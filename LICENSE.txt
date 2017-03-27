@@ -1,0 +1,1 @@
+pyiga is free for academic use.

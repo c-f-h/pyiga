@@ -1,4 +1,4 @@
-``pyiga``
+pyiga
 =========
 
 ``pyiga`` is a Python research toolbox for Isogeometric Analysis.
@@ -30,15 +30,17 @@ your test runner of choice, move to the main directory and execute
 Usage
 -----
 
-After successful installation, you should be able to load the package. A simple example::
+After successful installation, you should be able to load the package. A simple example:
+
+.. code:: python
 
     from pyiga import bspline, geometry, assemble
 
     kv = bspline.make_knots(3, 0.0, 1.0, 50)    # knot vector over (0,1) with degree 3 and 50 knot spans
     geo = geometry.bspline_quarter_annulus()    # a B-spline approximation of a quarter annulus
-    K = assemble.stiffness((kv,kv), geo=geo)    # assemble a stiffness matrix for the tensor product B-spline
-                                                # basis over the given geometry
+    K = assemble.stiffness((kv,kv), geo=geo)    # assemble a stiffness matrix for the 2D tensor product
+                                                # B-spline basis over the given geometry
 
-Right now there is now comprehensive documentation, so look at the code, the unit tests,
+Right now there is no comprehensive documentation, so look at the code, the unit tests,
 and the IPython notebooks to learn more.
 

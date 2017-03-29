@@ -291,6 +291,7 @@ def single_ev(knotvec, i, u):
 
 def collocation(kv, nodes):
     """Compute collocation matrix for B-spline basis at the given interpolation nodes"""
+    nodes = np.array(nodes, copy=False)
     m = nodes.size
     n = kv.numdofs()
     p = kv.p
@@ -308,6 +309,7 @@ def collocation_derivs(kv, nodes, derivs=1):
     basis at the given interpolation nodes.
     
     Returns a list of derivs+1 sparse CSR matrices with shape (nodes.size, kv.numdofs())."""
+    nodes = np.array(nodes, copy=False)
     m = nodes.size
     n = kv.numdofs()
     p = kv.p
@@ -327,6 +329,8 @@ def interpolate(kv, func, nodes=None):
     """Interpolate function in B-spline basis at given nodes (or Gréville abscissae by default)"""
     if nodes is None:
         nodes = kv.greville()
+    else:
+        nodes = np.array(nodes, copy=False)
     C = collocation(kv, nodes)
     vals = func(nodes)
     return scipy.sparse.linalg.spsolve(C, vals)

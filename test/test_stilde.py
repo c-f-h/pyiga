@@ -3,7 +3,7 @@ from pyiga.stilde import *
 def test_Stilde_basis():
     kv = bspline.make_knots(4, 0.0, 1.0, 10)
     P_tilde, P_compl = Stilde_basis(kv)
-    n = kv.numdofs()
+    n = kv.numdofs
     assert n == P_tilde.shape[0]
     assert n == P_compl.shape[0]
     assert n == P_tilde.shape[1] + P_compl.shape[1]

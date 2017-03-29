@@ -48,14 +48,14 @@ cdef object fast_assemble_2d_wrapper(MatrixEntryFn entry_func, void * data, kvs,
     set_log_func(_stdout_log_func)
 
     fast_assemble_2d_cimpl(entry_func, data,
-            kvs[0].numdofs(), 2*kvs[0].p + 1,
-            kvs[1].numdofs(), 2*kvs[1].p + 1,
+            kvs[0].numdofs, 2*kvs[0].p + 1,
+            kvs[1].numdofs, 2*kvs[1].p + 1,
             tol, maxiter, skipcount, tolcount,
             verbose,
             entries_i, entries_j, entries)
 
     cdef size_t ne = entries.size()
-    cdef size_t N = kvs[0].numdofs() * kvs[1].numdofs()
+    cdef size_t N = kvs[0].numdofs * kvs[1].numdofs
 
     #cdef double[:] edata =
     <double[:ne]>(entries.data())
@@ -76,15 +76,15 @@ cdef object fast_assemble_3d_wrapper(MatrixEntryFn entry_func, void * data, kvs,
     set_log_func(_stdout_log_func)
 
     fast_assemble_3d_cimpl(entry_func, data,
-            kvs[0].numdofs(), 2*kvs[0].p + 1,
-            kvs[1].numdofs(), 2*kvs[1].p + 1,
-            kvs[2].numdofs(), 2*kvs[2].p + 1,
+            kvs[0].numdofs, 2*kvs[0].p + 1,
+            kvs[1].numdofs, 2*kvs[1].p + 1,
+            kvs[2].numdofs, 2*kvs[2].p + 1,
             tol, maxiter, skipcount, tolcount,
             verbose,
             entries_i, entries_j, entries)
 
     cdef size_t ne = entries.size()
-    cdef size_t N = kvs[0].numdofs() * kvs[1].numdofs() * kvs[2].numdofs()
+    cdef size_t N = kvs[0].numdofs * kvs[1].numdofs * kvs[2].numdofs
 
     return scipy.sparse.coo_matrix(
             (<double[:ne]> entries.data(),

@@ -10,7 +10,7 @@ def _random_kv(p, n):
 
 def test_derivative():
     kv = _random_kv(4, 20)
-    s = Spline(kv, np.random.rand(kv.numdofs()))
+    s = Spline(kv, np.random.rand(kv.numdofs))
     s1 = s.derivative()
     x = np.linspace(0.0, 1.0, 50)
     d1 = s.deriv(x, 1)

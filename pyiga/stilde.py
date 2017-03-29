@@ -47,7 +47,7 @@ def Stilde_basis(kv):
     (b_L, b_compl_L) = Stilde_basis_side(kv, 0)
     (b_R, b_compl_R) = Stilde_basis_side(kv, 1)
 
-    n = kv.numdofs()
+    n = kv.numdofs
     n_L = b_L.shape[1]
     n_R = b_R.shape[1]
     n_I = n - 2*p

@@ -18,7 +18,7 @@ class TensorBSplinePatch:
         assert coeffs.ndim == self.dim + 1, "Wrong shape of coefficients"
         assert self.dim == self.coeffs.shape[-1], "Wrong shape of coefficients"
         for i in range(self.dim):
-            assert self.kvs[i].numdofs() == self.coeffs.shape[i], "Wrong shape of coefficients"
+            assert self.kvs[i].numdofs == self.coeffs.shape[i], "Wrong shape of coefficients"
 
     def eval(self, *x):
         """Evaluate the geometry at a single point of the parameter domain.

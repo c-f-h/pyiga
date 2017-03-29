@@ -39,15 +39,15 @@ def test_mass_asym():
     kv1 = bspline.make_knots(4, 0.0, 1.0, 10)
     kv2 = bspline.make_knots(1, 0.0, 1.0, 20)
     M_12 = bsp_mass_1d_asym(kv1, kv2, quadgrid=kv2.kv[kv2.p:-kv2.p])
-    assert(M_12.shape[0] == kv1.numdofs())
-    assert(M_12.shape[1] == kv2.numdofs())
+    assert(M_12.shape[0] == kv1.numdofs)
+    assert(M_12.shape[1] == kv2.numdofs)
 
 def test_stiffness_asym():
     kv1 = bspline.make_knots(4, 0.0, 1.0, 10)
     kv2 = bspline.make_knots(1, 0.0, 1.0, 20)
     K_12 = bsp_stiffness_1d_asym(kv1, kv2, quadgrid=kv2.kv[kv2.p:-kv2.p])
-    assert(K_12.shape[0] == kv1.numdofs())
-    assert(K_12.shape[1] == kv2.numdofs())
+    assert(K_12.shape[0] == kv1.numdofs)
+    assert(K_12.shape[1] == kv2.numdofs)
 
 def test_stiffness_2d():
     kvs = (bspline.make_knots(4, 0.0, 1.0, 10),

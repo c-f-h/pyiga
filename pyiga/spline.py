@@ -6,7 +6,7 @@ class Spline:
     def __init__(self, kv, coeffs):
         """Create a spline function with the given knot vector and coefficients."""
         coeffs = np.asarray(coeffs)
-        assert coeffs.shape == (kv.numdofs(),)
+        assert coeffs.shape == (kv.numdofs,)
         self.kv = kv
         self.coeffs = coeffs
 

@@ -21,13 +21,16 @@ class KnotVector:
     def __repr__(self):
         return 'KnotVector(%s, %s)' % (repr(self.kv), repr(self.p))
 
+    @property
     def numknots(self):
         return self.kv.size
 
+    @property
     def numdofs(self):
         """Number of basis functions in a B-spline basis defined over this knot vector"""
         return self.kv.size - self.p - 1
 
+    @property
     def numspans(self):
         """Number of nontrivial intervals in the knot vector"""
         return np.unique(self.kv).size - 1
@@ -57,11 +60,11 @@ class KnotVector:
         return (self._knots_to_mesh[supp[0]], self._knots_to_mesh[supp[1]])
 
     def mesh_support_idx_all(self):
-        """Compute an integer array of size Nx2, where N = self.numdofs(), which
+        """Compute an integer array of size Nx2, where N = self.numdofs, which
         contains for each B-spline the result of `mesh_support_idx`.
         """
         self._ensure_mesh()
-        n = self.numdofs()
+        n = self.numdofs
         startend = np.stack((np.arange(0,n), np.arange(self.p+1, n+self.p+1)), axis=1)
         return self._knots_to_mesh[startend]
 
@@ -97,7 +100,7 @@ class KnotVector:
 
     def meshsize_avg(self):
         """Compute average length of the knot spans of this knot vector"""
-        nspans = self.numspans()
+        nspans = self.numspans
         support = abs(self.kv[-1] - self.kv[0])
         return support / nspans
 
@@ -301,7 +304,7 @@ def collocation(kv, nodes):
     """Compute collocation matrix for B-spline basis at the given interpolation nodes"""
     nodes = np.array(nodes, copy=False)
     m = nodes.size
-    n = kv.numdofs()
+    n = kv.numdofs
     p = kv.p
     I, J, V = [], [], []
     values = active_ev(kv, nodes) # (p+1) x n
@@ -316,10 +319,10 @@ def collocation_derivs(kv, nodes, derivs=1):
     """Compute collocation matrix and derivative collocation matrices for B-spline
     basis at the given interpolation nodes.
 
-    Returns a list of derivs+1 sparse CSR matrices with shape (nodes.size, kv.numdofs())."""
+    Returns a list of derivs+1 sparse CSR matrices with shape (nodes.size, kv.numdofs)."""
     nodes = np.array(nodes, copy=False)
     m = nodes.size
-    n = kv.numdofs()
+    n = kv.numdofs
     p = kv.p
     I, J = [], []
     V = [[] for _ in range(derivs+1)]

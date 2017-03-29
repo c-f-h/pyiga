@@ -31,7 +31,7 @@ class TensorBSplinePatch:
 
     def grid_eval(self, gridaxes):
         """Evaluate the patch on a tensor product grid.
-        
+
         Note that the gridaxes should be given in reverse order, i.e.,
         the x axis last."""
         assert np.shape(gridaxes)[0] == self.dim
@@ -40,7 +40,7 @@ class TensorBSplinePatch:
 
     def grid_jacobian(self, gridaxes):
         """Evaluate the Jacobian on a tensor product grid.
-        
+
         Note that the gridaxes should be given in reverse order, i.e.,
         the x axis last."""
         assert np.shape(gridaxes)[0] == self.dim

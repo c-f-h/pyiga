@@ -12,8 +12,8 @@ class KnotVector:
         """
         self.kv = knots
         self.p = p
-        self.mesh = None    # knots with duplicates removed (on demand)
-        self.knots_to_mesh = None   # knot indices to mesh indices (on demand)
+        self._mesh = None    # knots with duplicates removed (on demand)
+        self._knots_to_mesh = None   # knot indices to mesh indices (on demand)
 
     def __str__(self):
         return '<KnotVector p=%d sz=%d>' % (self.p, self.kv.size)
@@ -40,22 +40,30 @@ class KnotVector:
         """Knot indices of support of j-th B-spline"""
         return (j, j+self.p+1)
 
+    def _ensure_mesh(self):
+        """Make sure that the _mesh and _knots_to_mesh arrays are set up"""
+        if self._knots_to_mesh is None:
+            self._mesh, self._knots_to_mesh = np.unique(self.kv, return_inverse=True)
+
+    @property
+    def mesh(self):
+        self._ensure_mesh()
+        return self._mesh
+
     def mesh_support_idx(self, j):
         """Return the first and last mesh index of the support of i"""
+        self._ensure_mesh()
         supp = self.support_idx(j)
-        if self.knots_to_mesh is None:
-            self.mesh, self.knots_to_mesh = np.unique(self.kv, return_inverse=True)
-        return (self.knots_to_mesh[supp[0]], self.knots_to_mesh[supp[1]])
+        return (self._knots_to_mesh[supp[0]], self._knots_to_mesh[supp[1]])
 
     def mesh_support_idx_all(self):
         """Compute an integer array of size Nx2, where N = self.numdofs(), which
         contains for each B-spline the result of `mesh_support_idx`.
         """
-        if self.knots_to_mesh is None:
-            self.mesh, self.knots_to_mesh = np.unique(self.kv, return_inverse=True)
+        self._ensure_mesh()
         n = self.numdofs()
         startend = np.stack((np.arange(0,n), np.arange(self.p+1, n+self.p+1)), axis=1)
-        return self.knots_to_mesh[startend]
+        return self._knots_to_mesh[startend]
 
     def findspan(self, u):
         """Returns an index i such that
@@ -307,7 +315,7 @@ def collocation(kv, nodes):
 def collocation_derivs(kv, nodes, derivs=1):
     """Compute collocation matrix and derivative collocation matrices for B-spline
     basis at the given interpolation nodes.
-    
+
     Returns a list of derivs+1 sparse CSR matrices with shape (nodes.size, kv.numdofs())."""
     nodes = np.array(nodes, copy=False)
     m = nodes.size

@@ -23,7 +23,8 @@ def test_truncate():
     # rank 1 tensor
     X = np.outer(rand(3),rand(4))[:,:,None] * rand(5)[None,None,:]
     T = hosvd(X)
-    T1 = truncate_tucker(T, 1)
+    assert find_truncation_rank(T[0], 1e-12) == (1,1,1)
+    T1 = truncate(T, 1)
     assert np.allclose(X, tucker_prod(*T1))
 
 def test_truncate2():
@@ -32,8 +33,13 @@ def test_truncate2():
     X = rand(5,5,5)
     T = hosvd(X)
     k = 3
-    Tk = truncate_tucker(T, k)
+    Tk = truncate(T, k)
     E = X - tucker_prod(*Tk)
     Cdk = T[0]
     Cdk[:k,:k,:k] = 0
     assert np.allclose(np.sum(E*E), np.sum(Cdk*Cdk))
+
+def test_truncation_rank():
+    X = np.zeros((4,3,7))
+    X[:2,:3,:4] = rand(2,3,4)
+    assert find_truncation_rank(X, 1e-12) == (2,3,4)

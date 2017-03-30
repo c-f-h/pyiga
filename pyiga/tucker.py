@@ -27,13 +27,15 @@ def hosvd(X):
     return (C, tuple(Uk.T for Uk in U))
 
 def tucker_prod(X, Uk):
+    """Convert the Tucker tensor (X,Uk) to a full tensor"""
     assert len(Uk) == X.ndim
     Y = X
     for i in range(len(Uk)):
         Y = modek_tprod(Y, i, Uk[i])
     return Y
 
-def truncate_tucker(T, k):
+def truncate(T, k):
+    """Truncate a Tucker tensor to the given rank `k`"""
     C, Uk = T
     N = C.ndim
     if np.isscalar(k):
@@ -42,3 +44,27 @@ def truncate_tucker(T, k):
         assert len(k) == N
         slices = tuple(slice(None, ki) for ki in k)
     return (C[slices], tuple(Uk[i][slices[i],:] for i in range(N)))
+
+def find_best_truncation_axis(X):
+    """Find the axis along which truncating the last slice causes the smallest error"""
+    errors = [np.linalg.norm(np.swapaxes(X, i, 0)[-1].ravel())
+              for i in range(X.ndim)]
+    i = np.argmin(errors)
+    return i, errors[i]
+
+def find_truncation_rank(X, tol=1e-12):
+    """A greedy algorithm for finding a good truncation rank for a HOSVD core tensor"""
+    total_err_squ = 0.0
+    tolsq = tol**2
+    while X.size > 0:
+        ax,err = find_best_truncation_axis(X)
+        total_err_squ += err**2
+        if total_err_squ > tolsq:
+            break
+        else:
+            # truncate one slice off axis ax
+            sl = X.ndim * [slice(None)]
+            sl[ax] = slice(None, -1)
+            X = X[sl]
+    return X.shape
+

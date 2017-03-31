@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.random
 
 from . import bspline
 from .kronecker import apply_tprod
@@ -74,6 +75,7 @@ class TensorBSplinePatch:
 ################################################################################
 
 def unit_square(num_intervals=1):
+    """Unit square with given number of intervals per direction"""
     kv = bspline.make_knots(1, 0.0, 1.0, num_intervals)
     #coeffs = np.array([
     #    [[ 0., 0.],
@@ -85,6 +87,15 @@ def unit_square(num_intervals=1):
     X,Y = np.meshgrid(x,x)
     coeffs = np.stack((X,Y), axis=-1)
     return TensorBSplinePatch((kv,kv), coeffs)
+
+def perturbed_square(num_intervals=5, noise=0.02):
+    """Unit square with given number of intervals per direction;
+    the control points are perturbed randomly according to the
+    given noise level.
+    """
+    geo = unit_square(num_intervals)
+    geo.coeffs += 2*noise*(np.random.random_sample(geo.coeffs.shape) - 0.5)
+    return geo
 
 def bspline_quarter_annulus(r1=1.0, r2=2.0):
     kvx = bspline.make_knots(1, 0.0, 1.0, 1)

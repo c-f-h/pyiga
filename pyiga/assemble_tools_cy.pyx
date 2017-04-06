@@ -15,6 +15,9 @@ from .quadrature import make_iterated_quadrature
 #from . cimport fast_assemble_cy
 cimport fast_assemble_cy
 
+from concurrent.futures import ThreadPoolExecutor
+import multiprocessing
+
 ################################################################################
 # Helper functions
 ################################################################################
@@ -273,6 +276,13 @@ cdef double[:,:,:,:,::1] inverses_3x3(double[:,:,:,:,::1] X):
 
     return Y
 
+#### Parallelization
+
+def chunk_tasks(tasks, num_chunks):
+    n = len(tasks) // num_chunks + 1
+    for i in range(0, len(tasks), n):
+        yield tasks[i:i+n]
+
 
 ################################################################################
 # Assembler kernels
@@ -424,6 +434,14 @@ cdef class BaseAssembler2D:
         self.ndofs[:] = [kv.numdofs for kv in kvs]
         self.meshsupp = [kvs[k].mesh_support_idx_all() for k in range(2)]
 
+    cdef _share_base(self, BaseAssembler2D asm):
+        asm.nqp = self.nqp
+        asm.ndofs[:] = self.ndofs[:]
+        asm.meshsupp = self.meshsupp
+
+    cdef BaseAssembler2D shared_clone(self):
+        return None     # not implemented
+
     cdef inline size_t to_seq(self, size_t[2] ii) nogil:
         # by convention, the order of indices is (y,x)
         return ii[0] * self.ndofs[1] + ii[1]
@@ -488,6 +506,20 @@ cdef class MassAssembler2D(BaseAssembler2D):
         self.values_i.resize(2)
         self.values_j.resize(2)
 
+    cdef MassAssembler2D shared_clone(self):
+        cdef MassAssembler2D asm = MassAssembler2D.__new__(MassAssembler2D)
+
+        # copy references to shared data
+        self._share_base(asm)
+        asm.C = self.C
+        asm.geo_weights = self.geo_weights
+
+        # initialize local data
+        asm.values_i.resize(2)
+        asm.values_j.resize(2)
+
+        return asm
+
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
@@ -551,6 +583,25 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
             self.nqp * (2*kvs[1].p + 1),
             2), np.double)
 
+    cdef StiffnessAssembler2D shared_clone(self):
+        cdef StiffnessAssembler2D asm = StiffnessAssembler2D.__new__(StiffnessAssembler2D)
+
+        # copy references to shared data
+        self._share_base(asm)
+        asm.C = self.C
+        asm.Cd = self.Cd
+        asm.geo_weights = self.geo_weights
+        asm.geo_jacinv = self.geo_jacinv
+
+        # initialize local data
+        asm.values_i.resize(2)
+        asm.values_j.resize(2)
+        asm.derivs_i.resize(2)
+        asm.derivs_j.resize(2)
+        asm.grad_buffer = np.empty_like(self.grad_buffer)
+
+        return asm
+
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
@@ -607,6 +658,14 @@ cdef class BaseAssembler3D:
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
         self.meshsupp = [kvs[k].mesh_support_idx_all() for k in range(3)]
+
+    cdef _share_base(self, BaseAssembler3D asm):
+        asm.nqp = self.nqp
+        asm.ndofs[:] = self.ndofs[:]
+        asm.meshsupp = self.meshsupp
+
+    cdef BaseAssembler3D shared_clone(self):
+        return None     # not implemented
 
     cdef inline size_t to_seq(self, size_t[3] ii) nogil:
         # by convention, the order of indices is (z,y,x)
@@ -674,6 +733,20 @@ cdef class MassAssembler3D(BaseAssembler3D):
         self.values_i.resize(3)
         self.values_j.resize(3)
 
+    cdef MassAssembler3D shared_clone(self):
+        cdef MassAssembler3D asm = MassAssembler3D.__new__(MassAssembler3D)
+
+        # copy references to shared data
+        self._share_base(asm)
+        asm.C = self.C
+        asm.geo_weights = self.geo_weights
+
+        # initialize local data
+        asm.values_i.resize(3)
+        asm.values_j.resize(3)
+
+        return asm
+
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
@@ -738,20 +811,13 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
             self.nqp * (2*kvs[2].p + 1),
             3), np.double)
 
-    cdef StiffnessAssembler3D _shared_clone(self):
+    cdef StiffnessAssembler3D shared_clone(self):
         cdef StiffnessAssembler3D asm = StiffnessAssembler3D.__new__(StiffnessAssembler3D)
 
         # copy references to shared data
-        asm.nqp = self.nqp
-        asm.ndofs[:] = self.ndofs[:]
-
-        asm.C.resize(3)
-        asm.Cd.resize(3)
-        asm.meshsupp.resize(3)
-
+        self._share_base(asm)
         asm.C = self.C
         asm.Cd = self.Cd
-        asm.meshsupp = self.meshsupp
         asm.geo_weights = self.geo_weights
         asm.geo_jacinv = self.geo_jacinv
 
@@ -814,18 +880,25 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef object generic_assemble_2d(BaseAssembler2D asm):
+cdef object generic_assemble_2d(BaseAssembler2D asm, long chunk_start=-1, long chunk_end=-1):
     cdef size_t[2] i, j
     cdef size_t k, ii, jj
     cdef IntInterval intv
 
-    cdef size_t[2] zeros, neigh_j_start, neigh_j_end
+    cdef size_t[2] dof_start, dof_end, neigh_j_start, neigh_j_end
     cdef double entry
     cdef vector[double] entries
     cdef vector[size_t] entries_i, entries_j
 
-    zeros[:] = (0,0)
-    i[:] = zeros[:]
+    dof_start[:] = (0,0)
+    dof_end[:] = asm.ndofs[:]
+
+    if chunk_start >= 0:
+        dof_start[0] = chunk_start
+    if chunk_end >= 0:
+        dof_end[0] = chunk_end
+
+    i[:] = dof_start[:]
     with nogil:
         while True:         # loop over all i
             ii = asm.to_seq(i)
@@ -853,7 +926,7 @@ cdef object generic_assemble_2d(BaseAssembler2D asm):
 
                 if not next_lexicographic2(j, neigh_j_start, neigh_j_end):
                     break
-            if not next_lexicographic2(i, zeros, asm.ndofs):
+            if not next_lexicographic2(i, dof_start, dof_end):
                 break
 
     cdef size_t ne = entries.size()
@@ -865,11 +938,23 @@ cdef object generic_assemble_2d(BaseAssembler2D asm):
             shape=(N,N)).tocsr()
 
 
+cdef generic_assemble_2d_parallel(BaseAssembler2D asm):
+    num_cpus = multiprocessing.cpu_count()
+    if num_cpus <= 1:
+        return generic_assemble_2d(asm)
+    def asm_chunk(rg):
+        cdef BaseAssembler2D asm_clone = asm.shared_clone()
+        return generic_assemble_2d(asm_clone, rg.start, rg.stop)
+    pool = ThreadPoolExecutor(max_workers=num_cpus+1)
+    results = pool.map(asm_chunk, chunk_tasks(range(asm.ndofs[0]), 4*num_cpus))
+    return sum(results)
+
+
 def mass_2d(kvs, geo):
-    return generic_assemble_2d(MassAssembler2D(kvs, geo))
+    return generic_assemble_2d_parallel(MassAssembler2D(kvs, geo))
 
 def stiffness_2d(kvs, geo):
-    return generic_assemble_2d(StiffnessAssembler2D(kvs, geo))
+    return generic_assemble_2d_parallel(StiffnessAssembler2D(kvs, geo))
 
 
 
@@ -938,27 +1023,23 @@ cdef object generic_assemble_3d(BaseAssembler3D asm, long chunk_start=-1, long c
             shape=(N,N)).tocsr()
 
 
+cdef generic_assemble_3d_parallel(BaseAssembler3D asm):
+    num_cpus = multiprocessing.cpu_count()
+    if num_cpus <= 1:
+        return generic_assemble_3d(asm)
+    def asm_chunk(rg):
+        cdef BaseAssembler3D asm_clone = asm.shared_clone()
+        return generic_assemble_3d(asm_clone, rg.start, rg.stop)
+    pool = ThreadPoolExecutor(max_workers=num_cpus+1)
+    results = pool.map(asm_chunk, chunk_tasks(range(asm.ndofs[0]), 4*num_cpus))
+    return sum(results)
+
+
 def mass_3d(kvs, geo):
-    return generic_assemble_3d(MassAssembler3D(kvs, geo))
-
-
-from concurrent.futures import ThreadPoolExecutor
-import multiprocessing
-
-def chunk_tasks(tasks, num_chunks):
-    n = len(tasks) // num_chunks + 1
-    for i in range(0, len(tasks), n):
-        yield tasks[i:i+n]
+    return generic_assemble_3d_parallel(MassAssembler3D(kvs, geo))
 
 def stiffness_3d(kvs, geo):
-    cdef StiffnessAssembler3D asm = StiffnessAssembler3D(kvs, geo)
-    num_cpus = multiprocessing.cpu_count()
-    pool = ThreadPoolExecutor(max_workers=num_cpus)
-    def my_asm(rg):
-        cdef StiffnessAssembler3D asm_clone = asm._shared_clone()
-        return generic_assemble_3d(asm_clone, rg.start, rg.stop)
-    results = pool.map(my_asm, chunk_tasks(range(asm.ndofs[0]), num_cpus))
-    return sum(results)
+    return generic_assemble_3d_parallel(StiffnessAssembler3D(kvs, geo))
 
 
 

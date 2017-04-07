@@ -684,9 +684,10 @@ cdef class BaseAssembler3D:
 
     cpdef double assemble(self, size_t i, size_t j):
         cdef size_t[3] I, J
-        self.from_seq(i, I)
-        self.from_seq(j, J)
-        return self.assemble_impl(I, J)
+        with nogil:
+            self.from_seq(i, I)
+            self.from_seq(j, J)
+            return self.assemble_impl(I, J)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)

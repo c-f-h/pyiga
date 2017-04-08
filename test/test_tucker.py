@@ -12,6 +12,17 @@ def test_modek_tprod():
                 Y[i,j,k] = np.dot(X[:,j,k], A[:,i])
     assert np.allclose(Y, modek_tprod(X, 0, A))
 
+def test_tuckerprod():
+    U = [rand(n,n) for n in range(3,6)]
+    C = rand(3,4,5)
+    for i in range(3):
+        U2 = U[:]
+        U2[i] = np.eye(i+3)
+        X1 = tucker_prod(C, U2)
+        U2[i] = None
+        X2 = tucker_prod(C, U2)
+        assert np.allclose(X1, X2)
+
 def test_tucker():
     X = rand(3,4,5)
     T = hosvd(X)

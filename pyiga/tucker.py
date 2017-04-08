@@ -31,7 +31,8 @@ def tucker_prod(X, Uk):
     assert len(Uk) == X.ndim
     Y = X
     for i in range(len(Uk)):
-        Y = modek_tprod(Y, i, Uk[i])
+        if Uk[i] is not None:   # None is equivalent to identity
+            Y = modek_tprod(Y, i, Uk[i])
     return Y
 
 def truncate(T, k):

@@ -42,5 +42,6 @@ After successful installation, you should be able to load the package. A simple 
                                                 # B-spline basis over the given geometry
 
 Right now there is no comprehensive documentation, so look at the code, the unit tests,
-and the IPython notebooks to learn more.
+and the `IPython notebooks`__ to learn more.
 
+__ ./notebooks

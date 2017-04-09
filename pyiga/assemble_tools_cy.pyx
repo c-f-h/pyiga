@@ -3,6 +3,7 @@
 # cython: binding=False
 
 cimport cython
+from cython.parallel import prange
 from libcpp.vector cimport vector
 
 import numpy as np
@@ -148,12 +149,12 @@ def inverses(X):
 @cython.wraparound(False)
 @cython.cdivision(True)
 cdef double[:,:,:,::1] det_and_inv_2x2(double[:,:,:,::1] X, double[:,::1] det_out):
-    cdef size_t m,n, i,j
+    cdef long m,n, i,j
     cdef double det, a,b,c,d
     m,n = X.shape[0], X.shape[1]
 
     cdef double[:,:,:,::1] Y = np.empty_like(X)
-    for i in range(m):
+    for i in prange(m, nogil=True, schedule='static'):
         for j in range(n):
             a,b,c,d = X[i,j, 0,0], X[i,j, 0,1], X[i,j, 1,0], X[i,j, 1,1]
             det = a*d - b*c
@@ -189,36 +190,37 @@ cdef double[:,:,:,::1] inverses_2x2(double[:,:,:,::1] X):
 @cython.wraparound(False)
 @cython.cdivision(True)
 cdef double[:,:,:,:,::1] det_and_inv_3x3(double[:,:,:,:,::1] X, double[:,:,::1] det_out):
-    cdef size_t n0, n1, n2, i0, i1, i2
+    cdef long n0, n1, n2, i0, i1, i2
     cdef double det, invdet
     n0,n1,n2 = X.shape[0], X.shape[1], X.shape[2]
+    cdef double x00,x01,x02,x10,x11,x12,x20,x21,x22
 
     cdef double[:,:,:,:,::1] Y = np.empty_like(X)
-    cdef double[:,::1] x, y
 
-    for i0 in range(n0):
+    for i0 in prange(n0, nogil=True, schedule='static'):
         for i1 in range(n1):
             for i2 in range(n2):
-                x = X[i0, i1, i2, :, :]
-                y = Y[i0, i1, i2, :, :]
+                x00,x01,x02 = X[i0, i1, i2, 0, 0], X[i0, i1, i2, 0, 1], X[i0, i1, i2, 0, 2]
+                x10,x11,x12 = X[i0, i1, i2, 1, 0], X[i0, i1, i2, 1, 1], X[i0, i1, i2, 1, 2]
+                x20,x21,x22 = X[i0, i1, i2, 2, 0], X[i0, i1, i2, 2, 1], X[i0, i1, i2, 2, 2]
 
-                det = x[0, 0] * (x[1, 1] * x[2, 2] - x[2, 1] * x[1, 2]) - \
-                      x[0, 1] * (x[1, 0] * x[2, 2] - x[1, 2] * x[2, 0]) + \
-                      x[0, 2] * (x[1, 0] * x[2, 1] - x[1, 1] * x[2, 0])
+                det = x00 * (x11 * x22 - x21 * x12) - \
+                      x01 * (x10 * x22 - x12 * x20) + \
+                      x02 * (x10 * x21 - x11 * x20)
 
                 det_out[i0, i1, i2] = det
 
                 invdet = 1.0 / det
 
-                y[0, 0] = (x[1, 1] * x[2, 2] - x[2, 1] * x[1, 2]) * invdet
-                y[0, 1] = (x[0, 2] * x[2, 1] - x[0, 1] * x[2, 2]) * invdet
-                y[0, 2] = (x[0, 1] * x[1, 2] - x[0, 2] * x[1, 1]) * invdet
-                y[1, 0] = (x[1, 2] * x[2, 0] - x[1, 0] * x[2, 2]) * invdet
-                y[1, 1] = (x[0, 0] * x[2, 2] - x[0, 2] * x[2, 0]) * invdet
-                y[1, 2] = (x[1, 0] * x[0, 2] - x[0, 0] * x[1, 2]) * invdet
-                y[2, 0] = (x[1, 0] * x[2, 1] - x[2, 0] * x[1, 1]) * invdet
-                y[2, 1] = (x[2, 0] * x[0, 1] - x[0, 0] * x[2, 1]) * invdet
-                y[2, 2] = (x[0, 0] * x[1, 1] - x[1, 0] * x[0, 1]) * invdet
+                Y[i0, i1, i2, 0, 0] = (x11 * x22 - x21 * x12) * invdet
+                Y[i0, i1, i2, 0, 1] = (x02 * x21 - x01 * x22) * invdet
+                Y[i0, i1, i2, 0, 2] = (x01 * x12 - x02 * x11) * invdet
+                Y[i0, i1, i2, 1, 0] = (x12 * x20 - x10 * x22) * invdet
+                Y[i0, i1, i2, 1, 1] = (x00 * x22 - x02 * x20) * invdet
+                Y[i0, i1, i2, 1, 2] = (x10 * x02 - x00 * x12) * invdet
+                Y[i0, i1, i2, 2, 0] = (x10 * x21 - x20 * x11) * invdet
+                Y[i0, i1, i2, 2, 1] = (x20 * x01 - x00 * x21) * invdet
+                Y[i0, i1, i2, 2, 2] = (x00 * x11 - x10 * x01) * invdet
 
     return Y
 

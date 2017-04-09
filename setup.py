@@ -3,27 +3,37 @@ from setuptools.extension import Extension
 from Cython.Build import cythonize
 import numpy
 
+USE_OPENMP = True
+
+c_args = ['-O3', '-march=native', '-ffast-math']
+
+if USE_OPENMP:
+    c_args_openmp = l_args_openmp = ['-fopenmp']
+else:
+    c_args_openmp = l_args_openmp = []
+
 extensions = [
     Extension("pyiga.bspline_cy",
              ["pyiga/bspline_cy.pyx"],
         include_dirs = [numpy.get_include()],
-        extra_compile_args=['-O3'],
+        extra_compile_args=c_args,
     ),
     #Extension("pyiga.lowrank_cy",
     #         ["pyiga/lowrank_cy.pyx"],
     #    include_dirs = [numpy.get_include()],
-    #    extra_compile_args=['-O3'],
+    #    extra_compile_args=c_args,
     #),
     Extension("pyiga.mlmatrix_cy",
              ["pyiga/mlmatrix_cy.pyx"],
         include_dirs = [numpy.get_include()],
-        extra_compile_args=['-O3'],
+        extra_compile_args=c_args,
     ),
     Extension("pyiga.assemble_tools_cy",
              ["pyiga/assemble_tools_cy.pyx"],
         include_dirs = [numpy.get_include()],
         language='c++',
-        extra_compile_args=['-O3'],
+        extra_compile_args=c_args + c_args_openmp,
+        extra_link_args=l_args_openmp,
         #define_macros=[('CYTHON_TRACE', '1')]
     ),
     Extension("pyiga.fast_assemble_cy",
@@ -31,7 +41,7 @@ extensions = [
               "pyiga/fast_assemble_cy.pyx"],
         include_dirs = [numpy.get_include()],
         language='c++',
-        extra_compile_args=['-O3'],
+        extra_compile_args=c_args,
     ),
 ]
 

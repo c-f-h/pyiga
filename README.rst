@@ -27,6 +27,9 @@ Running tests
 your test runner of choice, move to the main directory and execute
 ``nosetests`` or ``py.test`` to run the tests.
 
+If the test runner fails to find the Cython extensions modules (``pyiga.bspline_cy`` etc.),
+you may have to run ``python setup.py build_ext -i`` to build them in-place.
+
 Usage
 -----
 

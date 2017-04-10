@@ -40,6 +40,7 @@ public:
     virtual int sync() {
         funcptr(this->str().c_str(), this->str().size());
         this->str("");
+        return 0;
     }
 private:
     LogFuncPtr funcptr;

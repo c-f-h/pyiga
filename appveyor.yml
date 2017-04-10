@@ -10,7 +10,9 @@ environment:
       #    - PYTHON_VERSION: 3.6
       #      MINICONDA: "C:\\Miniconda3"
     - PYTHON_VERSION: 3.5
-      MINICONDA: "C:\\Miniconda35-x64"  # x64 produces access violations
+      MINICONDA: "C:\\Miniconda35"
+    - PYTHON_VERSION: 3.5
+      MINICONDA: "C:\\Miniconda35-x64"
 
 init:
   - "ECHO %PYTHON_VERSION% %MINICONDA%"
@@ -18,9 +20,7 @@ init:
 install:
   - "set PATH=%MINICONDA%;%MINICONDA%\\Scripts;%PATH%"
   - conda config --set always_yes yes --set changeps1 no
-  - conda update -q conda
   - conda info -a
-  - conda info msvc_runtime
     #  - "conda create -q -n test-environment python=%PYTHON_VERSION% wheel setuptools Cython nose msvc_runtime numpy scipy"
     #  - activate test-environment
   - conda install wheel setuptools Cython nose numpy scipy"

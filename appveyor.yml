@@ -25,12 +25,13 @@ install:
     #  - activate test-environment
   - conda install wheel setuptools Cython nose numpy scipy"
 
-build: off
+build:
+  - python setup.py build_ext -i
 
 test_script:
   # pyamg isn't available as a Python 3 version in the conda repository,
   # so exclude the relaxation test
-  - python setup.py nosetests --verbosity=2 --exclude test_relaxation
+  #  - python setup.py nosetests --verbosity=2 --exclude test_relaxation
 
 after_test:
   # build the wheels
@@ -39,6 +40,8 @@ after_test:
 artifacts:
   # bdist_wheel puts the built wheel in the dist directory
   - path: dist\*
+  - path: pyiga\bspline_cy.c
+  - path: pyiga\assemble_tools_cy.cpp
 
 #on_success:
 #  You can use this step to upload your artifacts to a public website.

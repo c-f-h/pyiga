@@ -27,7 +27,7 @@ install:
   - "conda create -q -n test-environment python=%PYTHON_VERSION% wheel setuptools Cython nose %MSVC_RUNTIME% numpy scipy"
   - activate test-environment
   - conda config --add channels conda-forge
-  - conda install pyamg
+  - pip install pyamg
 
 build: off
 

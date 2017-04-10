@@ -1,3 +1,6 @@
+.. image:: https://ci.appveyor.com/api/projects/status/1enc32o4ts2w9w17/branch/master?svg=true
+   :target: https://ci.appveyor.com/project/c-f-h/pyiga
+
 pyiga
 =========
 

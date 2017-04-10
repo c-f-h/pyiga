@@ -12,6 +12,7 @@
 #include <vector>
 #include <assert.h>
 #include <cstdlib>
+#include <algorithm>
 
 //#define USE_CBLAS
 

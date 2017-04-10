@@ -10,9 +10,9 @@ environment:
       #    - PYTHON_VERSION: 3.6
       #      MINICONDA: "C:\\Miniconda3"
     - PYTHON_VERSION: 3.4
-      MINICONDA: "C:\\Miniconda34"
+      MINICONDA: "C:\\Miniconda3"
     - PYTHON_VERSION: 3.4
-      MINICONDA: "C:\\Miniconda34-x64"
+      MINICONDA: "C:\\Miniconda3-x64"
 
 init:
   - "ECHO %PYTHON_VERSION% %MINICONDA%"

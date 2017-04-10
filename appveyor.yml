@@ -1,16 +1,16 @@
 environment:
-
   matrix:
-
     # For Python versions available on Appveyor, see
     # http://www.appveyor.com/docs/installed-software#python
 
-    #- PYTHON_VERSION: 3.5
-    #  MINICONDA: "C:\\Miniconda3"
-    # - PYTHON_VERSION: 3.5
-    # - MINICONDA: "C:\\Miniconda3-x64"  # 3.5 x64 has some runtime error
-    - PYTHON_VERSION: 3.6
-      MINICONDA: "C:\\Miniconda3-x64"
+      #    - PYTHON_VERSION: 3.4
+      #      MINICONDA: "C:\\Miniconda3"
+      #    - PYTHON_VERSION: 3.5
+      #      MINICONDA: "C:\\Miniconda3"
+      #    - PYTHON_VERSION: 3.6
+      #      MINICONDA: "C:\\Miniconda3"
+    - PYTHON_VERSION: 3.5
+      MINICONDA: "C:\\Miniconda35-x64"  # x64 produces access violations
 
 init:
   - "ECHO %PYTHON_VERSION% %MINICONDA%"
@@ -20,8 +20,9 @@ install:
   - conda config --set always_yes yes --set changeps1 no
   - conda update -q conda
   - conda info -a
-  - "conda create -q -n test-environment python=%PYTHON_VERSION% wheel setuptools Cython nose numpy scipy"
-  - activate test-environment
+    #  - "conda create -q -n test-environment python=%PYTHON_VERSION% wheel setuptools Cython nose msvc_runtime numpy scipy"
+    #  - activate test-environment
+  - pip install wheel setuptools Cython nose msvc_runtime numpy scipy"
 
 build: off
 

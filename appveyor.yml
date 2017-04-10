@@ -34,7 +34,7 @@ install:
     #- activate test-environment
   # We need wheel installed to build wheels
   - "%PYTHON%\\python.exe -m pip install wheel"
-  - conda install numpy scipy Cython nose
+  - conda install setuptools numpy scipy Cython nose
 
 build: off
 

@@ -23,9 +23,9 @@ install:
   - "set PATH=%MINICONDA%;%MINICONDA%\\Scripts;%PATH%"
   - conda config --set always_yes yes --set changeps1 no
   - conda info -a
-    #  - "conda create -q -n test-environment python=%PYTHON_VERSION% wheel setuptools Cython nose msvc_runtime numpy scipy"
-    #  - activate test-environment
-  - "conda install wheel setuptools Cython nose numpy scipy %MSVC_RUNTIME%"
+  - "conda create -q -n test-environment python=%PYTHON_VERSION% wheel setuptools Cython nose msvc_runtime numpy scipy"
+  - activate test-environment
+    #  - "conda install wheel setuptools Cython nose numpy scipy %MSVC_RUNTIME%"
 
 build: off
 

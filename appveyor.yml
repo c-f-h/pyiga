@@ -23,7 +23,7 @@ install:
   - conda info msvc_runtime
     #  - "conda create -q -n test-environment python=%PYTHON_VERSION% wheel setuptools Cython nose msvc_runtime numpy scipy"
     #  - activate test-environment
-  - pip install wheel setuptools Cython nose numpy scipy"
+  - conda install wheel setuptools Cython nose numpy scipy"
 
 build: off
 

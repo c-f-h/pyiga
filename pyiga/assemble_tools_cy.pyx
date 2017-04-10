@@ -59,7 +59,7 @@ cdef int next_lexicographic3(size_t[3] cur, size_t start[3], size_t end[3]) nogi
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef IntInterval find_joint_support_functions(long[:,::1] meshsupp, long i) nogil:
+cdef IntInterval find_joint_support_functions(long long[:,::1] meshsupp, long i) nogil:
     cdef long j, n, minj, maxj
     minj = j = i
     while j >= 0 and meshsupp[j,1] > meshsupp[i,0]:
@@ -416,7 +416,7 @@ cdef double combine_stiff_3d(double[:,:,:,:,::1] B,
 cdef class BaseAssembler2D:
     cdef int nqp
     cdef size_t[2] ndofs
-    cdef vector[long[:,::1]] meshsupp
+    cdef vector[long long[:,::1]] meshsupp
 
     cdef void base_init(self, kvs):
         assert len(kvs) == 2, "Assembler requires two knot vectors"
@@ -581,7 +581,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
 cdef class BaseAssembler3D:
     cdef int nqp
     cdef size_t[3] ndofs
-    cdef vector[long[:,::1]] meshsupp
+    cdef vector[long long[:,::1]] meshsupp
 
     cdef base_init(self, kvs):
         assert len(kvs) == 3, "Assembler requires three knot vectors"

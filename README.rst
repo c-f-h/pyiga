@@ -1,12 +1,11 @@
-|travis| |appveyor|
 
 .. |travis| image:: https://travis-ci.org/c-f-h/pyiga.svg?branch=master
     :target: https://travis-ci.org/c-f-h/pyiga
 .. |appveyor| image:: https://ci.appveyor.com/api/projects/status/1enc32o4ts2w9w17/branch/master?svg=true
    :target: https://ci.appveyor.com/project/c-f-h/pyiga
 
-pyiga
-=========
+pyiga |travis| |appveyor|
+=========================
 
 ``pyiga`` is a Python research toolbox for Isogeometric Analysis.
 

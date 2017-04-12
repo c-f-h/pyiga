@@ -10,6 +10,13 @@ class MatrixGenerator:
         self.shape = (m,n)
         self.entryfunc = entryfunc
 
+    @staticmethod
+    def from_array(X):
+        """Create a MatrixGenerator which just returns the entries of a 2D array"""
+        assert X.ndim == 2
+        return MatrixGenerator(X.shape[0], X.shape[1],
+                lambda i,j: X[i,j])
+
     def entry(self, i, j):
         """Generate the entry at row i and column j"""
         return self.entryfunc(i, j)
@@ -98,6 +105,8 @@ def _rank_1_update(X, alpha, u, v):
 
 def aca(A, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2, startval=None):
     """Adaptive Cross Approximation (ACA) algorithm with row pivoting"""
+    if not isinstance(A, MatrixGenerator):
+        A = MatrixGenerator.from_array(A)  # assume it's an array
     if startval is not None:
         X = np.array(startval, order='C')
         assert X.shape == A.shape
@@ -149,6 +158,8 @@ def aca(A, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2, startval=
 
 def aca_lr(A, tol=1e-10, maxiter=100):
     """ACA which returns the crosses rather than the full matrix"""
+    if not isinstance(A, MatrixGenerator):
+        A = MatrixGenerator.from_array(A)  # assume it's an array
     crosses = []
 
     def X_row(i):

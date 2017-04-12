@@ -6,9 +6,14 @@ import numpy.random
 ################################################################################
 
 class MatrixGenerator:
-    def __init__(self, m, n, entryfunc):
+    def __init__(self, m, n, entryfunc=None, multientryfunc=None):
         self.shape = (m,n)
-        self.entryfunc = entryfunc
+        assert entryfunc is not None or multientryfunc is not None, \
+            "At least one of entryfunc and multientryfunc must be specified"
+        if entryfunc is not None:
+            self.entry = entryfunc
+        if multientryfunc is not None:
+            self.compute_entries = multientryfunc
 
     @staticmethod
     def from_array(X):
@@ -19,31 +24,30 @@ class MatrixGenerator:
 
     def entry(self, i, j):
         """Generate the entry at row i and column j"""
-        return self.entryfunc(i, j)
+        return self.compute_entries([(i, j)])[0]
+
+    def compute_entries(self, indices):
+        """Compute all entries given by the list of pairs `indices`."""
+        indices = list(indices)
+        n = len(indices)
+        result = np.empty(n)
+        for i in range(n):
+            result[i] = self.entry(*indices[i])
+        return result
 
     def row(self, i):
         """Generate the i-th row"""
-        n = self.shape[1]
-        result = np.empty(n)
-        for j in range(n):
-            result[j] = self.entryfunc(i, j)
-        return result
+        return self.compute_entries((i,j) for j in range(self.shape[1]))
 
     def column(self, j):
         """Generate the j-th column"""
-        m = self.shape[0]
-        result = np.empty(m)
-        for i in range(m):
-            result[i] = self.entryfunc(i, j)
-        return result
+        return self.compute_entries((i,j) for i in range(self.shape[0]))
 
     def full(self):
         """Generate the entire matrix as an np.ndarray"""
-        X = np.empty(self.shape)
-        for i in range(X.shape[0]):
-            for j in range(X.shape[1]):
-                X[i,j] = self.entryfunc(i, j)
-        return X
+        return self.compute_entries(
+                (i,j) for i in range(self.shape[0])
+                      for j in range(self.shape[1])).reshape(self.shape, order='C')
 
 
 class TensorGenerator:

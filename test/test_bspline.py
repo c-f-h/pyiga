@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
+
 from pyiga.bspline import *
 
 def test_eval():
     # create random spline
-    kv = make_knots(4, 0, 1, 25)
+    kv = make_knots(4, 0.0, 1.0, 25)
     n = kv.numdofs
     coeffs = np.random.rand(n)
     # evaluate it, B-spline by B-spline
@@ -16,7 +18,7 @@ def test_eval():
     assert np.linalg.norm(values - values3) < 1e-10
 
 def test_interpolation():
-    kv = make_knots(3, 0, 1, 10)
+    kv = make_knots(3, 0.0, 1.0, 10)
     g = kv.greville()
     C = collocation(kv, g)
     # create random spline
@@ -28,7 +30,7 @@ def test_interpolation():
 
 def test_deriv():
     # create linear spline
-    kv = make_knots(4, 0, 1, 25)
+    kv = make_knots(4, 0.0, 1.0, 25)
     coeffs = interpolate(kv, lambda x: 1.0 + 2.5*x)
     # check that derivative is 2.5
     x = np.linspace(0.0, 1.0, 100)
@@ -46,7 +48,7 @@ def test_deriv():
 
 def test_prolongation():
     # create random spline
-    kv = make_knots(3, 0, 1, 10)
+    kv = make_knots(3, 0.0, 1.0, 10)
     coeffs = np.random.rand(kv.numdofs)
     # compute a refined knot vector and prolongation matrix
     kv2 = kv.refine()

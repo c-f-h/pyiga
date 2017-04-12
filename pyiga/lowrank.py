@@ -7,6 +7,17 @@ import numpy.random
 
 class MatrixGenerator:
     def __init__(self, m, n, entryfunc=None, multientryfunc=None):
+        """Set up a matrix generator with shape (m,n).
+
+        Arguments:
+            m: number of rows
+            n: number of columns
+            `entryfunc`: a function taking i,j and producing an entry.
+            `multientryfunc`: a function taking a list of (i,j) pairs
+                and producing an ndarray of the requested entries.
+
+        At least one of the two functions must be provided.
+        """
         self.shape = (m,n)
         assert entryfunc is not None or multientryfunc is not None, \
             "At least one of entryfunc and multientryfunc must be specified"

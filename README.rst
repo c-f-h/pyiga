@@ -13,7 +13,11 @@ pyiga |travis| |appveyor|
 Installation
 ------------
 
-``pyiga`` is currently only compatible with Python 3. Before installing, make
+``pyiga`` is compatible with Python 2.7 as well as Python 3.4 and higher.
+**NB:** Python 2 support is only provided for compatibility and is not
+well tested. Python 3 is recommended.
+
+Before installing, make
 sure you have recent versions of **Numpy**, **Scipy** and **Cython** installed
 and that your environment can compile Python extension modules.
 

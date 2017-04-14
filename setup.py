@@ -58,5 +58,6 @@ setup(
         'pyiga': [ '*.pyx' , '*.pxd' ],
     },
 
+    tests_require = 'nose',
     test_suite = 'nose.collector'
 )

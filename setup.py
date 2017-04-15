@@ -58,6 +58,9 @@ setup(
         'pyiga': [ '*.pyx' , '*.pxd' ],
     },
 
+    setup_requires = ['numpy', 'Cython'],
+    install_requires = ['numpy', 'scipy'],
+
     tests_require = 'nose',
     test_suite = 'nose.collector'
 )

@@ -12,6 +12,8 @@ class KnotVector:
     """Represents an open B-spline knot vector.
     
     The most convenient way to create knot vectors is the :func:`make_knots` function.
+
+    .. automethod:: __init__
     """
 
     def __init__(self, knots, p):
@@ -60,6 +62,7 @@ class KnotVector:
 
     @property
     def mesh(self):
+        """Return the mesh, i.e., the vector of unique knots in the knot vector."""
         self._ensure_mesh()
         return self._mesh
 
@@ -70,8 +73,8 @@ class KnotVector:
         return (self._knots_to_mesh[supp[0]], self._knots_to_mesh[supp[1]])
 
     def mesh_support_idx_all(self):
-        """Compute an integer array of size Nx2, where N = self.numdofs, which
-        contains for each B-spline the result of `mesh_support_idx`.
+        """Compute an integer array of size `N x 2`, where N = self.numdofs, which
+        contains for each B-spline the result of :func:`mesh_support_idx`.
         """
         self._ensure_mesh()
         n = self.numdofs

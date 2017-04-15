@@ -1,6 +1,56 @@
-#
-# Matrix assembling functions for B-spline IGA
-#
+"""Matrix assembling functions for B-spline IgA.
+
+This module contains functions to assemble mass and stiffness matrices
+for IgA with tensor product B-spline functions.
+
+
+.. _gauss-asms:
+
+Tensor product Gauss quadrature assemblers
+------------------------------------------
+
+Standard Gauss quadrature assemblers for mass and stiffness matrices.
+They take one or two arguments:
+
+- `kvs` (list of :class:`pyiga.bspline.KnotVector`):
+  Describes the tensor product B-spline basis for which to assemble
+  the matrix. One :class:`KnotVector` per coordinate direction.
+- `geo` (:class:`pyiga.geometry.BSplinePatch`; optional):
+  Geometry transform, mapping from the parameter domain to the
+  physical domain. If omitted, assume the identity map; a fast
+  Kronecker product implementation is used in this case.
+
+.. autofunction:: mass
+.. autofunction:: stiffness
+
+
+.. _fast-asms:
+
+Fast low-rank assemblers
+------------------------
+
+Fast low-rank assemblers based on the paper
+"A Black-Box Algorithm for Fast Matrix Assembly in Isogeometric Analysis".
+They may achieve significant speedups over the classical Gauss assemblers,
+in particular for fine discretizations and higher spline degrees.
+They only work well if the geometry transform is rather smooth so that the
+resulting matrix has relatively low (numerical) Kronecker rank.
+
+They take the following additional arguments:
+
+- `tol`: the stopping accuracy for the Adaptive Cross Approximation (ACA)
+  algorithm
+- `maxiter`: the maximum number of ACA iterations
+- `skipcount`: terminate after finding this many successive near-zero pivots
+- `tolcount`: terminate after finding this many successive pivots below the
+  desired accuracy
+- `verbose`: the amount of output to display. `0` is silent, `1` prints
+  basic information, `2` prints detailed information
+
+.. autofunction:: mass_fast
+.. autofunction:: stiffness_fast
+
+"""
 import numpy as np
 import scipy
 import scipy.sparse

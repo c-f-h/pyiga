@@ -11,6 +11,8 @@ Welcome to pyiga's documentation!
    :caption: Contents:
 
    api/bspline
+   api/geometry
+   api/assemble
 
 
 

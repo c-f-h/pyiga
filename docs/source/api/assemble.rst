@@ -1,0 +1,5 @@
+Assembling
+==================
+
+.. automodule:: pyiga.assemble
+

@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+"""Functions and classes for B-spline basis functions.
+
+"""
 
 import numpy as np
 import scipy.sparse
@@ -6,6 +9,11 @@ import scipy.sparse.linalg
 import scipy.interpolate
 
 class KnotVector:
+    """Represents an open B-spline knot vector.
+    
+    The most convenient way to create knot vectors is the :func:`make_knots` function.
+    """
+
     def __init__(self, knots, p):
         """Construct a B-spline knot vector with the given knots and degree p.
 
@@ -108,7 +116,22 @@ class KnotVector:
 
 
 def make_knots(p, a, b, n):
-    """Create an open knot vector of degree `p` over (a,b) with `n` knot spans"""
+    """Create an open knot vector of degree `p` over an interval `(a,b)` with `n` knot spans.
+
+    This automatically repeats the first and last knots `p+1` times in order
+    to create an open knot vector. Interior knots are single, i.e., have
+    maximum continuity.
+
+    Args:
+        p (int): the spline degree
+        a (float): the starting point of the interval
+        b (float): the end point of the interval
+        n (int): the number of knot spans to divide the interval into
+
+    Returns:
+        :class:`KnotVector`: the new knot vector
+    
+    """
     kv = np.concatenate((np.repeat(a, p), np.arange(a, b, (b-a) / n), np.repeat(b, p+1)))
     return KnotVector(kv, p)
 
@@ -116,11 +139,30 @@ def make_knots(p, a, b, n):
 ################################################################################
 
 def ev(knotvec, coeffs, u):
-    """Evaluate a spline with given B-spline coefficients at all points `u`"""
+    """Evaluate a spline with given B-spline coefficients at all points `u`.
+    
+    Args:
+        knotvec (:class:`KnotVector`): B-spline knot vector
+        coeffs (`ndarray`): 1D array of coefficients, length `knotvec.numdofs`
+        u (`ndarray`): 1D array of evaluation points
+
+    Returns:
+        `ndarray`: the vector of function values
+    """
     return scipy.interpolate.splev(u, (knotvec.kv, coeffs, knotvec.p))
 
 def deriv(knotvec, coeffs, deriv, u):
-    """Evaluate a derivative of the spline with given B-spline coefficients at all points `u`"""
+    """Evaluate a derivative of the spline with given B-spline coefficients at all points `u`.
+    
+    Args:
+        knotvec (:class:`KnotVector`): B-spline knot vector
+        coeffs (`ndarray`): 1D array of coefficients, length `knotvec.numdofs`
+        deriv (int): which derivative to evaluate
+        u (`ndarray`): 1D array of evaluation points
+
+    Returns:
+        `ndarray`: the vector of function derivatives
+    """
     return scipy.interpolate.splev(u, (knotvec.kv, coeffs, knotvec.p), der=deriv)
 
 ################################################################################

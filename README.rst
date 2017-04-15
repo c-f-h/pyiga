@@ -54,7 +54,9 @@ After successful installation, you should be able to load the package. A simple 
     K = assemble.stiffness((kv,kv), geo=geo)    # assemble a stiffness matrix for the 2D tensor product
                                                 # B-spline basis over the given geometry
 
-Right now there is no comprehensive documentation, so look at the code, the unit tests,
-and the `IPython notebooks`__ to learn more.
+There is an (incomplete) `API reference`_. Beyond that, look at the code,
+the unit tests, and the `IPython notebooks`_ to learn more.
 
-__ ./notebooks
+
+.. _IPython notebooks: ./notebooks
+.. _API reference: http://pyiga.readthedocs.io/en/latest/

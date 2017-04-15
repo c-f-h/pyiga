@@ -10,8 +10,16 @@ import scipy.interpolate
 
 class KnotVector:
     """Represents an open B-spline knot vector.
+
+    This class stores both a list of knots as well as an associated
+    spline degree. It is commonly used to represent the B-spline basis
+    over that knot vector with the given spline degree.
     
     The most convenient way to create knot vectors is the :func:`make_knots` function.
+
+    Attributes:
+        kv (ndarray): vector of knots
+        p (int): spline degree
 
     .. automethod:: __init__
     """
@@ -396,7 +404,19 @@ def interpolate(kv, func, nodes=None):
 ################################################################################
 
 def prolongation(kv1, kv2):
-    """Compute prolongation matrix from B-spline basis over kv1 to that over kv2"""
+    """Compute prolongation matrix between B-spline bases.
+
+    Given two B-spline bases, where the first spans a subspace of the second
+    one, compute the matrix which maps spline coefficients from the first
+    basis to the coefficients of the same function in the second basis.
+
+    Args:
+        kv1 (:class:`KnotVector`): source B-spline basis knot vector
+        kv2 (:class:`KnotVector`): target B-spline basis knot vector
+
+    Returns:
+        csr_matrix: sparse matrix which prolongs coefficients from `kv1` to `kv2`
+    """
     g = kv2.greville()
     C1 = collocation(kv1, g).A
     C2 = collocation(kv2, g)

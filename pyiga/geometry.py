@@ -9,7 +9,7 @@ class BSplinePatch:
     """Represents a tensor product B-spline patch.
 
     Includes a tensor product B-spline basis in the form of a list
-    of :class:`KnotVector` instances and an `ndarray` of coefficients.
+    of :class:`pyiga.bspline.KnotVector` instances and an `ndarray` of coefficients.
 
     Attributes:
         kvs (seq): the knot vectors representing the tensor product basis
@@ -25,9 +25,9 @@ class BSplinePatch:
         """Construct a `d`-dimensional tensor product B-spline patch.
 
         Arguments:
-            kvs (seq): tuple of `d` :class:`KnotVector`.
+            kvs (seq): tuple of `d` :class:`pyiga.bspline.KnotVector`.
             coeffs (ndarray): an array of shape (n1, n2, ..., nd, d), where
-                    ni is the number of dofs in the i-th :class:`KnotVector`.
+                    ni is the number of dofs in the i-th :class:`pyiga.bspline.KnotVector`.
         """
         self.kvs = kvs
         self.coeffs = coeffs

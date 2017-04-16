@@ -443,6 +443,25 @@ cdef class BaseAssembler2D:
             self.from_seq(j, J)
             return self.assemble_impl(I, J)
 
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def multi_assemble(self, indices):
+        cdef size_t[2] I, J
+        cdef size_t[:,::1] idx_arr
+        cdef double[::1] result
+        cdef size_t k
+
+        idx_arr = np.array(list(indices), dtype=np.uintp)
+        result = np.empty(idx_arr.shape[0])
+
+        with nogil:
+            for k in range(idx_arr.shape[0]):
+                self.from_seq(idx_arr[k,0], I)
+                self.from_seq(idx_arr[k,1], J)
+                result[k] = self.assemble_impl(I, J)
+
+        return result
+
 
 cdef class MassAssembler2D(BaseAssembler2D):
     # shared data
@@ -609,6 +628,25 @@ cdef class BaseAssembler3D:
         self.from_seq(i, I)
         self.from_seq(j, J)
         return self.assemble_impl(I, J)
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def multi_assemble(self, indices):
+        cdef size_t[3] I, J
+        cdef size_t[:,::1] idx_arr
+        cdef double[::1] result
+        cdef size_t k
+
+        idx_arr = np.array(list(indices), dtype=np.uintp)
+        result = np.empty(idx_arr.shape[0])
+
+        with nogil:
+            for k in range(idx_arr.shape[0]):
+                self.from_seq(idx_arr[k,0], I)
+                self.from_seq(idx_arr[k,1], J)
+                result[k] = self.assemble_impl(I, J)
+
+        return result
 
 
 cdef class MassAssembler3D(BaseAssembler3D):

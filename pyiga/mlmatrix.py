@@ -106,13 +106,13 @@ def compute_banded_sparsity(n, bw):
 # Elementwise generators for ML-reordered sparse matrices
 ################################################################################
 
-def ReorderedMatrixGenerator(asm, sparsidx, n1, n2):
-    block_sizes = (n1,n1, n2,n2)
-    def entryfunc(i, j):
-        (ii,jj) = reindex_from_reordered(sparsidx[0][i], sparsidx[1][j], *block_sizes)
-        return asm(ii, jj)
+def ReorderedMatrixGenerator(multiasm, sparsidx, n1, n2):
+    def multientryfunc(indices):
+        return multiasm(
+            [reindex_from_reordered(sparsidx[0][i], sparsidx[1][j], n1, n1, n2, n2)
+                for (i,j) in indices])
     shp = tuple(len(si) for si in sparsidx)
-    return lowrank.MatrixGenerator(shp[0], shp[1], entryfunc)
+    return lowrank.MatrixGenerator(shp[0], shp[1], multientryfunc=multientryfunc)
 
 def ReorderedTensorGenerator(asm, sparsidx, bs):
     block_sizes = np.array([(b,b) for b in bs])

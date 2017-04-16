@@ -466,7 +466,7 @@ cdef class BaseAssembler2D:
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    def multi_assemble(self, indices):
+    def multi_assemble_chunk(self, indices):
         cdef size_t[2] I, J
         cdef size_t[:,::1] idx_arr
         cdef double[::1] result
@@ -482,6 +482,17 @@ cdef class BaseAssembler2D:
                 result[k] = self.assemble_impl(I, J)
 
         return result
+
+    def multi_assemble(self, indices):
+        num_cpus = multiprocessing.cpu_count()
+        if num_cpus <= 1:
+            return self.multi_assemble_chunk(indices)
+        def asm_chunk(idxchunk):
+            cdef BaseAssembler2D asm_clone = self.shared_clone()
+            return asm_clone.multi_assemble_chunk(idxchunk)
+        pool = ThreadPoolExecutor(max_workers=num_cpus)
+        results = pool.map(asm_chunk, chunk_tasks(indices, num_cpus))
+        return np.concatenate(list(results))
 
 
 cdef class MassAssembler2D(BaseAssembler2D):
@@ -694,7 +705,7 @@ cdef class BaseAssembler3D:
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    def multi_assemble(self, indices):
+    def multi_assemble_chunk(self, indices):
         cdef size_t[3] I, J
         cdef size_t[:,::1] idx_arr
         cdef double[::1] result
@@ -710,6 +721,17 @@ cdef class BaseAssembler3D:
                 result[k] = self.assemble_impl(I, J)
 
         return result
+
+    def multi_assemble(self, indices):
+        num_cpus = multiprocessing.cpu_count()
+        if num_cpus <= 1:
+            return self.multi_assemble_chunk(indices)
+        def asm_chunk(idxchunk):
+            cdef BaseAssembler3D asm_clone = self.shared_clone()
+            return asm_clone.multi_assemble_chunk(idxchunk)
+        pool = ThreadPoolExecutor(max_workers=num_cpus)
+        results = pool.map(asm_chunk, chunk_tasks(indices, num_cpus))
+        return np.concatenate(list(results))
 
 
 cdef class MassAssembler3D(BaseAssembler3D):

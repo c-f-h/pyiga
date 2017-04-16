@@ -8,9 +8,15 @@ def geos_roughly_equal(geo1, geo2, n=25):
     return np.allclose(f1, f2)
 
 def test_creation():
+    geo = unit_square()
+    assert geo.dim == 2
+    geo = perturbed_square(noise=0.05)
+    assert geo.dim == 2
     geo = bspline_quarter_annulus()
     assert geo.dim == 2
     geo = unit_cube()
+    assert geo.dim == 3
+    geo = twisted_box()
     assert geo.dim == 3
 
 def test_evaluation():

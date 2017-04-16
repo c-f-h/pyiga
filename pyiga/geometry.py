@@ -108,6 +108,12 @@ class BSplinePatch:
                       axis=0)
         return BSplinePatch((kvz,) + self.kvs, newcoefs)
 
+    def perturb(self, noise):
+        """Create a copy of this patch where all coefficients are randomly perturbed
+        by noise of the given magnitude."""
+        return BSplinePatch(self.kvs,
+            self.coeffs + 2*noise*(np.random.random_sample(self.coeffs.shape) - 0.5))
+
 ################################################################################
 # Examples of 2D geometries
 ################################################################################
@@ -140,9 +146,7 @@ def perturbed_square(num_intervals=5, noise=0.02):
     Returns:
         :class:`BSplinePatch` 2D geometry
     """
-    geo = unit_square(num_intervals)
-    geo.coeffs += 2*noise*(np.random.random_sample(geo.coeffs.shape) - 0.5)
-    return geo
+    return unit_square(num_intervals).perturb(noise)
 
 def bspline_quarter_annulus(r1=1.0, r2=2.0):
     """A B-spline approximation of a quarter annulus in the first quadrant.

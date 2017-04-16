@@ -281,6 +281,7 @@ cdef double[:,:,:,:,::1] inverses_3x3(double[:,:,:,:,::1] X):
 #### Parallelization
 
 def chunk_tasks(tasks, num_chunks):
+    """Generator that splits the list `tasks` into roughly `num_chunks` equally-sized parts."""
     n = len(tasks) // num_chunks + 1
     for i in range(0, len(tasks), n):
         yield tasks[i:i+n]

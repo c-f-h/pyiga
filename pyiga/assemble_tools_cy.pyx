@@ -601,7 +601,7 @@ cdef class BaseAssembler3D:
         i /= self.ndofs[1]
         out[0] = i
 
-    cdef double assemble_impl(self, size_t[2] i, size_t[2] j) nogil:
+    cdef double assemble_impl(self, size_t[3] i, size_t[3] j) nogil:
         return -9999.99  # Not implemented
 
     cpdef double assemble(self, size_t i, size_t j):

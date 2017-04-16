@@ -10,23 +10,23 @@ class BSplinePatch:
 
     Arguments:
         kvs (seq): tuple of `d` :class:`pyiga.bspline.KnotVector`.
-        coeffs (ndarray): an array of shape (n1, n2, ..., nd, d), where
-            ni is the number of dofs in the basis given by the i-th
+        coeffs (ndarray): an array of shape `(n1, n2, ..., nd, d)`, where
+            `ni` is the number of dofs in the basis given by the *i*-th
             :class:`pyiga.bspline.KnotVector`.
 
-    `kvs` represents a tensor product B-spline basis, where the i-th
-    :class:`pyiga.bspline.KnotVector` describes the B-spline basis in the i-th
+    `kvs` represents a tensor product B-spline basis, where the *i*-th
+    :class:`pyiga.bspline.KnotVector` describes the B-spline basis in the *i*-th
     coordinate direction.
 
     `coeffs` is an array of coefficients with respect to this tensor product
     basis. The j-th component of the geometry is represented by the
-    coefficients `coeffs[..., j]`.
+    coefficients ``coeffs[..., j]``.
  
     Attributes:
         kvs (seq): the knot vectors representing the tensor product basis
         coeffs (ndarray): the coefficients for the geometry.
-            An array of shape (n1, n2, ..., nd, `dim`), where
-            ni is the number of dofs in the i-th basis.
+            An array of shape `(n1, n2, ..., nd, dim)`, where
+            `ni` is the number of dofs in the *i*-th basis.
         dim (int): dimension of the space in which the geometry lies
     """
 

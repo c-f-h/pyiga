@@ -286,6 +286,13 @@ def chunk_tasks(tasks, num_chunks):
     for i in range(0, len(tasks), n):
         yield tasks[i:i+n]
 
+cdef object _threadpool = None
+
+cdef object get_thread_pool():
+    global _threadpool
+    if _threadpool is None:
+        _threadpool = ThreadPoolExecutor(multiprocessing.cpu_count())
+    return _threadpool
 
 ################################################################################
 # Assembler kernels
@@ -490,8 +497,7 @@ cdef class BaseAssembler2D:
         def asm_chunk(idxchunk):
             cdef BaseAssembler2D asm_clone = self.shared_clone()
             return asm_clone.multi_assemble_chunk(idxchunk)
-        pool = ThreadPoolExecutor(max_workers=num_cpus)
-        results = pool.map(asm_chunk, chunk_tasks(indices, num_cpus))
+        results = get_thread_pool().map(asm_chunk, chunk_tasks(indices, num_cpus))
         return np.concatenate(list(results))
 
 
@@ -729,8 +735,7 @@ cdef class BaseAssembler3D:
         def asm_chunk(idxchunk):
             cdef BaseAssembler3D asm_clone = self.shared_clone()
             return asm_clone.multi_assemble_chunk(idxchunk)
-        pool = ThreadPoolExecutor(max_workers=num_cpus)
-        results = pool.map(asm_chunk, chunk_tasks(indices, num_cpus))
+        results = get_thread_pool().map(asm_chunk, chunk_tasks(indices, num_cpus))
         return np.concatenate(list(results))
 
 
@@ -971,8 +976,7 @@ cdef generic_assemble_2d_parallel(BaseAssembler2D asm):
     def asm_chunk(rg):
         cdef BaseAssembler2D asm_clone = asm.shared_clone()
         return generic_assemble_2d(asm_clone, rg.start, rg.stop)
-    pool = ThreadPoolExecutor(max_workers=num_cpus+1)
-    results = pool.map(asm_chunk, chunk_tasks(range(asm.ndofs[0]), 4*num_cpus))
+    results = get_thread_pool().map(asm_chunk, chunk_tasks(range(asm.ndofs[0]), 4*num_cpus))
     return sum(results)
 
 
@@ -1056,8 +1060,7 @@ cdef generic_assemble_3d_parallel(BaseAssembler3D asm):
     def asm_chunk(rg):
         cdef BaseAssembler3D asm_clone = asm.shared_clone()
         return generic_assemble_3d(asm_clone, rg.start, rg.stop)
-    pool = ThreadPoolExecutor(max_workers=num_cpus+1)
-    results = pool.map(asm_chunk, chunk_tasks(range(asm.ndofs[0]), 4*num_cpus))
+    results = get_thread_pool().map(asm_chunk, chunk_tasks(range(asm.ndofs[0]), 4*num_cpus))
     return sum(results)
 
 

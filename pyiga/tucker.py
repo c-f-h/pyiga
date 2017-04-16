@@ -2,15 +2,21 @@ import numpy as np
 import numpy.linalg
 
 def matricize(X, k):
+    """Return the mode-`k` matricization of the ndarray `X`."""
     nk = X.shape[k]
     return np.reshape(np.swapaxes(X, 0,k), (nk,-1), order='C')
 
 def modek_tprod(X, k, B):
-    """X is an ndarray with X.shape[k] = nk and
-    B is a matrix of size nk x m.
+    """Compute the mode-`k` tensor product of the ndarray X with the matrix `B`.
 
-    The result is the mode-k tensor product of
-    size (n1, ... nk-1, j, nk+1, ..., nN)."""
+    Args:
+        X (ndarray): tensor with ``X.shape[k] == nk``
+        k (int): the mode along which to multiply `X`
+        B (ndarray): a 2D array of size `nk x m`.
+
+    Returns:
+        ndarray: the mode-`k` tensor product of size `(n1, ... nk-1, m, nk+1, ..., nN)`
+    """
     Y = np.tensordot(X, B, axes=((k,0)))
     return np.rollaxis(Y, -1, k) # put last (new) axis back into k-th position
 
@@ -27,16 +33,19 @@ def hosvd(X):
     return (C, tuple(Uk.T for Uk in U))
 
 def tucker_prod(X, Uk):
-    """Convert the Tucker tensor (X,Uk) to a full tensor"""
+    """Convert the Tucker tensor `(X,Uk)` to a full tensor (`ndarray`) by multiplying
+    each mode of `X` by the corresponding matrix in `Uk`."""
     assert len(Uk) == X.ndim
     Y = X
     for i in range(len(Uk)):
         if Uk[i] is not None:   # None is equivalent to identity
-            Y = modek_tprod(Y, i, Uk[i])
+            Y = np.tensordot(Y, Uk[i], axes=(0,0))  # tensordot brings the new axis to the end
+        else:   # None, do not change this dimension
+            Y = np.rollaxis(Y, 0, len(Uk))   # bring this axes to the end
     return Y
 
 def truncate(T, k):
-    """Truncate a Tucker tensor to the given rank `k`"""
+    """Truncate a Tucker tensor `T` to the given rank `k`."""
     C, Uk = T
     N = C.ndim
     if np.isscalar(k):
@@ -47,14 +56,14 @@ def truncate(T, k):
     return (C[slices], tuple(Uk[i][slices[i],:] for i in range(N)))
 
 def find_best_truncation_axis(X):
-    """Find the axis along which truncating the last slice causes the smallest error"""
+    """Find the axis along which truncating the last slice causes the smallest error."""
     errors = [np.linalg.norm(np.swapaxes(X, i, 0)[-1].ravel())
               for i in range(X.ndim)]
     i = np.argmin(errors)
     return i, errors[i]
 
 def find_truncation_rank(X, tol=1e-12):
-    """A greedy algorithm for finding a good truncation rank for a HOSVD core tensor"""
+    """A greedy algorithm for finding a good truncation rank for a HOSVD core tensor."""
     total_err_squ = 0.0
     tolsq = tol**2
     while X.size > 0:

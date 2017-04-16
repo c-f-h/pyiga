@@ -10,17 +10,20 @@ class BSplinePatch:
 
     Arguments:
         kvs (seq): tuple of `d` :class:`pyiga.bspline.KnotVector`.
-        coeffs (ndarray): an array of shape `(n1, n2, ..., nd, d)`, where
-            `ni` is the number of dofs in the basis given by the *i*-th
+        coeffs (ndarray): the control points. Array of shape `(n1, n2, ..., nd, d)`,
+            where `ni` is the number of dofs in the basis given by the *i*-th
             :class:`pyiga.bspline.KnotVector`.
 
     `kvs` represents a tensor product B-spline basis, where the *i*-th
     :class:`pyiga.bspline.KnotVector` describes the B-spline basis in the *i*-th
     coordinate direction.
 
-    `coeffs` is an array of coefficients with respect to this tensor product
-    basis. The j-th component of the geometry is represented by the
-    coefficients ``coeffs[..., j]``.
+    `coeffs` are the control points, i.e., an array of coefficients with
+    respect to this tensor product basis.
+    The control point for the tensor product basis function `(i1, ..., id)`
+    is given by ``coeffs[i1, ..., id, :]``.
+    The j-th component of the geometry is
+    represented by the coefficients ``coeffs[..., j]``.
  
     Attributes:
         kvs (seq): the knot vectors representing the tensor product basis

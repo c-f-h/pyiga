@@ -9,27 +9,28 @@ import scipy.sparse.linalg
 import scipy.interpolate
 
 class KnotVector:
-    """Represents an open B-spline knot vector.
+    """Represents an open B-spline knot vector together with a spline degree.
 
-    This class stores both a list of knots as well as an associated
-    spline degree. It is commonly used to represent the B-spline basis
-    over that knot vector with the given spline degree.
-    
-    The most convenient way to create knot vectors is the :func:`make_knots` function.
+    Args:
+        knots (ndarray): the 1D knot vector. Should be an open knot vector,
+            i.e., the first and last knot should be repeated `p+1` times.
+            Interior knots may be single or repeated up to `p` times.
+        p (int): the spline degree.
+
+    This class is commonly used to represent the B-spline basis
+    over the given knot vector with the given spline degree.
+    The B-splines are normalized in the sense that they satisfy a
+    partition of unity property.
+
+    A more convenient way to create knot vectors is the :func:`make_knots` function.
 
     Attributes:
         kv (ndarray): vector of knots
         p (int): spline degree
-
-    .. automethod:: __init__
     """
 
     def __init__(self, knots, p):
-        """Construct a B-spline knot vector with the given knots and degree p.
-
-        Knots should be an open knot vector, i.e., the first and last knot should
-        be repeated p+1 times.
-        """
+        """Construct an open B-spline knot vector with given `knots` and degree `p`."""
         self.kv = knots
         self.p = p
         self._mesh = None    # knots with duplicates removed (on demand)

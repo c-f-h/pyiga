@@ -6,29 +6,32 @@ from . import bspline
 from .kronecker import apply_tprod
 
 class BSplinePatch:
-    """Represents a tensor product B-spline patch.
+    """Represents a `d`-dimensional tensor product B-spline patch.
 
-    Includes a tensor product B-spline basis in the form of a list
-    of :class:`pyiga.bspline.KnotVector` instances and an `ndarray` of coefficients.
+    Arguments:
+        kvs (seq): tuple of `d` :class:`pyiga.bspline.KnotVector`.
+        coeffs (ndarray): an array of shape (n1, n2, ..., nd, d), where
+            ni is the number of dofs in the basis given by the i-th
+            :class:`pyiga.bspline.KnotVector`.
 
+    `kvs` represents a tensor product B-spline basis, where the i-th
+    :class:`pyiga.bspline.KnotVector` describes the B-spline basis in the i-th
+    coordinate direction.
+
+    `coeffs` is an array of coefficients with respect to this tensor product
+    basis. The j-th component of the geometry is represented by the
+    coefficients `coeffs[..., j]`.
+ 
     Attributes:
         kvs (seq): the knot vectors representing the tensor product basis
         coeffs (ndarray): the coefficients for the geometry.
             An array of shape (n1, n2, ..., nd, `dim`), where
             ni is the number of dofs in the i-th basis.
         dim (int): dimension of the space in which the geometry lies
-
-    .. automethod:: __init__
     """
 
     def __init__(self, kvs, coeffs):
-        """Construct a `d`-dimensional tensor product B-spline patch.
-
-        Arguments:
-            kvs (seq): tuple of `d` :class:`pyiga.bspline.KnotVector`.
-            coeffs (ndarray): an array of shape (n1, n2, ..., nd, d), where
-                    ni is the number of dofs in the i-th :class:`pyiga.bspline.KnotVector`.
-        """
+        """Construct a dimensional tensor product B-spline patch with the given knot vectors and coefficients."""
         self.kvs = kvs
         self.coeffs = coeffs
         self.dim = len(kvs)
@@ -40,8 +43,9 @@ class BSplinePatch:
     def eval(self, *x):
         """Evaluate the geometry at a single point of the parameter domain.
 
-        NB: For now, the components of x are in reverse order (e.g., zyx) to
-        be consistent with the grid evaluation functions below.
+        .. note::
+            The components of x are in reverse order (e.g., zyx) to
+            be consistent with the grid evaluation functions below.
         """
         coords = [ [t] for t in x ]
         return self.grid_eval(np.array(coords))
@@ -90,7 +94,7 @@ class BSplinePatch:
 
     def extrude(self, z0=0.0, z1=1.0):
         """Create a patch with one additional space dimension by
-        linearly extruding along the new axis from z0 to z1.
+        linearly extruding along the new axis from `z0` to `z1`.
         """
         kvz = bspline.make_knots(1, 0.0, 1.0, 1)      # linear KV with a single interval
 

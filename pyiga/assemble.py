@@ -15,6 +15,8 @@ They take one or two arguments:
 - `kvs` (list of :class:`pyiga.bspline.KnotVector`):
   Describes the tensor product B-spline basis for which to assemble
   the matrix. One :class:`KnotVector` per coordinate direction.
+  In the 1D case, a single :class:`pyiga.bspline.KnotVector` may be passed
+  directly.
 - `geo` (:class:`pyiga.geometry.BSplinePatch`; optional):
   Geometry transform, mapping from the parameter domain to the
   physical domain. If omitted, assume the identity map; a fast

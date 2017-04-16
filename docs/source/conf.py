@@ -105,6 +105,9 @@ html_static_path = ['_static']
 
 html_show_sourcelink = False
 
+html_sidebars = { '**':
+        ['globaltoc.html', 'relations.html', 'searchbox.html'], }
+
 
 # -- Options for HTMLHelp output ------------------------------------------
 

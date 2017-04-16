@@ -1,3 +1,20 @@
+r"""Functions for manipulating tensors in Tucker format and computing the HOSVD.
+
+A *d*-dimensional Tucker tensor is given by a (typically small) core tensor
+
+.. math::
+    X \in \mathbb R^{m_1 \times \ldots \times m_d}
+
+and a list of *d* matrices
+
+.. math::
+    U_k \in \mathbb R^{n_k \times m_k}, \qquad k=1,\ldots,d.
+
+When expanded, it represents a full tensor
+
+.. math::
+    A \in \mathbb R^{n_1 \times \ldots \times n_d}.
+"""
 import numpy as np
 import numpy.linalg
 

@@ -19,6 +19,8 @@ from . cimport fast_assemble_cy
 from concurrent.futures import ThreadPoolExecutor
 import multiprocessing
 
+import itertools
+
 ################################################################################
 # Public utility functions
 ################################################################################
@@ -492,32 +494,35 @@ cdef class BaseAssembler2D:
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    def multi_assemble_chunk(self, indices):
+    cdef void multi_assemble_chunk(self, size_t[:,::1] idx_arr, double[::1] out) nogil:
         cdef size_t[2] I, J
-        cdef size_t[:,::1] idx_arr
-        cdef double[::1] result
         cdef size_t k
 
-        idx_arr = np.array(list(indices), dtype=np.uintp)
-        result = np.empty(idx_arr.shape[0])
+        for k in range(idx_arr.shape[0]):
+            self.from_seq(idx_arr[k,0], I)
+            self.from_seq(idx_arr[k,1], J)
+            out[k] = self.assemble_impl(I, J)
 
+    cpdef void _asm_chunk(self, int threadid, size_t[:,::1] idxchunk, double[::1] out):
+        cdef BaseAssembler2D asm_clone
+        asm_clone = self if threadid==0 else self.shared_clone()
         with nogil:
-            for k in range(idx_arr.shape[0]):
-                self.from_seq(idx_arr[k,0], I)
-                self.from_seq(idx_arr[k,1], J)
-                result[k] = self.assemble_impl(I, J)
-
-        return result
+            asm_clone.multi_assemble_chunk(idxchunk, out)
 
     def multi_assemble(self, indices):
+        cdef size_t[:,::1] idx_arr = np.array(list(indices), dtype=np.uintp)
+        cdef double[::1] result = np.empty(idx_arr.shape[0])
+
         num_cpus = multiprocessing.cpu_count()
         if num_cpus <= 1:
-            return self.multi_assemble_chunk(indices)
-        def asm_chunk(idxchunk):
-            cdef BaseAssembler2D asm_clone = self.shared_clone()
-            return asm_clone.multi_assemble_chunk(idxchunk)
-        results = get_thread_pool().map(asm_chunk, chunk_tasks(indices, num_cpus))
-        return np.concatenate(list(results))
+            self.multi_assemble_chunk(idx_arr, result)
+        else:
+            results = get_thread_pool().map(self._asm_chunk,
+                        itertools.count(),
+                        chunk_tasks(idx_arr, num_cpus),
+                        chunk_tasks(result, num_cpus))
+            list(results)   # wait for threads to finish
+        return result
 
 
 cdef class MassAssembler2D(BaseAssembler2D):
@@ -730,32 +735,35 @@ cdef class BaseAssembler3D:
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    def multi_assemble_chunk(self, indices):
+    cdef void multi_assemble_chunk(self, size_t[:,::1] idx_arr, double[::1] out) nogil:
         cdef size_t[3] I, J
-        cdef size_t[:,::1] idx_arr
-        cdef double[::1] result
         cdef size_t k
 
-        idx_arr = np.array(list(indices), dtype=np.uintp)
-        result = np.empty(idx_arr.shape[0])
+        for k in range(idx_arr.shape[0]):
+            self.from_seq(idx_arr[k,0], I)
+            self.from_seq(idx_arr[k,1], J)
+            out[k] = self.assemble_impl(I, J)
 
+    cpdef void _asm_chunk(self, int threadid, size_t[:,::1] idxchunk, double[::1] out):
+        cdef BaseAssembler3D asm_clone
+        asm_clone = self if threadid==0 else self.shared_clone()
         with nogil:
-            for k in range(idx_arr.shape[0]):
-                self.from_seq(idx_arr[k,0], I)
-                self.from_seq(idx_arr[k,1], J)
-                result[k] = self.assemble_impl(I, J)
-
-        return result
+            asm_clone.multi_assemble_chunk(idxchunk, out)
 
     def multi_assemble(self, indices):
+        cdef size_t[:,::1] idx_arr = np.array(list(indices), dtype=np.uintp)
+        cdef double[::1] result = np.empty(idx_arr.shape[0])
+
         num_cpus = multiprocessing.cpu_count()
         if num_cpus <= 1:
-            return self.multi_assemble_chunk(indices)
-        def asm_chunk(idxchunk):
-            cdef BaseAssembler3D asm_clone = self.shared_clone()
-            return asm_clone.multi_assemble_chunk(idxchunk)
-        results = get_thread_pool().map(asm_chunk, chunk_tasks(indices, num_cpus))
-        return np.concatenate(list(results))
+            self.multi_assemble_chunk(idx_arr, result)
+        else:
+            results = get_thread_pool().map(self._asm_chunk,
+                        itertools.count(),
+                        chunk_tasks(idx_arr, num_cpus),
+                        chunk_tasks(result, num_cpus))
+            list(results)   # wait for threads to finish
+        return result
 
 
 cdef class MassAssembler3D(BaseAssembler3D):

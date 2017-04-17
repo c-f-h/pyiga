@@ -282,7 +282,7 @@ cdef double[:,:,:,:,::1] inverses_3x3(double[:,:,:,:,::1] X):
 
 def chunk_tasks(tasks, num_chunks):
     """Generator that splits the list `tasks` into roughly `num_chunks` equally-sized parts."""
-    n = (len(tasks) + num_chunks - 1) // num_chunks
+    n = len(tasks) // num_chunks + 1
     for i in range(0, len(tasks), n):
         yield tasks[i:i+n]
 
@@ -976,7 +976,7 @@ cdef generic_assemble_2d_parallel(BaseAssembler2D asm):
     def asm_chunk(rg):
         cdef BaseAssembler2D asm_clone = asm.shared_clone()
         return generic_assemble_2d(asm_clone, rg.start, rg.stop)
-    results = get_thread_pool().map(asm_chunk, chunk_tasks(range(asm.ndofs[0]), 2*num_cpus))
+    results = get_thread_pool().map(asm_chunk, chunk_tasks(range(asm.ndofs[0]), 4*num_cpus))
     return sum(results)
 
 
@@ -1060,7 +1060,7 @@ cdef generic_assemble_3d_parallel(BaseAssembler3D asm):
     def asm_chunk(rg):
         cdef BaseAssembler3D asm_clone = asm.shared_clone()
         return generic_assemble_3d(asm_clone, rg.start, rg.stop)
-    results = get_thread_pool().map(asm_chunk, chunk_tasks(range(asm.ndofs[0]), 2*num_cpus))
+    results = get_thread_pool().map(asm_chunk, chunk_tasks(range(asm.ndofs[0]), 4*num_cpus))
     return sum(results)
 
 

@@ -114,18 +114,20 @@ def ReorderedMatrixGenerator(multiasm, sparsidx, n1, n2):
     shp = tuple(len(si) for si in sparsidx)
     return lowrank.MatrixGenerator(shp[0], shp[1], multientryfunc=multientryfunc)
 
-def ReorderedTensorGenerator(asm, sparsidx, bs):
+def ReorderedTensorGenerator(multiasm, sparsidx, bs):
     block_sizes = np.array([(b,b) for b in bs])
     L = len(sparsidx)
     assert L == block_sizes.shape[0]
     Ms = L * [None]
-    def entryfunc(M):
-        for k in range(L):
-            Ms[k] = sparsidx[k][M[k]]
-        i,j = reindex_from_multilevel(Ms, block_sizes)
-        return asm(i, j)
+    def multientryfunc(indices):
+        indices = list(indices)
+        for n in range(len(indices)):
+            for k in range(L):
+                Ms[k] = sparsidx[k][indices[n][k]]
+            indices[n] = reindex_from_multilevel(Ms, block_sizes)
+        return multiasm(indices)
     shp = tuple(len(si) for si in sparsidx)
-    return lowrank.TensorGenerator(shp, entryfunc)
+    return lowrank.TensorGenerator(shp, multientryfunc=multientryfunc)
 
 
 

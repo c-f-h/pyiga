@@ -62,24 +62,42 @@ class MatrixGenerator:
 
 
 class TensorGenerator:
-    def __init__(self, shape, entryfunc):
+    def __init__(self, shape, entryfunc=None, multientryfunc=None):
         self.shape = tuple(shape)
-        self.entryfunc = entryfunc
+        assert entryfunc is not None or multientryfunc is not None, \
+            "At least one of entryfunc and multientryfunc must be specified"
+        if entryfunc is not None:
+            self.entry = entryfunc
+        if multientryfunc is not None:
+            self.compute_entries = multientryfunc
+
+    @staticmethod
+    def from_array(X):
+        return TensorGenerator(X.shape, lambda I: X[tuple(I)])
 
     def entry(self, I):
         """Generate the entry at index I"""
-        return self.entryfunc(I)
+        return self.compute_entries([I])[0]
+
+    def compute_entries(self, indices):
+        """Compute all entries given by the list of tuples `indices`."""
+        indices = list(indices)
+        n = len(indices)
+        result = np.empty(n)
+        for i in range(n):
+            result[i] = self.entry(indices[i])
+        return result
 
     def fiber_at(self, I, axis):
         """Generate the fiber (vector) passing through index I along the given axis"""
         assert len(I) == len(self.shape)
         I = list(I)
         m = self.shape[axis]
-        x = np.empty(m)
+        indices = []
         for i in range(m):
             I[axis] = i
-            x[i] = self.entryfunc(I)
-        return x
+            indices.append(tuple(I))
+        return self.compute_entries(indices)
 
     def matrix_at(self, I, axes):
         """Return a MatrixGenerator for the matrix slice of this tensor which
@@ -87,20 +105,23 @@ class TensorGenerator:
         assert len(axes) == 2
         assert len(I) == len(self.shape)
         I = list(I)
-        def entryfunc(i, j):
-            I[axes[0]] = i
-            I[axes[1]] = j
-            return self.entryfunc(I)
+        def multientryfunc(indices):
+            indices = list(indices)
+            for k in range(len(indices)):
+                I[axes[0]], I[axes[1]] = indices[k]
+                indices[k] = tuple(I)
+            return self.compute_entries(indices)
+
         return MatrixGenerator(self.shape[axes[0]],
                                self.shape[axes[1]],
-                               entryfunc)
+                               multientryfunc=multientryfunc)
 
     def full(self):
         """Generate the full tensor as an np.ndarray"""
-        X = np.empty(self.shape)
-        for I in np.ndindex(X.shape):
-            X[I] = self.entryfunc(I)
-        return X
+        return self.compute_entries(
+            (i,j,k) for i in range(self.shape[0])
+                    for j in range(self.shape[1])
+                    for k in range(self.shape[2])).reshape(self.shape, order='C')
 
 
 ################################################################################

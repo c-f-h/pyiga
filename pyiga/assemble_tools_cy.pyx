@@ -1,3 +1,4 @@
+# cython: language_level=3
 # cython: profile=False
 # cython: linetrace=False
 # cython: binding=False
@@ -13,14 +14,32 @@ import scipy.sparse
 
 from . import bspline
 from .quadrature import make_iterated_quadrature
-#from . cimport fast_assemble_cy
-cimport fast_assemble_cy
+from . cimport fast_assemble_cy
 
 from concurrent.futures import ThreadPoolExecutor
 import multiprocessing
 
 ################################################################################
-# Helper functions
+# Public utility functions
+################################################################################
+
+cpdef void rank_1_update(double[:,::1] X, double alpha, double[::1] u, double[::1] v):
+    """Perform the update `X += alpha * u * v^T`.
+
+    This does the same thing as the BLAS function `dger`, but OpenBLAS
+    tries to parallelize it, which hurts more than it helps. Instead of
+    forcing OMP_NUM_THREADS=1, which slows down many other things,
+    we write our own.
+    """
+    cdef double au
+    cdef size_t i, j
+    for i in range(X.shape[0]):
+        au = alpha * u[i]
+        for j in range(X.shape[1]):
+            X[i,j] += au * v[j]
+
+################################################################################
+# Internal helper functions
 ################################################################################
 
 cdef struct IntInterval:

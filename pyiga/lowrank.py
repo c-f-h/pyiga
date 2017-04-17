@@ -1,6 +1,8 @@
 import numpy as np
 import numpy.random
 
+from . import assemble_tools
+
 ################################################################################
 # Utility classes for entrywise matrix/tensor generation
 ################################################################################
@@ -128,17 +130,6 @@ class TensorGenerator:
 # Adaptive cross approximation (ACA)
 ################################################################################
 
-from scipy.linalg.blas import dger
-
-def _rank_1_update(X, alpha, u, v):
-    # Basic Numpy version:
-    #X += (alpha * u)[:, None] * v[None, :]
-
-    # Direct BLAS call:
-    # This only works if X is a C-contiguous array of doubles!
-    # We transpose X to get it in Fortran order and update it in place.
-    dger(alpha, v, u, 1, 1, X.T, 0, 0, 1)
-
 def aca(A, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2, startval=None):
     """Adaptive Cross Approximation (ACA) algorithm with row pivoting"""
     if not isinstance(A, MatrixGenerator):
@@ -181,7 +172,7 @@ def aca(A, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2, startval=
             print(i, '\t', j0, '\t', e)
 
         col = A.column(j0) - X[:,j0]
-        _rank_1_update(X, 1 / E_row[j0], col, E_row)
+        assemble_tools.rank_1_update(X, 1 / E_row[j0], col, E_row)
 
         col[i] = 0  # error is now 0 there
         i = abs(col).argmax()   # choose next row to pivot on

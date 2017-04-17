@@ -1,3 +1,4 @@
+# cython: language_level=3
 # cython: profile=False
 # cython: linetrace=False
 # cython: binding=False
@@ -12,8 +13,7 @@ import scipy.sparse
 
 from . import bspline
 from .quadrature import make_iterated_quadrature
-#from . cimport fast_assemble_cy
-cimport fast_assemble_cy
+from . cimport fast_assemble_cy
 
 ################################################################################
 # Helper functions

@@ -307,12 +307,15 @@ def chunk_tasks(tasks, num_chunks):
     for i in range(0, len(tasks), n):
         yield tasks[i:i+n]
 
+def get_max_threads():
+    return multiprocessing.cpu_count()
+
 cdef object _threadpool = None
 
 cdef object get_thread_pool():
     global _threadpool
     if _threadpool is None:
-        _threadpool = ThreadPoolExecutor(multiprocessing.cpu_count())
+        _threadpool = ThreadPoolExecutor(get_max_threads())
     return _threadpool
 
 ################################################################################
@@ -509,8 +512,8 @@ cdef class BaseAssembler2D:
         cdef size_t[:,::1] idx_arr = np.array(list(indices), dtype=np.uintp)
         cdef double[::1] result = np.empty(idx_arr.shape[0])
 
-        num_cpus = multiprocessing.cpu_count()
-        if num_cpus <= 1:
+        num_threads = get_max_threads()
+        if num_threads <= 1:
             self.multi_assemble_chunk(idx_arr, result)
         else:
             thread_pool = get_thread_pool()
@@ -520,8 +523,8 @@ cdef class BaseAssembler2D:
 
             results = thread_pool.map(_asm_chunk_2d,
                         self._asm_pool,
-                        chunk_tasks(idx_arr, num_cpus),
-                        chunk_tasks(result, num_cpus))
+                        chunk_tasks(idx_arr, num_threads),
+                        chunk_tasks(result, num_threads))
             list(results)   # wait for threads to finish
         return result
 
@@ -755,8 +758,8 @@ cdef class BaseAssembler3D:
         cdef size_t[:,::1] idx_arr = np.array(list(indices), dtype=np.uintp)
         cdef double[::1] result = np.empty(idx_arr.shape[0])
 
-        num_cpus = multiprocessing.cpu_count()
-        if num_cpus <= 1:
+        num_threads = get_max_threads()
+        if num_threads <= 1:
             self.multi_assemble_chunk(idx_arr, result)
         else:
             thread_pool = get_thread_pool()
@@ -766,8 +769,8 @@ cdef class BaseAssembler3D:
 
             results = thread_pool.map(_asm_chunk_3d,
                         self._asm_pool,
-                        chunk_tasks(idx_arr, num_cpus),
-                        chunk_tasks(result, num_cpus))
+                        chunk_tasks(idx_arr, num_threads),
+                        chunk_tasks(result, num_threads))
             list(results)   # wait for threads to finish
         return result
 
@@ -1007,13 +1010,13 @@ cdef object generic_assemble_2d(BaseAssembler2D asm, long chunk_start=-1, long c
 
 
 cdef generic_assemble_2d_parallel(BaseAssembler2D asm):
-    num_cpus = multiprocessing.cpu_count()
-    if num_cpus <= 1:
+    num_threads = get_max_threads()
+    if num_threads <= 1:
         return generic_assemble_2d(asm)
     def asm_chunk(rg):
         cdef BaseAssembler2D asm_clone = asm.shared_clone()
         return generic_assemble_2d(asm_clone, rg.start, rg.stop)
-    results = get_thread_pool().map(asm_chunk, chunk_tasks(range(asm.ndofs[0]), 4*num_cpus))
+    results = get_thread_pool().map(asm_chunk, chunk_tasks(range(asm.ndofs[0]), 4*num_threads))
     return sum(results)
 
 
@@ -1091,13 +1094,13 @@ cdef object generic_assemble_3d(BaseAssembler3D asm, long chunk_start=-1, long c
 
 
 cdef generic_assemble_3d_parallel(BaseAssembler3D asm):
-    num_cpus = multiprocessing.cpu_count()
-    if num_cpus <= 1:
+    num_threads = get_max_threads()
+    if num_threads <= 1:
         return generic_assemble_3d(asm)
     def asm_chunk(rg):
         cdef BaseAssembler3D asm_clone = asm.shared_clone()
         return generic_assemble_3d(asm_clone, rg.start, rg.stop)
-    results = get_thread_pool().map(asm_chunk, chunk_tasks(range(asm.ndofs[0]), 4*num_cpus))
+    results = get_thread_pool().map(asm_chunk, chunk_tasks(range(asm.ndofs[0]), 4*num_threads))
     return sum(results)
 
 

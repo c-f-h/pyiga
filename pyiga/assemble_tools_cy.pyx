@@ -458,12 +458,14 @@ cdef class BaseAssembler2D:
     cdef int nqp
     cdef size_t[2] ndofs
     cdef vector[ssize_t[:,::1]] meshsupp
+    cdef list _asm_pool     # list of shared clones for multithreading
 
     cdef void base_init(self, kvs):
         assert len(kvs) == 2, "Assembler requires two knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
         self.meshsupp = [kvs[k].mesh_support_idx_all() for k in range(2)]
+        self._asm_pool = []
 
     cdef _share_base(self, BaseAssembler2D asm):
         asm.nqp = self.nqp
@@ -503,12 +505,6 @@ cdef class BaseAssembler2D:
             self.from_seq(idx_arr[k,1], J)
             out[k] = self.assemble_impl(I, J)
 
-    cpdef void _asm_chunk(self, int threadid, size_t[:,::1] idxchunk, double[::1] out):
-        cdef BaseAssembler2D asm_clone
-        asm_clone = self if threadid==0 else self.shared_clone()
-        with nogil:
-            asm_clone.multi_assemble_chunk(idxchunk, out)
-
     def multi_assemble(self, indices):
         cdef size_t[:,::1] idx_arr = np.array(list(indices), dtype=np.uintp)
         cdef double[::1] result = np.empty(idx_arr.shape[0])
@@ -517,12 +513,21 @@ cdef class BaseAssembler2D:
         if num_cpus <= 1:
             self.multi_assemble_chunk(idx_arr, result)
         else:
-            results = get_thread_pool().map(self._asm_chunk,
-                        itertools.count(),
+            thread_pool = get_thread_pool()
+            if not self._asm_pool:
+                self._asm_pool = [self] + [self.shared_clone()
+                        for i in range(1, thread_pool._max_workers)]
+
+            results = thread_pool.map(_asm_chunk_2d,
+                        self._asm_pool,
                         chunk_tasks(idx_arr, num_cpus),
                         chunk_tasks(result, num_cpus))
             list(results)   # wait for threads to finish
         return result
+
+cpdef void _asm_chunk_2d(BaseAssembler2D asm, size_t[:,::1] idxchunk, double[::1] out):
+    with nogil:
+        asm.multi_assemble_chunk(idxchunk, out)
 
 
 cdef class MassAssembler2D(BaseAssembler2D):
@@ -696,12 +701,14 @@ cdef class BaseAssembler3D:
     cdef int nqp
     cdef size_t[3] ndofs
     cdef vector[ssize_t[:,::1]] meshsupp
+    cdef list _asm_pool     # list of shared clones for multithreading
 
     cdef base_init(self, kvs):
         assert len(kvs) == 3, "Assembler requires three knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
         self.meshsupp = [kvs[k].mesh_support_idx_all() for k in range(3)]
+        self._asm_pool = []
 
     cdef _share_base(self, BaseAssembler3D asm):
         asm.nqp = self.nqp
@@ -744,12 +751,6 @@ cdef class BaseAssembler3D:
             self.from_seq(idx_arr[k,1], J)
             out[k] = self.assemble_impl(I, J)
 
-    cpdef void _asm_chunk(self, int threadid, size_t[:,::1] idxchunk, double[::1] out):
-        cdef BaseAssembler3D asm_clone
-        asm_clone = self if threadid==0 else self.shared_clone()
-        with nogil:
-            asm_clone.multi_assemble_chunk(idxchunk, out)
-
     def multi_assemble(self, indices):
         cdef size_t[:,::1] idx_arr = np.array(list(indices), dtype=np.uintp)
         cdef double[::1] result = np.empty(idx_arr.shape[0])
@@ -758,12 +759,21 @@ cdef class BaseAssembler3D:
         if num_cpus <= 1:
             self.multi_assemble_chunk(idx_arr, result)
         else:
-            results = get_thread_pool().map(self._asm_chunk,
-                        itertools.count(),
+            thread_pool = get_thread_pool()
+            if not self._asm_pool:
+                self._asm_pool = [self] + [self.shared_clone()
+                        for i in range(1, thread_pool._max_workers)]
+
+            results = thread_pool.map(_asm_chunk_3d,
+                        self._asm_pool,
                         chunk_tasks(idx_arr, num_cpus),
                         chunk_tasks(result, num_cpus))
             list(results)   # wait for threads to finish
         return result
+
+cpdef void _asm_chunk_3d(BaseAssembler3D asm, size_t[:,::1] idxchunk, double[::1] out):
+    with nogil:
+        asm.multi_assemble_chunk(idxchunk, out)
 
 
 cdef class MassAssembler3D(BaseAssembler3D):

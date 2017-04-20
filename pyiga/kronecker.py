@@ -60,7 +60,6 @@ def _apply_kronecker_dense(ops, x):
     if x.ndim == 2 and x.shape[1] > 1:
         m = x.shape[1]
         shape = shape + (m,)
-        ops = tuple(ops) + (None,)  # treat last axis as identity
     X = x.reshape(shape)
     Y = apply_tprod(ops, X)
     return Y.reshape(x.shape)
@@ -81,11 +80,26 @@ def KroneckerOperator(*ops):
 
 
 def apply_tprod(ops, A):
-    """Apply tensor product of operators to ndarray A.
+    """Apply tensor product of operators to ndarray `A`.
+
+    Args:
+        ops (seq): a list of matrices
+        A (ndarray): a tensor
+    Returns:
+        ndarray: a new tensor with the same number of axes as `A`
+            that is the result of applying the tensor product operator
+            `ops[0] x ... x ops[-1]` to `A`
 
     This does essentially the same as apply_kronecker, but assumes
     that A is an ndarray with the proper number of dimensions rather
-    than its matricization."""
+    than its matricization.
+    See also :func:`pyiga.tucker.tucker_prod`, which is almost
+    equivalent, but uses transposed matrices.
+
+    The initial dimensions of `A` must match the sizes of the
+    operators, but `A` is allowed to have an arbitrary number of
+    trailing dimensions. ``None`` is a valid operator and is
+    treated like the identity."""
     # this works only for dense matrices as operators
     n = len(ops)
     for i in reversed(range(n)):

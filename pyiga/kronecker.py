@@ -95,3 +95,18 @@ def apply_tprod(ops, A):
             A = np.rollaxis(A, n-1, 0)   # bring this axis to the front
     return A
 
+
+def DiagonalOperator(diag):
+    """Return a `LinearOperator` which acts like a diagonal matrix
+    with the given diagonal."""
+    diag = np.squeeze(diag)
+    assert diag.ndim == 1, 'Diagonal must be a vector'
+    N = diag.shape[0]
+    matvec = lambda x: diag * x
+    return scipy.sparse.linalg.LinearOperator(
+        shape=(N,N),
+        matvec=matvec,
+        rmatvec=matvec,
+        matmat=lambda x: diag[:,None] * x,
+        dtype=diag.dtype
+    )

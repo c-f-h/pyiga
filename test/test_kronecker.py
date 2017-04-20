@@ -66,3 +66,5 @@ def test_diagonal():
     D = np.diag(diag)
     x = rand(n)
     assert np.allclose(D.dot(x), diag_op*x)
+    x = rand(n,2)
+    assert np.allclose(D.dot(x), diag_op*x)

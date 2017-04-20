@@ -58,7 +58,7 @@ def tucker_prod(X, Uk):
         if Uk[i] is not None:   # None is equivalent to identity
             Y = np.tensordot(Y, Uk[i], axes=(0,0))  # tensordot brings the new axis to the end
         else:   # None, do not change this dimension
-            Y = np.rollaxis(Y, 0, len(Uk))   # bring this axes to the end
+            Y = np.rollaxis(Y, 0, Y.ndim)   # bring this axis to the end
     return Y
 
 def truncate(T, k):

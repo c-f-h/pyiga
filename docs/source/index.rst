@@ -14,6 +14,7 @@ Welcome to pyiga's documentation!
    api/geometry
    api/assemble
    api/tucker
+   api/multigrid
 
 
 

@@ -13,6 +13,7 @@ Welcome to pyiga's documentation!
    api/bspline
    api/geometry
    api/assemble
+   api/kronecker
    api/tucker
    api/multigrid
 

@@ -66,6 +66,9 @@ def _apply_kronecker_dense(ops, x):
 
 
 def KroneckerOperator(*ops):
+    """Return a `LinearOperator` which efficiently implements the
+    application of the Kronecker product of the given input operators.
+    """
     # assumption: all operators are square
     sz = np.prod([A.shape[0] for A in ops])
     if all(isinstance(A, np.ndarray) for A in ops):
@@ -86,11 +89,11 @@ def apply_tprod(ops, A):
         ops (seq): a list of matrices
         A (ndarray): a tensor
     Returns:
-        ndarray: a new tensor with the same number of axes as `A`
-            that is the result of applying the tensor product operator
-            `ops[0] x ... x ops[-1]` to `A`
+        ndarray: a new tensor with the same number of axes as `A` that is
+        the result of applying the tensor product operator
+        ``ops[0] x ... x ops[-1]`` to `A`
 
-    This does essentially the same as apply_kronecker, but assumes
+    This does essentially the same as :func:`apply_kronecker`, but assumes
     that A is an ndarray with the proper number of dimensions rather
     than its matricization.
     See also :func:`pyiga.tucker.tucker_prod`, which is almost

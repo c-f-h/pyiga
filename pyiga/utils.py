@@ -2,6 +2,15 @@ import numpy as np
 import scipy.sparse
 import scipy.sparse.linalg
 
+def grid_eval(f, grid):
+    if hasattr(f, 'grid_eval'):
+        return f.grid_eval(grid)
+    else:
+        mesh = np.meshgrid(*grid, sparse=True, indexing='ij')
+        mesh.reverse() # convert order ZYX into XYZ
+        values = f(*mesh)
+        return values
+
 
 def make_solver(B, symmetric=False):
     """Construct a linear solver for the (dense or sparse) square matrix B.

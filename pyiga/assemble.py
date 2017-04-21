@@ -65,6 +65,7 @@ import scipy.sparse
 from . import bspline
 from . import assemble_tools
 from . import kronecker
+from . import utils
 
 from .quadrature import make_iterated_quadrature
 
@@ -242,15 +243,6 @@ def bsp_stiffness_3d(knotvecs, geo=None):
 # Assembling right-hand sides
 ################################################################################
 
-def _grid_eval(f, grid):
-    if hasattr(f, 'grid_eval'):
-        return f.grid_eval(grid)
-    else:
-        mesh = np.meshgrid(*grid, sparse=True, indexing='ij')
-        mesh.reverse() # convert order ZYX into XYZ
-        values = f(*mesh)
-        return values
-
 def inner_products(kvs, f):
     """Compute the :math:`L_2` inner products between each basis
     function in a tensor product B-spline basis and the function `f`
@@ -273,7 +265,7 @@ def inner_products(kvs, f):
     nqp = max(kv.p for kv in kvs) + 1
     gauss = [make_iterated_quadrature(kv.mesh, nqp) for kv in kvs]
     # evaluate function f on grid
-    fvals = _grid_eval(f, [g[0] for g in gauss])
+    fvals = utils.grid_eval(f, [g[0] for g in gauss])
     # multiply function values with quadrature weights
     fvals = kronecker.apply_tprod(
               [kronecker.DiagonalOperator(g[1]) for g in gauss], fvals)

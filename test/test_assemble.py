@@ -140,3 +140,12 @@ def test_fast_stiffness_geo_3d():
         "poisson_neu_d3_p2_n10_stiff.mtx.gz"))
     assert abs(A - A_ref).max() < 1e-9
 
+################################################################################
+# Test right-hand side
+################################################################################
+
+def test_inner_products():
+    kvs = [bspline.make_knots(p, 0.0, 1.0, 8+p) for p in range(3,6)]
+    def f(x,y,z): return np.cos(x) * np.exp(y) * np.sin(z)
+    inp = inner_products(kvs, f)
+    assert inp.shape == tuple(kv.numdofs for kv in kvs)

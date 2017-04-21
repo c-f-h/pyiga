@@ -5,7 +5,70 @@ import numpy.random
 from . import bspline
 from .kronecker import apply_tprod
 
-class BSplinePatch:
+class BSplineFunc:
+    """Any function that is given in terms of a tensor product B-spline basis with coefficients.
+
+    Arguments:
+        kvs (seq): tuple of `d` :class:`pyiga.bspline.KnotVector`.
+        coeffs (ndarray): coefficient array
+
+    `kvs` represents a tensor product B-spline basis, where the *i*-th
+    :class:`pyiga.bspline.KnotVector` describes the B-spline basis in the *i*-th
+    coordinate direction.
+
+    `coeffs` is the array of coefficients with respect to this tensor product basis.
+    The length of its first `d` axes must match the number of degrees of freedom
+    in the corresponding :class:`pyiga.bspline.KnotVector`.
+    Trailing axes, if any, determine the output dimension of the function.
+    If there are no trailing dimensions or only a single one of length 1,
+    the function is scalar-valued.
+    """
+    def __init__(self, kvs, coeffs):
+        self.kvs = kvs
+        self.coeffs = coeffs
+        self.sdim = len(kvs)    # source dimension
+
+        N = tuple(kv.numdofs for kv in kvs)
+        assert N == coeffs.shape[:self.sdim], "Wrong shape of coefficients"
+
+        # determine target dimension
+        dim = coeffs.shape[self.sdim:]
+        if len(dim) == 0:
+            dim = 1
+        elif len(dim) == 1:
+            dim = dim[0]
+        self.dim = dim
+
+    def eval(self, *x):
+        """Evaluate the function at a single point of the parameter domain.
+
+        .. note::
+            The components of x are in reverse order (e.g., zyx) to
+            be consistent with the grid evaluation functions below.
+        """
+        coords = [ [t] for t in x ]
+        return self.grid_eval(coords)
+
+    def grid_eval(self, gridaxes):
+        """Evaluate the function on a tensor product grid.
+
+        Args:
+            gridaxes (seq): list of 1D vectors describing the tensor product grid.
+
+        .. note::
+
+            The gridaxes should be given in reverse order, i.e.,
+            the x axis last.
+
+        Returns:
+            ndarray: array of function values; shape corresponds to input grid.
+        """
+        assert len(gridaxes) == self.sdim, "Input has wrong dimension"
+        colloc = [bspline.collocation(self.kvs[i], gridaxes[i]).A for i in range(self.sdim)]
+        return apply_tprod(colloc, self.coeffs)
+
+
+class BSplinePatch(BSplineFunc):
     """Represents a `d`-dimensional tensor product B-spline patch.
 
     Arguments:
@@ -24,7 +87,7 @@ class BSplinePatch:
     is given by ``coeffs[i1, ..., id, :]``.
     The j-th component of the geometry is
     represented by the coefficients ``coeffs[..., j]``.
- 
+
     Attributes:
         kvs (seq): the knot vectors representing the tensor product basis
         coeffs (ndarray): the coefficients for the geometry.
@@ -34,42 +97,9 @@ class BSplinePatch:
     """
 
     def __init__(self, kvs, coeffs):
-        """Construct a dimensional tensor product B-spline patch with the given knot vectors and coefficients."""
-        self.kvs = kvs
-        self.coeffs = coeffs
-        self.dim = len(kvs)
-        assert coeffs.ndim == self.dim + 1, "Wrong shape of coefficients"
-        assert self.dim == self.coeffs.shape[-1], "Wrong shape of coefficients"
-        for i in range(self.dim):
-            assert self.kvs[i].numdofs == self.coeffs.shape[i], "Wrong shape of coefficients"
-
-    def eval(self, *x):
-        """Evaluate the geometry at a single point of the parameter domain.
-
-        .. note::
-            The components of x are in reverse order (e.g., zyx) to
-            be consistent with the grid evaluation functions below.
-        """
-        coords = [ [t] for t in x ]
-        return self.grid_eval(np.array(coords))
-
-    def grid_eval(self, gridaxes):
-        """Evaluate the patch on a tensor product grid.
-
-        Args:
-            gridaxes (seq): list of 1D vectors describing the tensor product grid.
-
-        .. note::
-
-            The gridaxes should be given in reverse order, i.e.,
-            the x axis last.
-
-        Returns:
-            ndarray: array of function values; shape corresponds to input grid.
-        """
-        assert np.shape(gridaxes)[0] == self.dim
-        colloc = [bspline.collocation(self.kvs[i], gridaxes[i]).A for i in range(self.dim)]
-        return apply_tprod(colloc, self.coeffs)
+        """Construct a `d`-dimensional tensor product B-spline patch with the given knot vectors and coefficients."""
+        BSplineFunc.__init__(self, kvs, coeffs)
+        assert self.dim == self.sdim, "Wrong dimension: should be %s, not %s" % (self.sdim, self.dim)
 
     def grid_jacobian(self, gridaxes):
         """Evaluate the Jacobian on a tensor product grid.

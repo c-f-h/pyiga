@@ -137,7 +137,11 @@ def DiagonalOperator(diag):
     diag = np.squeeze(diag)
     assert diag.ndim == 1, 'Diagonal must be a vector'
     N = diag.shape[0]
-    matvec = lambda x: diag * x
+    def matvec(x):
+        if x.ndim == 1:
+            return diag * x
+        else:
+            return diag * x[:,0]
     return scipy.sparse.linalg.LinearOperator(
         shape=(N,N),
         matvec=matvec,

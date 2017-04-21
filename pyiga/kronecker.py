@@ -82,11 +82,27 @@ def KroneckerOperator(*ops):
                 matvec=applyfunc, matmat=applyfunc)
 
 
+def _modek_tensordot_sparse(B, X, k):
+    # This does the same as the np.tensordot() operation used below in
+    # `apply_tprod`, but works for sparse matrices and LinearOperators.
+    nk = X.shape[k]
+    assert nk == B.shape[1]
+
+    Xk = np.rollaxis(X, k, 0)
+    shp = Xk.shape
+
+    Xk = Xk.reshape((nk, -1))
+    Yk = B.dot(Xk)
+    if Yk.shape[0] != nk:   # size changed?
+        shp = (Yk.shape[0],) + shp[1:]
+    return np.reshape(Yk, shp)
+
+
 def apply_tprod(ops, A):
     """Apply tensor product of operators to ndarray `A`.
 
     Args:
-        ops (seq): a list of matrices
+        ops (seq): a list of matrices, sparse matrices, or LinearOperators
         A (ndarray): a tensor
     Returns:
         ndarray: a new tensor with the same number of axes as `A` that is
@@ -103,11 +119,13 @@ def apply_tprod(ops, A):
     operators, but `A` is allowed to have an arbitrary number of
     trailing dimensions. ``None`` is a valid operator and is
     treated like the identity."""
-    # this works only for dense matrices as operators
     n = len(ops)
     for i in reversed(range(n)):
         if ops[i] is not None:
-            A = np.tensordot(ops[i], A, axes=([1],[n-1]))
+            if isinstance(ops[i], np.ndarray):
+                A = np.tensordot(ops[i], A, axes=([1],[n-1]))
+            else:
+                A = _modek_tensordot_sparse(ops[i], A, n-1)
         else:   # None means identity
             A = np.rollaxis(A, n-1, 0)   # bring this axis to the front
     return A

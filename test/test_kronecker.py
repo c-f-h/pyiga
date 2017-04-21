@@ -6,9 +6,9 @@ def _kron2d_test(X, Y, XY):
 
     x = rand(n**2)
     y1 = apply_kronecker((X,Y), x)
-    #y2 = apply_tprod((X,Y), x.reshape(n,n))    # TODO: doesn't work for sparse
+    y2 = apply_tprod((X,Y), x.reshape(n,n))
     assert abs(XY.dot(x) - y1).max() < 1e-10
-    #assert abs(XY.dot(x) - y2.ravel()).max() < 1e-10
+    assert abs(XY.dot(x) - y2.ravel()).max() < 1e-10
 
     x = rand(n**2, 1)
     assert np.allclose(XY.dot(x), apply_kronecker((X,Y), x))
@@ -34,9 +34,9 @@ def _kron3d_test(X, Y, Z, XYZ):
     n = X.shape[0]
     x = rand(n**3)
     y1 = apply_kronecker((X,Y,Z), x)
-    #y2 = apply_tprod((X,Y,Z), x.reshape(n,n,n))    # TODO: doesn't work for sparse
+    y2 = apply_tprod((X,Y,Z), x.reshape(n,n,n))
     assert abs(XYZ.dot(x) - y1).max() < 1e-10
-    #assert abs(XYZ.dot(x) - y2.ravel()).max() < 1e-10
+    assert abs(XYZ.dot(x) - y2.ravel()).max() < 1e-10
 
     x = rand(n**3, 1)
     assert np.allclose(XYZ.dot(x), apply_kronecker((X,Y,Z), x))

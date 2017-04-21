@@ -3,7 +3,7 @@ import scipy.sparse
 import scipy.sparse.linalg
 
 
-def make_solver(B):
+def make_solver(B, symmetric=False):
     """Construct a linear solver for the (dense or sparse) square matrix B.
     
     Returns a LinearOperator."""
@@ -11,9 +11,14 @@ def make_solver(B):
         spLU = scipy.sparse.linalg.splu(B.tocsc(), permc_spec='NATURAL')
         return scipy.sparse.linalg.LinearOperator(B.shape, spLU.solve)
     else:
-        LU = scipy.linalg.lu_factor(B, check_finite=False)
-        return scipy.sparse.linalg.LinearOperator(B.shape,
-            lambda x: scipy.linalg.lu_solve(LU, x, check_finite=False))
+        if symmetric:
+            chol = scipy.linalg.cho_factor(B, check_finite=False)
+            return scipy.sparse.linalg.LinearOperator(B.shape,
+                lambda x: scipy.linalg.cho_solve(chol, x, check_finite=False))
+        else:
+            LU = scipy.linalg.lu_factor(B, check_finite=False)
+            return scipy.sparse.linalg.LinearOperator(B.shape,
+                lambda x: scipy.linalg.lu_solve(LU, x, check_finite=False))
 
 
 def read_sparse_matrix(fname):

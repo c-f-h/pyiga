@@ -404,6 +404,24 @@ def interpolate(kv, func, nodes=None):
 
 ################################################################################
 
+def load_vector(kv, f):
+    """Compute the load vector (L_2 inner products of basis functions with `f`)."""
+    from .quadrature import make_iterated_quadrature
+    nqp = kv.p + 1
+    q = make_iterated_quadrature(kv.mesh, nqp)
+    C = collocation(kv, q[0])
+    fvals = q[1] * f(q[0])  # values weighted with quadrature weights
+    return C.T.dot(fvals)
+
+def project_L2(kv, f):
+    """Compute the B-spline coefficients for the L_2-projection of `f`."""
+    from .assemble import bsp_mass_1d
+    lv = load_vector(kv, f)
+    M = bsp_mass_1d(kv)
+    return scipy.sparse.linalg.spsolve(M, lv)
+
+################################################################################
+
 def prolongation(kv1, kv2):
     """Compute prolongation matrix between B-spline bases.
 

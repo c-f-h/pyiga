@@ -19,14 +19,19 @@ def test_eval():
 
 def test_interpolation():
     kv = make_knots(3, 0.0, 1.0, 10)
-    g = kv.greville()
-    C = collocation(kv, g)
     # create random spline
     coeffs = np.random.rand(kv.numdofs)
+    def f(x): return ev(kv, coeffs, x)
     # interpolate it at Gréville points and check that result is the same
-    values = ev(kv, coeffs, g)
-    result = scipy.sparse.linalg.spsolve(C, values)
-    assert np.linalg.norm(result - coeffs) < 1e-10
+    result = interpolate(kv, f)
+    assert np.allclose(coeffs, result)
+
+def test_L2_projection():
+    kv = make_knots(3, 0.0, 1.0, 10)
+    def f(x): return np.sin(2*np.pi * x**2)
+    x = np.linspace(0.0, 1.0, 100)
+    coeffs = project_L2(kv, f)
+    assert np.linalg.norm(f(x) - ev(kv, coeffs, x)) / np.sqrt(len(x)) < 1e-3
 
 def test_deriv():
     # create linear spline

@@ -141,11 +141,11 @@ def DiagonalOperator(diag):
         if x.ndim == 1:
             return diag * x
         else:
-            return diag * x[:,0]
+            return diag[:,None] * x
     return scipy.sparse.linalg.LinearOperator(
         shape=(N,N),
         matvec=matvec,
         rmatvec=matvec,
-        matmat=lambda x: diag[:,None] * x,
+        matmat=matvec,
         dtype=diag.dtype
     )

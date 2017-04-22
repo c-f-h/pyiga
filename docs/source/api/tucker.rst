@@ -1,5 +1,5 @@
-Tensors in Tucker format
-========================
+Tucker tensors
+==============
 
 .. automodule:: pyiga.tucker
     :members:

@@ -1,5 +1,5 @@
-Kronecker product operators
-===========================
+Kronecker products
+==================
 
 .. automodule:: pyiga.kronecker
     :members:

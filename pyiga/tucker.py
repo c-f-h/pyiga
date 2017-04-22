@@ -17,6 +17,9 @@ When expanded, it represents a full tensor
 """
 import numpy as np
 import numpy.linalg
+import scipy.linalg
+
+from . import kronecker
 
 def matricize(X, k):
     """Return the mode-`k` matricization of the ndarray `X`."""
@@ -29,12 +32,12 @@ def modek_tprod(X, k, B):
     Args:
         X (ndarray): tensor with ``X.shape[k] == nk``
         k (int): the mode along which to multiply `X`
-        B (ndarray): a 2D array of size `nk x m`.
+        B (ndarray): a 2D array of size `m x nk`.
 
     Returns:
         ndarray: the mode-`k` tensor product of size `(n1, ... nk-1, m, nk+1, ..., nN)`
     """
-    Y = np.tensordot(X, B, axes=((k,0)))
+    Y = np.tensordot(X, B, axes=((k,1)))
     return np.rollaxis(Y, -1, k) # put last (new) axis back into k-th position
 
 def hosvd(X):
@@ -44,22 +47,15 @@ def hosvd(X):
     core tensor C has the same shape as X and the
     Uk are square, orthogonal matrices of size X.shape[k]."""
     # left singular vectors for each matricization
-    U = [np.linalg.svd(matricize(X,k), full_matrices=False)[0]
+    U = [scipy.linalg.svd(matricize(X,k), full_matrices=False, check_finite=False)[0]
             for k in range(X.ndim)]
-    C = tucker_prod(X, U)   # core tensor (same size as X)
-    return (C, tuple(Uk.T for Uk in U))
+    C = tucker_prod(X, tuple(Uk.T for Uk in U))   # core tensor (same size as X)
+    return (C, U)
 
 def tucker_prod(X, Uk):
     """Convert the Tucker tensor `(X,Uk)` to a full tensor (`ndarray`) by multiplying
     each mode of `X` by the corresponding matrix in `Uk`."""
-    assert len(Uk) == X.ndim
-    Y = X
-    for i in range(len(Uk)):
-        if Uk[i] is not None:   # None is equivalent to identity
-            Y = np.tensordot(Y, Uk[i], axes=(0,0))  # tensordot brings the new axis to the end
-        else:   # None, do not change this dimension
-            Y = np.rollaxis(Y, 0, Y.ndim)   # bring this axis to the end
-    return Y
+    return kronecker.apply_tprod(Uk, X)
 
 def truncate(T, k):
     """Truncate a Tucker tensor `T` to the given rank `k`."""
@@ -70,7 +66,7 @@ def truncate(T, k):
     else:
         assert len(k) == N
         slices = tuple(slice(None, ki) for ki in k)
-    return (C[slices], tuple(Uk[i][slices[i],:] for i in range(N)))
+    return (C[slices], tuple(Uk[i][:,slices[i]] for i in range(N)))
 
 def find_best_truncation_axis(X):
     """Find the axis along which truncating the last slice causes the smallest error."""

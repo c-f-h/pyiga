@@ -1,14 +1,14 @@
 r"""Functions for manipulating tensors in Tucker format and computing the HOSVD.
 
-A *d*-dimensional Tucker tensor is given by a (typically small) core tensor
+A *d*-dimensional Tucker tensor is given as a list of *d* basis matrices
 
 .. math::
-    X \in \mathbb R^{m_1 \times \ldots \times m_d}
+    U_k \in \mathbb R^{n_k \times m_k}, \qquad k=1,\ldots,d
 
-and a list of *d* matrices
+and a (typically small) core coefficient tensor
 
 .. math::
-    U_k \in \mathbb R^{n_k \times m_k}, \qquad k=1,\ldots,d.
+    X \in \mathbb R^{m_1 \times \ldots \times m_d}.
 
 When expanded, it represents a full tensor
 
@@ -40,6 +40,11 @@ def modek_tprod(X, k, B):
     Y = np.tensordot(X, B, axes=((k,1)))
     return np.rollaxis(Y, -1, k) # put last (new) axis back into k-th position
 
+def tucker_prod(Uk, X):
+    """Convert the Tucker tensor `(Uk,X)` to a full tensor (`ndarray`) by multiplying
+    each mode of `X` by the corresponding matrix in `Uk`."""
+    return kronecker.apply_tprod(Uk, X)
+
 def hosvd(X):
     """Compute higher-order SVD (Tucker decomposition).
 
@@ -49,24 +54,19 @@ def hosvd(X):
     # left singular vectors for each matricization
     U = [scipy.linalg.svd(matricize(X,k), full_matrices=False, check_finite=False)[0]
             for k in range(X.ndim)]
-    C = tucker_prod(X, tuple(Uk.T for Uk in U))   # core tensor (same size as X)
-    return (C, U)
-
-def tucker_prod(X, Uk):
-    """Convert the Tucker tensor `(X,Uk)` to a full tensor (`ndarray`) by multiplying
-    each mode of `X` by the corresponding matrix in `Uk`."""
-    return kronecker.apply_tprod(Uk, X)
+    C = tucker_prod(tuple(Uk.T for Uk in U), X)   # core tensor (same size as X)
+    return (U, C)
 
 def truncate(T, k):
     """Truncate a Tucker tensor `T` to the given rank `k`."""
-    C, Uk = T
+    Uk, C = T
     N = C.ndim
     if np.isscalar(k):
         slices = N * (slice(None,k),)
     else:
         assert len(k) == N
         slices = tuple(slice(None, ki) for ki in k)
-    return (C[slices], tuple(Uk[i][:,slices[i]] for i in range(N)))
+    return (tuple(Uk[i][:,slices[i]] for i in range(N)), C[slices])
 
 def find_best_truncation_axis(X):
     """Find the axis along which truncating the last slice causes the smallest error."""

@@ -21,6 +21,10 @@ import scipy.linalg
 
 from . import kronecker
 
+def fro_norm(X):
+    """Compute the Frobenius norm of multi-dimensional array `X`."""
+    return np.linalg.norm(X.ravel(order='K'))
+
 def matricize(X, k):
     """Return the mode-`k` matricization of the ndarray `X`."""
     nk = X.shape[k]

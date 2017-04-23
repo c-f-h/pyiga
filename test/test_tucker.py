@@ -48,7 +48,7 @@ def test_truncate2():
     E = X - tucker_prod(*Tk)
     Cdk = T[1]
     Cdk[:k,:k,:k] = 0
-    assert np.allclose(np.sum(E*E), np.sum(Cdk*Cdk))
+    assert np.allclose(fro_norm(E), fro_norm(Cdk))
 
 def test_truncation_rank():
     X = np.zeros((4,3,7))

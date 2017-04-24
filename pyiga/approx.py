@@ -2,7 +2,7 @@
 """Methods for approximating functions in tensor product spline spaces."""
 from . import bspline
 from . import assemble
-from . import kronecker
+from . import tensor
 from . import operators
 from . import utils
 
@@ -18,7 +18,7 @@ def interpolate(kvs, f, nodes=None):
     Cinvs = [operators.make_solver(bspline.collocation(kvs[i], nodes[i]))
                 for i in range(len(kvs))]
     rhs = utils.grid_eval(f, nodes)
-    return kronecker.apply_tprod(Cinvs, rhs)
+    return tensor.apply_tprod(Cinvs, rhs)
 
 def project_L2(kvs, f):
     """Compute the coefficients for the :math:`L_2`-projection of the function `f` into
@@ -26,4 +26,4 @@ def project_L2(kvs, f):
     """
     Minvs = [operators.make_solver(assemble.mass(kv), symmetric=True) for kv in kvs]
     rhs = assemble.inner_products(kvs, f)
-    return kronecker.apply_tprod(Minvs, rhs)
+    return tensor.apply_tprod(Minvs, rhs)

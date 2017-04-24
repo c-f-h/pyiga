@@ -1,4 +1,5 @@
 from pyiga.kronecker import *
+from pyiga.tensor import apply_tprod
 from numpy.random import rand
 
 def _kron2d_test(X, Y, XY):

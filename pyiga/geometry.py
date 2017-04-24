@@ -3,7 +3,7 @@ import numpy as np
 import numpy.random
 
 from . import bspline
-from .kronecker import apply_tprod
+from .tensor import apply_tprod
 
 class BSplineFunc:
     """Any function that is given in terms of a tensor product B-spline basis with coefficients.

@@ -9,8 +9,8 @@ def test_modek_tprod():
     for i in range(3):
         for j in range(3):
             for k in range(3):
-                Y[i,j,k] = np.dot(X[:,j,k], A[i,:])
-    assert np.allclose(Y, modek_tprod(X, 0, A))
+                Y[i,j,k] = np.dot(A[i,:], X[:,j,k])
+    assert np.allclose(Y, modek_tprod(A, 0, X))
 
 def test_tuckerprod():
     U = [rand(10,n) for n in range(3,6)]

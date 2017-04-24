@@ -30,13 +30,13 @@ def matricize(X, k):
     nk = X.shape[k]
     return np.reshape(np.swapaxes(X, 0,k), (nk,-1), order='C')
 
-def modek_tprod(X, k, B):
-    """Compute the mode-`k` tensor product of the ndarray X with the matrix `B`.
+def modek_tprod(B, k, X):
+    """Compute the mode-`k` tensor product of the ndarray `X` with the matrix `B`.
 
     Args:
-        X (ndarray): tensor with ``X.shape[k] == nk``
-        k (int): the mode along which to multiply `X`
         B (ndarray): a 2D array of size `m x nk`.
+        k (int): the mode along which to multiply `X`
+        X (ndarray): tensor with ``X.shape[k] == nk``
 
     Returns:
         ndarray: the mode-`k` tensor product of size `(n1, ... nk-1, m, nk+1, ..., nN)`

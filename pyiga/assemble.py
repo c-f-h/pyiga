@@ -65,6 +65,7 @@ import scipy.sparse
 from . import bspline
 from . import assemble_tools
 from . import kronecker
+from . import operators
 from . import utils
 
 from .quadrature import make_iterated_quadrature
@@ -268,7 +269,7 @@ def inner_products(kvs, f):
     fvals = utils.grid_eval(f, [g[0] for g in gauss])
     # multiply function values with quadrature weights
     fvals = kronecker.apply_tprod(
-              [kronecker.DiagonalOperator(g[1]) for g in gauss], fvals)
+              [operators.DiagonalOperator(g[1]) for g in gauss], fvals)
     # multiply with spline collocation matrices
     Ct = [bspline.collocation(kvs[i], gauss[i][0]).T
             for i in range(len(kvs))]

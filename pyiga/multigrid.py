@@ -1,7 +1,7 @@
 """Multigrid solvers."""
 import numpy as np
 import numpy.linalg
-from .utils import make_solver
+from .operators import make_solver
 
 tol = 1e-8
 

@@ -58,15 +58,3 @@ def test_kronecker_3d_sparse():
     Z = scipy.sparse.diags([rand(n-1), rand(n), rand(n-1)], offsets=(-1,0,1))
     XYZ = scipy.sparse.kron(scipy.sparse.kron(X, Y), Z)
     _kron3d_test(X, Y, Z, XYZ)
-
-def test_diagonal():
-    n = 10
-    diag = rand(n)
-    diag_op = DiagonalOperator(diag)
-    D = np.diag(diag)
-    x = rand(n)
-    assert np.allclose(D.dot(x), diag_op*x)
-    x = rand(n,1)
-    assert np.allclose(D.dot(x), diag_op*x)
-    x = rand(n,2)
-    assert np.allclose(D.dot(x), diag_op*x)

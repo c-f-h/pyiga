@@ -65,23 +65,6 @@ def _apply_kronecker_dense(ops, x):
     return Y.reshape(x.shape)
 
 
-def KroneckerOperator(*ops):
-    """Return a `LinearOperator` which efficiently implements the
-    application of the Kronecker product of the given input operators.
-    """
-    # assumption: all operators are square
-    sz = np.prod([A.shape[0] for A in ops])
-    if all(isinstance(A, np.ndarray) for A in ops):
-        applyfunc = lambda x: _apply_kronecker_dense(ops, x)
-        return scipy.sparse.linalg.LinearOperator(shape=(sz,sz),
-                matvec=applyfunc, matmat=applyfunc)
-    else:
-        ops = [scipy.sparse.linalg.aslinearoperator(B) for B in ops]
-        applyfunc = lambda x: _apply_kronecker_linops(ops, x)
-        return scipy.sparse.linalg.LinearOperator(shape=(sz,sz),
-                matvec=applyfunc, matmat=applyfunc)
-
-
 def _modek_tensordot_sparse(B, X, k):
     # This does the same as the np.tensordot() operation used below in
     # `apply_tprod`, but works for sparse matrices and LinearOperators.
@@ -131,21 +114,3 @@ def apply_tprod(ops, A):
     return A
 
 
-def DiagonalOperator(diag):
-    """Return a `LinearOperator` which acts like a diagonal matrix
-    with the given diagonal."""
-    diag = np.squeeze(diag)
-    assert diag.ndim == 1, 'Diagonal must be a vector'
-    N = diag.shape[0]
-    def matvec(x):
-        if x.ndim == 1:
-            return diag * x
-        else:
-            return diag[:,None] * x
-    return scipy.sparse.linalg.LinearOperator(
-        shape=(N,N),
-        matvec=matvec,
-        rmatvec=matvec,
-        matmat=matvec,
-        dtype=diag.dtype
-    )

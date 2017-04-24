@@ -98,10 +98,10 @@ def make_solver(B, symmetric=False):
                 lambda x: scipy.linalg.lu_solve(LU, x, check_finite=False))
 
 
-def make_kronecker_solver(*Bs, symmetric=False):
+def make_kronecker_solver(*Bs): #, symmetric=False): # kw arg doesn't work in Py2
     """Given a list of square matrices `Bs`, returns an operators which efficiently applies
     the inverse of their Kronecker product.
     """
-    Binvs = tuple(make_solver(B, symmetric=symmetric) for B in Bs)
+    Binvs = tuple(make_solver(B) for B in Bs)
     return KroneckerOperator(*Binvs)
 

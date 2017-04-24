@@ -1,3 +1,4 @@
+"""Classes and functions for creating custom instances of :class:`scipy.sparse.linalg.LinearOperator`."""
 import numpy as np
 import scipy.sparse.linalg
 
@@ -81,7 +82,8 @@ def BlockDiagonalOperator(*ops):
 def make_solver(B, symmetric=False):
     """Construct a linear solver for the (dense or sparse) square matrix B.
     
-    Returns a LinearOperator."""
+    Returns a LinearOperator.
+    """
     if scipy.sparse.issparse(B):
         spLU = scipy.sparse.linalg.splu(B.tocsc(), permc_spec='NATURAL')
         return scipy.sparse.linalg.LinearOperator(B.shape, spLU.solve)

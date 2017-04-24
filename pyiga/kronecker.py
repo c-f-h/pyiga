@@ -95,8 +95,6 @@ def apply_tprod(ops, A):
     This does essentially the same as :func:`apply_kronecker`, but assumes
     that A is an ndarray with the proper number of dimensions rather
     than its matricization.
-    See also :func:`pyiga.tucker.tucker_prod`, which is almost
-    equivalent, but uses transposed matrices.
 
     The initial dimensions of `A` must match the sizes of the
     operators, but `A` is allowed to have an arbitrary number of

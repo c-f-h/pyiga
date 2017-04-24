@@ -1,4 +1,4 @@
-from pyiga.tucker import *
+from pyiga.tensor import *
 
 from numpy.random import rand
 

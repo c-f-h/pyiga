@@ -1,6 +1,9 @@
-r"""Functions for manipulating tensors in Tucker format and computing the HOSVD.
+r"""Functions for manipulating tensors in full and in Tucker format,
+and for tensor approximation.
 
-A *d*-dimensional Tucker tensor is given as a list of *d* basis matrices
+A full tensor is simply represented as a Numpy ndarray.
+
+A *d*-dimensional tensor in Tucker format is given as a list of *d* basis matrices
 
 .. math::
     U_k \in \mathbb R^{n_k \times m_k}, \qquad k=1,\ldots,d

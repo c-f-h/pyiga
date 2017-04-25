@@ -30,6 +30,11 @@ extensions and then install the package in your user directory. If you prefer
 to install the package globally, skip the ``--user`` flag; this requires
 administrator rights.
 
+If you have Intel MKL installed on your machine, be sure to install the
+**pyMKL** package; if ``pyiga`` detects this package, it will use the
+MKL PARDISO sparse direct solver instead of the internal scipy solver
+(typically SuperLU).
+
 Running tests
 -------------
 

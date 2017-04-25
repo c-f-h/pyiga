@@ -80,10 +80,9 @@ def BlockDiagonalOperator(*ops):
 
 
 def make_solver(B, symmetric=False):
-    """Construct a linear solver for the (dense or sparse) square matrix B.
+    """Return a `LinearOperator` that acts as a linear solver for the (dense or sparse) square matrix B.
     
-    Returns a LinearOperator.
-    """
+    If `B` is symmetric, passing ``symmetric=True`` may try to take advantage of this."""
     if scipy.sparse.issparse(B):
         spLU = scipy.sparse.linalg.splu(B.tocsc(), permc_spec='NATURAL')
         return scipy.sparse.linalg.LinearOperator(B.shape, spLU.solve)
@@ -99,7 +98,7 @@ def make_solver(B, symmetric=False):
 
 
 def make_kronecker_solver(*Bs): #, symmetric=False): # kw arg doesn't work in Py2
-    """Given a list of square matrices `Bs`, returns an operators which efficiently applies
+    """Given several square matrices, return an operator which efficiently applies
     the inverse of their Kronecker product.
     """
     Binvs = tuple(make_solver(B) for B in Bs)

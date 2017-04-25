@@ -1,6 +1,7 @@
 """Classes and functions for creating custom instances of :class:`scipy.sparse.linalg.LinearOperator`."""
 import numpy as np
 import scipy.sparse.linalg
+from builtins import range   # Python 2 compatibility
 
 from . import kronecker
 

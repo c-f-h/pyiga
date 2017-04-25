@@ -144,7 +144,8 @@ def BlockOperator(ops):
 
 
 def make_solver(B, symmetric=False):
-    """Return a `LinearOperator` that acts as a linear solver for the (dense or sparse) square matrix B.
+    """Return a `LinearOperator` that acts as a linear solver for the
+    (dense or sparse) square matrix `B`.
     
     If `B` is symmetric, passing ``symmetric=True`` may try to take advantage of this."""
     if scipy.sparse.issparse(B):

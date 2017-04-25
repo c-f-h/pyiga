@@ -15,7 +15,6 @@ Welcome to pyiga's documentation!
    api/approx
    api/assemble
    api/operators
-   api/kronecker
    api/tensor
    api/multigrid
 

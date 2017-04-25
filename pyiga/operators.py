@@ -4,6 +4,12 @@ import scipy.sparse.linalg
 
 from . import kronecker
 
+HAVE_MKL = True
+try:
+    import pyMKL
+except:
+    HAVE_MKL = False
+
 
 def DiagonalOperator(diag):
     """Return a `LinearOperator` which acts like a diagonal matrix
@@ -84,17 +90,28 @@ def make_solver(B, symmetric=False):
     
     If `B` is symmetric, passing ``symmetric=True`` may try to take advantage of this."""
     if scipy.sparse.issparse(B):
-        spLU = scipy.sparse.linalg.splu(B.tocsc(), permc_spec='NATURAL')
-        return scipy.sparse.linalg.LinearOperator(B.shape, spLU.solve)
+        if HAVE_MKL:
+            # use MKL Pardiso
+            solver = pyMKL.pardisoSolver(B, -2 if symmetric else 11)
+            solver.factor()
+            return scipy.sparse.linalg.LinearOperator(B.shape, dtype=B.dtype,
+                    matvec=solver.solve, matmat=solver.solve)
+        else:
+            # use SuperLU (unless scipy uses UMFPACK?) -- really slow!
+            spLU = scipy.sparse.linalg.splu(B.tocsc(), permc_spec='NATURAL')
+            return scipy.sparse.linalg.LinearOperator(B.shape, dtype=B.dtype,
+                    matvec=spLU.solve, matmat=spLU.solve)
     else:
         if symmetric:
             chol = scipy.linalg.cho_factor(B, check_finite=False)
-            return scipy.sparse.linalg.LinearOperator(B.shape,
-                lambda x: scipy.linalg.cho_solve(chol, x, check_finite=False))
+            solve = lambda x: scipy.linalg.cho_solve(chol, x, check_finite=False)
+            return scipy.sparse.linalg.LinearOperator(B.shape, dtype=B.dtype,
+                    matvec=solve, matmat=solve)
         else:
             LU = scipy.linalg.lu_factor(B, check_finite=False)
-            return scipy.sparse.linalg.LinearOperator(B.shape,
-                lambda x: scipy.linalg.lu_solve(LU, x, check_finite=False))
+            solve = lambda x: scipy.linalg.lu_solve(LU, x, check_finite=False)
+            return scipy.sparse.linalg.LinearOperator(B.shape, dtype=B.dtype,
+                    matvec=solve, matmat=solve)
 
 
 def make_kronecker_solver(*Bs): #, symmetric=False): # kw arg doesn't work in Py2

@@ -101,6 +101,24 @@ def BlockDiagonalOperator(*ops):
 
 
 def BlockOperator(ops):
+    """Construct a block operator.
+
+    Args:
+        ops (list): a rectangular list of lists of operators or matrices.
+            All operators in a given row should have the same height
+            (output dimension).
+            All operators in a given column should have the same width
+            (input dimension).
+            Empty blocks should use :class:`NullOperator` as a placeholder.
+
+    Returns:
+        LinearOperator: a block structured linear operator. Its height is the
+        total height of one input column of operators, and its width is the
+        total width of one input row.
+
+    See also :func:`numpy.bmat`, which has analogous functionality for
+    dense matrices.
+    """
     M, N = len(ops), len(ops[0])
     ranges_i = _sizes_to_ranges(ops[i][0].shape[0] for i in range(M))
     ranges_j = _sizes_to_ranges(ops[0][j].shape[1] for j in range(N))
@@ -114,7 +132,8 @@ def BlockOperator(ops):
             if op is None or isinstance(op, NullOperator):
                 continue
             else:
-                assert op.shape == (len(ranges_i[i]), len(ranges_j[j]))
+                assert op.shape == (len(ranges_i[i]), len(ranges_j[j])), \
+                    "Operator at position (%d,%d) has wrong shape" % (i,j)
                 ops_list.append(op)
                 ranges_i_list.append(ranges_i[i])
                 ranges_j_list.append(ranges_j[j])

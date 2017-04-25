@@ -11,6 +11,17 @@ except:
     HAVE_MKL = False
 
 
+class NullOperator(scipy.sparse.linalg.LinearOperator):
+    """Null operator of the given shape which always returns zeros. Used as placeholder."""
+    def __init__(self, shape, dtype=np.float64):
+        scipy.sparse.linalg.LinearOperator.__init__(self, shape=shape, dtype=dtype)
+
+    def _matvec(self, x):
+        return np.zeros(self.shape[0], dtype=self.dtype)
+    def _matmat(self, x):
+        return np.zeros((self.shape[0], x.shape[1]), dtype=self.dtype)
+
+
 def DiagonalOperator(diag):
     """Return a `LinearOperator` which acts like a diagonal matrix
     with the given diagonal."""
@@ -24,10 +35,10 @@ def DiagonalOperator(diag):
             return diag[:,None] * x
     return scipy.sparse.linalg.LinearOperator(
         shape=(N,N),
+        dtype=diag.dtype,
         matvec=matvec,
         rmatvec=matvec,
-        matmat=matvec,
-        dtype=diag.dtype
+        matmat=matvec
     )
 
 
@@ -70,19 +81,46 @@ class BaseBlockOperator(scipy.sparse.linalg.LinearOperator):
         return y
 
 
+def _sizes_to_ranges(sizes):
+    """Convert an iterable of sizes into a list of consecutive ranges of these sizes."""
+    sizes = list(sizes)
+    runsizes = [0] + list(np.cumsum(sizes))
+    return [range(runsizes[k], runsizes[k+1]) for k in range(len(sizes))]
+
+
 def BlockDiagonalOperator(*ops):
     """Return a `LinearOperator` with block diagonal structure, with the given
     operators on the diagonal.
     """
     K = len(ops)
-    sizes_i = [op.shape[0] for op in ops]
-    sizes_j = [op.shape[1] for op in ops]
-    runsizes_i = [0] + list(np.cumsum(sizes_i))
-    runsizes_j = [0] + list(np.cumsum(sizes_j))
-    ranges_i = [range(runsizes_i[k], runsizes_i[k+1]) for k in range(K)]
-    ranges_j = [range(runsizes_j[k], runsizes_j[k+1]) for k in range(K)]
-    shape = (runsizes_i[-1], runsizes_j[-1])
+    ranges_i = _sizes_to_ranges(op.shape[0] for op in ops)
+    ranges_j = _sizes_to_ranges(op.shape[1] for op in ops)
+    shape = (ranges_i[-1].stop, ranges_j[-1].stop)
     return BaseBlockOperator(shape, ops, ranges_i, ranges_j)
+
+
+def BlockOperator(ops):
+    M, N = len(ops), len(ops[0])
+    ranges_i = _sizes_to_ranges(ops[i][0].shape[0] for i in range(M))
+    ranges_j = _sizes_to_ranges(ops[0][j].shape[1] for j in range(N))
+    shape = (ranges_i[-1].stop, ranges_j[-1].stop)
+
+    ops_list, ranges_i_list, ranges_j_list = [], [], []
+    for i in range(M):
+        assert len(ops[i]) == N, "All rows must have equal length"
+        for j in range(N):
+            op = ops[i][j]
+            if op is None or isinstance(op, NullOperator):
+                continue
+            else:
+                assert op.shape == (len(ranges_i[i]), len(ranges_j[j]))
+                ops_list.append(op)
+                ranges_i_list.append(ranges_i[i])
+                ranges_j_list.append(ranges_j[j])
+    if ops_list:
+        return BaseBlockOperator(shape, ops_list, ranges_i_list, ranges_j_list)
+    else:
+        return NullOperator(shape)
 
 
 def make_solver(B, symmetric=False):

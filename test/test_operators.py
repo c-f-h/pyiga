@@ -13,6 +13,10 @@ def _test_oper(A, B):
     x = rand(n,3)
     assert np.allclose(A.dot(x), B.dot(x))
 
+def test_null():
+    Z = np.zeros((7,3))
+    _test_oper(NullOperator(Z.shape), Z)
+
 def test_diagonal():
     diag = rand(10)
     diag_op = DiagonalOperator(diag)
@@ -26,6 +30,12 @@ def test_blockdiag():
     X = scipy.linalg.block_diag(A, B, C)
     Y = BlockDiagonalOperator(A, B, C)
     _test_oper(X, Y)
+
+def test_block():
+    A,B = rand(3,3), rand(3,4)
+    C,D = rand(2,3), rand(2,4)
+    blocks = ((A,B),(C,D))
+    _test_oper(BlockOperator(blocks), np.bmat(blocks))
 
 def test_solver():
     A = rand(3,3)

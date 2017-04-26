@@ -46,7 +46,7 @@ class BSplineFunc:
             The components of x are in reverse order (e.g., zyx) to
             be consistent with the grid evaluation functions below.
         """
-        coords = [ [t] for t in x ]
+        coords = tuple(np.asarray([t]) for t in x)
         return self.grid_eval(coords)
 
     def grid_eval(self, gridaxes):
@@ -64,6 +64,11 @@ class BSplineFunc:
             ndarray: array of function values; shape corresponds to input grid.
         """
         assert len(gridaxes) == self.sdim, "Input has wrong dimension"
+        # make sure axes are one-dimensional
+        if not all(ax.ndim == 1 for ax in gridaxes):
+            gridaxes = tuple(np.squeeze(ax) for ax in gridaxes)
+            assert all(ax.ndim == 1 for ax in gridaxes), \
+                "Grid axes should be one-dimensional"
         colloc = [bspline.collocation(self.kvs[i], gridaxes[i]).A for i in range(self.sdim)]
         return apply_tprod(colloc, self.coeffs)
 

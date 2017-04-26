@@ -1,9 +1,8 @@
-"""Multigrid solvers."""
+"""Linear solvers."""
 import numpy as np
 import numpy.linalg
 from .operators import make_solver
 
-tol = 1e-8
 
 def twogrid(A, f, P, smoother, u0=None, tol=1e-8, smooth_steps=2, maxiter=1000):
     """Generic two-grid method with arbitrary operator smoother.

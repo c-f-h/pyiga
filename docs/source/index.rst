@@ -16,7 +16,7 @@ Welcome to pyiga's documentation!
    api/assemble
    api/operators
    api/tensor
-   api/multigrid
+   api/solvers
 
 
 

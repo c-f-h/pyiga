@@ -37,6 +37,14 @@ def test_block():
     blocks = ((A,B),(C,D))
     _test_oper(BlockOperator(blocks), np.bmat(blocks))
 
+def test_subspace():
+    P1 = np.vstack((np.eye(2), np.zeros((2,2))))
+    P2 = np.vstack((np.zeros((2,2)), np.eye(2)))
+    B1 = rand(2,2)
+    B2 = rand(2,2)
+    _test_oper(SubspaceOperator((P1,P2), (B1,B2)),
+            scipy.linalg.block_diag(B1, B2))
+
 def test_solver():
     A = rand(3,3)
     _test_oper(make_solver(A), np.linalg.inv(A))

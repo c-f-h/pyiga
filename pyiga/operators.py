@@ -143,6 +143,35 @@ def BlockOperator(ops):
         return NullOperator(shape)
 
 
+def SubspaceOperator(subspaces, Bs):
+    r"""Implements an abstract subspace correction operator.
+
+    Args:
+        subspaces (seq): a list of `k` prolongation matrices
+            :math:`P_j \in \mathbb R^{n \times n_j}`
+        Bs (seq): a list of `k` square matrices or `LinearOperators`
+            :math:`B_j \in \mathbb R^{n_j \times n_j}`
+
+    Returns: a `LinearOperator` of shape :math:`n \times n` that implements the action
+        .. math::
+            Lx = \sum_{j=1}^k P_j B_j P_j^T x
+    """
+    subspaces, Bs = tuple(subspaces), tuple(Bs)
+    assert len(subspaces) == len(Bs)
+    assert len(Bs) > 0, "No operators given"
+    def apply_ssc(x):
+        if x.ndim > 1: x = np.squeeze(x)
+        y = np.zeros(len(x))
+        for j in range(len(subspaces)):
+            P_j = subspaces[j]
+            y += P_j.dot(Bs[j].dot(P_j.T.dot(x)))
+        return y
+    n = subspaces[0].shape[0]
+    return scipy.sparse.linalg.LinearOperator(
+        shape=(n,n), dtype=Bs[0].dtype, matvec=apply_ssc
+    )
+
+
 def make_solver(B, symmetric=False):
     """Return a `LinearOperator` that acts as a linear solver for the
     (dense or sparse) square matrix `B`.

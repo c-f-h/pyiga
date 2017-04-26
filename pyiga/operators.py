@@ -152,7 +152,9 @@ def SubspaceOperator(subspaces, Bs):
         Bs (seq): a list of `k` square matrices or `LinearOperators`
             :math:`B_j \in \mathbb R^{n_j \times n_j}`
 
-    Returns: a `LinearOperator` of shape :math:`n \times n` that implements the action
+    Returns:
+        LinearOperator: operator with shape :math:`n \times n` that implements the action
+
         .. math::
             Lx = \sum_{j=1}^k P_j B_j P_j^T x
     """

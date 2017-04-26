@@ -37,7 +37,7 @@ def test_evaluation():
        [[ 0.   ,  1.   ],
         [ 0.   ,  1.5  ],
         [ 0.   ,  2.   ]]])
-    assert abs(exact[1,1] - geo.eval(0.3, 0.5)).max() < 1e-14
+    assert abs(exact[1,1] - geo.eval(0.5, 0.3)).max() < 1e-14
     assert abs(exact - values).max() < 1e-14
 
 def test_jacobian():

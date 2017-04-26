@@ -40,13 +40,8 @@ class BSplineFunc:
         self.dim = dim
 
     def eval(self, *x):
-        """Evaluate the function at a single point of the parameter domain.
-
-        .. note::
-            The components of x are in reverse order (e.g., zyx) to
-            be consistent with the grid evaluation functions below.
-        """
-        coords = tuple(np.asarray([t]) for t in x)
+        """Evaluate the function at a single point of the parameter domain."""
+        coords = tuple(np.asarray([t]) for t in reversed(x))
         return self.grid_eval(coords)
 
     def grid_eval(self, gridaxes):

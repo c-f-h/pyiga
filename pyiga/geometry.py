@@ -22,14 +22,20 @@ class BSplineFunc:
     Trailing axes, if any, determine the output dimension of the function.
     If there are no trailing dimensions or only a single one of length 1,
     the function is scalar-valued.
+
+    For convenience, if `coeffs` is a vector, it is reshaped to the proper
+    size for the tensor product basis. The result is a scalar-valued function.
     """
     def __init__(self, kvs, coeffs):
         self.kvs = kvs
-        self.coeffs = coeffs
         self.sdim = len(kvs)    # source dimension
 
         N = tuple(kv.numdofs for kv in kvs)
+        if coeffs.ndim == 1:
+            assert coeffs.shape[0] == np.prod(N), "Wrong length of coefficient vector"
+            coeffs = coeffs.reshape(N)
         assert N == coeffs.shape[:self.sdim], "Wrong shape of coefficients"
+        self.coeffs = coeffs
 
         # determine target dimension
         dim = coeffs.shape[self.sdim:]

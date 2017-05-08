@@ -3,6 +3,8 @@
 # cython: linetrace=False
 # cython: binding=False
 
+from builtins import range as range_it   # Python 2 compatibility
+
 cimport cython
 from cython.parallel import prange
 from libcpp.vector cimport vector
@@ -987,7 +989,7 @@ cdef generic_assemble_2d_parallel(BaseAssembler2D asm):
     def asm_chunk(rg):
         cdef BaseAssembler2D asm_clone = asm.shared_clone()
         return generic_assemble_2d(asm_clone, rg.start, rg.stop)
-    results = get_thread_pool().map(asm_chunk, chunk_tasks(range(asm.ndofs[0]), 4*num_threads))
+    results = get_thread_pool().map(asm_chunk, chunk_tasks(range_it(asm.ndofs[0]), 4*num_threads))
     return sum(results)
 
 
@@ -1071,7 +1073,7 @@ cdef generic_assemble_3d_parallel(BaseAssembler3D asm):
     def asm_chunk(rg):
         cdef BaseAssembler3D asm_clone = asm.shared_clone()
         return generic_assemble_3d(asm_clone, rg.start, rg.stop)
-    results = get_thread_pool().map(asm_chunk, chunk_tasks(range(asm.ndofs[0]), 4*num_threads))
+    results = get_thread_pool().map(asm_chunk, chunk_tasks(range_it(asm.ndofs[0]), 4*num_threads))
     return sum(results)
 
 

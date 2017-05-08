@@ -69,7 +69,7 @@ setup(
     },
 
     setup_requires = ['numpy', 'Cython'],
-    install_requires = ['numpy', 'scipy', 'future'],
+    install_requires = ['numpy', 'scipy', 'future', 'futures'], # futures: backport of concurrent.futures to Py2
 
     tests_require = 'nose',
     test_suite = 'nose.collector'

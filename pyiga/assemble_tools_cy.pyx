@@ -14,6 +14,7 @@ cimport numpy as np
 
 import scipy.sparse
 
+import pyiga
 from . import bspline
 from .quadrature import make_iterated_quadrature
 from . cimport fast_assemble_cy
@@ -309,15 +310,12 @@ def chunk_tasks(tasks, num_chunks):
     for i in range(0, len(tasks), n):
         yield tasks[i:i+n]
 
-def get_max_threads():
-    return multiprocessing.cpu_count()
-
 cdef object _threadpool = None
 
 cdef object get_thread_pool():
     global _threadpool
     if _threadpool is None:
-        _threadpool = ThreadPoolExecutor(get_max_threads())
+        _threadpool = ThreadPoolExecutor(pyiga.get_max_threads())
     return _threadpool
 
 ################################################################################
@@ -514,7 +512,7 @@ cdef class BaseAssembler2D:
         cdef size_t[:,::1] idx_arr = np.array(list(indices), dtype=np.uintp)
         cdef double[::1] result = np.empty(idx_arr.shape[0])
 
-        num_threads = get_max_threads()
+        num_threads = pyiga.get_max_threads()
         if num_threads <= 1:
             self.multi_assemble_chunk(idx_arr, result)
         else:
@@ -746,7 +744,7 @@ cdef class BaseAssembler3D:
         cdef size_t[:,::1] idx_arr = np.array(list(indices), dtype=np.uintp)
         cdef double[::1] result = np.empty(idx_arr.shape[0])
 
-        num_threads = get_max_threads()
+        num_threads = pyiga.get_max_threads()
         if num_threads <= 1:
             self.multi_assemble_chunk(idx_arr, result)
         else:
@@ -983,7 +981,7 @@ cdef object generic_assemble_2d(BaseAssembler2D asm, long chunk_start=-1, long c
 
 
 cdef generic_assemble_2d_parallel(BaseAssembler2D asm):
-    num_threads = get_max_threads()
+    num_threads = pyiga.get_max_threads()
     if num_threads <= 1:
         return generic_assemble_2d(asm)
     def asm_chunk(rg):
@@ -1067,7 +1065,7 @@ cdef object generic_assemble_3d(BaseAssembler3D asm, long chunk_start=-1, long c
 
 
 cdef generic_assemble_3d_parallel(BaseAssembler3D asm):
-    num_threads = get_max_threads()
+    num_threads = pyiga.get_max_threads()
     if num_threads <= 1:
         return generic_assemble_3d(asm)
     def asm_chunk(rg):

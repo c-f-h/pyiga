@@ -389,17 +389,17 @@ cdef double combine_stiff_2d(double[:,:,:,::1] B, double[:,::1] J, double[:,:,::
 @cython.wraparound(False)
 @cython.initializedcheck(False)
 cdef double combine_mass_3d(
-        double[::1] vi0, double[::1] vi1, double[::1] vi2,
-        double[::1] vj0, double[::1] vj1, double[::1] vj2,
+        double* vi0, double* vi1, double* vi2,
+        double* vj0, double* vj1, double* vj2,
         double[:,:,::1] weights) nogil:
     """Computes sum(kron(vi0,vi1,vi2) * kron(vj0,vj1,vj2) * weights.ravel())"""
     cdef size_t i0, i1, i2
     cdef double result = 0.0
     cdef double temp0, temp1
 
-    cdef size_t n0 = vi0.shape[0]
-    cdef size_t n1 = vi1.shape[0]
-    cdef size_t n2 = vi2.shape[0]
+    cdef size_t n0 = weights.shape[0]
+    cdef size_t n1 = weights.shape[1]
+    cdef size_t n2 = weights.shape[2]
 
     for i0 in range(n0):
         temp0 = vi0[i0] * vj0[i0]
@@ -769,8 +769,6 @@ cdef class MassAssembler3D(BaseAssembler3D):
     # shared data
     cdef vector[double[::1,:]] C
     cdef double[:,:,::1] geo_weights
-    # local data
-    cdef vector[double[::1]] values_i, values_j
 
     def __init__(self, kvs, geo):
         assert geo.dim == 3, "Geometry has wrong dimension"
@@ -786,23 +784,8 @@ cdef class MassAssembler3D(BaseAssembler3D):
         geo_det    = np.abs(determinants(geo_jac))
         self.geo_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * geo_det
 
-        # initialize local storage
-        self.values_i.resize(3)
-        self.values_j.resize(3)
-
     cdef MassAssembler3D shared_clone(self):
-        cdef MassAssembler3D asm = MassAssembler3D.__new__(MassAssembler3D)
-
-        # copy references to shared data
-        self._share_base(asm)
-        asm.C = self.C
-        asm.geo_weights = self.geo_weights
-
-        # initialize local data
-        asm.values_i.resize(3)
-        asm.values_j.resize(3)
-
-        return asm
+        return self     # no shared data; class is thread-safe
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -812,6 +795,8 @@ cdef class MassAssembler3D(BaseAssembler3D):
         cdef IntInterval intv
         cdef size_t g_sta[3]
         cdef size_t g_end[3]
+        cdef (double*) values_i[3]
+        cdef (double*) values_j[3]
 
         for k in range(3):
             intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
@@ -821,12 +806,12 @@ cdef class MassAssembler3D(BaseAssembler3D):
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-            self.values_i[k] = self.C[k][ g_sta[k]:g_end[k], i[k] ]
-            self.values_j[k] = self.C[k][ g_sta[k]:g_end[k], j[k] ]
+            values_i[k] = &self.C[k][ g_sta[k], i[k] ]
+            values_j[k] = &self.C[k][ g_sta[k], j[k] ]
 
         return combine_mass_3d(
-            self.values_i[0], self.values_i[1], self.values_i[2],
-            self.values_j[0], self.values_j[1], self.values_j[2],
+            values_i[0], values_i[1], values_i[2],
+            values_j[0], values_j[1], values_j[2],
             self.geo_weights[ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ]
         )
 

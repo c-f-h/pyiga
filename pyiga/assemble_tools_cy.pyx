@@ -301,15 +301,15 @@ cdef double[:,:,:,:,::1] inverses_3x3(double[:,:,:,:,::1] X):
 @cython.wraparound(False)
 @cython.initializedcheck(False)
 cdef double combine_mass_2d(
-        double[::1] vi0, double[::1] vi1,
-        double[::1] vj0, double[::1] vj1,
+        double* vi0, double* vi1,
+        double* vj0, double* vj1,
         double[:,::1] weights) nogil:
     """Computes sum(kron(vi0,vi1) * kron(vj0,vj1) * weights.ravel())"""
     cdef size_t i0, i1
     cdef double result = 0.0, temp0
 
-    cdef size_t n0 = vi0.shape[0]
-    cdef size_t n1 = vi1.shape[0]
+    cdef size_t n0 = weights.shape[0]
+    cdef size_t n1 = weights.shape[1]
 
     for i0 in range(n0):
         temp0 = vi0[i0] * vj0[i0]
@@ -486,8 +486,6 @@ cdef class MassAssembler2D(BaseAssembler2D):
     # shared data
     cdef vector[double[::1,:]] C
     cdef double[:,::1] geo_weights
-    # local data
-    cdef vector[double[::1]] values_i, values_j
 
     def __init__(self, kvs, geo):
         assert geo.dim == 2, "Geometry has wrong dimension"
@@ -503,10 +501,6 @@ cdef class MassAssembler2D(BaseAssembler2D):
         geo_det    = np.abs(determinants(geo_jac))
         self.geo_weights = gaussweights[0][:,None] * gaussweights[1][None,:] * geo_det
 
-        # initialize local storage
-        self.values_i.resize(2)
-        self.values_j.resize(2)
-
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
@@ -516,6 +510,9 @@ cdef class MassAssembler2D(BaseAssembler2D):
         cdef size_t g_sta[2]
         cdef size_t g_end[2]
 
+        cdef (double*) values_i[2]
+        cdef (double*) values_j[2]
+
         for k in range(2):
             intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
                                        make_intv(self.meshsupp[k][j[k],0], self.meshsupp[k][j[k],1]))
@@ -524,12 +521,12 @@ cdef class MassAssembler2D(BaseAssembler2D):
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-            self.values_i[k] = self.C[k][ g_sta[k]:g_end[k], i[k] ]
-            self.values_j[k] = self.C[k][ g_sta[k]:g_end[k], j[k] ]
+            values_i[k] = &self.C[k][ g_sta[k], i[k] ]
+            values_j[k] = &self.C[k][ g_sta[k], j[k] ]
 
         return combine_mass_2d(
-            self.values_i[0], self.values_i[1],
-            self.values_j[0], self.values_j[1],
+            values_i[0], values_i[1],
+            values_j[0], values_j[1],
             self.geo_weights[ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ]
         )
 

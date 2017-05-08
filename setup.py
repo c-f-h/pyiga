@@ -69,7 +69,7 @@ setup(
     },
 
     setup_requires = ['numpy', 'Cython'],
-    install_requires = ['numpy', 'scipy'],
+    install_requires = ['numpy', 'scipy', 'future'],
 
     tests_require = 'nose',
     test_suite = 'nose.collector'

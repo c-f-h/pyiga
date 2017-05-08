@@ -1,12 +1,20 @@
 import numpy as np
 import scipy.sparse.linalg
 
+from . import tensor
+
 def apply_kronecker(ops, x):
-    """Apply the Kronecker product of a sequence of square linear operators"""
+    """Apply the Kronecker product of a sequence of square matrices or linear operators."""
+    if all(isinstance(A, np.ndarray) for A in ops):
+        return _apply_kronecker_dense(ops, x)
+    else:
+        ops = [scipy.sparse.linalg.aslinearoperator(B) for B in ops]
+        return _apply_kronecker_linops(ops, x)
+
+
+def _apply_kronecker_linops(ops, x):
+    """Apply the Kronecker product of a sequence of square linear operators."""
     assert len(ops) >= 1, "Empty Kronecker product"
-    
-    # make sure input are linear operators
-    ops = [scipy.sparse.linalg.aslinearoperator(B) for B in ops]
     
     if len(ops) == 1:
         return ops[0] * x
@@ -47,23 +55,14 @@ def apply_kronecker(ops, x):
     return q0.reshape(orig_shape, order='F')
 
 
-def KroneckerOperator(*ops):
-    # assumption: all operators are square
-    ops = [scipy.sparse.linalg.aslinearoperator(B) for B in ops]
-    sz = np.prod([A.shape[0] for A in ops])
-    applyfunc = lambda x: apply_kronecker(ops, x)
-    return scipy.sparse.linalg.LinearOperator((sz,sz), matvec=applyfunc, matmat=applyfunc)
-
-
-def apply_tprod(ops, A):
-    """Apply tensor product of operators to ndarray A.
-
-    This does essentially the same as apply_kronecker, but assumes
-    that A is an ndarray with the proper number of dimensions rather
-    than its matricization."""
-    n = len(ops)
-    for i in reversed(range(n)):
-        # this works only for dense matrices as operators
-        A = np.tensordot(ops[i], A, axes=([1],[n-1]))
-    return A
+def _apply_kronecker_dense(ops, x):
+    shape = tuple(op.shape[0] for op in ops)
+    assert x.ndim == 1 or x.ndim == 2, \
+        'Only vectors or matrices allowed as right-hand sides'
+    if x.ndim == 2 and x.shape[1] > 1:
+        m = x.shape[1]
+        shape = shape + (m,)
+    X = x.reshape(shape)
+    Y = tensor.apply_tprod(ops, X)
+    return Y.reshape(x.shape)
 

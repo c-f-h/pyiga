@@ -52,6 +52,11 @@ They take the following additional arguments:
 .. autofunction:: mass_fast
 .. autofunction:: stiffness_fast
 
+Right-hand sides
+----------------
+
+.. autofunction:: inner_products
+
 """
 import numpy as np
 import scipy
@@ -59,6 +64,9 @@ import scipy.sparse
 
 from . import bspline
 from . import assemble_tools
+from . import tensor
+from . import operators
+from . import utils
 
 from .quadrature import make_iterated_quadrature
 
@@ -231,6 +239,41 @@ def bsp_stiffness_3d(knotvecs, geo=None):
         return k(MK[0][1], M12) + k(MK[0][0], K12)
     else:
         return assemble_tools.stiffness_3d(knotvecs, geo)
+
+################################################################################
+# Assembling right-hand sides
+################################################################################
+
+def inner_products(kvs, f):
+    """Compute the :math:`L_2` inner products between each basis
+    function in a tensor product B-spline basis and the function `f`
+    (i.e., the load vector).
+
+    Args:
+        kvs (seq): a list of :class:`pyiga.bspline.KnotVector`,
+                   representing a tensor product basis
+        f: a function or :class:`pyiga.geometry.BSplinePatch` object
+
+    Returns:
+        ndarray: the inner products as an array of size
+        `kvs[0].ndofs x kvs[1].ndofs x ... x kvs[-1].ndofs`.
+        Each entry corresponds to the inner product of the
+        corresponding basis function with `f`.
+    """
+    if isinstance(kvs, bspline.KnotVector):
+        kvs = (kvs,)
+    # compute quadrature rules
+    nqp = max(kv.p for kv in kvs) + 1
+    gauss = [make_iterated_quadrature(kv.mesh, nqp) for kv in kvs]
+    # evaluate function f on grid
+    fvals = utils.grid_eval(f, [g[0] for g in gauss])
+    # multiply function values with quadrature weights
+    fvals = tensor.apply_tprod(
+              [operators.DiagonalOperator(g[1]) for g in gauss], fvals)
+    # multiply with spline collocation matrices
+    Ct = [bspline.collocation(kvs[i], gauss[i][0]).T
+            for i in range(len(kvs))]
+    return tensor.apply_tprod(Ct, fvals)
 
 ################################################################################
 # Convenience functions

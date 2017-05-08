@@ -2,18 +2,14 @@ import numpy as np
 import scipy.sparse
 import scipy.sparse.linalg
 
-
-def make_solver(B):
-    """Construct a linear solver for the (dense or sparse) square matrix B.
-    
-    Returns a LinearOperator."""
-    if scipy.sparse.issparse(B):
-        spLU = scipy.sparse.linalg.splu(B.tocsc(), permc_spec='NATURAL')
-        return scipy.sparse.linalg.LinearOperator(B.shape, spLU.solve)
+def grid_eval(f, grid):
+    if hasattr(f, 'grid_eval'):
+        return f.grid_eval(grid)
     else:
-        LU = scipy.linalg.lu_factor(B, check_finite=False)
-        return scipy.sparse.linalg.LinearOperator(B.shape,
-            lambda x: scipy.linalg.lu_solve(LU, x, check_finite=False))
+        mesh = np.meshgrid(*grid, sparse=True, indexing='ij')
+        mesh.reverse() # convert order ZYX into XYZ
+        values = f(*mesh)
+        return values
 
 
 def read_sparse_matrix(fname):

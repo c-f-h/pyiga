@@ -2,22 +2,22 @@ from pyiga.geometry import *
 
 def geos_roughly_equal(geo1, geo2, n=25):
     x = np.linspace(0.0, 1.0, n)
-    grid = geo1.dim * (x,)
+    grid = geo1.sdim * (x,)
     f1 = geo1.grid_eval(grid)
     f2 = geo2.grid_eval(grid)
     return np.allclose(f1, f2)
 
 def test_creation():
     geo = unit_square()
-    assert geo.dim == 2
+    assert geo.sdim == geo.dim == 2
     geo = perturbed_square(noise=0.05)
-    assert geo.dim == 2
+    assert geo.sdim == geo.dim == 2
     geo = bspline_quarter_annulus()
-    assert geo.dim == 2
+    assert geo.sdim == geo.dim == 2
     geo = unit_cube()
-    assert geo.dim == 3
+    assert geo.sdim == geo.dim == 3
     geo = twisted_box()
-    assert geo.dim == 3
+    assert geo.sdim == geo.dim == 3
 
 def test_evaluation():
     geo = bspline_quarter_annulus()
@@ -37,7 +37,7 @@ def test_evaluation():
        [[ 0.   ,  1.   ],
         [ 0.   ,  1.5  ],
         [ 0.   ,  2.   ]]])
-    assert abs(exact[1,1] - geo.eval(0.3, 0.5)).max() < 1e-14
+    assert abs(exact[1,1] - geo.eval(0.5, 0.3)).max() < 1e-14
     assert abs(exact - values).max() < 1e-14
 
 def test_jacobian():

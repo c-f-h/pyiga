@@ -12,8 +12,11 @@ Welcome to pyiga's documentation!
 
    api/bspline
    api/geometry
+   api/approx
    api/assemble
-   api/tucker
+   api/operators
+   api/tensor
+   api/solvers
 
 
 

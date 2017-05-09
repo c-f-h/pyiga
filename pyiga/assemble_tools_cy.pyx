@@ -427,39 +427,45 @@ cdef double combine_mass_3d(
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.initializedcheck(False)
-cdef double combine_stiff_3d(double[:,:,:,:,::1] B,
-                             double[:,:,::1] J,
-                             double[:,:,:,::1] u,
-                             double[:,:,:,::1] v) nogil:
+cdef double combine_stiff_3d(
+        double[:,:,:,:,::1] B,
+        double[:,:,::1] J,
+        double* Vu0, double* Du0,
+        double* Vu1, double* Du1,
+        double* Vu2, double* Du2,
+        double* Vv0, double* Dv0,
+        double* Vv1, double* Dv1,
+        double* Vv2, double* Dv2
+    ) nogil:
     """Compute the sum of J*(B^T u, B^T v) over a 3D grid"""
     cdef size_t n0 = B.shape[0]
     cdef size_t n1 = B.shape[1]
     cdef size_t n2 = B.shape[2]
     #cdef size_t m0 = B.shape[3]    # == 3
     #cdef size_t m1 = B.shape[4]    # == 3
-    cdef size_t i0,i1,i2,k,l
-    cdef double result = 0.0, x, y, z, b
-    cdef double * u_I
-    cdef double * v_I
-    cdef double * B_I
+
+    cdef size_t i0,i1,i2
+    cdef double result = 0.0, z
 
     for i0 in range(n0):
+        vu0 = Vu0[i0]
+        du0 = Du0[i0]
+        vv0 = Vv0[i0]
+        dv0 = Dv0[i0]
         for i1 in range(n1):
+            vu1 = Vu1[i1]
+            du1 = Du1[i1]
+            vv1 = Vv1[i1]
+            dv1 = Dv1[i1]
             for i2 in range(n2):
-                z = 0.0
+                vu2 = Vu2[i2]
+                du2 = Du2[i2]
+                vv2 = Vv2[i2]
+                dv2 = Dv2[i2]
 
-                u_I = &u[i0,i1,i2, 0]
-                v_I = &v[i0,i1,i2, 0]
-                B_I = &B[i0,i1,i2, 0,0] # assume B is contiguous in last two axes
+                # expression generated with asm-codegen.py
+                z = (du0*vu1*vu2*B[i0, i1, i2, 2, 0] + du1*vu0*vu2*B[i0, i1, i2, 1, 0] + du2*vu0*vu1*B[i0, i1, i2, 0, 0])*(dv0*vv1*vv2*B[i0, i1, i2, 2, 0] + dv1*vv0*vv2*B[i0, i1, i2, 1, 0] + dv2*vv0*vv1*B[i0, i1, i2, 0, 0]) + (du0*vu1*vu2*B[i0, i1, i2, 2, 1] + du1*vu0*vu2*B[i0, i1, i2, 1, 1] + du2*vu0*vu1*B[i0, i1, i2, 0, 1])*(dv0*vv1*vv2*B[i0, i1, i2, 2, 1] + dv1*vv0*vv2*B[i0, i1, i2, 1, 1] + dv2*vv0*vv1*B[i0, i1, i2, 0, 1]) + (du0*vu1*vu2*B[i0, i1, i2, 2, 2] + du1*vu0*vu2*B[i0, i1, i2, 1, 2] + du2*vu0*vu1*B[i0, i1, i2, 0, 2])*(dv0*vv1*vv2*B[i0, i1, i2, 2, 2] + dv1*vv0*vv2*B[i0, i1, i2, 1, 2] + dv2*vv0*vv1*B[i0, i1, i2, 0, 2])
 
-                for k in range(3):
-                    x = y = 0.0
-                    for l in range(3):
-                        #b = B[i0,i1,i2, l,k]
-                        b = B_I[3*l + k]
-                        x += b * u_I[l]
-                        y += b * v_I[l]
-                    z += x*y
                 result += J[i0,i1,i2] * z
     return result
 
@@ -797,9 +803,6 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
     cdef vector[double[::1,:]] C, Cd
     cdef double[:,:,::1] geo_weights
     cdef double[:,:,:,:,::1] geo_jacinv
-    # local data
-    cdef double[:,:,:,:,::1] grad_buffer
-    cdef vector[double[::1]] values_i, values_j, derivs_i, derivs_j
 
     def __init__(self, kvs, geo):
         assert geo.dim == 3, "Geometry has wrong dimension"
@@ -816,36 +819,8 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         geo_det, self.geo_jacinv = det_and_inv(geo_jac)
         self.geo_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
 
-        # initialize local storage
-        self.values_i.resize(3)
-        self.values_j.resize(3)
-        self.derivs_i.resize(3)
-        self.derivs_j.resize(3)
-        # indices: (basis function i or j), coord0, coord1, coord2, (x,y,z)
-        self.grad_buffer = np.empty((2,
-            self.nqp * (2*kvs[0].p + 1),
-            self.nqp * (2*kvs[1].p + 1),
-            self.nqp * (2*kvs[2].p + 1),
-            3), np.double)
-
     cdef StiffnessAssembler3D shared_clone(self):
-        cdef StiffnessAssembler3D asm = StiffnessAssembler3D.__new__(StiffnessAssembler3D)
-
-        # copy references to shared data
-        self._share_base(asm)
-        asm.C = self.C
-        asm.Cd = self.Cd
-        asm.geo_weights = self.geo_weights
-        asm.geo_jacinv = self.geo_jacinv
-
-        # initialize local data
-        asm.values_i.resize(3)
-        asm.values_j.resize(3)
-        asm.derivs_i.resize(3)
-        asm.derivs_j.resize(3)
-        asm.grad_buffer = np.empty_like(self.grad_buffer)
-
-        return asm
+        return self     # no shared data; class is thread-safe
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -853,10 +828,12 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
     cdef double assemble_impl(self, size_t[3] i, size_t[3] j) nogil:
         cdef int k
         cdef IntInterval intv
-        cdef size_t m[3]
         cdef size_t g_sta[3]
         cdef size_t g_end[3]
-        cdef double[:,:,:,::1] grad_i, grad_j
+        cdef (double*) values_i[3]
+        cdef (double*) values_j[3]
+        cdef (double*) derivs_i[3]
+        cdef (double*) derivs_j[3]
 
         for k in range(3):
             intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
@@ -865,29 +842,18 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                 return 0.0      # no intersection of support
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
-            m[k] = self.nqp * (intv.b - intv.a)  # length
 
-            self.values_i[k] = self.C[k][ g_sta[k]:g_end[k], i[k] ]
-            self.values_j[k] = self.C[k][ g_sta[k]:g_end[k], j[k] ]
+            values_i[k] = &self.C[k][ g_sta[k], i[k] ]
+            values_j[k] = &self.C[k][ g_sta[k], j[k] ]
 
-            self.derivs_i[k] = self.Cd[k][ g_sta[k]:g_end[k], i[k] ]
-            self.derivs_j[k] = self.Cd[k][ g_sta[k]:g_end[k], j[k] ]
-
-        grad_i = self.grad_buffer[0, :m[0], :m[1], :m[2], :]
-        grad_j = self.grad_buffer[1, :m[0], :m[1], :m[2], :]
-
-        outer_prod3(self.values_i[0], self.values_i[1], self.derivs_i[2], out=grad_i[:,:,:,0])
-        outer_prod3(self.values_i[0], self.derivs_i[1], self.values_i[2], out=grad_i[:,:,:,1])
-        outer_prod3(self.derivs_i[0], self.values_i[1], self.values_i[2], out=grad_i[:,:,:,2])
-
-        outer_prod3(self.values_j[0], self.values_j[1], self.derivs_j[2], out=grad_j[:,:,:,0])
-        outer_prod3(self.values_j[0], self.derivs_j[1], self.values_j[2], out=grad_j[:,:,:,1])
-        outer_prod3(self.derivs_j[0], self.values_j[1], self.values_j[2], out=grad_j[:,:,:,2])
+            derivs_i[k] = &self.Cd[k][ g_sta[k], i[k] ]
+            derivs_j[k] = &self.Cd[k][ g_sta[k], j[k] ]
 
         return combine_stiff_3d(
                 self.geo_jacinv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 self.geo_weights[ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
-                grad_i, grad_j)
+                values_i[0], derivs_i[0], values_i[1], derivs_i[1], values_i[2], derivs_i[2],
+                values_j[0], derivs_j[0], values_j[1], derivs_j[1], values_j[2], derivs_j[2])
 
 
 

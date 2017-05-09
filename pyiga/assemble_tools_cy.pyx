@@ -326,129 +326,101 @@ cdef object get_thread_pool():
 @cython.wraparound(False)
 @cython.initializedcheck(False)
 cdef double combine_mass_2d(
-        double* vi0, double* vi1,
-        double* vj0, double* vj1,
-        double[:,::1] weights) nogil:
-    """Computes sum(kron(vi0,vi1) * kron(vj0,vj1) * weights.ravel())"""
+        double[:,::1] J,
+        double* Vu0, double* Vu1,
+        double* Vv0, double* Vv1
+    ) nogil:
+    """Compute the sum of J*u*v over a 2D grid."""
     cdef size_t i0, i1
-    cdef double result = 0.0, temp0
+    cdef double result = 0.0
+    cdef double vu0, vu1, vv0, vv1
 
-    cdef size_t n0 = weights.shape[0]
-    cdef size_t n1 = weights.shape[1]
+    cdef size_t n0 = J.shape[0]
+    cdef size_t n1 = J.shape[1]
 
     for i0 in range(n0):
-        temp0 = vi0[i0] * vj0[i0]
+        vu0 = Vu0[i0]
+        vv0 = Vv0[i0]
         for i1 in range(n1):
-            result += temp0 * vi1[i1] * vj1[i1] * weights[i0,i1]
+            vu1 = Vu1[i1]
+            vv1 = Vv1[i1]
+            result += vu0*vu1 * vv0*vv1 * J[i0,i1]
     return result
+
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.initializedcheck(False)
-cdef double combine_stiff_2d(double[:,:,:,::1] B, double[:,::1] J, double[:,:,::1] u, double[:,:,::1] v) nogil:
-    """Compute the sum of J*(B^T u, B^T v) over a 2D grid"""
-    cdef size_t n0 = B.shape[0]
-    cdef size_t n1 = B.shape[1]
-    #cdef size_t m0 = B.shape[2]    # == 2
-    #cdef size_t m1 = B.shape[3]    # == 2
-    cdef size_t i,j,k,l
-    cdef double result = 0.0, x, y, z, b
-
-    for i in range(n0):
-        for j in range(n1):
-            z = 0.0
-            for k in range(2):
-                x = y = 0.0
-                for l in range(2):
-                    b = B[i,j,l,k]
-                    x += b * u[i,j,l]
-                    y += b * v[i,j,l]
-                z += x*y
-            result += J[i,j] * z
-    return result
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-@cython.initializedcheck(False)
-cdef double combine_stiff_2d_b(double[:,:,:,::1] B, double[:,::1] J,
+cdef double combine_stiff_2d(
+        double[:,:,:,::1] B,
+        double[:,::1] J,
         double* Vu0, double* Du0,
         double* Vu1, double* Du1,
         double* Vv0, double* Dv0,
         double* Vv1, double* Dv1
     ) nogil:
-    """Compute the sum of J*(B^T grad(u), B^T grad(v)) over a 2D grid"""
+    """Compute the sum of J*(B^T grad(u), B^T grad(v)) over a 2D grid."""
     cdef size_t n0 = B.shape[0]
     cdef size_t n1 = B.shape[1]
     #cdef size_t m0 = B.shape[2]    # == 2
     #cdef size_t m1 = B.shape[3]    # == 2
-    cdef size_t i,j,k
+    cdef size_t i0, i1, k
     cdef double result = 0.0, x, y, z, b0, b1
     cdef double vu0, vu1, du0, du1
     cdef double vv0, vv1, dv0, dv1
 
-    for i in range(n0):
-        vu0 = Vu0[i]
-        du0 = Du0[i]
-        vv0 = Vv0[i]
-        dv0 = Dv0[i]
-        for j in range(n1):
-            vu1 = Vu1[j]
-            du1 = Du1[j]
-            vv1 = Vv1[j]
-            dv1 = Dv1[j]
+    for i0 in range(n0):
+        vu0 = Vu0[i0]
+        du0 = Du0[i0]
+        vv0 = Vv0[i0]
+        dv0 = Dv0[i0]
+        for i1 in range(n1):
+            vu1 = Vu1[i1]
+            du1 = Du1[i1]
+            vv1 = Vv1[i1]
+            dv1 = Dv1[i1]
             z = 0.0
             for k in range(2):
-                b0 = B[i,j,0,k]
-                b1 = B[i,j,1,k]
+                b0 = B[i0,i1,0,k]
+                b1 = B[i0,i1,1,k]
 
                 x = b0 * vu0*du1 + b1 * du0*vu1
                 y = b0 * vv0*dv1 + b1 * dv0*vv1
                 z += x*y
-            result += J[i,j] * z
+            result += J[i0,i1] * z
     return result
-
-#@cython.boundscheck(False)
-#@cython.wraparound(False)
-#cdef double combine_stiff_2d(double[:,:,:,:] B, double[:,:,:] u, double[:,:,:] v):
-#    cdef size_t n0 = B.shape[0]
-#    cdef size_t n1 = B.shape[1]
-#    #cdef size_t m0 = B.shape[2]    # == 2
-#    #cdef size_t m1 = B.shape[3]    # == 2
-#    cdef size_t i,j,k,l
-#    cdef double result = 0.0
-#
-#    for i in range(n0):
-#        for j in range(n1):
-#            for k in range(2):
-#                for l in range(2):
-#                    result += B[i,j,k,l] * u[i,j,k] * v[i,j,l]
-#    return result
 
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.initializedcheck(False)
 cdef double combine_mass_3d(
-        double* vi0, double* vi1, double* vi2,
-        double* vj0, double* vj1, double* vj2,
-        double[:,:,::1] weights) nogil:
-    """Computes sum(kron(vi0,vi1,vi2) * kron(vj0,vj1,vj2) * weights.ravel())"""
+        double[:,:,::1] J,
+        double* Vu0, double* Vu1, double* Vu2,
+        double* Vv0, double* Vv1, double* Vv2
+    ) nogil:
+    """Compute the sum of J*u*v over a 2D grid."""
     cdef size_t i0, i1, i2
     cdef double result = 0.0
-    cdef double temp0, temp1
+    cdef double vu0, vu1, vu2, vv0, vv1, vv2
 
-    cdef size_t n0 = weights.shape[0]
-    cdef size_t n1 = weights.shape[1]
-    cdef size_t n2 = weights.shape[2]
+    cdef size_t n0 = J.shape[0]
+    cdef size_t n1 = J.shape[1]
+    cdef size_t n2 = J.shape[2]
 
     for i0 in range(n0):
-        temp0 = vi0[i0] * vj0[i0]
+        vu0 = Vu0[i0]
+        vv0 = Vv0[i0]
 
         for i1 in range(n1):
-            temp1 = vi1[i1] * vj1[i1]
+            vu1 = Vu1[i1]
+            vv1 = Vv1[i1]
 
             for i2 in range(n2):
-                result += temp0 * temp1 * vi2[i2] * vj2[i2] * weights[i0,i1,i2]
+                vu2 = Vu2[i2]
+                vv2 = Vv2[i2]
+
+                result += vu0*vu1*vu2 * vv0*vv1*vv2 * J[i0,i1,i2]
 
     return result
 
@@ -619,9 +591,9 @@ cdef class MassAssembler2D(BaseAssembler2D):
             values_j[k] = &self.C[k][ g_sta[k], j[k] ]
 
         return combine_mass_2d(
+            self.geo_weights[ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
             values_i[0], values_i[1],
-            values_j[0], values_j[1],
-            self.geo_weights[ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ]
+            values_j[0], values_j[1]
         )
 
 
@@ -677,7 +649,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
             derivs_i[k] = &self.Cd[k][ g_sta[k], i[k] ]
             derivs_j[k] = &self.Cd[k][ g_sta[k], j[k] ]
 
-        return combine_stiff_2d_b(
+        return combine_stiff_2d(
                 self.geo_jacinv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 self.geo_weights[ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_i[0], derivs_i[0], values_i[1], derivs_i[1],
@@ -813,9 +785,9 @@ cdef class MassAssembler3D(BaseAssembler3D):
             values_j[k] = &self.C[k][ g_sta[k], j[k] ]
 
         return combine_mass_3d(
+            self.geo_weights[ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
             values_i[0], values_i[1], values_i[2],
-            values_j[0], values_j[1], values_j[2],
-            self.geo_weights[ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ]
+            values_j[0], values_j[1], values_j[2]
         )
 
 

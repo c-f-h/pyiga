@@ -17,17 +17,23 @@ def grad(U):
         components.append(Mul(*terms))
     return Array(components)
 
+dim = 3
 
-U = make_vararr('u', 3)
-V = make_vararr('v', 3)
+U = make_vararr('u', dim)
+V = make_vararr('v', dim)
+
+if dim == 2:
+    BI = Matrix([[B[i0,i1, i,j] for j in range(dim)] for i in range(dim)])
+elif dim == 3:
+    BI = Matrix([[B[i0,i1,i2, i,j] for j in range(dim)] for i in range(dim)])
 
 gradu = grad(U)
 gradv = grad(V)
 
-Btgu = Array([sum(B[i0,i1,i2,i,j]*gradu[i] for i in range(3)) for j in range(3)])
-Btgv = Array([sum(B[i0,i1,i2,i,j]*gradv[i] for i in range(3)) for j in range(3)])
+Btgu = Matrix(BI.T.dot(gradu))
+Btgv = Matrix(BI.T.dot(gradv))
 
-result = sum(Btgu[i]*Btgv[i] for i in range(3))
+result = Btgu.T.dot(Btgv)
 
 print(result)
 #print(factor(result))

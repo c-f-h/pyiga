@@ -9,6 +9,12 @@ def make_vararr(name, dim):
     v = [[Symbol(base + name + str(i)) for i in range(dim)] for base in ['v', 'd']]
     return Array(v)
 
+def make_vararr2(name, indices):
+    dim = len(indices)
+    return Array([
+        [symbols('%s%s%s' % (deriv, name, i), cls=IndexedBase)[indices[i]] for i in range(dim)] for deriv in ('V', 'D')
+    ])
+
 def grad(U):
     d = U.shape[1]
     components = []
@@ -19,8 +25,10 @@ def grad(U):
 
 dim = 3
 
-U = make_vararr('u', dim)
-V = make_vararr('v', dim)
+I = (i0, i1, i2)[:dim]
+
+U = make_vararr2('u', I)
+V = make_vararr2('v', I)
 
 if dim == 2:
     BI = Matrix([[B[i0,i1, i,j] for j in range(dim)] for i in range(dim)])

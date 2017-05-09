@@ -331,19 +331,15 @@ cdef double combine_mass_2d(
         double* Vv0, double* Vv1
     ) nogil:
     """Compute the sum of J*u*v over a 2D grid."""
-    cdef size_t i0, i1
-    cdef double result = 0.0
-
     cdef size_t n0 = J.shape[0]
     cdef size_t n1 = J.shape[1]
 
+    cdef size_t i0, i1
+    cdef double result = 0.0
+
     for i0 in range(n0):
-        vu0 = Vu0[i0]
-        vv0 = Vv0[i0]
         for i1 in range(n1):
-            vu1 = Vu1[i1]
-            vv1 = Vv1[i1]
-            result += vu0*vu1 * vv0*vv1 * J[i0,i1]
+            result += Vu0[i0]*Vu1[i1] * Vv0[i0]*Vv1[i1] * J[i0,i1]
     return result
 
 
@@ -361,25 +357,14 @@ cdef double combine_stiff_2d(
     """Compute the sum of J*(B^T grad(u), B^T grad(v)) over a 2D grid."""
     cdef size_t n0 = B.shape[0]
     cdef size_t n1 = B.shape[1]
-    #cdef size_t m0 = B.shape[2]    # == 2
-    #cdef size_t m1 = B.shape[3]    # == 2
 
     cdef size_t i0, i1
     cdef double result = 0.0, z
 
     for i0 in range(n0):
-        vu0 = Vu0[i0]
-        du0 = Du0[i0]
-        vv0 = Vv0[i0]
-        dv0 = Dv0[i0]
         for i1 in range(n1):
-            vu1 = Vu1[i1]
-            du1 = Du1[i1]
-            vv1 = Vv1[i1]
-            dv1 = Dv1[i1]
-
             # expression generated with asm-codegen.py
-            z = (du0*vu1*B[i0, i1, 1, 0] + du1*vu0*B[i0, i1, 0, 0])*(dv0*vv1*B[i0, i1, 1, 0] + dv1*vv0*B[i0, i1, 0, 0]) + (du0*vu1*B[i0, i1, 1, 1] + du1*vu0*B[i0, i1, 0, 1])*(dv0*vv1*B[i0, i1, 1, 1] + dv1*vv0*B[i0, i1, 0, 1])
+            z = (Du0[i0]*Vu1[i1]*B[i0, i1, 1, 0] + Du1[i1]*Vu0[i0]*B[i0, i1, 0, 0])*(Dv0[i0]*Vv1[i1]*B[i0, i1, 1, 0] + Dv1[i1]*Vv0[i0]*B[i0, i1, 0, 0]) + (Du0[i0]*Vu1[i1]*B[i0, i1, 1, 1] + Du1[i1]*Vu0[i0]*B[i0, i1, 0, 1])*(Dv0[i0]*Vv1[i1]*B[i0, i1, 1, 1] + Dv1[i1]*Vv0[i0]*B[i0, i1, 0, 1])
             result += J[i0,i1] * z
     return result
 
@@ -393,26 +378,17 @@ cdef double combine_mass_3d(
         double* Vv0, double* Vv1, double* Vv2
     ) nogil:
     """Compute the sum of J*u*v over a 2D grid."""
-    cdef size_t i0, i1, i2
-    cdef double result = 0.0
-
     cdef size_t n0 = J.shape[0]
     cdef size_t n1 = J.shape[1]
     cdef size_t n2 = J.shape[2]
 
+    cdef size_t i0, i1, i2
+    cdef double result = 0.0
+
     for i0 in range(n0):
-        vu0 = Vu0[i0]
-        vv0 = Vv0[i0]
-
         for i1 in range(n1):
-            vu1 = Vu1[i1]
-            vv1 = Vv1[i1]
-
             for i2 in range(n2):
-                vu2 = Vu2[i2]
-                vv2 = Vv2[i2]
-
-                result += vu0*vu1*vu2 * vv0*vv1*vv2 * J[i0,i1,i2]
+                result += Vu0[i0]*Vu1[i1]*Vu2[i2] * Vv0[i0]*Vv1[i1]*Vv2[i2] * J[i0,i1,i2]
 
     return result
 
@@ -433,30 +409,15 @@ cdef double combine_stiff_3d(
     cdef size_t n0 = B.shape[0]
     cdef size_t n1 = B.shape[1]
     cdef size_t n2 = B.shape[2]
-    #cdef size_t m0 = B.shape[3]    # == 3
-    #cdef size_t m1 = B.shape[4]    # == 3
 
     cdef size_t i0,i1,i2
     cdef double result = 0.0, z
 
     for i0 in range(n0):
-        vu0 = Vu0[i0]
-        du0 = Du0[i0]
-        vv0 = Vv0[i0]
-        dv0 = Dv0[i0]
         for i1 in range(n1):
-            vu1 = Vu1[i1]
-            du1 = Du1[i1]
-            vv1 = Vv1[i1]
-            dv1 = Dv1[i1]
             for i2 in range(n2):
-                vu2 = Vu2[i2]
-                du2 = Du2[i2]
-                vv2 = Vv2[i2]
-                dv2 = Dv2[i2]
-
                 # expression generated with asm-codegen.py
-                z = (du0*vu1*vu2*B[i0, i1, i2, 2, 0] + du1*vu0*vu2*B[i0, i1, i2, 1, 0] + du2*vu0*vu1*B[i0, i1, i2, 0, 0])*(dv0*vv1*vv2*B[i0, i1, i2, 2, 0] + dv1*vv0*vv2*B[i0, i1, i2, 1, 0] + dv2*vv0*vv1*B[i0, i1, i2, 0, 0]) + (du0*vu1*vu2*B[i0, i1, i2, 2, 1] + du1*vu0*vu2*B[i0, i1, i2, 1, 1] + du2*vu0*vu1*B[i0, i1, i2, 0, 1])*(dv0*vv1*vv2*B[i0, i1, i2, 2, 1] + dv1*vv0*vv2*B[i0, i1, i2, 1, 1] + dv2*vv0*vv1*B[i0, i1, i2, 0, 1]) + (du0*vu1*vu2*B[i0, i1, i2, 2, 2] + du1*vu0*vu2*B[i0, i1, i2, 1, 2] + du2*vu0*vu1*B[i0, i1, i2, 0, 2])*(dv0*vv1*vv2*B[i0, i1, i2, 2, 2] + dv1*vv0*vv2*B[i0, i1, i2, 1, 2] + dv2*vv0*vv1*B[i0, i1, i2, 0, 2])
+                z = (Du0[i0]*Vu1[i1]*Vu2[i2]*B[i0, i1, i2, 2, 0] + Du1[i1]*Vu0[i0]*Vu2[i2]*B[i0, i1, i2, 1, 0] + Du2[i2]*Vu0[i0]*Vu1[i1]*B[i0, i1, i2, 0, 0])*(Dv0[i0]*Vv1[i1]*Vv2[i2]*B[i0, i1, i2, 2, 0] + Dv1[i1]*Vv0[i0]*Vv2[i2]*B[i0, i1, i2, 1, 0] + Dv2[i2]*Vv0[i0]*Vv1[i1]*B[i0, i1, i2, 0, 0]) + (Du0[i0]*Vu1[i1]*Vu2[i2]*B[i0, i1, i2, 2, 1] + Du1[i1]*Vu0[i0]*Vu2[i2]*B[i0, i1, i2, 1, 1] + Du2[i2]*Vu0[i0]*Vu1[i1]*B[i0, i1, i2, 0, 1])*(Dv0[i0]*Vv1[i1]*Vv2[i2]*B[i0, i1, i2, 2, 1] + Dv1[i1]*Vv0[i0]*Vv2[i2]*B[i0, i1, i2, 1, 1] + Dv2[i2]*Vv0[i0]*Vv1[i1]*B[i0, i1, i2, 0, 1]) + (Du0[i0]*Vu1[i1]*Vu2[i2]*B[i0, i1, i2, 2, 2] + Du1[i1]*Vu0[i0]*Vu2[i2]*B[i0, i1, i2, 1, 2] + Du2[i2]*Vu0[i0]*Vu1[i1]*B[i0, i1, i2, 0, 2])*(Dv0[i0]*Vv1[i1]*Vv2[i2]*B[i0, i1, i2, 2, 2] + Dv1[i1]*Vv0[i0]*Vv2[i2]*B[i0, i1, i2, 1, 2] + Dv2[i2]*Vv0[i0]*Vv1[i1]*B[i0, i1, i2, 0, 2])
                 result += J[i0,i1,i2] * z
     return result
 

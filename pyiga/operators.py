@@ -174,15 +174,23 @@ def SubspaceOperator(subspaces, Bs):
     )
 
 
-def make_solver(B, symmetric=False):
+def make_solver(B, symmetric=False, spd=False):
     """Return a `LinearOperator` that acts as a linear solver for the
     (dense or sparse) square matrix `B`.
     
-    If `B` is symmetric, passing ``symmetric=True`` may try to take advantage of this."""
+    If `B` is symmetric, passing ``symmetric=True`` may try to take advantage of this.
+    If `B` is symmetric and positive definite, pass ``spd=True``.
+    """
+    if spd:
+        symmetric = True
+
     if scipy.sparse.issparse(B):
         if HAVE_MKL:
             # use MKL Pardiso
-            solver = pyMKL.pardisoSolver(B, -2 if symmetric else 11)
+            mtype = 11   # real, nonsymmetric
+            if symmetric:
+                mtype = 2 if spd else -2
+            solver = pyMKL.pardisoSolver(B, mtype)
             solver.factor()
             return scipy.sparse.linalg.LinearOperator(B.shape, dtype=B.dtype,
                     matvec=solver.solve, matmat=solver.solve)

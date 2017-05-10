@@ -24,6 +24,6 @@ def project_L2(kvs, f):
     """Compute the coefficients for the :math:`L_2`-projection of the function `f` into
     the tensor product B-spline basis `kvs`.
     """
-    Minvs = [operators.make_solver(assemble.mass(kv), symmetric=True) for kv in kvs]
+    Minvs = [operators.make_solver(assemble.mass(kv), spd=True) for kv in kvs]
     rhs = assemble.inner_products(kvs, f)
     return tensor.apply_tprod(Minvs, rhs)

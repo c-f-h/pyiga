@@ -50,10 +50,12 @@ def test_solver():
     _test_oper(make_solver(A), np.linalg.inv(A))
     B = A + A.T + 3*np.eye(3)
     _test_oper(make_solver(B, symmetric=True), np.linalg.inv(B))
+    _test_oper(make_solver(B, spd=True), np.linalg.inv(B))
     A = scipy.sparse.csr_matrix(A)
     _test_oper(make_solver(A), np.linalg.inv(A.A))
     B = scipy.sparse.csr_matrix(B)
     _test_oper(make_solver(B, symmetric=True), np.linalg.inv(B.A))
+    _test_oper(make_solver(B, spd=True), np.linalg.inv(B.A))
 
 def test_kron_solver():
     A = rand(3,3)

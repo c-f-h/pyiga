@@ -48,15 +48,18 @@ def KroneckerOperator(*ops):
     application of the Kronecker product of the given input operators.
     """
     # assumption: all operators are square
-    sz = np.prod([A.shape[0] for A in ops])
-    if all(isinstance(A, np.ndarray) for A in ops):
+    sz     = np.prod([A.shape[1] for A in ops])
+    sz_out = np.prod([A.shape[0] for A in ops])
+    alldense = all(isinstance(A, np.ndarray) for A in ops)
+    allsquare = all(A.shape[0] == A.shape[1] for A in ops)
+    if alldense or not allsquare:
         applyfunc = lambda x: kronecker._apply_kronecker_dense(ops, x)
-        return scipy.sparse.linalg.LinearOperator(shape=(sz,sz),
+        return scipy.sparse.linalg.LinearOperator(shape=(sz_out,sz), dtype=ops[0].dtype,
                 matvec=applyfunc, matmat=applyfunc)
-    else:
+    else:   # use implementation for square LinearOperators; TODO: is this faster??
         ops = [scipy.sparse.linalg.aslinearoperator(B) for B in ops]
         applyfunc = lambda x: kronecker._apply_kronecker_linops(ops, x)
-        return scipy.sparse.linalg.LinearOperator(shape=(sz,sz),
+        return scipy.sparse.linalg.LinearOperator(shape=(sz_out,sz), dtype=ops[0].dtype,
                 matvec=applyfunc, matmat=applyfunc)
 
 

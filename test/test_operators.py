@@ -57,6 +57,11 @@ def test_solver():
     _test_oper(make_solver(B, symmetric=True), np.linalg.inv(B.A))
     _test_oper(make_solver(B, spd=True), np.linalg.inv(B.A))
 
+def test_kronecker():
+    A = rand(2,3)
+    B = rand(4,5)
+    _test_oper(KroneckerOperator(A, B), np.kron(A, B))
+
 def test_kron_solver():
     A = rand(3,3)
     B = rand(4,4)

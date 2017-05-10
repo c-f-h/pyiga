@@ -56,13 +56,14 @@ def _apply_kronecker_linops(ops, x):
 
 
 def _apply_kronecker_dense(ops, x):
-    shape = tuple(op.shape[0] for op in ops)
+    shape_in  = tuple(op.shape[1] for op in ops)
+    shape_out = (np.prod([op.shape[0] for op in ops]),) + x.shape[1:]
     assert x.ndim == 1 or x.ndim == 2, \
         'Only vectors or matrices allowed as right-hand sides'
     if x.ndim == 2 and x.shape[1] > 1:
         m = x.shape[1]
-        shape = shape + (m,)
-    X = x.reshape(shape)
+        shape_in  = shape_in  + (m,)
+    X = x.reshape(shape_in)
     Y = tensor.apply_tprod(ops, X)
-    return Y.reshape(x.shape)
+    return Y.reshape(shape_out)
 

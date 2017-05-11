@@ -30,12 +30,16 @@ def test_blockdiag():
     X = scipy.linalg.block_diag(A, B, C)
     Y = BlockDiagonalOperator(A, B, C)
     _test_oper(X, Y)
+    _test_oper(X.T, Y.T)
 
 def test_block():
     A,B = rand(3,3), rand(3,4)
     C,D = rand(2,3), rand(2,4)
     blocks = ((A,B),(C,D))
-    _test_oper(BlockOperator(blocks), np.bmat(blocks))
+    X = BlockOperator(blocks)
+    Y = np.bmat(blocks)
+    _test_oper(X, Y)
+    _test_oper(X.T, Y.T)
 
 def test_subspace():
     P1 = np.vstack((np.eye(2), np.zeros((2,2))))

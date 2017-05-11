@@ -69,7 +69,7 @@ class BaseBlockOperator(scipy.sparse.linalg.LinearOperator):
         self.ran_out = ran_out
         self.ran_in = ran_in
         scipy.sparse.linalg.LinearOperator.__init__(self, ops[0].dtype, shape)
-    
+
     def _matvec(self, x):
         y = np.zeros(self.shape[0])
         if x.ndim == 2:
@@ -83,6 +83,16 @@ class BaseBlockOperator(scipy.sparse.linalg.LinearOperator):
         for i in range(len(self.ops)):
             y[self.ran_out[i]] += self.ops[i].dot(x[self.ran_in[i]])
         return y
+
+    def _transpose(self):
+        shape_T = (self.shape[1], self.shape[0])
+        return BaseBlockOperator(shape_T, tuple(op.T for op in self.ops),
+                self.ran_in, self.ran_out)
+
+    def _adjoint(self):
+        shape_T = (self.shape[1], self.shape[0])
+        return BaseBlockOperator(shape_T, tuple(op.H for op in self.ops),
+                self.ran_in, self.ran_out)
 
 
 def _sizes_to_ranges(sizes):
@@ -180,7 +190,7 @@ def SubspaceOperator(subspaces, Bs):
 def make_solver(B, symmetric=False, spd=False):
     """Return a `LinearOperator` that acts as a linear solver for the
     (dense or sparse) square matrix `B`.
-    
+
     If `B` is symmetric, passing ``symmetric=True`` may try to take advantage of this.
     If `B` is symmetric and positive definite, pass ``spd=True``.
     """

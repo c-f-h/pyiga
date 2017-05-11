@@ -22,6 +22,7 @@ def test_diagonal():
     diag_op = DiagonalOperator(diag)
     D = np.diag(diag)
     _test_oper(diag_op, D)
+    _test_oper(diag_op.T, D)
 
 def test_blockdiag():
     A = rand(2,3)

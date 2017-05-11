@@ -23,24 +23,26 @@ class NullOperator(scipy.sparse.linalg.LinearOperator):
         return np.zeros((self.shape[0], x.shape[1]), dtype=self.dtype)
 
 
-def DiagonalOperator(diag):
-    """Return a :class:`LinearOperator` which acts like a diagonal matrix
-    with the given diagonal."""
-    diag = np.squeeze(diag)
-    assert diag.ndim == 1, 'Diagonal must be a vector'
-    N = diag.shape[0]
-    def matvec(x):
+class DiagonalOperator(scipy.sparse.linalg.LinearOperator):
+    """A :class:`LinearOperator` which acts like a diagonal matrix with the given diagonal."""
+    def __init__(self, diag):
+        diag = np.squeeze(diag)
+        assert diag.ndim == 1, 'Diagonal must be a vector'
+        N = diag.shape[0]
+        self.diag = diag
+        scipy.sparse.linalg.LinearOperator.__init__(self, shape=(N,N), dtype=diag.dtype)
+
+    def _matvec(self, x):
         if x.ndim == 1:
-            return diag * x
+            return self.diag * x
         else:
-            return diag[:,None] * x
-    return scipy.sparse.linalg.LinearOperator(
-        shape=(N,N),
-        dtype=diag.dtype,
-        matvec=matvec,
-        rmatvec=matvec,
-        matmat=matvec
-    )
+            return self.diag[:,None] * x
+
+    def _matmat(self, x):
+        return self._matvec(x)
+
+    def _transpose(self):
+        return self
 
 
 class KroneckerOperator(scipy.sparse.linalg.LinearOperator):

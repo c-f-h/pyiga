@@ -24,7 +24,7 @@ class NullOperator(scipy.sparse.linalg.LinearOperator):
 
 
 def DiagonalOperator(diag):
-    """Return a `LinearOperator` which acts like a diagonal matrix
+    """Return a :class:`LinearOperator` which acts like a diagonal matrix
     with the given diagonal."""
     diag = np.squeeze(diag)
     assert diag.ndim == 1, 'Diagonal must be a vector'
@@ -113,7 +113,7 @@ def _sizes_to_ranges(sizes):
 
 
 def BlockDiagonalOperator(*ops):
-    """Return a `LinearOperator` with block diagonal structure, with the given
+    """Return a :class:`LinearOperator` with block diagonal structure, with the given
     operators on the diagonal.
     """
     K = len(ops)
@@ -172,7 +172,7 @@ def SubspaceOperator(subspaces, Bs):
     Args:
         subspaces (seq): a list of `k` prolongation matrices
             :math:`P_j \in \mathbb R^{n \times n_j}`
-        Bs (seq): a list of `k` square matrices or `LinearOperators`
+        Bs (seq): a list of `k` square matrices or instances of :class:`LinearOperator`
             :math:`B_j \in \mathbb R^{n_j \times n_j}`
 
     Returns:
@@ -198,7 +198,7 @@ def SubspaceOperator(subspaces, Bs):
 
 
 def make_solver(B, symmetric=False, spd=False):
-    """Return a `LinearOperator` that acts as a linear solver for the
+    """Return a :class:`LinearOperator` that acts as a linear solver for the
     (dense or sparse) square matrix `B`.
 
     If `B` is symmetric, passing ``symmetric=True`` may try to take advantage of this.

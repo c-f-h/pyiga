@@ -17,7 +17,7 @@ def _apply_kronecker_linops(ops, x):
     assert len(ops) >= 1, "Empty Kronecker product"
     
     if len(ops) == 1:
-        return ops[0] * x
+        return ops[0].dot(x)
     
     # assumption: all operators are square
     sz = np.prod([A.shape[0] for A in ops])
@@ -43,11 +43,11 @@ def _apply_kronecker_linops(ops, x):
         q1.resize((r_i, n * sz_i))
         
         if n == 1:
-            q1[:] = (ops[i] * q0).T
+            q1[:] = ops[i].dot(q0).T
         else:
             for k in range(n):
                 # apply op to coefficients for k-th rhs vector
-                temp = ops[i] * q0[:, k*r_i : (k+1)*r_i] # sz_i x r_i
+                temp = ops[i].dot(q0[:, k*r_i : (k+1)*r_i]) # sz_i x r_i
                 q1[:, k*sz_i : (k+1)*sz_i] = temp.T
         
         q0, q1 = q1, q0   # swap input and output

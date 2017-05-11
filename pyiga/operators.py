@@ -59,7 +59,6 @@ class KroneckerOperator(scipy.sparse.linalg.LinearOperator):
             self.applyfunc = kronecker._apply_kronecker_dense
         else:   # use implementation for square LinearOperators; TODO: is this faster??
             self.applyfunc = kronecker._apply_kronecker_linops
-            self.ops = tuple(scipy.sparse.linalg.aslinearoperator(B) for B in self.ops)
         scipy.sparse.linalg.LinearOperator.__init__(self, dtype=ops[0].dtype, shape=(sz_out,sz))
 
     def _matvec(self, x):

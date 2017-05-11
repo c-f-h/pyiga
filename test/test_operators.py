@@ -64,7 +64,10 @@ def test_solver():
 def test_kronecker():
     A = rand(2,3)
     B = rand(4,5)
-    _test_oper(KroneckerOperator(A, B), np.kron(A, B))
+    X = KroneckerOperator(A, B)
+    Y = np.kron(A, B)
+    _test_oper(X, Y)
+    _test_oper(X.T, Y.T)
 
 def test_kron_solver():
     A = rand(3,3)

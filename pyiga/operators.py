@@ -43,24 +43,34 @@ def DiagonalOperator(diag):
     )
 
 
-def KroneckerOperator(*ops):
-    """Return a `LinearOperator` which efficiently implements the
+class KroneckerOperator(scipy.sparse.linalg.LinearOperator):
+    """A :class:`LinearOperator` which efficiently implements the
     application of the Kronecker product of the given input operators.
     """
-    # assumption: all operators are square
-    sz     = np.prod([A.shape[1] for A in ops])
-    sz_out = np.prod([A.shape[0] for A in ops])
-    alldense = all(isinstance(A, np.ndarray) for A in ops)
-    allsquare = all(A.shape[0] == A.shape[1] for A in ops)
-    if alldense or not allsquare:
-        applyfunc = lambda x: kronecker._apply_kronecker_dense(ops, x)
-        return scipy.sparse.linalg.LinearOperator(shape=(sz_out,sz), dtype=ops[0].dtype,
-                matvec=applyfunc, matmat=applyfunc)
-    else:   # use implementation for square LinearOperators; TODO: is this faster??
-        ops = [scipy.sparse.linalg.aslinearoperator(B) for B in ops]
-        applyfunc = lambda x: kronecker._apply_kronecker_linops(ops, x)
-        return scipy.sparse.linalg.LinearOperator(shape=(sz_out,sz), dtype=ops[0].dtype,
-                matvec=applyfunc, matmat=applyfunc)
+    def __init__(self, *ops):
+        self.ops = ops
+        sz     = np.prod([A.shape[1] for A in ops])
+        sz_out = np.prod([A.shape[0] for A in ops])
+        alldense = all(isinstance(A, np.ndarray) for A in ops)
+        allsquare = all(A.shape[0] == A.shape[1] for A in ops)
+        if alldense or not allsquare:
+            self.applyfunc = kronecker._apply_kronecker_dense
+        else:   # use implementation for square LinearOperators; TODO: is this faster??
+            self.applyfunc = kronecker._apply_kronecker_linops
+            self.ops = tuple(scipy.sparse.linalg.aslinearoperator(B) for B in self.ops)
+        scipy.sparse.linalg.LinearOperator.__init__(self, dtype=ops[0].dtype, shape=(sz_out,sz))
+
+    def _matvec(self, x):
+        return self.applyfunc(self.ops, x)
+
+    def _matmat(self, x):
+        return self.applyfunc(self.ops, x)
+
+    def _transpose(self):
+        return KroneckerOperator(*(B.T for B in self.ops))
+
+    def _adjoint(self):
+        return KroneckerOperator(*(B.H for B in self.ops))
 
 
 class BaseBlockOperator(scipy.sparse.linalg.LinearOperator):

@@ -397,7 +397,6 @@ cdef double combine_mass_3d(
 @cython.initializedcheck(False)
 cdef double combine_stiff_3d(
         double[:,:,:,:,::1] B,
-        double[:,:,::1] J,
         double* Vu0, double* Du0,
         double* Vu1, double* Du1,
         double* Vu2, double* Du2,
@@ -405,7 +404,7 @@ cdef double combine_stiff_3d(
         double* Vv1, double* Dv1,
         double* Vv2, double* Dv2
     ) nogil:
-    """Compute the sum of J*(B^T u, B^T v) over a 3D grid"""
+    """Compute the sum of (B u, v) over a 3D grid"""
     cdef size_t n0 = B.shape[0]
     cdef size_t n1 = B.shape[1]
     cdef size_t n2 = B.shape[2]
@@ -417,8 +416,8 @@ cdef double combine_stiff_3d(
         for i1 in range(n1):
             for i2 in range(n2):
                 # expression generated with asm-codegen.py
-                z = (Du0[i0]*Vu1[i1]*Vu2[i2]*B[i0, i1, i2, 2, 0] + Du1[i1]*Vu0[i0]*Vu2[i2]*B[i0, i1, i2, 1, 0] + Du2[i2]*Vu0[i0]*Vu1[i1]*B[i0, i1, i2, 0, 0])*(Dv0[i0]*Vv1[i1]*Vv2[i2]*B[i0, i1, i2, 2, 0] + Dv1[i1]*Vv0[i0]*Vv2[i2]*B[i0, i1, i2, 1, 0] + Dv2[i2]*Vv0[i0]*Vv1[i1]*B[i0, i1, i2, 0, 0]) + (Du0[i0]*Vu1[i1]*Vu2[i2]*B[i0, i1, i2, 2, 1] + Du1[i1]*Vu0[i0]*Vu2[i2]*B[i0, i1, i2, 1, 1] + Du2[i2]*Vu0[i0]*Vu1[i1]*B[i0, i1, i2, 0, 1])*(Dv0[i0]*Vv1[i1]*Vv2[i2]*B[i0, i1, i2, 2, 1] + Dv1[i1]*Vv0[i0]*Vv2[i2]*B[i0, i1, i2, 1, 1] + Dv2[i2]*Vv0[i0]*Vv1[i1]*B[i0, i1, i2, 0, 1]) + (Du0[i0]*Vu1[i1]*Vu2[i2]*B[i0, i1, i2, 2, 2] + Du1[i1]*Vu0[i0]*Vu2[i2]*B[i0, i1, i2, 1, 2] + Du2[i2]*Vu0[i0]*Vu1[i1]*B[i0, i1, i2, 0, 2])*(Dv0[i0]*Vv1[i1]*Vv2[i2]*B[i0, i1, i2, 2, 2] + Dv1[i1]*Vv0[i0]*Vv2[i2]*B[i0, i1, i2, 1, 2] + Dv2[i2]*Vv0[i0]*Vv1[i1]*B[i0, i1, i2, 0, 2])
-                result += J[i0,i1,i2] * z
+                z = (Du0[i0]*Vu1[i1]*Vu2[i2]*B[i0, i1, i2, 0, 2] + Du1[i1]*Vu0[i0]*Vu2[i2]*B[i0, i1, i2, 0, 1] + Du2[i2]*Vu0[i0]*Vu1[i1]*B[i0, i1, i2, 0, 0])*Dv2[i2]*Vv0[i0]*Vv1[i1] + (Du0[i0]*Vu1[i1]*Vu2[i2]*B[i0, i1, i2, 1, 2] + Du1[i1]*Vu0[i0]*Vu2[i2]*B[i0, i1, i2, 1, 1] + Du2[i2]*Vu0[i0]*Vu1[i1]*B[i0, i1, i2, 1, 0])*Dv1[i1]*Vv0[i0]*Vv2[i2] + (Du0[i0]*Vu1[i1]*Vu2[i2]*B[i0, i1, i2, 2, 2] + Du1[i1]*Vu0[i0]*Vu2[i2]*B[i0, i1, i2, 2, 1] + Du2[i2]*Vu0[i0]*Vu1[i1]*B[i0, i1, i2, 2, 0])*Dv0[i0]*Vv1[i1]*Vv2[i2]
+                result += z
     return result
 
 
@@ -749,12 +748,26 @@ cdef class MassAssembler3D(BaseAssembler3D):
         )
 
 
+cdef double[:,:,:,:,::1] matmatT_3x3(double[:,:,:,:,::1] B):
+    """Compute B * B^T for each matrix in the input."""
+    cdef double[:,:,:,:,::1] X = np.zeros_like(B, order='C')
+    cdef size_t n0 = B.shape[0]
+    cdef size_t n1 = B.shape[1]
+    cdef size_t n2 = B.shape[2]
+    for i0 in range(n0):
+        for i1 in range(n1):
+            for i2 in range(n2):
+                for j in range(3):
+                    for k in range(3):
+                        for l in range(3):
+                            X[i0,i1,i2, j,l] += B[i0,i1,i2, j,k] * B[i0,i1,i2, l,k]
+    return X
+
 
 cdef class StiffnessAssembler3D(BaseAssembler3D):
     # shared data
     cdef vector[double[::1,:]] C, Cd
-    cdef double[:,:,::1] geo_weights
-    cdef double[:,:,:,:,::1] geo_jacinv
+    cdef double[:,:,:,:,::1] B
 
     def __init__(self, kvs, geo):
         assert geo.dim == 3, "Geometry has wrong dimension"
@@ -767,9 +780,10 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         self.C  = [X.toarray(order='F') for (X,Y) in colloc]
         self.Cd = [Y.toarray(order='F') for (X,Y) in colloc]
 
-        geo_jac    = geo.grid_jacobian(gaussgrid)
-        geo_det, self.geo_jacinv = det_and_inv(geo_jac)
-        self.geo_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
+        geo_jac = geo.grid_jacobian(gaussgrid)
+        geo_det, geo_jacinv = det_and_inv(geo_jac)
+        weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
+        self.B = matmatT_3x3(geo_jacinv) * weights[:,:,:,None,None]
 
     cdef StiffnessAssembler3D shared_clone(self):
         return self     # no shared data; class is thread-safe
@@ -802,8 +816,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
             derivs_j[k] = &self.Cd[k][ g_sta[k], j[k] ]
 
         return combine_stiff_3d(
-                self.geo_jacinv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
-                self.geo_weights[ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
+                self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_i[0], derivs_i[0], values_i[1], derivs_i[1], values_i[2], derivs_i[2],
                 values_j[0], derivs_j[0], values_j[1], derivs_j[1], values_j[2], derivs_j[2])
 

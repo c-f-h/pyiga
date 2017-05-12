@@ -38,10 +38,11 @@ elif dim == 3:
 gradu = grad(U)
 gradv = grad(V)
 
-Btgu = Matrix(BI.T.dot(gradu))
-Btgv = Matrix(BI.T.dot(gradv))
+Bgu = Matrix(BI.dot(gradu))
+#Btgu = Matrix(BI.T.dot(gradu))
+#Btgv = Matrix(BI.T.dot(gradv))
 
-result = Btgu.T.dot(Btgv)
+result = Bgu.T.dot(gradv)
 
 print(result)
 #print(factor(result))

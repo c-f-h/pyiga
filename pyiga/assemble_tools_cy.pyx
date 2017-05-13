@@ -378,10 +378,8 @@ cdef double combine_mass_2d(
 @cython.initializedcheck(False)
 cdef double combine_stiff_2d(
         double[:,:,:,::1] B,
-        double* Vu0, double* Du0,
-        double* Vu1, double* Du1,
-        double* Vv0, double* Dv0,
-        double* Vv1, double* Dv1
+        double* VDu0, double* VDu1,
+        double* VDv0, double* VDv1,
     ) nogil:
     """Compute the sum of J*(B^T grad(u), B^T grad(v)) over a 2D grid."""
     cdef size_t n0 = B.shape[0]
@@ -393,7 +391,7 @@ cdef double combine_stiff_2d(
     for i0 in range(n0):
         for i1 in range(n1):
             # expression generated with asm-codegen.py
-            result += (Du0[i0]*Vu1[i1]*B[i0, i1, 0, 1] + Du1[i1]*Vu0[i0]*B[i0, i1, 0, 0])*Dv1[i1]*Vv0[i0] + (Du0[i0]*Vu1[i1]*B[i0, i1, 1, 1] + Du1[i1]*Vu0[i0]*B[i0, i1, 1, 0])*Dv0[i0]*Vv1[i1]
+            result += (VDu0[2*i0 + 1]*VDu1[2*i1]*B[i0, i1, 0, 1] + VDu0[2*i0]*VDu1[2*i1 + 1]*B[i0, i1, 0, 0])*VDv0[2*i0]*VDv1[2*i1 + 1] + (VDu0[2*i0 + 1]*VDu1[2*i1]*B[i0, i1, 1, 1] + VDu0[2*i0]*VDu1[2*i1 + 1]*B[i0, i1, 1, 0])*VDv0[2*i0 + 1]*VDv1[2*i1]
     return result
 
 
@@ -579,8 +577,8 @@ cdef class MassAssembler2D(BaseAssembler2D):
 
 cdef class StiffnessAssembler2D(BaseAssembler2D):
     # shared data
-    cdef vector[double[::1,:]] C, Cd
-    cdef double[:,:,:,::1] B
+    cdef vector[double[:, :, ::1]] C    # basis values. Indices: basis function, mesh point, derivative
+    cdef double[:, :, :, ::1] B         # transformation matrix. Indices: 2 x mesh point, i, j
 
     def __init__(self, kvs, geo):
         assert geo.dim == 2, "Geometry has wrong dimension"
@@ -590,8 +588,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         gaussgrid = [g[0] for g in gauss]
         gaussweights = [g[1] for g in gauss]
         colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=1) for k in range(2)]
-        self.C  = [X.toarray(order='F') for (X,Y) in colloc]
-        self.Cd = [Y.toarray(order='F') for (X,Y) in colloc]
+        self.C = [np.stack((X.T.A, Y.T.A), axis=-1) for (X,Y) in colloc]
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)
@@ -611,8 +608,6 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         cdef size_t g_end[2]
         cdef (double*) values_i[2]
         cdef (double*) values_j[2]
-        cdef (double*) derivs_i[2]
-        cdef (double*) derivs_j[2]
 
         for k in range(2):
             intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
@@ -622,16 +617,13 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-            values_i[k] = &self.C[k][ g_sta[k], i[k] ]
-            values_j[k] = &self.C[k][ g_sta[k], j[k] ]
-
-            derivs_i[k] = &self.Cd[k][ g_sta[k], i[k] ]
-            derivs_j[k] = &self.Cd[k][ g_sta[k], j[k] ]
+            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
+            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 
         return combine_stiff_2d(
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
-                values_i[0], derivs_i[0], values_i[1], derivs_i[1],
-                values_j[0], derivs_j[0], values_j[1], derivs_j[1])
+                values_i[0], values_i[1],
+                values_j[0], values_j[1])
 
 
 

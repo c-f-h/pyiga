@@ -425,12 +425,8 @@ cdef double combine_mass_3d(
 @cython.initializedcheck(False)
 cdef double combine_stiff_3d(
         double[:,:,:,:,::1] B,
-        double* Vu0, double* Du0,
-        double* Vu1, double* Du1,
-        double* Vu2, double* Du2,
-        double* Vv0, double* Dv0,
-        double* Vv1, double* Dv1,
-        double* Vv2, double* Dv2
+        double* VDu0, double* VDu1, double* VDu2,
+        double* VDv0, double* VDv1, double* VDv2,
     ) nogil:
     """Compute the sum of (B u, v) over a 3D grid"""
     cdef size_t n0 = B.shape[0]
@@ -444,7 +440,7 @@ cdef double combine_stiff_3d(
         for i1 in range(n1):
             for i2 in range(n2):
                 # expression generated with asm-codegen.py
-                result += (Du0[i0]*Vu1[i1]*Vu2[i2]*B[i0, i1, i2, 0, 2] + Du1[i1]*Vu0[i0]*Vu2[i2]*B[i0, i1, i2, 0, 1] + Du2[i2]*Vu0[i0]*Vu1[i1]*B[i0, i1, i2, 0, 0])*Dv2[i2]*Vv0[i0]*Vv1[i1] + (Du0[i0]*Vu1[i1]*Vu2[i2]*B[i0, i1, i2, 1, 2] + Du1[i1]*Vu0[i0]*Vu2[i2]*B[i0, i1, i2, 1, 1] + Du2[i2]*Vu0[i0]*Vu1[i1]*B[i0, i1, i2, 1, 0])*Dv1[i1]*Vv0[i0]*Vv2[i2] + (Du0[i0]*Vu1[i1]*Vu2[i2]*B[i0, i1, i2, 2, 2] + Du1[i1]*Vu0[i0]*Vu2[i2]*B[i0, i1, i2, 2, 1] + Du2[i2]*Vu0[i0]*Vu1[i1]*B[i0, i1, i2, 2, 0])*Dv0[i0]*Vv1[i1]*Vv2[i2]
+                result += (VDu0[2*i0 + 1]*VDu1[2*i1]*VDu2[2*i2]*B[i0, i1, i2, 0, 2] + VDu0[2*i0]*VDu1[2*i1 + 1]*VDu2[2*i2]*B[i0, i1, i2, 0, 1] + VDu0[2*i0]*VDu1[2*i1]*VDu2[2*i2 + 1]*B[i0, i1, i2, 0, 0])*VDv0[2*i0]*VDv1[2*i1]*VDv2[2*i2 + 1] + (VDu0[2*i0 + 1]*VDu1[2*i1]*VDu2[2*i2]*B[i0, i1, i2, 1, 2] + VDu0[2*i0]*VDu1[2*i1 + 1]*VDu2[2*i2]*B[i0, i1, i2, 1, 1] + VDu0[2*i0]*VDu1[2*i1]*VDu2[2*i2 + 1]*B[i0, i1, i2, 1, 0])*VDv0[2*i0]*VDv1[2*i1 + 1]*VDv2[2*i2] + (VDu0[2*i0 + 1]*VDu1[2*i1]*VDu2[2*i2]*B[i0, i1, i2, 2, 2] + VDu0[2*i0]*VDu1[2*i1 + 1]*VDu2[2*i2]*B[i0, i1, i2, 2, 1] + VDu0[2*i0]*VDu1[2*i1]*VDu2[2*i2 + 1]*B[i0, i1, i2, 2, 0])*VDv0[2*i0 + 1]*VDv1[2*i1]*VDv2[2*i2]
     return result
 
 
@@ -775,8 +771,8 @@ cdef class MassAssembler3D(BaseAssembler3D):
 
 cdef class StiffnessAssembler3D(BaseAssembler3D):
     # shared data
-    cdef vector[double[::1,:]] C, Cd
-    cdef double[:,:,:,:,::1] B
+    cdef vector[double[:, :, ::1]] C    # basis values. Indices: basis function, mesh point, derivative
+    cdef double[:, :, :, :, ::1] B  # transformation matrix. Indices: 3 x mesh point, i, j
 
     def __init__(self, kvs, geo):
         assert geo.dim == 3, "Geometry has wrong dimension"
@@ -786,8 +782,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         gaussgrid = [g[0] for g in gauss]
         gaussweights = [g[1] for g in gauss]
         colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=1) for k in range(3)]
-        self.C  = [X.toarray(order='F') for (X,Y) in colloc]
-        self.Cd = [Y.toarray(order='F') for (X,Y) in colloc]
+        self.C = [np.stack((X.T.A, Y.T.A), axis=-1) for (X,Y) in colloc]
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)
@@ -807,8 +802,6 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         cdef size_t g_end[3]
         cdef (double*) values_i[3]
         cdef (double*) values_j[3]
-        cdef (double*) derivs_i[3]
-        cdef (double*) derivs_j[3]
 
         for k in range(3):
             intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
@@ -818,16 +811,13 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-            values_i[k] = &self.C[k][ g_sta[k], i[k] ]
-            values_j[k] = &self.C[k][ g_sta[k], j[k] ]
-
-            derivs_i[k] = &self.Cd[k][ g_sta[k], i[k] ]
-            derivs_j[k] = &self.Cd[k][ g_sta[k], j[k] ]
+            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
+            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 
         return combine_stiff_3d(
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
-                values_i[0], derivs_i[0], values_i[1], derivs_i[1], values_i[2], derivs_i[2],
-                values_j[0], derivs_j[0], values_j[1], derivs_j[1], values_j[2], derivs_j[2])
+                values_i[0], values_i[1], values_i[2],
+                values_j[0], values_j[1], values_j[2])
 
 
 

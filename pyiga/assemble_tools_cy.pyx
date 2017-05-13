@@ -302,6 +302,36 @@ cdef double[:,:,:,:,::1] inverses_3x3(double[:,:,:,:,::1] X):
 
     return Y
 
+
+cdef double[:,:,:,::1] matmatT_2x2(double[:,:,:,::1] B):
+    """Compute B * B^T for each matrix in the input."""
+    cdef double[:,:,:,::1] X = np.zeros_like(B, order='C')
+    cdef size_t n0 = B.shape[0]
+    cdef size_t n1 = B.shape[1]
+    for i0 in range(n0):
+        for i1 in range(n1):
+            for j in range(2):
+                for k in range(2):
+                    for l in range(2):
+                        X[i0,i1, j,l] += B[i0,i1, j,k] * B[i0,i1, l,k]
+    return X
+
+cdef double[:,:,:,:,::1] matmatT_3x3(double[:,:,:,:,::1] B):
+    """Compute B * B^T for each matrix in the input."""
+    cdef double[:,:,:,:,::1] X = np.zeros_like(B, order='C')
+    cdef size_t n0 = B.shape[0]
+    cdef size_t n1 = B.shape[1]
+    cdef size_t n2 = B.shape[2]
+    for i0 in range(n0):
+        for i1 in range(n1):
+            for i2 in range(n2):
+                for j in range(3):
+                    for k in range(3):
+                        for l in range(3):
+                            X[i0,i1,i2, j,l] += B[i0,i1,i2, j,k] * B[i0,i1,i2, l,k]
+    return X
+
+
 #### Parallelization
 
 def chunk_tasks(tasks, num_chunks):
@@ -348,7 +378,6 @@ cdef double combine_mass_2d(
 @cython.initializedcheck(False)
 cdef double combine_stiff_2d(
         double[:,:,:,::1] B,
-        double[:,::1] J,
         double* Vu0, double* Du0,
         double* Vu1, double* Du1,
         double* Vv0, double* Dv0,
@@ -359,13 +388,12 @@ cdef double combine_stiff_2d(
     cdef size_t n1 = B.shape[1]
 
     cdef size_t i0, i1
-    cdef double result = 0.0, z
+    cdef double result = 0.0
 
     for i0 in range(n0):
         for i1 in range(n1):
             # expression generated with asm-codegen.py
-            z = (Du0[i0]*Vu1[i1]*B[i0, i1, 1, 0] + Du1[i1]*Vu0[i0]*B[i0, i1, 0, 0])*(Dv0[i0]*Vv1[i1]*B[i0, i1, 1, 0] + Dv1[i1]*Vv0[i0]*B[i0, i1, 0, 0]) + (Du0[i0]*Vu1[i1]*B[i0, i1, 1, 1] + Du1[i1]*Vu0[i0]*B[i0, i1, 0, 1])*(Dv0[i0]*Vv1[i1]*B[i0, i1, 1, 1] + Dv1[i1]*Vv0[i0]*B[i0, i1, 0, 1])
-            result += J[i0,i1] * z
+            result += (Du0[i0]*Vu1[i1]*B[i0, i1, 0, 1] + Du1[i1]*Vu0[i0]*B[i0, i1, 0, 0])*Dv1[i1]*Vv0[i0] + (Du0[i0]*Vu1[i1]*B[i0, i1, 1, 1] + Du1[i1]*Vu0[i0]*B[i0, i1, 1, 0])*Dv0[i0]*Vv1[i1]
     return result
 
 
@@ -410,14 +438,13 @@ cdef double combine_stiff_3d(
     cdef size_t n2 = B.shape[2]
 
     cdef size_t i0,i1,i2
-    cdef double result = 0.0, z
+    cdef double result = 0.0
 
     for i0 in range(n0):
         for i1 in range(n1):
             for i2 in range(n2):
                 # expression generated with asm-codegen.py
-                z = (Du0[i0]*Vu1[i1]*Vu2[i2]*B[i0, i1, i2, 0, 2] + Du1[i1]*Vu0[i0]*Vu2[i2]*B[i0, i1, i2, 0, 1] + Du2[i2]*Vu0[i0]*Vu1[i1]*B[i0, i1, i2, 0, 0])*Dv2[i2]*Vv0[i0]*Vv1[i1] + (Du0[i0]*Vu1[i1]*Vu2[i2]*B[i0, i1, i2, 1, 2] + Du1[i1]*Vu0[i0]*Vu2[i2]*B[i0, i1, i2, 1, 1] + Du2[i2]*Vu0[i0]*Vu1[i1]*B[i0, i1, i2, 1, 0])*Dv1[i1]*Vv0[i0]*Vv2[i2] + (Du0[i0]*Vu1[i1]*Vu2[i2]*B[i0, i1, i2, 2, 2] + Du1[i1]*Vu0[i0]*Vu2[i2]*B[i0, i1, i2, 2, 1] + Du2[i2]*Vu0[i0]*Vu1[i1]*B[i0, i1, i2, 2, 0])*Dv0[i0]*Vv1[i1]*Vv2[i2]
-                result += z
+                result += (Du0[i0]*Vu1[i1]*Vu2[i2]*B[i0, i1, i2, 0, 2] + Du1[i1]*Vu0[i0]*Vu2[i2]*B[i0, i1, i2, 0, 1] + Du2[i2]*Vu0[i0]*Vu1[i1]*B[i0, i1, i2, 0, 0])*Dv2[i2]*Vv0[i0]*Vv1[i1] + (Du0[i0]*Vu1[i1]*Vu2[i2]*B[i0, i1, i2, 1, 2] + Du1[i1]*Vu0[i0]*Vu2[i2]*B[i0, i1, i2, 1, 1] + Du2[i2]*Vu0[i0]*Vu1[i1]*B[i0, i1, i2, 1, 0])*Dv1[i1]*Vv0[i0]*Vv2[i2] + (Du0[i0]*Vu1[i1]*Vu2[i2]*B[i0, i1, i2, 2, 2] + Du1[i1]*Vu0[i0]*Vu2[i2]*B[i0, i1, i2, 2, 1] + Du2[i2]*Vu0[i0]*Vu1[i1]*B[i0, i1, i2, 2, 0])*Dv0[i0]*Vv1[i1]*Vv2[i2]
     return result
 
 
@@ -557,8 +584,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
 cdef class StiffnessAssembler2D(BaseAssembler2D):
     # shared data
     cdef vector[double[::1,:]] C, Cd
-    cdef double[:,::1] geo_weights
-    cdef double[:,:,:,::1] geo_jacinv
+    cdef double[:,:,:,::1] B
 
     def __init__(self, kvs, geo):
         assert geo.dim == 2, "Geometry has wrong dimension"
@@ -571,10 +597,10 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         self.C  = [X.toarray(order='F') for (X,Y) in colloc]
         self.Cd = [Y.toarray(order='F') for (X,Y) in colloc]
 
-        geo_jac    = geo.grid_jacobian(gaussgrid)
-        geo_det, self.geo_jacinv = det_and_inv(geo_jac)
-
-        self.geo_weights = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
+        geo_jac = geo.grid_jacobian(gaussgrid)
+        geo_det, geo_jacinv = det_and_inv(geo_jac)
+        weights = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
+        self.B = matmatT_2x2(geo_jacinv) * weights[:,:,None,None]
 
     cdef StiffnessAssembler2D shared_clone(self):
         return self     # no shared data; class is thread-safe
@@ -607,8 +633,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
             derivs_j[k] = &self.Cd[k][ g_sta[k], j[k] ]
 
         return combine_stiff_2d(
-                self.geo_jacinv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
-                self.geo_weights[ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
+                self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_i[0], derivs_i[0], values_i[1], derivs_i[1],
                 values_j[0], derivs_j[0], values_j[1], derivs_j[1])
 
@@ -746,22 +771,6 @@ cdef class MassAssembler3D(BaseAssembler3D):
             values_i[0], values_i[1], values_i[2],
             values_j[0], values_j[1], values_j[2]
         )
-
-
-cdef double[:,:,:,:,::1] matmatT_3x3(double[:,:,:,:,::1] B):
-    """Compute B * B^T for each matrix in the input."""
-    cdef double[:,:,:,:,::1] X = np.zeros_like(B, order='C')
-    cdef size_t n0 = B.shape[0]
-    cdef size_t n1 = B.shape[1]
-    cdef size_t n2 = B.shape[2]
-    for i0 in range(n0):
-        for i1 in range(n1):
-            for i2 in range(n2):
-                for j in range(3):
-                    for k in range(3):
-                        for l in range(3):
-                            X[i0,i1,i2, j,l] += B[i0,i1,i2, j,k] * B[i0,i1,i2, l,k]
-    return X
 
 
 cdef class StiffnessAssembler3D(BaseAssembler3D):

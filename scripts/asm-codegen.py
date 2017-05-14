@@ -2,6 +2,8 @@ from sympy import *
 from sympy.tensor import *
 from sympy.tensor.array import Array
 
+use_cse = False
+
 B, J = symbols('B J', cls=IndexedBase)
 i0, i1, i2 = symbols('i0 i1 i2', cls=Idx)
 
@@ -50,6 +52,26 @@ Bgu = Matrix(BI.dot(gradu))
 
 result = Bgu.T.dot(gradv)
 
-print(result)
-#print(factor(result))
+if use_cse:
+    def is_atomic(pair):
+        return len(pair[1].args) <= 1
+
+    def fix_subs(pair):
+        x, y = pair
+        if y.func == IndexedBase:
+            x = IndexedBase(x.name)
+        return x, y
+
+    subs, expr = cse(result)
+
+    atm    = [fix_subs(pair) for pair in subs if is_atomic(pair)]
+    nonatm = [pair for pair in subs if not is_atomic(pair)]
+
+    for (x,y) in nonatm:
+        print('%s = %s' % (x, y.subs(atm)))
+
+    print(expr[0].subs(atm))
+else:
+    print(result)
+    #print(factor(result))
 

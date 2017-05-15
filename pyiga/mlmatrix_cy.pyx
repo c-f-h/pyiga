@@ -142,6 +142,9 @@ def reindex_from_multilevel(M, np.int_t[:,:] bs):
 cpdef object inflate_3d(object X, sparsidx, block_sizes):
     """Convert the dense ndarray X from reordered, compressed three-level
     banded form back to a standard sparse matrix format.
+
+    Returns:
+        sparse matrix of size `m1*m2*m3 x n1*n2*n3`
     """
     cdef np.int_t[:] sparsidx1, sparsidx2, sparsidx3
     sparsidx1,sparsidx2,sparsidx3 = sparsidx
@@ -166,19 +169,19 @@ cpdef object inflate_3d(object X, sparsidx, block_sizes):
     entries_j = np.empty(Ni*Nj*Nk, dtype=int)
 
     for i in range(Ni):
-        si = sparsidx1[i]
-        xi0, xi1 = si % m1, si // m1
+        si = sparsidx1[i]                       # range: m1*n1
+        xi0, xi1 = si // n1, si % n1            # range: m1, n1
 
         for j in range(Nj):
-            sj = sparsidx2[j]
-            yi0, yi1 = sj % m2, sj // m2
+            sj = sparsidx2[j]                   # range: m2*n2
+            yi0, yi1 = sj // n2, sj % n2        # range: m2, n2
 
             for k in range(Nk):
-                sk = sparsidx3[k]
-                zi0, zi1 = sk % m3, sk // m3
+                sk = sparsidx3[k]               # range: m3*n3
+                zi0, zi1 = sk // n3, sk % n3    # range: m3, n3
 
-                entries_i[idx] = (xi0 * m2 + yi0) * m3 + zi0
-                entries_j[idx] = (xi1 * n2 + yi1) * n3 + zi1
+                entries_i[idx] = (xi0 * m2 + yi0) * m3 + zi0    # range: m1*m2*m3
+                entries_j[idx] = (xi1 * n2 + yi1) * n3 + zi1    # range: n1*n2*n3
                 idx += 1
 
     return scipy.sparse.csr_matrix((X.ravel('C'), (entries_i, entries_j)),

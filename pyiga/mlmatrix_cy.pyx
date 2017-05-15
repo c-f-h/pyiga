@@ -16,19 +16,23 @@ def reindex_from_reordered(size_t i, size_t j, size_t m1, size_t n1, size_t m2, 
     """Convert (i,j) from an index into reorder(X, m1, n1) into the
     corresponding index into X (reordered to original).
 
-      i = row = block index           (0...m1*n1)
-      j = column = index within block (0...m2*n2)
+    Arguments:
+        i = row = block index           (0...m1*n1)
+        j = column = index within block (0...m2*n2)
+
+    Returns:
+        a pair of indices with ranges `(0...m1*m2, 0...n1*n2)`
     """
     cdef size_t bi0, bi1, ii0, ii1
-    bi0, bi1 = i % m1, i // m1
-    ii0, ii1 = j % m2, j // m2
+    bi0, bi1 = i // n1, i % n1      # range: m1, n1
+    ii0, ii1 = j // n2, j % n2      # range: m2, n2
     return (bi0*m2 + ii0, bi1*n2 + ii1)
 
 
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef object inflate(object X, np.int_t[:] sparsidx1, np.int_t[:] sparsidx2,
+cpdef object inflate_2d(object X, np.int_t[:] sparsidx1, np.int_t[:] sparsidx2,
         int m1, int n1, int m2, int n2):
     """Convert the dense ndarray X from reordered, compressed two-level
     banded form back to a standard sparse matrix format.
@@ -46,14 +50,14 @@ cpdef object inflate(object X, np.int_t[:] sparsidx1, np.int_t[:] sparsidx2,
     entries_j = np.empty(M*N, dtype=int)
 
     for i in range(M):
-        si = sparsidx1[i]
-        bi0, bi1 = si % m1, si // m1
+        si = sparsidx1[i]                   # range: m1*n1
+        bi0, bi1 = si // n1, si % n1        # range: m1, n1
         for j in range(N):
-            sj = sparsidx2[j]
-            ii0, ii1 = sj % m2, sj // m2
+            sj = sparsidx2[j]               # range: m2*n2
+            ii0, ii1 = sj // n2, sj % n2    # range: m2, n2
 
-            entries_i[k] = bi0*m2 + ii0
-            entries_j[k] = bi1*n2 + ii1
+            entries_i[k] = bi0*m2 + ii0     # range: m1*m2
+            entries_j[k] = bi1*n2 + ii1     # range: n1*n2
             k += 1
 
     return scipy.sparse.csr_matrix((X.ravel('C'), (entries_i, entries_j)),

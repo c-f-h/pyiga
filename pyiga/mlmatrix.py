@@ -24,18 +24,22 @@ def reorder(X, m1, n1):
     for i in range(m1):
         for j in range(n1):
             B = X[i*m2 : (i+1)*m2, j*n2 : (j+1)*n2]
-            Y[i + j*m1, :] = B.ravel('F')
+            Y[i*n1 + j, :] = B.ravel('C')
     return Y
 
 def reindex_from_reordered(i,j, m1,n1,m2,n2):
     """Convert (i,j) from an index into reorder(X, m1, n1) into the
     corresponding index into X (reordered to original).
 
-      i = row = block index           (0...m1*n1)
-      j = column = index within block (0...m2*n2)
+    Arguments:
+        i = row = block index           (0...m1*n1)
+        j = column = index within block (0...m2*n2)
+
+    Returns:
+        a pair of indices with ranges `(0...m1*m2, 0...n1*n2)`
     """
-    bi0, bi1 = i % m1, i // m1
-    ii0, ii1 = j % m2, j // m2
+    bi0, bi1 = i // n1, i % n1      # range: m1, n1
+    ii0, ii1 = j // n2, j % n2      # range: m2, n2
     return (bi0*m2 + ii0, bi1*n2 + ii1)
 
 def from_seq(i, dims):

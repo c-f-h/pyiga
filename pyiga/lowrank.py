@@ -271,8 +271,10 @@ def aca_3d(A, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
                     skipcount=max_skipcount, tolcount=max_tolcount,
                     verbose=min(verbose, 1))
         E_mat = A_mat - X[i0,:,:]
-        E_col /= E_col[i0] # normalize
-        X += E_col[:,None,None] * E_mat[None,:,:]
+
+        # add the scaled tensor product E_col * E_mat
+        assemble_tools.aca3d_update(X, 1.0 / E_col[i0], E_col, E_mat)
+
         E_mat[I[1:]] = 0  # error is now (close to) zero there
         I[1:] = np.unravel_index(abs(E_mat).argmax(), E_mat.shape)
         k += 1

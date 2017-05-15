@@ -22,5 +22,13 @@ def test_aca():
     X = np.zeros((n,n))
     for i in range(k):
         X += np.outer(rand(n), rand(n))
-    X_aca = aca(X, tol=0, maxiter=3, verbose=0)
+    X_aca = aca(X, tol=0, maxiter=k, verbose=0)
+    assert np.allclose(X, X_aca)
+
+def test_aca3d():
+    n,k = 10, 3
+    X = np.zeros((n,n,n))
+    for i in range(k):
+        X += rand(n,1,1) * rand(1,n,1) * rand(1,1,n)
+    X_aca = aca_3d(TensorGenerator.from_array(X), tol=0, maxiter=k, verbose=0)
     assert np.allclose(X, X_aca)

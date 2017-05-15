@@ -93,10 +93,8 @@ def compute_banded_sparsity(n, bw):
     This is identical to np.flatnonzero(X) of such a banded matrix X.
     """
     I = []
-    assert bw % 2 == 1, 'Bandwidth must be an odd number'
-    k = bw // 2
     for j in range(n):
-        for i in range(max(0, j-k), min(n, j+k+1)):
+        for i in range(max(0, j-bw), min(n, j+bw+1)):
             I.append(i + j*n)
     return np.array(I, dtype=int)
 

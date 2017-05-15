@@ -505,10 +505,8 @@ Array3D<double> aca_3d(const TensorGenerator& A, double tol=1e-10, int maxiter=1
 std::vector<size_t> compute_banded_sparsity(size_t n, int bw)
 {
     std::vector<size_t> I;
-    assert((bw % 2) == 1);
-    int k = bw / 2;
     for (int j = 0; j < n; ++j)
-        for (int i = std::max(0, j-k); i < std::min((int)n, j+k+1); ++i)
+        for (int i = std::max(0, j-bw); i < std::min((int)n, j+bw+1); ++i)
             I.push_back(i + j*n);
     return I;
 }

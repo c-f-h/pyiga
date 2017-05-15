@@ -12,13 +12,12 @@ def test_tofrom_multilevel():
 
 def test_banded_sparsity():
     n = 10
-    bw = 5
-    k = bw // 2
+    bw = 2
 
     X = np.zeros((n,n), dtype=int)
     for i in range(n):
         for j in range(n):
-            if abs(i-j) <= k:
+            if abs(i-j) <= bw:
                 X[i,j] = 1
     assert np.array_equal(np.flatnonzero(X),
                           compute_banded_sparsity(n, bw))

@@ -64,6 +64,33 @@ cpdef object inflate_2d(object X, np.int_t[:] sparsidx1, np.int_t[:] sparsidx2,
             shape=(m1*m2, n1*n2))
 
 
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef void ml_matvec_2d(double[:,::1] X,
+        np.int_t[:] sparsidx1, np.int_t[:] sparsidx2,
+        int m1, int n1, int m2, int n2,
+        double[::1] x, double[::1] y):
+    cdef size_t i, j, si, sj, M, N
+    M, N = X.shape[0], X.shape[1]
+
+    cdef size_t bi0, bi1, ii0, ii1
+
+    assert len(sparsidx1) == M
+    assert len(sparsidx2) == N
+
+    with nogil:
+        for i in range(M):
+            si = sparsidx1[i]                   # range: m1*n1
+            bi0, bi1 = si // n1, si % n1        # range: m1, n1
+            for j in range(N):
+                sj = sparsidx2[j]               # range: m2*n2
+                ii0, ii1 = sj // n2, sj % n2    # range: m2, n2
+
+                I = bi0*m2 + ii0     # range: m1*m2
+                J = bi1*n2 + ii1     # range: n1*n2
+
+                y[I] += X[i,j] * x[J]
 
 
 @cython.cdivision(True)
@@ -186,4 +213,44 @@ cpdef object inflate_3d(object X, sparsidx, block_sizes):
 
     return scipy.sparse.csr_matrix((X.ravel('C'), (entries_i, entries_j)),
             shape=(m1*m2*m3, n1*n2*n3))
+
+
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef void ml_matvec_3d(double[:,:,::1] X, sparsidx, block_sizes, double[::1] x, double[::1] y):
+    cdef np.int_t[:] sparsidx1, sparsidx2, sparsidx3
+    sparsidx1,sparsidx2,sparsidx3 = sparsidx
+
+    cdef int m1,n1, m2,n2, m3,n3
+    m1,n1 = block_sizes[0]
+    m2,n2 = block_sizes[1]
+    m3,n3 = block_sizes[2]
+
+    cdef size_t i, j, k, si, sj, sk, Ni, Nj, Nk
+    Ni,Nj,Nk = X.shape[:3]
+
+    assert len(sparsidx1) == Ni
+    assert len(sparsidx2) == Nj
+    assert len(sparsidx3) == Nk
+
+    cdef size_t xi0, xi1, yi0, yi1, zi0, zi1, I, J
+
+    with nogil:
+        for i in range(Ni):
+            si = sparsidx1[i]                       # range: m1*n1
+            xi0, xi1 = si // n1, si % n1            # range: m1, n1
+
+            for j in range(Nj):
+                sj = sparsidx2[j]                   # range: m2*n2
+                yi0, yi1 = sj // n2, sj % n2        # range: m2, n2
+
+                for k in range(Nk):
+                    sk = sparsidx3[k]               # range: m3*n3
+                    zi0, zi1 = sk // n3, sk % n3    # range: m3, n3
+
+                    I = (xi0 * m2 + yi0) * m3 + zi0    # range: m1*m2*m3
+                    J = (xi1 * n2 + yi1) * n3 + zi1    # range: n1*n2*n3
+
+                    y[I] += X[i,j,k] * x[J]
 

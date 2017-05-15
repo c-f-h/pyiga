@@ -4,8 +4,83 @@
 #
 
 import numpy as np
+import scipy.sparse.linalg
+
 from . import lowrank
 
+
+################################################################################
+# Multi-level banded matrix class
+################################################################################
+
+class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
+    """Compact representation of a multi-level banded matrix.
+
+    Many IgA matrices arising from tensor product bases have multi-level
+    banded structure, meaning that they are block-structured, each block
+    is banded, and the block pattern itself is banded. This allows
+    compact storage of all coefficients in a dense matrix or tensor.
+    See (Hofreither 2017) for details.
+
+    Args:
+        bs (seq): list of block sizes, one per level (dimension)
+        bw (seq): list of bandwidths, one per level (dimension)
+        data (ndarray): optionally, the data for the matrix can be
+            specified. Otherwise, it is initialized to 0.
+    """
+    def __init__(self, bs, bw, data=None):
+        self.bs = tuple(bs)
+        self.bw = tuple(bw)
+        self.L = len(bs)
+        assert self.L == len(bw), \
+            'Inconsistent dimensions for block sizes and bandwidths'
+        self.sparsidx = tuple(compute_banded_sparsity(n, p)
+                for (n,p) in zip(self.bs,bw))
+        datashape = tuple(len(si) for si in self.sparsidx)
+        if data is None:
+            data = np.zeros(datashape)
+        assert data.shape == datashape, 'Wrong shape of data tensor'
+        self.data = data
+        N = np.prod(self.bs)
+        self._total_bs = np.array([(b,b) for b in self.bs])
+        scipy.sparse.linalg.LinearOperator.__init__(self,
+                shape=(N,N), dtype=self.data.dtype)
+
+    @property
+    def nnz(self):
+        """Return the number of nonzeros in a sparse matrix representation."""
+        return self.data.size
+
+    def asmatrix(self, format='csr'):
+        """Return a sparse matrix representation in the given format."""
+        if self.L == 2:
+            A = inflate_2d(self.data, self.sparsidx[0], self.sparsidx[1],
+                self.bs[0], self.bs[0], self.bs[1], self.bs[1])
+        elif self.L == 3:
+            A = inflate_3d(self.data, self.sparsidx, self._total_bs)
+        else:
+            assert False, 'dimension %d not implemented' % self.L
+        return A.asformat(format)
+
+    def _matvec(self, x):
+        """Compute the matrix-vector product with vector `x`."""
+        assert len(x) == self.shape[1], 'Invalid input size'
+        if self.L == 2:
+            y = np.zeros(len(x))
+            ml_matvec_2d(self.data, self.sparsidx[0], self.sparsidx[1],
+                self.bs[0], self.bs[0], self.bs[1], self.bs[1], x, y)
+            return y
+        elif self.L == 3:
+            y = np.zeros(len(x))
+            ml_matvec_3d(self.data, self.sparsidx, self._total_bs, x, y)
+            return y
+        else:
+            return self.asmatrix().dot(x)
+
+
+################################################################################
+# Reordering and reindexing
+################################################################################
 
 def reorder(X, m1, n1):
     """Input X has m1 x n1 blocks of size m2 x n2, i.e.,

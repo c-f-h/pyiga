@@ -1,6 +1,7 @@
 # cython: profile=False
 
 cimport cython
+from cython.parallel import prange
 
 import numpy as np
 cimport numpy as np
@@ -8,7 +9,7 @@ cimport numpy as np
 import scipy.sparse
 
 ################################################################################
-# Structured matrix reordering
+# Reindexing
 ################################################################################
 
 @cython.cdivision(True)
@@ -27,70 +28,6 @@ def reindex_from_reordered(size_t i, size_t j, size_t m1, size_t n1, size_t m2, 
     bi0, bi1 = i // n1, i % n1      # range: m1, n1
     ii0, ii1 = j // n2, j % n2      # range: m2, n2
     return (bi0*m2 + ii0, bi1*n2 + ii1)
-
-
-@cython.cdivision(True)
-@cython.boundscheck(False)
-@cython.wraparound(False)
-cpdef object inflate_2d(object X, np.int_t[:] sparsidx1, np.int_t[:] sparsidx2,
-        int m1, int n1, int m2, int n2):
-    """Convert the dense ndarray X from reordered, compressed two-level
-    banded form back to a standard sparse matrix format.
-    """
-    cdef long[::1] entries_i, entries_j
-    cdef size_t i, j, si, sj, M, N, k=0
-    M, N = X.shape[0], X.shape[1]
-
-    cdef size_t bi0, bi1, ii0, ii1
-
-    assert len(sparsidx1) == M
-    assert len(sparsidx2) == N
-
-    entries_i = np.empty(M*N, dtype=int)
-    entries_j = np.empty(M*N, dtype=int)
-
-    for i in range(M):
-        si = sparsidx1[i]                   # range: m1*n1
-        bi0, bi1 = si // n1, si % n1        # range: m1, n1
-        for j in range(N):
-            sj = sparsidx2[j]               # range: m2*n2
-            ii0, ii1 = sj // n2, sj % n2    # range: m2, n2
-
-            entries_i[k] = bi0*m2 + ii0     # range: m1*m2
-            entries_j[k] = bi1*n2 + ii1     # range: n1*n2
-            k += 1
-
-    return scipy.sparse.csr_matrix((X.ravel('C'), (entries_i, entries_j)),
-            shape=(m1*m2, n1*n2))
-
-
-@cython.cdivision(True)
-@cython.boundscheck(False)
-@cython.wraparound(False)
-cpdef void ml_matvec_2d(double[:,::1] X,
-        np.int_t[:] sparsidx1, np.int_t[:] sparsidx2,
-        int m1, int n1, int m2, int n2,
-        double[::1] x, double[::1] y):
-    cdef size_t i, j, si, sj, M, N
-    M, N = X.shape[0], X.shape[1]
-
-    cdef size_t bi0, bi1, ii0, ii1
-
-    assert len(sparsidx1) == M
-    assert len(sparsidx2) == N
-
-    with nogil:
-        for i in range(M):
-            si = sparsidx1[i]                   # range: m1*n1
-            bi0, bi1 = si // n1, si % n1        # range: m1, n1
-            for j in range(N):
-                sj = sparsidx2[j]               # range: m2*n2
-                ii0, ii1 = sj // n2, sj % n2    # range: m2, n2
-
-                I = bi0*m2 + ii0     # range: m1*m2
-                J = bi1*n2 + ii1     # range: n1*n2
-
-                y[I] += X[i,j] * x[J]
 
 
 @cython.cdivision(True)
@@ -163,6 +100,97 @@ def reindex_from_multilevel(M, np.int_t[:,:] bs):
     return (ii, jj)
 
 
+################################################################################
+# Inflation and matvec
+################################################################################
+
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+def make_block_indices(sparsidx, block_sizes):
+    cdef np.int_t[:] sidx
+    cdef unsigned[:, ::1] bidx
+    cdef list bidx_list = []
+    cdef size_t i, s, N, n
+
+    assert len(sparsidx) == len(block_sizes)
+    for k in range(len(sparsidx)):
+        sidx = sparsidx[k]
+        n = block_sizes[k][1]
+        N = len(sidx)
+        bidx = np.empty((N,2), dtype=np.uint32)
+
+        for i in range(N):
+            s = sidx[i]
+            bidx[i,0], bidx[i,1] = s // n, s % n
+
+        bidx_list.append(bidx)
+
+    return tuple(bidx_list)
+
+
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef object inflate_2d(object X, np.int_t[:] sparsidx1, np.int_t[:] sparsidx2,
+        int m1, int n1, int m2, int n2):
+    """Convert the dense ndarray X from reordered, compressed two-level
+    banded form back to a standard sparse matrix format.
+    """
+    cdef long[::1] entries_i, entries_j
+    cdef size_t i, j, si, sj, M, N, k=0
+    M, N = X.shape[0], X.shape[1]
+
+    cdef size_t bi0, bi1, ii0, ii1
+
+    assert len(sparsidx1) == M
+    assert len(sparsidx2) == N
+
+    entries_i = np.empty(M*N, dtype=int)
+    entries_j = np.empty(M*N, dtype=int)
+
+    for i in range(M):
+        si = sparsidx1[i]                   # range: m1*n1
+        bi0, bi1 = si // n1, si % n1        # range: m1, n1
+        for j in range(N):
+            sj = sparsidx2[j]               # range: m2*n2
+            ii0, ii1 = sj // n2, sj % n2    # range: m2, n2
+
+            entries_i[k] = bi0*m2 + ii0     # range: m1*m2
+            entries_j[k] = bi1*n2 + ii1     # range: n1*n2
+            k += 1
+
+    return scipy.sparse.csr_matrix((X.ravel('C'), (entries_i, entries_j)),
+            shape=(m1*m2, n1*n2))
+
+
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef void ml_matvec_2d(double[:,::1] X,
+        unsigned[:,::1] bidx1, unsigned[:,::1] bidx2,
+        int m1, int n1, int m2, int n2,
+        double[::1] x, double[::1] y):
+    cdef size_t i, j, M, N, I, J
+    M, N = X.shape[0], X.shape[1]
+
+    cdef unsigned bi0, bi1, ii0, ii1
+
+    assert len(bidx1) == M
+    assert len(bidx2) == N
+
+    for i in prange(M, schedule='static', nogil=True):
+        bi0, bi1 = bidx1[i,0], bidx1[i,1]        # range: m1, n1
+        for j in range(N):
+            ii0, ii1 = bidx2[j,0], bidx2[j,1]    # range: m2, n2
+
+            I = bi0*m2 + ii0     # range: m1*m2
+            J = bi1*n2 + ii1     # range: n1*n2
+
+            # TODO: is this thread safe?
+            y[I] += X[i,j] * x[J]
+
+
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -218,39 +246,34 @@ cpdef object inflate_3d(object X, sparsidx, block_sizes):
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef void ml_matvec_3d(double[:,:,::1] X, sparsidx, block_sizes, double[::1] x, double[::1] y):
-    cdef np.int_t[:] sparsidx1, sparsidx2, sparsidx3
-    sparsidx1,sparsidx2,sparsidx3 = sparsidx
+cpdef void ml_matvec_3d(double[:,:,::1] X, bidx, block_sizes, double[::1] x, double[::1] y):
+    cdef unsigned[:,::1] bidx1, bidx2, bidx3
+    bidx1,bidx2,bidx3 = bidx
 
-    cdef int m1,n1, m2,n2, m3,n3
-    m1,n1 = block_sizes[0]
+    cdef int m2,n2, m3,n3
     m2,n2 = block_sizes[1]
     m3,n3 = block_sizes[2]
 
-    cdef size_t i, j, k, si, sj, sk, Ni, Nj, Nk
+    cdef size_t i, j, k, Ni, Nj, Nk, I, J
+    cdef unsigned xi0, xi1, yi0, yi1, zi0, zi1
+
     Ni,Nj,Nk = X.shape[:3]
+    assert len(bidx1) == Ni
+    assert len(bidx2) == Nj
+    assert len(bidx3) == Nk
 
-    assert len(sparsidx1) == Ni
-    assert len(sparsidx2) == Nj
-    assert len(sparsidx3) == Nk
+    for i in prange(Ni, schedule='static', nogil=True):
+        xi0, xi1 = bidx1[i,0], bidx1[i,1]          # range: m1, n1
 
-    cdef size_t xi0, xi1, yi0, yi1, zi0, zi1, I, J
+        for j in range(Nj):
+            yi0, yi1 = bidx2[j,0], bidx2[j,1]      # range: m2, n2
 
-    with nogil:
-        for i in range(Ni):
-            si = sparsidx1[i]                       # range: m1*n1
-            xi0, xi1 = si // n1, si % n1            # range: m1, n1
+            for k in range(Nk):
+                zi0, zi1 = bidx3[k,0], bidx3[k,1]  # range: m3, n3
 
-            for j in range(Nj):
-                sj = sparsidx2[j]                   # range: m2*n2
-                yi0, yi1 = sj // n2, sj % n2        # range: m2, n2
+                I = (xi0 * m2 + yi0) * m3 + zi0    # range: m1*m2*m3
+                J = (xi1 * n2 + yi1) * n3 + zi1    # range: n1*n2*n3
 
-                for k in range(Nk):
-                    sk = sparsidx3[k]               # range: m3*n3
-                    zi0, zi1 = sk // n3, sk % n3    # range: m3, n3
-
-                    I = (xi0 * m2 + yi0) * m3 + zi0    # range: m1*m2*m3
-                    J = (xi1 * n2 + yi1) * n3 + zi1    # range: n1*n2*n3
-
-                    y[I] += X[i,j,k] * x[J]
+                # TODO: is this thread safe? (seems to work)
+                y[I] += X[i,j,k] * x[J]
 

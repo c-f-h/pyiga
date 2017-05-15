@@ -30,6 +30,7 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
     """
     def __init__(self, bs, bw, data=None):
         self.bs = tuple(bs)
+        self._total_bs = np.array([(b,b) for b in self.bs])
         self.bw = tuple(bw)
         self.L = len(bs)
         assert self.L == len(bw), \
@@ -41,8 +42,8 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
             data = np.zeros(datashape)
         assert data.shape == datashape, 'Wrong shape of data tensor'
         self.data = data
+        self.bidx = make_block_indices(self.sparsidx, self._total_bs)
         N = np.prod(self.bs)
-        self._total_bs = np.array([(b,b) for b in self.bs])
         scipy.sparse.linalg.LinearOperator.__init__(self,
                 shape=(N,N), dtype=self.data.dtype)
 
@@ -67,12 +68,12 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
         assert len(x) == self.shape[1], 'Invalid input size'
         if self.L == 2:
             y = np.zeros(len(x))
-            ml_matvec_2d(self.data, self.sparsidx[0], self.sparsidx[1],
+            ml_matvec_2d(self.data, self.bidx[0], self.bidx[1],
                 self.bs[0], self.bs[0], self.bs[1], self.bs[1], x, y)
             return y
         elif self.L == 3:
             y = np.zeros(len(x))
-            ml_matvec_3d(self.data, self.sparsidx, self._total_bs, x, y)
+            ml_matvec_3d(self.data, self.bidx, self._total_bs, x, y)
             return y
         else:
             return self.asmatrix().dot(x)

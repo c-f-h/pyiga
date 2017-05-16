@@ -207,7 +207,9 @@ cpdef void ml_matvec_2d(double[:,::1] X,
     assert len(bidx1) == M
     assert len(bidx2) == N
 
-    for i in prange(M, schedule='static', nogil=True):
+    #for i in prange(M, schedule='static', nogil=True):
+    # the += update is not thread safe! need atomics
+    for i in range(M):
         bi0, bi1 = bidx1[i,0], bidx1[i,1]        # range: m1, n1
         for j in range(N):
             ii0, ii1 = bidx2[j,0], bidx2[j,1]    # range: m2, n2
@@ -215,7 +217,6 @@ cpdef void ml_matvec_2d(double[:,::1] X,
             I = bi0*m2 + ii0     # range: m1*m2
             J = bi1*n2 + ii1     # range: n1*n2
 
-            # TODO: is this thread safe?
             y[I] += X[i,j] * x[J]
 
 
@@ -321,7 +322,9 @@ cpdef void ml_matvec_3d(double[:,:,::1] X, bidx, block_sizes, double[::1] x, dou
     assert len(bidx2) == Nj
     assert len(bidx3) == Nk
 
-    for i in prange(Ni, schedule='static', nogil=True):
+    #for i in prange(Ni, schedule='static', nogil=True):
+    # the += update is not thread safe! need atomics
+    for i in range(Ni):
         xi0, xi1 = bidx1[i,0], bidx1[i,1]          # range: m1, n1
 
         for j in range(Nj):
@@ -333,6 +336,5 @@ cpdef void ml_matvec_3d(double[:,:,::1] X, bidx, block_sizes, double[::1] x, dou
                 I = (xi0 * m2 + yi0) * m3 + zi0    # range: m1*m2*m3
                 J = (xi1 * n2 + yi1) * n3 + zi1    # range: n1*n2*n3
 
-                # TODO: is this thread safe? (seems to work)
                 y[I] += X[i,j,k] * x[J]
 

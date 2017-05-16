@@ -25,10 +25,14 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
     Args:
         bs (seq): list of block sizes, one per level (dimension)
         bw (seq): list of bandwidths, one per level (dimension)
-        data (ndarray): optionally, the data for the matrix can be
-            specified. Otherwise, it is initialized to 0.
+        matrix: a dense or sparse matrix with the proper multi-level
+            banded structure used as initializer
+        data (ndarray): alternatively, the compact data array for the matrix
+            can be specified directly
     """
-    def __init__(self, bs, bw, data=None):
+    def __init__(self, bs, bw, data=None, matrix=None):
+        if (data is not None) and (matrix is not None):
+            assert False, 'Can only specify one of `data` and `matrix`'
         self.bs = tuple(bs)
         self._total_bs = np.array([(b,b) for b in self.bs])
         self.bw = tuple(bw)
@@ -37,13 +41,21 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
             'Inconsistent dimensions for block sizes and bandwidths'
         self.sparsidx = tuple(compute_banded_sparsity(n, p)
                 for (n,p) in zip(self.bs,bw))
-        datashape = tuple(len(si) for si in self.sparsidx)
-        if data is None:
-            data = np.zeros(datashape)
-        assert data.shape == datashape, 'Wrong shape of data tensor'
-        self.data = np.asarray(data, order='C')
         self.bidx = make_block_indices(self.sparsidx, self._total_bs)
         N = np.prod(self.bs)
+
+        # initialize data
+        datashape = tuple(len(si) for si in self.sparsidx)
+        if data is not None:
+            assert data.shape == datashape, 'Wrong shape of data tensor'
+            self.data = np.asarray(data, order='C')
+        elif matrix is not None:
+            assert matrix.shape == (N,N), 'Matrix has wrong shape'
+            data = np.asarray(matrix[self.nonzero()]).reshape(datashape)
+            self.data = np.asarray(data, order='C')
+        else:
+            self.data = np.zeros(datashape)
+
         scipy.sparse.linalg.LinearOperator.__init__(self,
                 shape=(N,N), dtype=self.data.dtype)
 
@@ -77,6 +89,19 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
             return y
         else:
             return self.asmatrix().dot(x)
+
+    def nonzero(self):
+        """
+        Returns a tuple of arrays `(row,col)` containing the indices of
+        the non-zero elements of the matrix.
+        """
+        if self.L == 2:
+            IJ = ml_nonzero_2d(self.bidx, self._total_bs)
+        elif self.L == 3:
+            IJ = ml_nonzero_3d(self.bidx, self._total_bs)
+        else:
+            assert False, 'dimension %d not implemented' % self.L
+        return IJ[0,:], IJ[1,:]
 
 
 ################################################################################

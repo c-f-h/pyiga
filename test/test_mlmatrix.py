@@ -20,6 +20,11 @@ def test_mlbanded_2d():
     # test matvec
     x = rand(M.shape[1])
     assert np.allclose(X.dot(x), M.dot(x))
+    # test matrix constructor
+    M2 = MLBandedMatrix(bs, bw, matrix=X)
+    assert np.allclose(X, M.asmatrix().A)
+    M2 = MLBandedMatrix(bs, bw, matrix=scipy.sparse.csr_matrix(X))
+    assert np.allclose(X, M.asmatrix().A)
 
 def test_mlbanded_3d():
     bs = (8, 7, 6)
@@ -38,6 +43,11 @@ def test_mlbanded_3d():
     # test matvec
     x = rand(M.shape[1])
     assert np.allclose(X.dot(x), M.dot(x))
+    # test matrix constructor
+    M2 = MLBandedMatrix(bs, bw, matrix=X)
+    assert np.allclose(X, M.asmatrix().A)
+    M2 = MLBandedMatrix(bs, bw, matrix=scipy.sparse.csr_matrix(X))
+    assert np.allclose(X, M.asmatrix().A)
 
 def test_tofrom_seq():
     for i in range(3*4*5):

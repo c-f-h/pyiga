@@ -41,7 +41,7 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
         if data is None:
             data = np.zeros(datashape)
         assert data.shape == datashape, 'Wrong shape of data tensor'
-        self.data = data
+        self.data = np.asarray(data, order='C')
         self.bidx = make_block_indices(self.sparsidx, self._total_bs)
         N = np.prod(self.bs)
         scipy.sparse.linalg.LinearOperator.__init__(self,

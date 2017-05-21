@@ -52,6 +52,49 @@ cpdef void aca3d_update(double[:,:,::1] X, double alpha, double[::1] u, double[:
             for k in range(X.shape[2]):
                 X[i,j,k] += au * V[j,k]
 
+cdef inline void from_seq3(size_t i, size_t[3] ndofs, size_t[3] out) nogil:
+    out[2] = i % ndofs[2]
+    i /= ndofs[2]
+    out[1] = i % ndofs[1]
+    i /= ndofs[1]
+    out[0] = i
+
+def prepare_mesh_indices3(ij_arr, meshsupp, numdofs):
+    cdef size_t[3] ndofs
+    ndofs[:] = numdofs
+    cdef vector[unsigned] result
+    cdef size_t I[3]
+    cdef size_t J[3]
+    cdef size_t[:, :] ij = ij_arr
+    cdef size_t N = ij.shape[0], M = 0
+    cdef IntInterval[3] intvs
+
+    for k in range(N):
+        from_seq3(ij[k,0], ndofs, I)
+        from_seq3(ij[k,1], ndofs, J)
+
+        for r in range(3):
+            ii = I[r]
+            jj = J[r]
+            intvs[r] = intersect_intervals(
+                make_intv(meshsupp[r][ii, 0], meshsupp[r][ii, 1]),
+                make_intv(meshsupp[r][jj, 0], meshsupp[r][jj, 1]))
+
+        for t0 in range(intvs[0].a, intvs[0].b):
+            for t1 in range(intvs[1].a, intvs[1].b):
+                for t2 in range(intvs[2].a, intvs[2].b):
+                    result.push_back(I[0])
+                    result.push_back(I[1])
+                    result.push_back(I[2])
+                    result.push_back(J[0])
+                    result.push_back(J[1])
+                    result.push_back(J[2])
+                    result.push_back(t0)
+                    result.push_back(t1)
+                    result.push_back(t2)
+                    M += 1
+    return np.array(<unsigned[:result.size()]> result.data(), order='C').reshape((M,9))
+
 ################################################################################
 # Internal helper functions
 ################################################################################

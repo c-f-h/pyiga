@@ -132,16 +132,17 @@ def make_block_indices(sparsidx, block_sizes):
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef object ml_nonzero_2d(bidx, block_sizes):
+cpdef object ml_nonzero_2d(bidx, block_sizes, bint lower_tri=False):
     cdef unsigned[:,::1] bidx1, bidx2
     cdef int m2,n2
-    cdef size_t i, j, Ni, Nj, idx
+    cdef size_t i, j, Ni, Nj, N, idx, I, J
     cdef unsigned xi0, xi1, yi0, yi1
 
     bidx1, bidx2 = bidx
     m2, n2 = block_sizes[1]
     Ni, Nj = len(bidx1), len(bidx2)
-    results = np.empty((2, Ni * Nj), dtype=np.uintp)
+    N = Ni * Nj
+    results = np.empty((2, N), dtype=np.uintp)
     cdef size_t[:, ::1] IJ = results
 
     with nogil:
@@ -151,10 +152,16 @@ cpdef object ml_nonzero_2d(bidx, block_sizes):
             for j in range(Nj):
                 yi0, yi1 = bidx2[j,0], bidx2[j,1]      # range: m2, n2
 
-                IJ[0,idx] = xi0 * m2 + yi0      # range: m1*m2*m3
-                IJ[1,idx] = xi1 * n2 + yi1      # range: n1*n2*n3
-                idx += 1
-    return results
+                I = xi0 * m2 + yi0      # range: m1*m2*m3
+                J = xi1 * n2 + yi1      # range: n1*n2*n3
+                if not lower_tri or J <= I:
+                    IJ[0,idx] = I
+                    IJ[1,idx] = J
+                    idx += 1
+    if idx < N: # TODO: what's the closed formula for N in the triangular case?
+        return results[:, :N]
+    else:
+        return results
 
 
 @cython.cdivision(True)
@@ -223,17 +230,18 @@ cpdef void ml_matvec_2d(double[:,::1] X,
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef object ml_nonzero_3d(bidx, block_sizes):
+cpdef object ml_nonzero_3d(bidx, block_sizes, bint lower_tri=False):
     cdef unsigned[:,::1] bidx1, bidx2, bidx3
     cdef int m2,n2, m3,n3
-    cdef size_t i, j, k, Ni, Nj, Nk, idx
+    cdef size_t i, j, k, Ni, Nj, Nk, N, idx, I, J
     cdef unsigned xi0, xi1, yi0, yi1, zi0, zi1
 
     bidx1, bidx2, bidx3 = bidx
     m2, n2 = block_sizes[1]
     m3, n3 = block_sizes[2]
     Ni, Nj, Nk = len(bidx1), len(bidx2), len(bidx3)
-    results = np.empty((2, Ni * Nj * Nk), dtype=np.uintp)
+    N = Ni * Nj * Nk
+    results = np.empty((2, N), dtype=np.uintp)
     cdef size_t[:, ::1] IJ = results
 
     with nogil:
@@ -245,10 +253,16 @@ cpdef object ml_nonzero_3d(bidx, block_sizes):
                 for k in range(Nk):
                     zi0, zi1 = bidx3[k,0], bidx3[k,1]  # range: m3, n3
 
-                    IJ[0,idx] = (xi0 * m2 + yi0) * m3 + zi0    # range: m1*m2*m3
-                    IJ[1,idx] = (xi1 * n2 + yi1) * n3 + zi1    # range: n1*n2*n3
-                    idx += 1
-    return results
+                    I = (xi0 * m2 + yi0) * m3 + zi0    # range: m1*m2*m3
+                    J = (xi1 * n2 + yi1) * n3 + zi1    # range: n1*n2*n3
+                    if not lower_tri or J <= I:
+                        IJ[0,idx] = I
+                        IJ[1,idx] = J
+                        idx += 1
+    if idx < N: # TODO: what's the closed formula for N in the triangular case?
+        return results[:, :idx]
+    else:
+        return results
 
 
 @cython.cdivision(True)

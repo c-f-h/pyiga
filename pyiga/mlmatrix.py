@@ -90,15 +90,18 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
         else:
             return self.asmatrix().dot(x)
 
-    def nonzero(self):
+    def nonzero(self, lower_tri=False):
         """
-        Returns a tuple of arrays `(row,col)` containing the indices of
+        Return a tuple of arrays `(row,col)` containing the indices of
         the non-zero elements of the matrix.
+
+        If `lower_tri` is ``True``, return only the indices for the
+        lower triangular part.
         """
         if self.L == 2:
-            IJ = ml_nonzero_2d(self.bidx, self._total_bs)
+            IJ = ml_nonzero_2d(self.bidx, self._total_bs, lower_tri=lower_tri)
         elif self.L == 3:
-            IJ = ml_nonzero_3d(self.bidx, self._total_bs)
+            IJ = ml_nonzero_3d(self.bidx, self._total_bs, lower_tri=lower_tri)
         else:
             assert False, 'dimension %d not implemented' % self.L
         return IJ[0,:], IJ[1,:]

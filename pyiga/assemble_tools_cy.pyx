@@ -100,6 +100,53 @@ def prepare_tile_indices3(ij_arr, meshsupp, numdofs):
                     M += 1
     return np.array(<unsigned[:result.size()]> result.data(), order='C').reshape((M,9))
 
+
+# Used to recombine the results of tile-wise assemblers, where a single matrix
+# entry is split up into is contributions per tile. This class sums these
+# contributions up again.
+cdef class MatrixEntryAccumulator:
+    cdef ssize_t idx
+    cdef int num_indices
+    cdef double[::1] _result
+    cdef unsigned[16] old_indices
+
+    def __init__(self, int num_indices, size_t N):
+        self.idx = -1
+        assert num_indices <= 16
+        self.num_indices = num_indices
+        self._result = np.empty(N)
+        for i in range(16):
+            self.old_indices[i] = 0xffffffff
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    cdef bint index_changed(self, unsigned[:, :] indices, size_t i) nogil:
+        cdef bint changed = False
+        for k in range(self.num_indices):
+            if indices[i, k] != self.old_indices[k]:
+                changed = True
+                break
+        if changed: # update old_indices
+            for k in range(self.num_indices):
+                self.old_indices[k] = indices[i, k]
+        return changed
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    cpdef process(self, unsigned[:, :] indices, double[::1] values):
+        cdef size_t M = indices.shape[0]
+        for i in range(M):
+            if self.index_changed(indices, i):
+                self.idx += 1
+                self._result[self.idx] = values[i]
+            else:
+                self._result[self.idx] += values[i]
+
+    @property
+    def result(self):
+        return self._result[:self.idx+1]
+
+
 ################################################################################
 # Internal helper functions
 ################################################################################

@@ -59,7 +59,12 @@ cdef inline void from_seq3(size_t i, size_t[3] ndofs, size_t[3] out) nogil:
     i /= ndofs[1]
     out[0] = i
 
-def prepare_mesh_indices3(ij_arr, meshsupp, numdofs):
+# returns an array where each row contains:
+#  i0 i1 i2  j0 j1 j2  t0 t1 t2
+# where ix and jx are block indices of a matrix entry
+# and (t0,t1,t2) is a single tile index which is contained
+# in the joint support for the matrix entry
+def prepare_tile_indices3(ij_arr, meshsupp, numdofs):
     cdef size_t[3] ndofs
     ndofs[:] = numdofs
     cdef vector[unsigned] result

@@ -66,7 +66,7 @@ setup(
 
     ext_modules = cythonize(extensions),
     package_data = {
-        'pyiga': [ '*.pyx' , '*.pxd' ],
+        'pyiga': [ '*.pyx' , '*.pxd' , '*.pxi' ,],
     },
 
     setup_requires = ['numpy', 'Cython'],

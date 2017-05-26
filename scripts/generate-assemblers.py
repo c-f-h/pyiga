@@ -1,0 +1,302 @@
+import os.path
+from jinja2 import Template
+
+templ = Template(r"""
+################################################################################
+# {{DIM}}D Assemblers
+################################################################################
+
+cdef class BaseAssembler{{DIM}}D:
+    cdef int nqp
+    cdef size_t[{{DIM}}] ndofs
+    cdef vector[ssize_t[:,::1]] meshsupp
+    cdef list _asm_pool     # list of shared clones for multithreading
+
+    cdef void base_init(self, kvs):
+        assert len(kvs) == {{DIM}}, "Assembler requires two knot vectors"
+        self.nqp = max([kv.p for kv in kvs]) + 1
+        self.ndofs[:] = [kv.numdofs for kv in kvs]
+        self.meshsupp = [kvs[k].mesh_support_idx_all() for k in range({{DIM}})]
+        self._asm_pool = []
+
+    cdef _share_base(self, BaseAssembler{{DIM}}D asm):
+        asm.nqp = self.nqp
+        asm.ndofs[:] = self.ndofs[:]
+        asm.meshsupp = self.meshsupp
+
+    cdef BaseAssembler{{DIM}}D shared_clone(self):
+        return None     # not implemented
+
+    cdef inline size_t to_seq(self, size_t[{{DIM}}] ii) nogil:
+        # by convention, the order of indices is (y,x)
+        return {{ to_seq(indices, ndofs) }}
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.cdivision(True)
+    cdef inline void from_seq(self, size_t i, size_t[{{DIM}}] out) nogil:
+        {%- for k in range(1, DIM)|reverse %}
+        out[{{k}}] = i % self.ndofs[{{k}}]
+        i /= self.ndofs[{{k}}]
+        {%- endfor %}
+        out[0] = i
+
+    cdef double assemble_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
+        return -9999.99  # Not implemented
+
+    cpdef double assemble(self, size_t i, size_t j):
+        cdef size_t[{{DIM}}] I, J
+        with nogil:
+            self.from_seq(i, I)
+            self.from_seq(j, J)
+            return self.assemble_impl(I, J)
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    cdef void multi_assemble_chunk(self, size_t[:,::1] idx_arr, double[::1] out) nogil:
+        cdef size_t[{{DIM}}] I, J
+        cdef size_t k
+
+        for k in range(idx_arr.shape[0]):
+            self.from_seq(idx_arr[k,0], I)
+            self.from_seq(idx_arr[k,1], J)
+            out[k] = self.assemble_impl(I, J)
+
+    def multi_assemble(self, indices):
+        cdef size_t[:,::1] idx_arr = np.array(list(indices), dtype=np.uintp)
+        cdef double[::1] result = np.empty(idx_arr.shape[0])
+
+        num_threads = pyiga.get_max_threads()
+        if num_threads <= 1:
+            self.multi_assemble_chunk(idx_arr, result)
+        else:
+            thread_pool = get_thread_pool()
+            if not self._asm_pool:
+                self._asm_pool = [self] + [self.shared_clone()
+                        for i in range(1, thread_pool._max_workers)]
+
+            results = thread_pool.map(_asm_chunk_{{DIM}}d,
+                        self._asm_pool,
+                        chunk_tasks(idx_arr, num_threads),
+                        chunk_tasks(result, num_threads))
+            list(results)   # wait for threads to finish
+        return result
+
+cpdef void _asm_chunk_{{DIM}}d(BaseAssembler{{DIM}}D asm, size_t[:,::1] idxchunk, double[::1] out):
+    with nogil:
+        asm.multi_assemble_chunk(idxchunk, out)
+
+
+cdef class MassAssembler{{DIM}}D(BaseAssembler{{DIM}}D):
+    cdef vector[double[::1,:]] C
+    cdef double[{{dimrepeat(':')}}:1] geo_weights
+
+    def __init__(self, kvs, geo):
+        assert geo.dim == {{DIM}}, "Geometry has wrong dimension"
+        self.base_init(kvs)
+
+        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
+        gaussgrid = [g[0] for g in gauss]
+        gaussweights = [g[1] for g in gauss]
+        self.C  = [bspline.collocation(kvs[k], gaussgrid[k])
+                   .toarray(order='F') for k in range({{DIM}})]
+
+        geo_jac    = geo.grid_jacobian(gaussgrid)
+        geo_det    = np.abs(determinants(geo_jac))
+        self.geo_weights = {{ tensorprod('gaussweights') }} * geo_det
+
+    cdef MassAssembler{{DIM}}D shared_clone(self):
+        return self     # no shared data; class is thread-safe
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    cdef double assemble_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
+        cdef int k
+        cdef IntInterval intv
+        cdef size_t g_sta[{{DIM}}]
+        cdef size_t g_end[{{DIM}}]
+
+        cdef (double*) values_i[{{DIM}}]
+        cdef (double*) values_j[{{DIM}}]
+
+        for k in range({{DIM}}):
+            intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
+                                       make_intv(self.meshsupp[k][j[k],0], self.meshsupp[k][j[k],1]))
+            if intv.a >= intv.b:
+                return 0.0      # no intersection of support
+            g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
+            g_end[k] = self.nqp * intv.b    # end of Gauss nodes
+
+            values_i[k] = &self.C[k][ g_sta[k], i[k] ]
+            values_j[k] = &self.C[k][ g_sta[k], j[k] ]
+
+        return combine_mass_{{DIM}}d(
+                self.geo_weights [ {{ dimrepeat("g_sta[{0}]:g_end[{0}]") }} ],
+                {{ dimrepeat("values_i[{}]") }},
+                {{ dimrepeat("values_j[{}]") }}
+        )
+
+
+cdef class StiffnessAssembler{{DIM}}D(BaseAssembler{{DIM}}D):
+    cdef vector[double[:, :, ::1]] C            # 1D basis values. Indices: basis function, mesh point, derivative
+    cdef double[{{dimrepeat(':')}}, :, ::1] B   # transformation matrix. Indices: DIM x mesh point, i, j
+
+    def __init__(self, kvs, geo):
+        assert geo.dim == {{DIM}}, "Geometry has wrong dimension"
+        self.base_init(kvs)
+
+        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
+        gaussgrid = [g[0] for g in gauss]
+        gaussweights = [g[1] for g in gauss]
+        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=1) for k in range({{DIM}})]
+        self.C = [np.stack((X.T.A, Y.T.A), axis=-1) for (X,Y) in colloc]
+
+        geo_jac = geo.grid_jacobian(gaussgrid)
+        geo_det, geo_jacinv = det_and_inv(geo_jac)
+        weights = {{ tensorprod('gaussweights') }} * np.abs(geo_det)
+        self.B = matmatT_{{DIM}}x{{DIM}}(geo_jacinv) * weights[ {{dimrepeat(":")}}, None, None ]
+
+    cdef StiffnessAssembler{{DIM}}D shared_clone(self):
+        return self     # no shared data; class is thread-safe
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    cdef double assemble_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
+        cdef int k
+        cdef IntInterval intv
+        cdef size_t g_sta[{{DIM}}]
+        cdef size_t g_end[{{DIM}}]
+        cdef (double*) values_i[{{DIM}}]
+        cdef (double*) values_j[{{DIM}}]
+
+        for k in range({{DIM}}):
+            intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
+                                       make_intv(self.meshsupp[k][j[k],0], self.meshsupp[k][j[k],1]))
+            if intv.a >= intv.b:
+                return 0.0      # no intersection of support
+            g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
+            g_end[k] = self.nqp * intv.b    # end of Gauss nodes
+
+            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
+            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
+
+        return combine_stiff_{{DIM}}d(
+                self.B [ {{ dimrepeat("g_sta[{0}]:g_end[{0}]") }} ],
+                {{ dimrepeat("values_i[{}]") }},
+                {{ dimrepeat("values_j[{}]") }}
+        )
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef object generic_assemble_{{DIM}}d(BaseAssembler{{DIM}}D asm, long chunk_start=-1, long chunk_end=-1):
+    cdef size_t[{{DIM}}] i, j
+    cdef size_t k, ii, jj
+    cdef IntInterval intv
+
+    cdef size_t[{{DIM}}] dof_start, dof_end, neigh_j_start, neigh_j_end
+    cdef double entry
+    cdef vector[double] entries
+    cdef vector[size_t] entries_i, entries_j
+
+    dof_start[:] = ({{ dimrepeat('0') }})
+    dof_end[:] = asm.ndofs[:]
+
+    if chunk_start >= 0:
+        dof_start[0] = chunk_start
+    if chunk_end >= 0:
+        dof_end[0] = chunk_end
+
+    i[:] = dof_start[:]
+    with nogil:
+        while True:         # loop over all i
+            ii = asm.to_seq(i)
+
+            for k in range({{DIM}}):
+                intv = find_joint_support_functions(asm.meshsupp[k], i[k])
+                neigh_j_start[k] = intv.a
+                neigh_j_end[k] = intv.b
+
+            {% for k in range(DIM) %}
+            j[{{k}}] = neigh_j_start[{{k}}]
+            {% endfor %}
+
+            while True:     # loop j over all neighbors of i
+                jj = asm.to_seq(j)
+                if jj >= ii:
+                    entry = asm.assemble_impl(i, j)
+
+                    entries.push_back(entry)
+                    entries_i.push_back(ii)
+                    entries_j.push_back(jj)
+
+                    if ii != jj:
+                        entries.push_back(entry)
+                        entries_i.push_back(jj)
+                        entries_j.push_back(ii)
+
+                if not next_lexicographic{{DIM}}(j, neigh_j_start, neigh_j_end):
+                    break
+            if not next_lexicographic{{DIM}}(i, dof_start, dof_end):
+                break
+
+    cdef size_t ne = entries.size()
+    cdef size_t N = {{ dimrepeat("asm.ndofs[{}]", sep=' * ') }}
+    return scipy.sparse.coo_matrix(
+            (<double[:ne]> entries.data(),
+                (<size_t[:ne]> entries_i.data(),
+                 <size_t[:ne]> entries_j.data())),
+            shape=(N,N)).tocsr()
+
+
+cdef generic_assemble_{{DIM}}d_parallel(BaseAssembler{{DIM}}D asm):
+    num_threads = pyiga.get_max_threads()
+    if num_threads <= 1:
+        return generic_assemble_{{DIM}}d(asm)
+    def asm_chunk(rg):
+        cdef BaseAssembler{{DIM}}D asm_clone = asm.shared_clone()
+        return generic_assemble_{{DIM}}d(asm_clone, rg.start, rg.stop)
+    results = get_thread_pool().map(asm_chunk, chunk_tasks(range_it(asm.ndofs[0]), 4*num_threads))
+    return sum(results)
+
+
+# helper function for fast low-rank assembler
+cdef double _entry_func_{{DIM}}d(size_t i, size_t j, void * data):
+    return (<BaseAssembler{{DIM}}D>data).assemble(i, j)
+
+""")
+
+def generate(dim):
+    DIM = dim
+
+    def dimrepeat(s, sep=', '):
+        return sep.join([s.format(k) for k in range(DIM)])
+
+    def to_seq(i, n):
+        s = i[0]
+        for k in range(1,DIM):
+            s = '({0}) * {1} + {2}'.format(s, n[k], i[k])
+        return s
+
+    def extend_dim(i):
+        # ex.: i = 1  ->  'None,:,None'
+        slices = DIM * ['None']
+        slices[i] = ':'
+        return ','.join(slices)
+
+    def tensorprod(var):
+        return ' * '.join(['{0}[{1}][{2}]'.format(var, k, extend_dim(k)) for k in range(DIM)])
+
+    # helper variables for to_seq
+    indices = ['ii[%d]' % k for k in range(DIM)]
+    ndofs   = ['self.ndofs[%d]' % k for k in range(DIM)]
+
+    return templ.render(locals())
+
+path = os.path.join(os.path.dirname(__file__), "..", "pyiga", "assemblers.pxi")
+with open(path, 'w') as f:
+    f.write('# file generated by generate-assemblers.py\n')
+    f.write(generate(dim=2))
+    f.write(generate(dim=3))
+

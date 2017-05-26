@@ -485,17 +485,28 @@ cdef double combine_stiff_2d(
         double* VDu0, double* VDu1,
         double* VDv0, double* VDv1,
     ) nogil:
-    """Compute the sum of J*(B^T grad(u), B^T grad(v)) over a 2D grid."""
+    """Compute the sum of (B grad(u), grad(v)) over a 2D grid."""
     cdef size_t n0 = B.shape[0]
     cdef size_t n1 = B.shape[1]
 
-    cdef size_t i0, i1
     cdef double result = 0.0
+    cdef size_t i0, i1
+    cdef double gu[2]
+    cdef double gv[2]
+    cdef double *Bptr
 
     for i0 in range(n0):
         for i1 in range(n1):
-            # expression generated with asm-codegen.py
-            result += (VDu0[2*i0 + 1]*VDu1[2*i1]*B[i0, i1, 0, 1] + VDu0[2*i0]*VDu1[2*i1 + 1]*B[i0, i1, 0, 0])*VDv0[2*i0]*VDv1[2*i1 + 1] + (VDu0[2*i0 + 1]*VDu1[2*i1]*B[i0, i1, 1, 1] + VDu0[2*i0]*VDu1[2*i1 + 1]*B[i0, i1, 1, 0])*VDv0[2*i0 + 1]*VDv1[2*i1]
+            Bptr = &B[i0, i1, 0, 0]
+
+            gu[0] = VDu0[2*i0]   * VDu1[2*i1+1]
+            gu[1] = VDu0[2*i0+1] * VDu1[2*i1]
+
+            gv[0] = VDv0[2*i0]   * VDv1[2*i1+1]
+            gv[1] = VDv0[2*i0+1] * VDv1[2*i1]
+
+            result += (Bptr[0]*gu[0] + Bptr[1]*gu[1]) * gv[0]
+            result += (Bptr[2]*gu[0] + Bptr[3]*gu[1]) * gv[1]
     return result
 
 
@@ -530,19 +541,33 @@ cdef double combine_stiff_3d(
         double* VDu0, double* VDu1, double* VDu2,
         double* VDv0, double* VDv1, double* VDv2,
     ) nogil:
-    """Compute the sum of (B u, v) over a 3D grid"""
+    """Compute the sum of (B grad(u), grad(v)) over a 3D grid"""
     cdef size_t n0 = B.shape[0]
     cdef size_t n1 = B.shape[1]
     cdef size_t n2 = B.shape[2]
 
-    cdef size_t i0,i1,i2
     cdef double result = 0.0
+    cdef size_t i0, i1, i2
+    cdef double gu[3]
+    cdef double gv[3]
+    cdef double *Bptr
 
     for i0 in range(n0):
         for i1 in range(n1):
             for i2 in range(n2):
-                # expression generated with asm-codegen.py
-                result += (VDu0[2*i0 + 1]*VDu1[2*i1]*VDu2[2*i2]*B[i0, i1, i2, 0, 2] + VDu0[2*i0]*VDu1[2*i1 + 1]*VDu2[2*i2]*B[i0, i1, i2, 0, 1] + VDu0[2*i0]*VDu1[2*i1]*VDu2[2*i2 + 1]*B[i0, i1, i2, 0, 0])*VDv0[2*i0]*VDv1[2*i1]*VDv2[2*i2 + 1] + (VDu0[2*i0 + 1]*VDu1[2*i1]*VDu2[2*i2]*B[i0, i1, i2, 1, 2] + VDu0[2*i0]*VDu1[2*i1 + 1]*VDu2[2*i2]*B[i0, i1, i2, 1, 1] + VDu0[2*i0]*VDu1[2*i1]*VDu2[2*i2 + 1]*B[i0, i1, i2, 1, 0])*VDv0[2*i0]*VDv1[2*i1 + 1]*VDv2[2*i2] + (VDu0[2*i0 + 1]*VDu1[2*i1]*VDu2[2*i2]*B[i0, i1, i2, 2, 2] + VDu0[2*i0]*VDu1[2*i1 + 1]*VDu2[2*i2]*B[i0, i1, i2, 2, 1] + VDu0[2*i0]*VDu1[2*i1]*VDu2[2*i2 + 1]*B[i0, i1, i2, 2, 0])*VDv0[2*i0 + 1]*VDv1[2*i1]*VDv2[2*i2]
+                Bptr = &B[i0, i1, i2, 0, 0]
+
+                gu[0] = VDu0[2*i0]   * VDu1[2*i1]   * VDu2[2*i2+1]
+                gu[1] = VDu0[2*i0]   * VDu1[2*i1+1] * VDu2[2*i2]
+                gu[2] = VDu0[2*i0+1] * VDu1[2*i1]   * VDu2[2*i2]
+
+                gv[0] = VDv0[2*i0]   * VDv1[2*i1]   * VDv2[2*i2+1]
+                gv[1] = VDv0[2*i0]   * VDv1[2*i1+1] * VDv2[2*i2]
+                gv[2] = VDv0[2*i0+1] * VDv1[2*i1]   * VDv2[2*i2]
+
+                result += (Bptr[0]*gu[0] + Bptr[1]*gu[1] + Bptr[2]*gu[2]) * gv[0]
+                result += (Bptr[3]*gu[0] + Bptr[4]*gu[1] + Bptr[5]*gu[2]) * gv[1]
+                result += (Bptr[6]*gu[0] + Bptr[7]*gu[1] + Bptr[8]*gu[2]) * gv[2]
     return result
 
 

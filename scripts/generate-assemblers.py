@@ -203,6 +203,32 @@ macros = r"""
 """
 
 tmpl_mass_asm = Template(macros + r"""
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.initializedcheck(False)
+cdef double combine_mass_{{DIM}}d(
+        double[ {{dimrepeat(':')}}:1 ] J,
+        {{ dimrepeat('double* Vu{}') }},
+        {{ dimrepeat('double* Vv{}') }},
+    ) nogil:
+
+{%- for k in range(DIM) %}
+    cdef size_t n{{k}} = J.shape[{{k}}]
+{%- endfor %}
+
+    cdef size_t {{ dimrepeat('i{}') }}
+    cdef double result = 0.0
+    cdef double vu, vv
+{% for k in range(DIM) %}
+    {{ indent(k) }}for i{{k}} in range(n{{k}}):
+{%- endfor %}
+    {{ indent(DIM) }}vu = {{ dimrepeat('Vu{0}[i{0}]', sep=' * ') }}
+    {{ indent(DIM) }}vv = {{ dimrepeat('Vv{0}[i{0}]', sep=' * ') }}
+
+    {{ indent(DIM) }}result += vu * vv * J[{{ dimrepeat('i{}') }}]
+
+    return result
+
 cdef class MassAssembler{{DIM}}D(BaseAssembler{{DIM}}D):
     cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative(0)
     cdef double[{{dimrepeat(':')}}:1] weights
@@ -263,6 +289,9 @@ def generate(dim):
 
     def tensorprod(var):
         return ' * '.join(['{0}[{1}][{2}]'.format(var, k, extend_dim(k)) for k in range(DIM)])
+
+    def indent(num):
+        return num * '    ';
 
     # helper variables for to_seq
     indices = ['ii[%d]' % k for k in range(DIM)]

@@ -459,27 +459,6 @@ cdef object get_thread_pool():
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.initializedcheck(False)
-cdef double combine_mass_2d(
-        double[:,::1] J,
-        double* Vu0, double* Vu1,
-        double* Vv0, double* Vv1
-    ) nogil:
-    """Compute the sum of J*u*v over a 2D grid."""
-    cdef size_t n0 = J.shape[0]
-    cdef size_t n1 = J.shape[1]
-
-    cdef size_t i0, i1
-    cdef double result = 0.0
-
-    for i0 in range(n0):
-        for i1 in range(n1):
-            result += Vu0[i0]*Vu1[i1] * Vv0[i0]*Vv1[i1] * J[i0,i1]
-    return result
-
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-@cython.initializedcheck(False)
 cdef double combine_stiff_2d(
         double[:,:,:,::1] B,
         double* VDu0, double* VDu1,
@@ -509,29 +488,6 @@ cdef double combine_stiff_2d(
             result += (Bptr[2]*gu[0] + Bptr[3]*gu[1]) * gv[1]
     return result
 
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-@cython.initializedcheck(False)
-cdef double combine_mass_3d(
-        double[:,:,::1] J,
-        double* Vu0, double* Vu1, double* Vu2,
-        double* Vv0, double* Vv1, double* Vv2
-    ) nogil:
-    """Compute the sum of J*u*v over a 2D grid."""
-    cdef size_t n0 = J.shape[0]
-    cdef size_t n1 = J.shape[1]
-    cdef size_t n2 = J.shape[2]
-
-    cdef size_t i0, i1, i2
-    cdef double result = 0.0
-
-    for i0 in range(n0):
-        for i1 in range(n1):
-            for i2 in range(n2):
-                result += Vu0[i0]*Vu1[i1]*Vu2[i2] * Vv0[i0]*Vv1[i1]*Vv2[i2] * J[i0,i1,i2]
-
-    return result
 
 @cython.boundscheck(False)
 @cython.wraparound(False)

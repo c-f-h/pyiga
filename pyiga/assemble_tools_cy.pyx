@@ -28,6 +28,8 @@ import itertools
 # Public utility functions
 ################################################################################
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cpdef void rank_1_update(double[:,::1] X, double alpha, double[::1] u, double[::1] v):
     """Perform the update `X += alpha * u * v^T`.
 
@@ -43,6 +45,8 @@ cpdef void rank_1_update(double[:,::1] X, double alpha, double[::1] u, double[::
         for j in range(X.shape[1]):
             X[i,j] += au * v[j]
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cpdef void aca3d_update(double[:,:,::1] X, double alpha, double[::1] u, double[:,::1] V):
     cdef double au
     cdef size_t i, j, k

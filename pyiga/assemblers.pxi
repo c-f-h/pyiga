@@ -83,6 +83,80 @@ cpdef void _asm_chunk_2d(BaseAssembler2D asm, size_t[:,::1] idxchunk, double[::1
         asm.multi_assemble_chunk(idxchunk, out)
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef object generic_assemble_2d(BaseAssembler2D asm, long chunk_start=-1, long chunk_end=-1):
+    cdef size_t[2] i, j
+    cdef size_t k, ii, jj
+    cdef IntInterval intv
+
+    cdef size_t[2] dof_start, dof_end, neigh_j_start, neigh_j_end
+    cdef double entry
+    cdef vector[double] entries
+    cdef vector[size_t] entries_i, entries_j
+
+    dof_start[:] = (0, 0)
+    dof_end[:] = asm.ndofs[:]
+
+    if chunk_start >= 0:
+        dof_start[0] = chunk_start
+    if chunk_end >= 0:
+        dof_end[0] = chunk_end
+
+    i[:] = dof_start[:]
+    with nogil:
+        while True:         # loop over all i
+            ii = asm.to_seq(i)
+
+            for k in range(2):
+                intv = find_joint_support_functions(asm.meshsupp[k], i[k])
+                neigh_j_start[k] = intv.a
+                neigh_j_end[k] = intv.b
+                j[k] = neigh_j_start[k]
+
+            while True:     # loop j over all neighbors of i
+                jj = asm.to_seq(j)
+                if jj >= ii:
+                    entry = asm.assemble_impl(i, j)
+
+                    entries.push_back(entry)
+                    entries_i.push_back(ii)
+                    entries_j.push_back(jj)
+
+                    if ii != jj:
+                        entries.push_back(entry)
+                        entries_i.push_back(jj)
+                        entries_j.push_back(ii)
+
+                if not next_lexicographic2(j, neigh_j_start, neigh_j_end):
+                    break
+            if not next_lexicographic2(i, dof_start, dof_end):
+                break
+
+    cdef size_t ne = entries.size()
+    cdef size_t N = asm.ndofs[0] * asm.ndofs[1]
+    return scipy.sparse.coo_matrix(
+            (<double[:ne]> entries.data(),
+                (<size_t[:ne]> entries_i.data(),
+                 <size_t[:ne]> entries_j.data())),
+            shape=(N,N)).tocsr()
+
+
+cdef generic_assemble_2d_parallel(BaseAssembler2D asm):
+    num_threads = pyiga.get_max_threads()
+    if num_threads <= 1:
+        return generic_assemble_2d(asm)
+    def asm_chunk(rg):
+        cdef BaseAssembler2D asm_clone = asm.shared_clone()
+        return generic_assemble_2d(asm_clone, rg.start, rg.stop)
+    results = get_thread_pool().map(asm_chunk, chunk_tasks(range_it(asm.ndofs[0]), 4*num_threads))
+    return sum(results)
+
+
+# helper function for fast low-rank assembler
+cdef double _entry_func_2d(size_t i, size_t j, void * data):
+    return (<BaseAssembler2D>data).assemble(i, j)
+
 cdef class MassAssembler2D(BaseAssembler2D):
     cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative(0)
     cdef double[:, ::1] weights
@@ -133,7 +207,6 @@ cdef class MassAssembler2D(BaseAssembler2D):
                 values_j[0], values_j[1]
         )
 
-
 cdef class StiffnessAssembler2D(BaseAssembler2D):
     cdef vector[double[:, :, ::1]] C            # 1D basis values. Indices: basis function, mesh point, derivative
     cdef double[:, :, :, ::1] B   # transformation matrix. Indices: DIM x mesh point, i, j
@@ -183,86 +256,6 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
                 values_i[0], values_i[1],
                 values_j[0], values_j[1]
         )
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-cdef object generic_assemble_2d(BaseAssembler2D asm, long chunk_start=-1, long chunk_end=-1):
-    cdef size_t[2] i, j
-    cdef size_t k, ii, jj
-    cdef IntInterval intv
-
-    cdef size_t[2] dof_start, dof_end, neigh_j_start, neigh_j_end
-    cdef double entry
-    cdef vector[double] entries
-    cdef vector[size_t] entries_i, entries_j
-
-    dof_start[:] = (0, 0)
-    dof_end[:] = asm.ndofs[:]
-
-    if chunk_start >= 0:
-        dof_start[0] = chunk_start
-    if chunk_end >= 0:
-        dof_end[0] = chunk_end
-
-    i[:] = dof_start[:]
-    with nogil:
-        while True:         # loop over all i
-            ii = asm.to_seq(i)
-
-            for k in range(2):
-                intv = find_joint_support_functions(asm.meshsupp[k], i[k])
-                neigh_j_start[k] = intv.a
-                neigh_j_end[k] = intv.b
-
-            
-            j[0] = neigh_j_start[0]
-            
-            j[1] = neigh_j_start[1]
-            
-
-            while True:     # loop j over all neighbors of i
-                jj = asm.to_seq(j)
-                if jj >= ii:
-                    entry = asm.assemble_impl(i, j)
-
-                    entries.push_back(entry)
-                    entries_i.push_back(ii)
-                    entries_j.push_back(jj)
-
-                    if ii != jj:
-                        entries.push_back(entry)
-                        entries_i.push_back(jj)
-                        entries_j.push_back(ii)
-
-                if not next_lexicographic2(j, neigh_j_start, neigh_j_end):
-                    break
-            if not next_lexicographic2(i, dof_start, dof_end):
-                break
-
-    cdef size_t ne = entries.size()
-    cdef size_t N = asm.ndofs[0] * asm.ndofs[1]
-    return scipy.sparse.coo_matrix(
-            (<double[:ne]> entries.data(),
-                (<size_t[:ne]> entries_i.data(),
-                 <size_t[:ne]> entries_j.data())),
-            shape=(N,N)).tocsr()
-
-
-cdef generic_assemble_2d_parallel(BaseAssembler2D asm):
-    num_threads = pyiga.get_max_threads()
-    if num_threads <= 1:
-        return generic_assemble_2d(asm)
-    def asm_chunk(rg):
-        cdef BaseAssembler2D asm_clone = asm.shared_clone()
-        return generic_assemble_2d(asm_clone, rg.start, rg.stop)
-    results = get_thread_pool().map(asm_chunk, chunk_tasks(range_it(asm.ndofs[0]), 4*num_threads))
-    return sum(results)
-
-
-# helper function for fast low-rank assembler
-cdef double _entry_func_2d(size_t i, size_t j, void * data):
-    return (<BaseAssembler2D>data).assemble(i, j)
-
 ################################################################################
 # 3D Assemblers
 ################################################################################
@@ -348,6 +341,80 @@ cpdef void _asm_chunk_3d(BaseAssembler3D asm, size_t[:,::1] idxchunk, double[::1
         asm.multi_assemble_chunk(idxchunk, out)
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef object generic_assemble_3d(BaseAssembler3D asm, long chunk_start=-1, long chunk_end=-1):
+    cdef size_t[3] i, j
+    cdef size_t k, ii, jj
+    cdef IntInterval intv
+
+    cdef size_t[3] dof_start, dof_end, neigh_j_start, neigh_j_end
+    cdef double entry
+    cdef vector[double] entries
+    cdef vector[size_t] entries_i, entries_j
+
+    dof_start[:] = (0, 0, 0)
+    dof_end[:] = asm.ndofs[:]
+
+    if chunk_start >= 0:
+        dof_start[0] = chunk_start
+    if chunk_end >= 0:
+        dof_end[0] = chunk_end
+
+    i[:] = dof_start[:]
+    with nogil:
+        while True:         # loop over all i
+            ii = asm.to_seq(i)
+
+            for k in range(3):
+                intv = find_joint_support_functions(asm.meshsupp[k], i[k])
+                neigh_j_start[k] = intv.a
+                neigh_j_end[k] = intv.b
+                j[k] = neigh_j_start[k]
+
+            while True:     # loop j over all neighbors of i
+                jj = asm.to_seq(j)
+                if jj >= ii:
+                    entry = asm.assemble_impl(i, j)
+
+                    entries.push_back(entry)
+                    entries_i.push_back(ii)
+                    entries_j.push_back(jj)
+
+                    if ii != jj:
+                        entries.push_back(entry)
+                        entries_i.push_back(jj)
+                        entries_j.push_back(ii)
+
+                if not next_lexicographic3(j, neigh_j_start, neigh_j_end):
+                    break
+            if not next_lexicographic3(i, dof_start, dof_end):
+                break
+
+    cdef size_t ne = entries.size()
+    cdef size_t N = asm.ndofs[0] * asm.ndofs[1] * asm.ndofs[2]
+    return scipy.sparse.coo_matrix(
+            (<double[:ne]> entries.data(),
+                (<size_t[:ne]> entries_i.data(),
+                 <size_t[:ne]> entries_j.data())),
+            shape=(N,N)).tocsr()
+
+
+cdef generic_assemble_3d_parallel(BaseAssembler3D asm):
+    num_threads = pyiga.get_max_threads()
+    if num_threads <= 1:
+        return generic_assemble_3d(asm)
+    def asm_chunk(rg):
+        cdef BaseAssembler3D asm_clone = asm.shared_clone()
+        return generic_assemble_3d(asm_clone, rg.start, rg.stop)
+    results = get_thread_pool().map(asm_chunk, chunk_tasks(range_it(asm.ndofs[0]), 4*num_threads))
+    return sum(results)
+
+
+# helper function for fast low-rank assembler
+cdef double _entry_func_3d(size_t i, size_t j, void * data):
+    return (<BaseAssembler3D>data).assemble(i, j)
+
 cdef class MassAssembler3D(BaseAssembler3D):
     cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative(0)
     cdef double[:, :, ::1] weights
@@ -398,7 +465,6 @@ cdef class MassAssembler3D(BaseAssembler3D):
                 values_j[0], values_j[1], values_j[2]
         )
 
-
 cdef class StiffnessAssembler3D(BaseAssembler3D):
     cdef vector[double[:, :, ::1]] C            # 1D basis values. Indices: basis function, mesh point, derivative
     cdef double[:, :, :, :, ::1] B   # transformation matrix. Indices: DIM x mesh point, i, j
@@ -448,84 +514,3 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                 values_i[0], values_i[1], values_i[2],
                 values_j[0], values_j[1], values_j[2]
         )
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-cdef object generic_assemble_3d(BaseAssembler3D asm, long chunk_start=-1, long chunk_end=-1):
-    cdef size_t[3] i, j
-    cdef size_t k, ii, jj
-    cdef IntInterval intv
-
-    cdef size_t[3] dof_start, dof_end, neigh_j_start, neigh_j_end
-    cdef double entry
-    cdef vector[double] entries
-    cdef vector[size_t] entries_i, entries_j
-
-    dof_start[:] = (0, 0, 0)
-    dof_end[:] = asm.ndofs[:]
-
-    if chunk_start >= 0:
-        dof_start[0] = chunk_start
-    if chunk_end >= 0:
-        dof_end[0] = chunk_end
-
-    i[:] = dof_start[:]
-    with nogil:
-        while True:         # loop over all i
-            ii = asm.to_seq(i)
-
-            for k in range(3):
-                intv = find_joint_support_functions(asm.meshsupp[k], i[k])
-                neigh_j_start[k] = intv.a
-                neigh_j_end[k] = intv.b
-
-            
-            j[0] = neigh_j_start[0]
-            
-            j[1] = neigh_j_start[1]
-            
-            j[2] = neigh_j_start[2]
-            
-
-            while True:     # loop j over all neighbors of i
-                jj = asm.to_seq(j)
-                if jj >= ii:
-                    entry = asm.assemble_impl(i, j)
-
-                    entries.push_back(entry)
-                    entries_i.push_back(ii)
-                    entries_j.push_back(jj)
-
-                    if ii != jj:
-                        entries.push_back(entry)
-                        entries_i.push_back(jj)
-                        entries_j.push_back(ii)
-
-                if not next_lexicographic3(j, neigh_j_start, neigh_j_end):
-                    break
-            if not next_lexicographic3(i, dof_start, dof_end):
-                break
-
-    cdef size_t ne = entries.size()
-    cdef size_t N = asm.ndofs[0] * asm.ndofs[1] * asm.ndofs[2]
-    return scipy.sparse.coo_matrix(
-            (<double[:ne]> entries.data(),
-                (<size_t[:ne]> entries_i.data(),
-                 <size_t[:ne]> entries_j.data())),
-            shape=(N,N)).tocsr()
-
-
-cdef generic_assemble_3d_parallel(BaseAssembler3D asm):
-    num_threads = pyiga.get_max_threads()
-    if num_threads <= 1:
-        return generic_assemble_3d(asm)
-    def asm_chunk(rg):
-        cdef BaseAssembler3D asm_clone = asm.shared_clone()
-        return generic_assemble_3d(asm_clone, rg.start, rg.stop)
-    results = get_thread_pool().map(asm_chunk, chunk_tasks(range_it(asm.ndofs[0]), 4*num_threads))
-    return sum(results)
-
-
-# helper function for fast low-rank assembler
-cdef double _entry_func_3d(size_t i, size_t j, void * data):
-    return (<BaseAssembler3D>data).assemble(i, j)

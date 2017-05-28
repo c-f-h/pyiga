@@ -1,23 +1,10 @@
 import os.path
 from jinja2 import Template
 
-templ = Template(r"""
+tmpl_generic = Template(r"""
 ################################################################################
 # {{DIM}}D Assemblers
 ################################################################################
-{%- macro init_basis_vals(numderivs) -%}
-        assert geo.dim == {{DIM}}, "Geometry has wrong dimension"
-        self.base_init(kvs)
-
-        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
-        gaussgrid = [g[0] for g in gauss]
-        gaussweights = [g[1] for g in gauss]
-
-        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs={{numderivs}}) for k in range({{DIM}})]
-        for k in range({{DIM}}):
-            colloc[k] = tuple(X.T.A for X in colloc[k])
-        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
-{%- endmacro %}
 
 cdef class BaseAssembler{{DIM}}D:
     cdef int nqp
@@ -100,87 +87,6 @@ cpdef void _asm_chunk_{{DIM}}d(BaseAssembler{{DIM}}D asm, size_t[:,::1] idxchunk
         asm.multi_assemble_chunk(idxchunk, out)
 
 
-cdef class MassAssembler{{DIM}}D(BaseAssembler{{DIM}}D):
-    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative(0)
-    cdef double[{{dimrepeat(':')}}:1] weights
-
-    def __init__(self, kvs, geo):
-        {{ init_basis_vals(numderivs=0) }}
-
-        geo_jac    = geo.grid_jacobian(gaussgrid)
-        geo_det    = determinants(geo_jac)
-        self.weights = {{ tensorprod('gaussweights') }} * np.abs(geo_det)
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.initializedcheck(False)
-    cdef double assemble_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
-        cdef int k
-        cdef IntInterval intv
-        cdef size_t g_sta[{{DIM}}]
-        cdef size_t g_end[{{DIM}}]
-
-        cdef (double*) values_i[{{DIM}}]
-        cdef (double*) values_j[{{DIM}}]
-
-        for k in range({{DIM}}):
-            intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
-                                       make_intv(self.meshsupp[k][j[k],0], self.meshsupp[k][j[k],1]))
-            if intv.a >= intv.b:
-                return 0.0      # no intersection of support
-            g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
-            g_end[k] = self.nqp * intv.b    # end of Gauss nodes
-
-            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
-            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
-
-        return combine_mass_{{DIM}}d(
-                self.weights [ {{ dimrepeat("g_sta[{0}]:g_end[{0}]") }} ],
-                {{ dimrepeat("values_i[{}]") }},
-                {{ dimrepeat("values_j[{}]") }}
-        )
-
-
-cdef class StiffnessAssembler{{DIM}}D(BaseAssembler{{DIM}}D):
-    cdef vector[double[:, :, ::1]] C            # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[{{dimrepeat(':')}}, :, ::1] B   # transformation matrix. Indices: DIM x mesh point, i, j
-
-    def __init__(self, kvs, geo):
-        {{ init_basis_vals(numderivs=1) }}
-
-        geo_jac = geo.grid_jacobian(gaussgrid)
-        geo_det, geo_jacinv = det_and_inv(geo_jac)
-        weights = {{ tensorprod('gaussweights') }} * np.abs(geo_det)
-        self.B = matmatT_{{DIM}}x{{DIM}}(geo_jacinv) * weights[ {{dimrepeat(":")}}, None, None ]
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.initializedcheck(False)
-    cdef double assemble_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
-        cdef int k
-        cdef IntInterval intv
-        cdef size_t g_sta[{{DIM}}]
-        cdef size_t g_end[{{DIM}}]
-        cdef (double*) values_i[{{DIM}}]
-        cdef (double*) values_j[{{DIM}}]
-
-        for k in range({{DIM}}):
-            intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
-                                       make_intv(self.meshsupp[k][j[k],0], self.meshsupp[k][j[k],1]))
-            if intv.a >= intv.b:
-                return 0.0      # no intersection of support
-            g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
-            g_end[k] = self.nqp * intv.b    # end of Gauss nodes
-
-            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
-            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
-
-        return combine_stiff_{{DIM}}d(
-                self.B [ {{ dimrepeat("g_sta[{0}]:g_end[{0}]") }} ],
-                {{ dimrepeat("values_i[{}]") }},
-                {{ dimrepeat("values_j[{}]") }}
-        )
-
 @cython.boundscheck(False)
 @cython.wraparound(False)
 cdef object generic_assemble_{{DIM}}d(BaseAssembler{{DIM}}D asm, long chunk_start=-1, long chunk_end=-1):
@@ -210,10 +116,7 @@ cdef object generic_assemble_{{DIM}}d(BaseAssembler{{DIM}}D asm, long chunk_star
                 intv = find_joint_support_functions(asm.meshsupp[k], i[k])
                 neigh_j_start[k] = intv.a
                 neigh_j_end[k] = intv.b
-
-            {% for k in range(DIM) %}
-            j[{{k}}] = neigh_j_start[{{k}}]
-            {% endfor %}
+                j[k] = neigh_j_start[k]
 
             while True:     # loop j over all neighbors of i
                 jj = asm.to_seq(j)
@@ -257,7 +160,106 @@ cdef generic_assemble_{{DIM}}d_parallel(BaseAssembler{{DIM}}D asm):
 # helper function for fast low-rank assembler
 cdef double _entry_func_{{DIM}}d(size_t i, size_t j, void * data):
     return (<BaseAssembler{{DIM}}D>data).assemble(i, j)
+""")
 
+macros = r"""
+{%- macro init_basis_vals(numderivs) -%}
+        assert geo.dim == {{DIM}}, "Geometry has wrong dimension"
+        self.base_init(kvs)
+
+        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
+        gaussgrid = [g[0] for g in gauss]
+        gaussweights = [g[1] for g in gauss]
+
+        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs={{numderivs}}) for k in range({{DIM}})]
+        for k in range({{DIM}}):
+            colloc[k] = tuple(X.T.A for X in colloc[k])
+        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
+{%- endmacro %}
+"""
+
+tmpl_mass_asm = Template(macros + r"""
+cdef class MassAssembler{{DIM}}D(BaseAssembler{{DIM}}D):
+    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative(0)
+    cdef double[{{dimrepeat(':')}}:1] weights
+
+    def __init__(self, kvs, geo):
+        {{ init_basis_vals(numderivs=0) }}
+
+        geo_jac    = geo.grid_jacobian(gaussgrid)
+        geo_det    = determinants(geo_jac)
+        self.weights = {{ tensorprod('gaussweights') }} * np.abs(geo_det)
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    cdef double assemble_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
+        cdef int k
+        cdef IntInterval intv
+        cdef size_t g_sta[{{DIM}}]
+        cdef size_t g_end[{{DIM}}]
+
+        cdef (double*) values_i[{{DIM}}]
+        cdef (double*) values_j[{{DIM}}]
+
+        for k in range({{DIM}}):
+            intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
+                                       make_intv(self.meshsupp[k][j[k],0], self.meshsupp[k][j[k],1]))
+            if intv.a >= intv.b:
+                return 0.0      # no intersection of support
+            g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
+            g_end[k] = self.nqp * intv.b    # end of Gauss nodes
+
+            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
+            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
+
+        return combine_mass_{{DIM}}d(
+                self.weights [ {{ dimrepeat("g_sta[{0}]:g_end[{0}]") }} ],
+                {{ dimrepeat("values_i[{}]") }},
+                {{ dimrepeat("values_j[{}]") }}
+        )
+""")
+
+tmpl_stiffness_asm = Template(macros + r"""
+cdef class StiffnessAssembler{{DIM}}D(BaseAssembler{{DIM}}D):
+    cdef vector[double[:, :, ::1]] C            # 1D basis values. Indices: basis function, mesh point, derivative
+    cdef double[{{dimrepeat(':')}}, :, ::1] B   # transformation matrix. Indices: DIM x mesh point, i, j
+
+    def __init__(self, kvs, geo):
+        {{ init_basis_vals(numderivs=1) }}
+
+        geo_jac = geo.grid_jacobian(gaussgrid)
+        geo_det, geo_jacinv = det_and_inv(geo_jac)
+        weights = {{ tensorprod('gaussweights') }} * np.abs(geo_det)
+        self.B = matmatT_{{DIM}}x{{DIM}}(geo_jacinv) * weights[ {{dimrepeat(":")}}, None, None ]
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    cdef double assemble_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
+        cdef int k
+        cdef IntInterval intv
+        cdef size_t g_sta[{{DIM}}]
+        cdef size_t g_end[{{DIM}}]
+        cdef (double*) values_i[{{DIM}}]
+        cdef (double*) values_j[{{DIM}}]
+
+        for k in range({{DIM}}):
+            intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
+                                       make_intv(self.meshsupp[k][j[k],0], self.meshsupp[k][j[k],1]))
+            if intv.a >= intv.b:
+                return 0.0      # no intersection of support
+            g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
+            g_end[k] = self.nqp * intv.b    # end of Gauss nodes
+
+            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
+            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
+
+        return combine_stiff_{{DIM}}d(
+                self.B [ {{ dimrepeat("g_sta[{0}]:g_end[{0}]") }} ],
+                {{ dimrepeat("values_i[{}]") }},
+                {{ dimrepeat("values_j[{}]") }}
+        )
 """)
 
 def generate(dim):
@@ -285,7 +287,9 @@ def generate(dim):
     indices = ['ii[%d]' % k for k in range(DIM)]
     ndofs   = ['self.ndofs[%d]' % k for k in range(DIM)]
 
-    return templ.render(locals())
+    env = locals()
+    return ''.join(tmpl.render(env)
+            for tmpl in (tmpl_generic, tmpl_mass_asm, tmpl_stiffness_asm))
 
 path = os.path.join(os.path.dirname(__file__), "..", "pyiga", "assemblers.pxi")
 with open(path, 'w') as f:

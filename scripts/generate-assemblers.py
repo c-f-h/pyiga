@@ -176,6 +176,30 @@ macros = r"""
             colloc[k] = tuple(X.T.A for X in colloc[k])
         self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
 {%- endmacro %}
+
+{%- macro assemble_impl_header() -%}
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    cdef double assemble_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
+        cdef int k
+        cdef IntInterval intv
+        cdef size_t g_sta[{{DIM}}]
+        cdef size_t g_end[{{DIM}}]
+        cdef (double*) values_i[{{DIM}}]
+        cdef (double*) values_j[{{DIM}}]
+
+        for k in range({{DIM}}):
+            intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
+                                       make_intv(self.meshsupp[k][j[k],0], self.meshsupp[k][j[k],1]))
+            if intv.a >= intv.b:
+                return 0.0      # no intersection of support
+            g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
+            g_end[k] = self.nqp * intv.b    # end of Gauss nodes
+
+            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
+            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
+{% endmacro %}
 """
 
 tmpl_mass_asm = Template(macros + r"""
@@ -190,29 +214,7 @@ cdef class MassAssembler{{DIM}}D(BaseAssembler{{DIM}}D):
         geo_det    = determinants(geo_jac)
         self.weights = {{ tensorprod('gaussweights') }} * np.abs(geo_det)
 
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.initializedcheck(False)
-    cdef double assemble_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
-        cdef int k
-        cdef IntInterval intv
-        cdef size_t g_sta[{{DIM}}]
-        cdef size_t g_end[{{DIM}}]
-
-        cdef (double*) values_i[{{DIM}}]
-        cdef (double*) values_j[{{DIM}}]
-
-        for k in range({{DIM}}):
-            intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
-                                       make_intv(self.meshsupp[k][j[k],0], self.meshsupp[k][j[k],1]))
-            if intv.a >= intv.b:
-                return 0.0      # no intersection of support
-            g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
-            g_end[k] = self.nqp * intv.b    # end of Gauss nodes
-
-            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
-            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
-
+    {{ assemble_impl_header() }}
         return combine_mass_{{DIM}}d(
                 self.weights [ {{ dimrepeat("g_sta[{0}]:g_end[{0}]") }} ],
                 {{ dimrepeat("values_i[{}]") }},
@@ -233,28 +235,7 @@ cdef class StiffnessAssembler{{DIM}}D(BaseAssembler{{DIM}}D):
         weights = {{ tensorprod('gaussweights') }} * np.abs(geo_det)
         self.B = matmatT_{{DIM}}x{{DIM}}(geo_jacinv) * weights[ {{dimrepeat(":")}}, None, None ]
 
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.initializedcheck(False)
-    cdef double assemble_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
-        cdef int k
-        cdef IntInterval intv
-        cdef size_t g_sta[{{DIM}}]
-        cdef size_t g_end[{{DIM}}]
-        cdef (double*) values_i[{{DIM}}]
-        cdef (double*) values_j[{{DIM}}]
-
-        for k in range({{DIM}}):
-            intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
-                                       make_intv(self.meshsupp[k][j[k],0], self.meshsupp[k][j[k],1]))
-            if intv.a >= intv.b:
-                return 0.0      # no intersection of support
-            g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
-            g_end[k] = self.nqp * intv.b    # end of Gauss nodes
-
-            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
-            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
-
+    {{ assemble_impl_header() }}
         return combine_stiff_{{DIM}}d(
                 self.B [ {{ dimrepeat("g_sta[{0}]:g_end[{0}]") }} ],
                 {{ dimrepeat("values_i[{}]") }},

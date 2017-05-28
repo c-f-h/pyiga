@@ -186,7 +186,6 @@ cdef class MassAssembler2D(BaseAssembler2D):
         cdef IntInterval intv
         cdef size_t g_sta[2]
         cdef size_t g_end[2]
-
         cdef (double*) values_i[2]
         cdef (double*) values_j[2]
 
@@ -444,7 +443,6 @@ cdef class MassAssembler3D(BaseAssembler3D):
         cdef IntInterval intv
         cdef size_t g_sta[3]
         cdef size_t g_end[3]
-
         cdef (double*) values_i[3]
         cdef (double*) values_j[3]
 

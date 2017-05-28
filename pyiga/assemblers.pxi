@@ -23,7 +23,7 @@ cdef class BaseAssembler2D:
         asm.meshsupp = self.meshsupp
 
     cdef BaseAssembler2D shared_clone(self):
-        return None     # not implemented
+        return self     # by default assume thread safety
 
     cdef inline size_t to_seq(self, size_t[2] ii) nogil:
         # by convention, the order of indices is (y,x)
@@ -104,9 +104,6 @@ cdef class MassAssembler2D(BaseAssembler2D):
         geo_det    = determinants(geo_jac)
         self.weights = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
 
-    cdef MassAssembler2D shared_clone(self):
-        return self     # no shared data; class is thread-safe
-
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
@@ -158,9 +155,6 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         geo_det, geo_jacinv = det_and_inv(geo_jac)
         weights = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
         self.B = matmatT_2x2(geo_jacinv) * weights[ :, :, None, None ]
-
-    cdef StiffnessAssembler2D shared_clone(self):
-        return self     # no shared data; class is thread-safe
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -292,7 +286,7 @@ cdef class BaseAssembler3D:
         asm.meshsupp = self.meshsupp
 
     cdef BaseAssembler3D shared_clone(self):
-        return None     # not implemented
+        return self     # by default assume thread safety
 
     cdef inline size_t to_seq(self, size_t[3] ii) nogil:
         # by convention, the order of indices is (y,x)
@@ -375,9 +369,6 @@ cdef class MassAssembler3D(BaseAssembler3D):
         geo_det    = determinants(geo_jac)
         self.weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
 
-    cdef MassAssembler3D shared_clone(self):
-        return self     # no shared data; class is thread-safe
-
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
@@ -429,9 +420,6 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         geo_det, geo_jacinv = det_and_inv(geo_jac)
         weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
         self.B = matmatT_3x3(geo_jacinv) * weights[ :, :, :, None, None ]
-
-    cdef StiffnessAssembler3D shared_clone(self):
-        return self     # no shared data; class is thread-safe
 
     @cython.boundscheck(False)
     @cython.wraparound(False)

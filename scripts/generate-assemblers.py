@@ -38,7 +38,7 @@ cdef class BaseAssembler{{DIM}}D:
         asm.meshsupp = self.meshsupp
 
     cdef BaseAssembler{{DIM}}D shared_clone(self):
-        return None     # not implemented
+        return self     # by default assume thread safety
 
     cdef inline size_t to_seq(self, size_t[{{DIM}}] ii) nogil:
         # by convention, the order of indices is (y,x)
@@ -111,9 +111,6 @@ cdef class MassAssembler{{DIM}}D(BaseAssembler{{DIM}}D):
         geo_det    = determinants(geo_jac)
         self.weights = {{ tensorprod('gaussweights') }} * np.abs(geo_det)
 
-    cdef MassAssembler{{DIM}}D shared_clone(self):
-        return self     # no shared data; class is thread-safe
-
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
@@ -155,9 +152,6 @@ cdef class StiffnessAssembler{{DIM}}D(BaseAssembler{{DIM}}D):
         geo_det, geo_jacinv = det_and_inv(geo_jac)
         weights = {{ tensorprod('gaussweights') }} * np.abs(geo_det)
         self.B = matmatT_{{DIM}}x{{DIM}}(geo_jacinv) * weights[ {{dimrepeat(":")}}, None, None ]
-
-    cdef StiffnessAssembler{{DIM}}D shared_clone(self):
-        return self     # no shared data; class is thread-safe
 
     @cython.boundscheck(False)
     @cython.wraparound(False)

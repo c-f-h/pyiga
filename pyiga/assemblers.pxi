@@ -84,7 +84,7 @@ cpdef void _asm_chunk_2d(BaseAssembler2D asm, size_t[:,::1] idxchunk, double[::1
 
 
 cdef class MassAssembler2D(BaseAssembler2D):
-    cdef vector[double[::1,:]] C
+    cdef vector[double[:, ::1]] C       # 1D basis values. Indices: basis function, mesh point
     cdef double[:, ::1] geo_weights
 
     def __init__(self, kvs, geo):
@@ -94,8 +94,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
         gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
         gaussgrid = [g[0] for g in gauss]
         gaussweights = [g[1] for g in gauss]
-        self.C  = [bspline.collocation(kvs[k], gaussgrid[k])
-                   .toarray(order='F') for k in range(2)]
+        self.C  = [bspline.collocation(kvs[k], gaussgrid[k]).T.A for k in range(2)]
 
         geo_jac    = geo.grid_jacobian(gaussgrid)
         geo_det    = np.abs(determinants(geo_jac))
@@ -124,8 +123,8 @@ cdef class MassAssembler2D(BaseAssembler2D):
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-            values_i[k] = &self.C[k][ g_sta[k], i[k] ]
-            values_j[k] = &self.C[k][ g_sta[k], j[k] ]
+            values_i[k] = &self.C[k][ i[k], g_sta[k] ]
+            values_j[k] = &self.C[k][ j[k], g_sta[k] ]
 
         return combine_mass_2d(
                 self.geo_weights [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
@@ -349,7 +348,7 @@ cpdef void _asm_chunk_3d(BaseAssembler3D asm, size_t[:,::1] idxchunk, double[::1
 
 
 cdef class MassAssembler3D(BaseAssembler3D):
-    cdef vector[double[::1,:]] C
+    cdef vector[double[:, ::1]] C       # 1D basis values. Indices: basis function, mesh point
     cdef double[:, :, ::1] geo_weights
 
     def __init__(self, kvs, geo):
@@ -359,8 +358,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
         gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
         gaussgrid = [g[0] for g in gauss]
         gaussweights = [g[1] for g in gauss]
-        self.C  = [bspline.collocation(kvs[k], gaussgrid[k])
-                   .toarray(order='F') for k in range(3)]
+        self.C  = [bspline.collocation(kvs[k], gaussgrid[k]).T.A for k in range(3)]
 
         geo_jac    = geo.grid_jacobian(gaussgrid)
         geo_det    = np.abs(determinants(geo_jac))
@@ -389,8 +387,8 @@ cdef class MassAssembler3D(BaseAssembler3D):
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-            values_i[k] = &self.C[k][ g_sta[k], i[k] ]
-            values_j[k] = &self.C[k][ g_sta[k], j[k] ]
+            values_i[k] = &self.C[k][ i[k], g_sta[k] ]
+            values_j[k] = &self.C[k][ j[k], g_sta[k] ]
 
         return combine_mass_3d(
                 self.geo_weights [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],

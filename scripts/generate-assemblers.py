@@ -88,7 +88,7 @@ cpdef void _asm_chunk_{{DIM}}d(BaseAssembler{{DIM}}D asm, size_t[:,::1] idxchunk
 
 
 cdef class MassAssembler{{DIM}}D(BaseAssembler{{DIM}}D):
-    cdef vector[double[::1,:]] C
+    cdef vector[double[:, ::1]] C       # 1D basis values. Indices: basis function, mesh point
     cdef double[{{dimrepeat(':')}}:1] geo_weights
 
     def __init__(self, kvs, geo):
@@ -98,8 +98,7 @@ cdef class MassAssembler{{DIM}}D(BaseAssembler{{DIM}}D):
         gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
         gaussgrid = [g[0] for g in gauss]
         gaussweights = [g[1] for g in gauss]
-        self.C  = [bspline.collocation(kvs[k], gaussgrid[k])
-                   .toarray(order='F') for k in range({{DIM}})]
+        self.C  = [bspline.collocation(kvs[k], gaussgrid[k]).T.A for k in range({{DIM}})]
 
         geo_jac    = geo.grid_jacobian(gaussgrid)
         geo_det    = np.abs(determinants(geo_jac))
@@ -128,8 +127,8 @@ cdef class MassAssembler{{DIM}}D(BaseAssembler{{DIM}}D):
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-            values_i[k] = &self.C[k][ g_sta[k], i[k] ]
-            values_j[k] = &self.C[k][ g_sta[k], j[k] ]
+            values_i[k] = &self.C[k][ i[k], g_sta[k] ]
+            values_j[k] = &self.C[k][ j[k], g_sta[k] ]
 
         return combine_mass_{{DIM}}d(
                 self.geo_weights [ {{ dimrepeat("g_sta[{0}]:g_end[{0}]") }} ],

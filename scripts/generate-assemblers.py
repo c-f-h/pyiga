@@ -5,6 +5,19 @@ templ = Template(r"""
 ################################################################################
 # {{DIM}}D Assemblers
 ################################################################################
+{%- macro init_basis_vals(numderivs) -%}
+        assert geo.dim == {{DIM}}, "Geometry has wrong dimension"
+        self.base_init(kvs)
+
+        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
+        gaussgrid = [g[0] for g in gauss]
+        gaussweights = [g[1] for g in gauss]
+
+        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs={{numderivs}}) for k in range({{DIM}})]
+        for k in range({{DIM}}):
+            colloc[k] = tuple(X.T.A for X in colloc[k])
+        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
+{%- endmacro %}
 
 cdef class BaseAssembler{{DIM}}D:
     cdef int nqp
@@ -88,21 +101,15 @@ cpdef void _asm_chunk_{{DIM}}d(BaseAssembler{{DIM}}D asm, size_t[:,::1] idxchunk
 
 
 cdef class MassAssembler{{DIM}}D(BaseAssembler{{DIM}}D):
-    cdef vector[double[:, ::1]] C       # 1D basis values. Indices: basis function, mesh point
-    cdef double[{{dimrepeat(':')}}:1] geo_weights
+    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative(0)
+    cdef double[{{dimrepeat(':')}}:1] weights
 
     def __init__(self, kvs, geo):
-        assert geo.dim == {{DIM}}, "Geometry has wrong dimension"
-        self.base_init(kvs)
-
-        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
-        gaussgrid = [g[0] for g in gauss]
-        gaussweights = [g[1] for g in gauss]
-        self.C  = [bspline.collocation(kvs[k], gaussgrid[k]).T.A for k in range({{DIM}})]
+        {{ init_basis_vals(numderivs=0) }}
 
         geo_jac    = geo.grid_jacobian(gaussgrid)
-        geo_det    = np.abs(determinants(geo_jac))
-        self.geo_weights = {{ tensorprod('gaussweights') }} * geo_det
+        geo_det    = determinants(geo_jac)
+        self.weights = {{ tensorprod('gaussweights') }} * np.abs(geo_det)
 
     cdef MassAssembler{{DIM}}D shared_clone(self):
         return self     # no shared data; class is thread-safe
@@ -127,11 +134,11 @@ cdef class MassAssembler{{DIM}}D(BaseAssembler{{DIM}}D):
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-            values_i[k] = &self.C[k][ i[k], g_sta[k] ]
-            values_j[k] = &self.C[k][ j[k], g_sta[k] ]
+            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
+            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 
         return combine_mass_{{DIM}}d(
-                self.geo_weights [ {{ dimrepeat("g_sta[{0}]:g_end[{0}]") }} ],
+                self.weights [ {{ dimrepeat("g_sta[{0}]:g_end[{0}]") }} ],
                 {{ dimrepeat("values_i[{}]") }},
                 {{ dimrepeat("values_j[{}]") }}
         )
@@ -142,14 +149,7 @@ cdef class StiffnessAssembler{{DIM}}D(BaseAssembler{{DIM}}D):
     cdef double[{{dimrepeat(':')}}, :, ::1] B   # transformation matrix. Indices: DIM x mesh point, i, j
 
     def __init__(self, kvs, geo):
-        assert geo.dim == {{DIM}}, "Geometry has wrong dimension"
-        self.base_init(kvs)
-
-        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
-        gaussgrid = [g[0] for g in gauss]
-        gaussweights = [g[1] for g in gauss]
-        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=1) for k in range({{DIM}})]
-        self.C = [np.stack((X.T.A, Y.T.A), axis=-1) for (X,Y) in colloc]
+        {{ init_basis_vals(numderivs=1) }}
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)

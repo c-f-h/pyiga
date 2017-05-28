@@ -84,8 +84,8 @@ cpdef void _asm_chunk_2d(BaseAssembler2D asm, size_t[:,::1] idxchunk, double[::1
 
 
 cdef class MassAssembler2D(BaseAssembler2D):
-    cdef vector[double[:, ::1]] C       # 1D basis values. Indices: basis function, mesh point
-    cdef double[:, ::1] geo_weights
+    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative(0)
+    cdef double[:, ::1] weights
 
     def __init__(self, kvs, geo):
         assert geo.dim == 2, "Geometry has wrong dimension"
@@ -94,11 +94,15 @@ cdef class MassAssembler2D(BaseAssembler2D):
         gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
         gaussgrid = [g[0] for g in gauss]
         gaussweights = [g[1] for g in gauss]
-        self.C  = [bspline.collocation(kvs[k], gaussgrid[k]).T.A for k in range(2)]
+
+        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=0) for k in range(2)]
+        for k in range(2):
+            colloc[k] = tuple(X.T.A for X in colloc[k])
+        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
 
         geo_jac    = geo.grid_jacobian(gaussgrid)
-        geo_det    = np.abs(determinants(geo_jac))
-        self.geo_weights = gaussweights[0][:,None] * gaussweights[1][None,:] * geo_det
+        geo_det    = determinants(geo_jac)
+        self.weights = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
 
     cdef MassAssembler2D shared_clone(self):
         return self     # no shared data; class is thread-safe
@@ -123,11 +127,11 @@ cdef class MassAssembler2D(BaseAssembler2D):
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-            values_i[k] = &self.C[k][ i[k], g_sta[k] ]
-            values_j[k] = &self.C[k][ j[k], g_sta[k] ]
+            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
+            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 
         return combine_mass_2d(
-                self.geo_weights [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
+                self.weights [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_i[0], values_i[1],
                 values_j[0], values_j[1]
         )
@@ -144,8 +148,11 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
         gaussgrid = [g[0] for g in gauss]
         gaussweights = [g[1] for g in gauss]
+
         colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=1) for k in range(2)]
-        self.C = [np.stack((X.T.A, Y.T.A), axis=-1) for (X,Y) in colloc]
+        for k in range(2):
+            colloc[k] = tuple(X.T.A for X in colloc[k])
+        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)
@@ -348,8 +355,8 @@ cpdef void _asm_chunk_3d(BaseAssembler3D asm, size_t[:,::1] idxchunk, double[::1
 
 
 cdef class MassAssembler3D(BaseAssembler3D):
-    cdef vector[double[:, ::1]] C       # 1D basis values. Indices: basis function, mesh point
-    cdef double[:, :, ::1] geo_weights
+    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative(0)
+    cdef double[:, :, ::1] weights
 
     def __init__(self, kvs, geo):
         assert geo.dim == 3, "Geometry has wrong dimension"
@@ -358,11 +365,15 @@ cdef class MassAssembler3D(BaseAssembler3D):
         gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
         gaussgrid = [g[0] for g in gauss]
         gaussweights = [g[1] for g in gauss]
-        self.C  = [bspline.collocation(kvs[k], gaussgrid[k]).T.A for k in range(3)]
+
+        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=0) for k in range(3)]
+        for k in range(3):
+            colloc[k] = tuple(X.T.A for X in colloc[k])
+        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
 
         geo_jac    = geo.grid_jacobian(gaussgrid)
-        geo_det    = np.abs(determinants(geo_jac))
-        self.geo_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * geo_det
+        geo_det    = determinants(geo_jac)
+        self.weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
 
     cdef MassAssembler3D shared_clone(self):
         return self     # no shared data; class is thread-safe
@@ -387,11 +398,11 @@ cdef class MassAssembler3D(BaseAssembler3D):
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-            values_i[k] = &self.C[k][ i[k], g_sta[k] ]
-            values_j[k] = &self.C[k][ j[k], g_sta[k] ]
+            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
+            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 
         return combine_mass_3d(
-                self.geo_weights [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
+                self.weights [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_i[0], values_i[1], values_i[2],
                 values_j[0], values_j[1], values_j[2]
         )
@@ -408,8 +419,11 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
         gaussgrid = [g[0] for g in gauss]
         gaussweights = [g[1] for g in gauss]
+
         colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=1) for k in range(3)]
-        self.C = [np.stack((X.T.A, Y.T.A), axis=-1) for (X,Y) in colloc]
+        for k in range(3):
+            colloc[k] = tuple(X.T.A for X in colloc[k])
+        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)

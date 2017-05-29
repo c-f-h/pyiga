@@ -45,47 +45,60 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
         N = np.prod(self.bs)
 
         # initialize data
-        datashape = tuple(len(si) for si in self.sparsidx)
+        self.datashape = tuple(len(si) for si in self.sparsidx)
         if data is not None:
-            assert data.shape == datashape, 'Wrong shape of data tensor'
-            self.data = np.asarray(data, order='C')
+            assert data.shape == self.datashape, 'Wrong shape of data tensor'
+            self._data = np.asarray(data, order='C')
+            dtype = self._data.dtype
         elif matrix is not None:
             assert matrix.shape == (N,N), 'Matrix has wrong shape'
-            data = np.asarray(matrix[self.nonzero()]).reshape(datashape)
-            self.data = np.asarray(data, order='C')
+            data = np.asarray(matrix[self.nonzero()]).reshape(self.datashape)
+            self._data = np.asarray(data, order='C')
+            dtype = self._data.dtype
         else:
-            self.data = np.zeros(datashape)
+            self._data = None
+            dtype = np.float_
 
-        scipy.sparse.linalg.LinearOperator.__init__(self,
-                shape=(N,N), dtype=self.data.dtype)
+        scipy.sparse.linalg.LinearOperator.__init__(self, shape=(N,N), dtype=dtype)
 
     @property
     def nnz(self):
         """Return the number of nonzeros in a sparse matrix representation."""
-        return self.data.size
+        return np.prod(self.datashape)
+
+    @property
+    def data(self):
+        return self._data
+
+    @data.setter
+    def data(self, X):
+        assert X.shape == self.datashape
+        self._data = np.asarray(X, order='C')
 
     def asmatrix(self, format='csr'):
         """Return a sparse matrix representation in the given format."""
+        assert self._data is not None, 'matrix has no data'
         if self.L == 2:
-            A = inflate_2d(self.data, self.sparsidx[0], self.sparsidx[1],
+            A = inflate_2d(self._data, self.sparsidx[0], self.sparsidx[1],
                 self.bs[0], self.bs[0], self.bs[1], self.bs[1])
         elif self.L == 3:
-            A = inflate_3d(self.data, self.sparsidx, self._total_bs)
+            A = inflate_3d(self._data, self.sparsidx, self._total_bs)
         else:
             assert False, 'dimension %d not implemented' % self.L
         return A.asformat(format)
 
     def _matvec(self, x):
         """Compute the matrix-vector product with vector `x`."""
+        assert self._data is not None, 'matrix has no data'
         assert len(x) == self.shape[1], 'Invalid input size'
         if self.L == 2:
             y = np.zeros(len(x))
-            ml_matvec_2d(self.data, self.bidx[0], self.bidx[1],
+            ml_matvec_2d(self._data, self.bidx[0], self.bidx[1],
                 self.bs[0], self.bs[0], self.bs[1], self.bs[1], x, y)
             return y
         elif self.L == 3:
             y = np.zeros(len(x))
-            ml_matvec_3d(self.data, self.bidx, self._total_bs, x, y)
+            ml_matvec_3d(self._data, self.bidx, self._total_bs, x, y)
             return y
         else:
             return self.asmatrix().dot(x)

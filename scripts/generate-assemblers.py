@@ -211,6 +211,12 @@ macros = r"""
             values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
             values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 {% endmacro %}
+
+{%- macro make_grad(output, var, idx) -%}
+{% for k in range(DIM) %}
+{{output}}[{{k}}] = {{ grad_comp(var, idx, k) }}
+{%- endfor %}
+{% endmacro %}
 """
 
 tmpl_mass_asm = Template(macros + r"""
@@ -284,12 +290,8 @@ cdef double combine_stiff_{{DIM}}d(
 {%- endfor %}
 
     {{ indent(DIM) }}Bptr = &B[{{ dimrepeat('i{}') }}, 0, 0]
-{% for k in range(DIM) %}
-    {{ indent(DIM) }}gu[{{k}}] = {{ grad_comp('VDu', 'i', k) }}
-{%- endfor %}
-{% for k in range(DIM) %}
-    {{ indent(DIM) }}gv[{{k}}] = {{ grad_comp('VDv', 'i', k) }}
-{%- endfor %}
+{{ make_grad('gu', 'VDu', 'i') | indent(4*(DIM + 1)) }}
+{{ make_grad('gv', 'VDv', 'i') | indent(4*(DIM + 1)) }}
 
 {% for k in range(DIM) -%}
 {% set K = (DIM*k)|string %}

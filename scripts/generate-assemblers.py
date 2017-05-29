@@ -260,6 +260,45 @@ cdef class MassAssembler{{DIM}}D(BaseAssembler{{DIM}}D):
 """)
 
 tmpl_stiffness_asm = Template(macros + r"""
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.initializedcheck(False)
+cdef double combine_stiff_{{DIM}}d(
+        double[{{ dimrepeat(':') }}, :, ::1] B,
+        {{ dimrepeat('double* VDu{}') }},
+        {{ dimrepeat('double* VDv{}') }},
+    ) nogil:
+
+{%- for k in range(DIM) %}
+    cdef size_t n{{k}} = B.shape[{{k}}]
+{%- endfor %}
+
+    cdef size_t {{ dimrepeat('i{}') }}
+    cdef double gu[{{DIM}}]
+    cdef double gv[{{DIM}}]
+    cdef double result = 0.0
+    cdef double *Bptr
+
+{% for k in range(DIM) %}
+    {{ indent(k) }}for i{{k}} in range(n{{k}}):
+{%- endfor %}
+
+    {{ indent(DIM) }}Bptr = &B[{{ dimrepeat('i{}') }}, 0, 0]
+{% for k in range(DIM) %}
+    {{ indent(DIM) }}gu[{{k}}] = {{ grad_comp('VDu', 'i', k) }}
+{%- endfor %}
+{% for k in range(DIM) %}
+    {{ indent(DIM) }}gv[{{k}}] = {{ grad_comp('VDv', 'i', k) }}
+{%- endfor %}
+
+{% for k in range(DIM) -%}
+{% set K = (DIM*k)|string %}
+    {{ indent(DIM) }}result += ({{ dimrepeat('Bptr[' + K + '+{0}]*gu[{0}]', sep=' + ') }}) * gv[{{k}}]
+{%- endfor %}
+
+    return result
+
+
 cdef class StiffnessAssembler{{DIM}}D(BaseAssembler{{DIM}}D):
     cdef vector[double[:, :, ::1]] C            # 1D basis values. Indices: basis function, mesh point, derivative
     cdef double[{{dimrepeat(':')}}, :, ::1] B   # transformation matrix. Indices: DIM x mesh point, i, j
@@ -303,6 +342,17 @@ def generate(dim):
 
     def indent(num):
         return num * '    ';
+
+    def grad_comp(var, idx, j):
+        factors = [
+                "{var}{k}[2*{idx}{k}+{ofs}]".format(
+                    var = var,
+                    idx = idx,
+                    k   = k,
+                    ofs = (1 if k + j + 1 == DIM else 0)
+                )
+                for k in range(DIM)]
+        return ' * '.join(factors)
 
     # helper variables for to_seq
     indices = ['ii[%d]' % k for k in range(DIM)]

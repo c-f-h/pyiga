@@ -241,6 +241,42 @@ cdef class MassAssembler2D(BaseAssembler2D):
                 values_j[0], values_j[1]
         )
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.initializedcheck(False)
+cdef double combine_stiff_2d(
+        double[:, :, :, ::1] B,
+        double* VDu0, double* VDu1,
+        double* VDv0, double* VDv1,
+    ) nogil:
+    cdef size_t n0 = B.shape[0]
+    cdef size_t n1 = B.shape[1]
+
+    cdef size_t i0, i1
+    cdef double gu[2]
+    cdef double gv[2]
+    cdef double result = 0.0
+    cdef double *Bptr
+
+
+    for i0 in range(n0):
+        for i1 in range(n1):
+
+            Bptr = &B[i0, i1, 0, 0]
+
+            gu[0] = VDu0[2*i0+0] * VDu1[2*i1+1]
+            gu[1] = VDu0[2*i0+1] * VDu1[2*i1+0]
+
+            gv[0] = VDv0[2*i0+0] * VDv1[2*i1+1]
+            gv[1] = VDv0[2*i0+1] * VDv1[2*i1+0]
+
+
+            result += (Bptr[0+0]*gu[0] + Bptr[0+1]*gu[1]) * gv[0]
+            result += (Bptr[2+0]*gu[0] + Bptr[2+1]*gu[1]) * gv[1]
+
+    return result
+
+
 cdef class StiffnessAssembler2D(BaseAssembler2D):
     cdef vector[double[:, :, ::1]] C            # 1D basis values. Indices: basis function, mesh point, derivative
     cdef double[:, :, :, ::1] B   # transformation matrix. Indices: DIM x mesh point, i, j
@@ -534,6 +570,47 @@ cdef class MassAssembler3D(BaseAssembler3D):
                 values_i[0], values_i[1], values_i[2],
                 values_j[0], values_j[1], values_j[2]
         )
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.initializedcheck(False)
+cdef double combine_stiff_3d(
+        double[:, :, :, :, ::1] B,
+        double* VDu0, double* VDu1, double* VDu2,
+        double* VDv0, double* VDv1, double* VDv2,
+    ) nogil:
+    cdef size_t n0 = B.shape[0]
+    cdef size_t n1 = B.shape[1]
+    cdef size_t n2 = B.shape[2]
+
+    cdef size_t i0, i1, i2
+    cdef double gu[3]
+    cdef double gv[3]
+    cdef double result = 0.0
+    cdef double *Bptr
+
+
+    for i0 in range(n0):
+        for i1 in range(n1):
+            for i2 in range(n2):
+
+                Bptr = &B[i0, i1, i2, 0, 0]
+
+                gu[0] = VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1]
+                gu[1] = VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0]
+                gu[2] = VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0]
+
+                gv[0] = VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1]
+                gv[1] = VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0]
+                gv[2] = VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0]
+
+
+                result += (Bptr[0+0]*gu[0] + Bptr[0+1]*gu[1] + Bptr[0+2]*gu[2]) * gv[0]
+                result += (Bptr[3+0]*gu[0] + Bptr[3+1]*gu[1] + Bptr[3+2]*gu[2]) * gv[1]
+                result += (Bptr[6+0]*gu[0] + Bptr[6+1]*gu[1] + Bptr[6+2]*gu[2]) * gv[2]
+
+    return result
+
 
 cdef class StiffnessAssembler3D(BaseAssembler3D):
     cdef vector[double[:, :, ::1]] C            # 1D basis values. Indices: basis function, mesh point, derivative

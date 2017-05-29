@@ -159,7 +159,7 @@ cpdef object ml_nonzero_2d(bidx, block_sizes, bint lower_tri=False):
                     IJ[1,idx] = J
                     idx += 1
     if idx < N: # TODO: what's the closed formula for N in the triangular case?
-        return results[:, :N]
+        return results[:, :idx]
     else:
         return results
 

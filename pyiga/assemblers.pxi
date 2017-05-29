@@ -59,6 +59,12 @@ cdef class BaseAssembler2D:
             out[k] = self.assemble_impl(I, J)
 
     def multi_assemble(self, indices):
+        """Assemble all entries given by `indices`.
+
+        Args:
+            indices: a sequence of `(i,j)` pairs or an `ndarray`
+            of size `N x 2`.
+        """
         cdef size_t[:,::1] idx_arr
         if isinstance(indices, np.ndarray):
             idx_arr = np.asarray(indices, order='C', dtype=np.uintp)
@@ -345,6 +351,12 @@ cdef class BaseAssembler3D:
             out[k] = self.assemble_impl(I, J)
 
     def multi_assemble(self, indices):
+        """Assemble all entries given by `indices`.
+
+        Args:
+            indices: a sequence of `(i,j)` pairs or an `ndarray`
+            of size `N x 2`.
+        """
         cdef size_t[:,::1] idx_arr
         if isinstance(indices, np.ndarray):
             idx_arr = np.asarray(indices, order='C', dtype=np.uintp)

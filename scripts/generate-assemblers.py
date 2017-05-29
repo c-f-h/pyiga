@@ -1,7 +1,7 @@
 import os.path
 from jinja2 import Template
 
-tmpl_generic = Template(r"""
+tmpl_generic = Template(r'''
 ################################################################################
 # {{DIM}}D Assemblers
 ################################################################################
@@ -63,6 +63,12 @@ cdef class BaseAssembler{{DIM}}D:
             out[k] = self.assemble_impl(I, J)
 
     def multi_assemble(self, indices):
+        """Assemble all entries given by `indices`.
+
+        Args:
+            indices: a sequence of `(i,j)` pairs or an `ndarray`
+            of size `N x 2`.
+        """
         cdef size_t[:,::1] idx_arr
         if isinstance(indices, np.ndarray):
             idx_arr = np.asarray(indices, order='C', dtype=np.uintp)
@@ -165,7 +171,7 @@ cdef generic_assemble_{{DIM}}d_parallel(BaseAssembler{{DIM}}D asm):
 # helper function for fast low-rank assembler
 cdef double _entry_func_{{DIM}}d(size_t i, size_t j, void * data):
     return (<BaseAssembler{{DIM}}D>data).assemble(i, j)
-""")
+''')
 
 macros = r"""
 {%- macro init_basis_vals(numderivs) -%}

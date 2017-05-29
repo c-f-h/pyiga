@@ -63,7 +63,12 @@ cdef class BaseAssembler{{DIM}}D:
             out[k] = self.assemble_impl(I, J)
 
     def multi_assemble(self, indices):
-        cdef size_t[:,::1] idx_arr = np.array(list(indices), dtype=np.uintp)
+        cdef size_t[:,::1] idx_arr
+        if isinstance(indices, np.ndarray):
+            idx_arr = np.asarray(indices, order='C', dtype=np.uintp)
+        else:   # possibly given as iterator
+            idx_arr = np.array(list(indices), dtype=np.uintp)
+
         cdef double[::1] result = np.empty(idx_arr.shape[0])
 
         num_threads = pyiga.get_max_threads()

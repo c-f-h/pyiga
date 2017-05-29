@@ -16,8 +16,17 @@ def test_creation():
     assert geo.sdim == geo.dim == 2
     geo = unit_cube()
     assert geo.sdim == geo.dim == 3
+    geo = unit_cube(dim=4)
+    assert geo.sdim == geo.dim == 4
     geo = twisted_box()
     assert geo.sdim == geo.dim == 3
+
+def test_cube():
+    cube2 = unit_cube(dim=2)
+    cube3 = unit_cube(dim=3)
+    cube4 = unit_cube(dim=4)
+    assert geos_roughly_equal(cube2, unit_square())
+    assert geos_roughly_equal(cube4, cube3.extrude(0.0, 1.0))
 
 def test_evaluation():
     geo = bspline_quarter_annulus()

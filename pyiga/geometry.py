@@ -214,24 +214,20 @@ def bspline_quarter_annulus(r1=1.0, r2=2.0):
 # Examples of 3D geometries
 ################################################################################
 
-def unit_cube():
-    """The 3D unit cube.
+def unit_cube(dim=3):
+    """The `dim`-dimensional unit cube.
 
     Returns:
-        :class:`BSplinePatch` 3D geometry
+        :class:`BSplinePatch` geometry
     """
+    coeffs = np.empty((2**dim, dim))
+
+    for i in range(dim):
+        coeffs[:,i] = (np.arange(2**dim) // (2**i)) % 2
+    coeffs.shape = dim*(2,) + (dim,)
+
     kv = bspline.make_knots(1, 0.0, 1.0, 1)
-    coeffs = np.array([
-       [[[ 0., 0., 0.],
-         [ 1., 0., 0.]],
-        [[ 0., 1., 0.],
-         [ 1., 1., 0.]]],
-       [[[ 0., 0., 1.],
-         [ 1., 0., 1.]],
-        [[ 0., 1., 1.],
-         [ 1., 1., 1.]]]
-    ])
-    return BSplinePatch((kv,kv,kv), coeffs)
+    return BSplinePatch(dim*(kv,), coeffs)
 
 def twisted_box():
     """A 3D volume that resembles a box with its right face twisted

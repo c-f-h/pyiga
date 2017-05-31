@@ -107,31 +107,6 @@ def reindex_from_multilevel(M, np.int_t[:,:] bs):
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def make_block_indices(sparsidx, block_sizes):
-    cdef np.int_t[:] sidx
-    cdef unsigned[:, ::1] bidx
-    cdef list bidx_list = []
-    cdef size_t i, s, N, n
-
-    assert len(sparsidx) == len(block_sizes)
-    for k in range(len(sparsidx)):
-        sidx = sparsidx[k]
-        n = block_sizes[k][1]
-        N = len(sidx)
-        bidx = np.empty((N,2), dtype=np.uint32)
-
-        for i in range(N):
-            s = sidx[i]
-            bidx[i,0], bidx[i,1] = s // n, s % n
-
-        bidx_list.append(bidx)
-
-    return tuple(bidx_list)
-
-
-@cython.cdivision(True)
-@cython.boundscheck(False)
-@cython.wraparound(False)
 cpdef object ml_nonzero_2d(bidx, block_sizes, bint lower_tri=False):
     cdef unsigned[:,::1] bidx1, bidx2
     cdef int m2,n2

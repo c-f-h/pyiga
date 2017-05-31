@@ -202,30 +202,31 @@ cpdef object inflate_2d(object X, np.int_t[:] sparsidx1, np.int_t[:] sparsidx2,
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef object inflate_2d_bidx(object X, unsigned[:,::1] bidx1, unsigned[:,::1] bidx2,
+cpdef object inflate_2d_bidx(object X, unsigned[:,::1] bidx0, unsigned[:,::1] bidx1,
         int m1, int n1, int m2, int n2):
     """Convert the dense ndarray X from reordered, compressed two-level
     banded form back to a standard sparse matrix format.
     """
     cdef long[::1] entries_i, entries_j
-    cdef size_t i, j, M, N, k=0
-    M, N = X.shape[0], X.shape[1]
+    cdef size_t i, j, MU0, MU1, k=0
+    MU0, MU1 = X.shape[0], X.shape[1]
 
-    cdef size_t bi0, bi1, ii0, ii1
+    cdef size_t I[2]
+    cdef size_t J[2]
 
-    assert len(bidx1) == M
-    assert len(bidx2) == N
+    assert len(bidx0) == MU0
+    assert len(bidx1) == MU1
 
-    entries_i = np.empty(M*N, dtype=int)
-    entries_j = np.empty(M*N, dtype=int)
+    entries_i = np.empty(MU0*MU1, dtype=int)
+    entries_j = np.empty(MU0*MU1, dtype=int)
 
-    for i in range(M):
-        bi0, bi1 = bidx1[i,0], bidx1[i,1]       # range: m1, n1
-        for j in range(N):
-            ii0, ii1 = bidx2[j,0], bidx2[j,1]   # range: m2, n2
+    for i in range(MU0):
+        I[0], J[0] = bidx0[i,0], bidx0[i,1]       # range: m1, n1
+        for j in range(MU1):
+            I[1], J[1] = bidx1[j,0], bidx1[j,1]   # range: m2, n2
 
-            entries_i[k] = bi0*m2 + ii0         # range: m1*m2
-            entries_j[k] = bi1*n2 + ii1         # range: n1*n2
+            entries_i[k] = I[0]*m2 + I[1]         # range: m1*m2
+            entries_j[k] = J[0]*n2 + J[1]         # range: n1*n2
             k += 1
 
     return scipy.sparse.csr_matrix((X.ravel('C'), (entries_i, entries_j)),
@@ -360,8 +361,8 @@ cpdef object inflate_3d_bidx(object X, bidx, block_sizes):
     Returns:
         sparse matrix of size `m1*m2*m3 x n1*n2*n3`
     """
-    cdef unsigned[:,::1] bidx1, bidx2, bidx3
-    bidx1, bidx2, bidx3 = bidx
+    cdef unsigned[:,::1] bidx0, bidx1, bidx2
+    bidx0, bidx1, bidx2 = bidx
 
     cdef int m1,n1, m2,n2, m3,n3
     m1,n1 = block_sizes[0]
@@ -369,30 +370,31 @@ cpdef object inflate_3d_bidx(object X, bidx, block_sizes):
     m3,n3 = block_sizes[2]
 
     cdef long[::1] entries_i, entries_j
-    cdef size_t i, j, k, Ni, Nj, Nk
+    cdef size_t mu0, mu1, mu2, MU0, MU1, MU2
     cdef size_t idx=0
-    Ni,Nj,Nk = X.shape
+    MU0,MU1,MU2 = X.shape
 
-    assert len(bidx1) == Ni
-    assert len(bidx2) == Nj
-    assert len(bidx3) == Nk
+    assert len(bidx0) == MU0
+    assert len(bidx1) == MU1
+    assert len(bidx2) == MU2
 
-    cdef size_t xi0, xi1, yi0, yi1, zi0, zi1
+    cdef size_t I[3]
+    cdef size_t J[3]
 
-    entries_i = np.empty(Ni*Nj*Nk, dtype=int)
-    entries_j = np.empty(Ni*Nj*Nk, dtype=int)
+    entries_i = np.empty(MU0*MU1*MU2, dtype=int)
+    entries_j = np.empty(MU0*MU1*MU2, dtype=int)
 
-    for i in range(Ni):
-        xi0, xi1 = bidx1[i,0], bidx1[i,1]            # range: m1, n1
+    for mu0 in range(MU0):
+        I[0], J[0] = bidx0[mu0,0], bidx0[mu0,1]            # range: m1, n1
 
-        for j in range(Nj):
-            yi0, yi1 = bidx2[j,0], bidx2[j,1]        # range: m2, n2
+        for mu1 in range(MU1):
+            I[1], J[1] = bidx1[mu1,0], bidx1[mu1,1]        # range: m2, n2
 
-            for k in range(Nk):
-                zi0, zi1 = bidx3[k,0], bidx3[k,1]    # range: m3, n3
+            for mu2 in range(MU2):
+                I[2], J[2] = bidx2[mu2,0], bidx2[mu2,1]    # range: m3, n3
 
-                entries_i[idx] = (xi0 * m2 + yi0) * m3 + zi0    # range: m1*m2*m3
-                entries_j[idx] = (xi1 * n2 + yi1) * n3 + zi1    # range: n1*n2*n3
+                entries_i[idx] = (I[0] * m2 + I[1]) * m3 + I[2]    # range: m1*m2*m3
+                entries_j[idx] = (J[0] * n2 + J[1]) * n3 + J[2]    # range: n1*n2*n3
                 idx += 1
 
     return scipy.sparse.csr_matrix((X.ravel('C'), (entries_i, entries_j)),

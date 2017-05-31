@@ -202,6 +202,39 @@ cpdef object inflate_2d(object X, np.int_t[:] sparsidx1, np.int_t[:] sparsidx2,
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
+cpdef object inflate_2d_bidx(object X, unsigned[:,::1] bidx1, unsigned[:,::1] bidx2,
+        int m1, int n1, int m2, int n2):
+    """Convert the dense ndarray X from reordered, compressed two-level
+    banded form back to a standard sparse matrix format.
+    """
+    cdef long[::1] entries_i, entries_j
+    cdef size_t i, j, M, N, k=0
+    M, N = X.shape[0], X.shape[1]
+
+    cdef size_t bi0, bi1, ii0, ii1
+
+    assert len(bidx1) == M
+    assert len(bidx2) == N
+
+    entries_i = np.empty(M*N, dtype=int)
+    entries_j = np.empty(M*N, dtype=int)
+
+    for i in range(M):
+        bi0, bi1 = bidx1[i,0], bidx1[i,1]       # range: m1, n1
+        for j in range(N):
+            ii0, ii1 = bidx2[j,0], bidx2[j,1]   # range: m2, n2
+
+            entries_i[k] = bi0*m2 + ii0         # range: m1*m2
+            entries_j[k] = bi1*n2 + ii1         # range: n1*n2
+            k += 1
+
+    return scipy.sparse.csr_matrix((X.ravel('C'), (entries_i, entries_j)),
+            shape=(m1*m2, n1*n2))
+
+
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cpdef void ml_matvec_2d(double[:,::1] X,
         unsigned[:,::1] bidx1, unsigned[:,::1] bidx2,
         int m1, int n1, int m2, int n2,
@@ -308,6 +341,55 @@ cpdef object inflate_3d(object X, sparsidx, block_sizes):
             for k in range(Nk):
                 sk = sparsidx3[k]               # range: m3*n3
                 zi0, zi1 = sk // n3, sk % n3    # range: m3, n3
+
+                entries_i[idx] = (xi0 * m2 + yi0) * m3 + zi0    # range: m1*m2*m3
+                entries_j[idx] = (xi1 * n2 + yi1) * n3 + zi1    # range: n1*n2*n3
+                idx += 1
+
+    return scipy.sparse.csr_matrix((X.ravel('C'), (entries_i, entries_j)),
+            shape=(m1*m2*m3, n1*n2*n3))
+
+
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef object inflate_3d_bidx(object X, bidx, block_sizes):
+    """Convert the dense ndarray X from reordered, compressed three-level
+    banded form back to a standard sparse matrix format.
+
+    Returns:
+        sparse matrix of size `m1*m2*m3 x n1*n2*n3`
+    """
+    cdef unsigned[:,::1] bidx1, bidx2, bidx3
+    bidx1, bidx2, bidx3 = bidx
+
+    cdef int m1,n1, m2,n2, m3,n3
+    m1,n1 = block_sizes[0]
+    m2,n2 = block_sizes[1]
+    m3,n3 = block_sizes[2]
+
+    cdef long[::1] entries_i, entries_j
+    cdef size_t i, j, k, Ni, Nj, Nk
+    cdef size_t idx=0
+    Ni,Nj,Nk = X.shape
+
+    assert len(bidx1) == Ni
+    assert len(bidx2) == Nj
+    assert len(bidx3) == Nk
+
+    cdef size_t xi0, xi1, yi0, yi1, zi0, zi1
+
+    entries_i = np.empty(Ni*Nj*Nk, dtype=int)
+    entries_j = np.empty(Ni*Nj*Nk, dtype=int)
+
+    for i in range(Ni):
+        xi0, xi1 = bidx1[i,0], bidx1[i,1]            # range: m1, n1
+
+        for j in range(Nj):
+            yi0, yi1 = bidx2[j,0], bidx2[j,1]        # range: m2, n2
+
+            for k in range(Nk):
+                zi0, zi1 = bidx3[k,0], bidx3[k,1]    # range: m3, n3
 
                 entries_i[idx] = (xi0 * m2 + yi0) * m3 + zi0    # range: m1*m2*m3
                 entries_j[idx] = (xi1 * n2 + yi1) * n3 + zi1    # range: n1*n2*n3

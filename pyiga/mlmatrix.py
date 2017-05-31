@@ -39,13 +39,13 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
         self.L = len(bs)
         assert self.L == len(bw), \
             'Inconsistent dimensions for block sizes and bandwidths'
-        self.sparsidx = tuple(compute_banded_sparsity(n, p)
-                for (n,p) in zip(self.bs,bw))
-        self.bidx = make_block_indices(self.sparsidx, self._total_bs)
+        # bidx is a tuple where each bidx_k has shape (mu_k, 2)
+        self.bidx = tuple(compute_banded_sparsity_ij(n, p)
+                for (n,p) in zip(self.bs, bw))
         N = np.prod(self.bs)
 
-        # initialize data
-        self.datashape = tuple(len(si) for si in self.sparsidx)
+        # initialize data (ndarray of shape mu_1 x ... x mu_L)
+        self.datashape = tuple(len(bi) for bi in self.bidx)
         if data is not None:
             assert data.shape == self.datashape, 'Wrong shape of data tensor'
             self._data = np.asarray(data, order='C')
@@ -79,10 +79,10 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
         """Return a sparse matrix representation in the given format."""
         assert self._data is not None, 'matrix has no data'
         if self.L == 2:
-            A = inflate_2d(self._data, self.sparsidx[0], self.sparsidx[1],
+            A = inflate_2d_bidx(self._data, self.bidx[0], self.bidx[1],
                 self.bs[0], self.bs[0], self.bs[1], self.bs[1])
         elif self.L == 3:
-            A = inflate_3d(self._data, self.sparsidx, self._total_bs)
+            A = inflate_3d_bidx(self._data, self.bidx, self._total_bs)
         else:
             assert False, 'dimension %d not implemented' % self.L
         return A.asformat(format)
@@ -214,10 +214,23 @@ def compute_banded_sparsity(n, bw):
     This is identical to np.flatnonzero(X) of such a banded matrix X.
     """
     I = []
-    for j in range(n):
-        for i in range(max(0, j-bw), min(n, j+bw+1)):
-            I.append(i + j*n)
+    for i in range(n):
+        for j in range(max(0, i-bw), min(n, i+bw+1)):
+            I.append(i*n + j)
     return np.array(I, dtype=int)
+
+def compute_banded_sparsity_ij(n, bw):
+    """Returns an `N x 2` array of those indices (i,j) which are nonzero in a
+    square, banded matrix of size n and bandwidth bw.
+
+    This is similar to :func:`compute_banded_sparsity`, but retains
+    the (i,j) indices rather than raveling them.
+    """
+    I = []
+    for i in range(n):
+        for j in range(max(0, i-bw), min(n, i+bw+1)):
+            I.append((i, j))
+    return np.array(I, dtype=np.uint32)
 
 
 

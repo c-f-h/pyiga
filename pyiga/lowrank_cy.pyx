@@ -1,42 +1,31 @@
 cimport cython
 
-import numpy as np
-cimport numpy as np
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef void rank_1_update(double[:,::1] X, double alpha, double[::1] u, double[::1] v):
+    """Perform the update `X += alpha * u * v^T`.
 
-cdef class MatrixGenerator:
-    cdef readonly tuple shape
-    cdef public object entryfunc
+    This does the same thing as the BLAS function `dger`, but OpenBLAS
+    tries to parallelize it, which hurts more than it helps. Instead of
+    forcing OMP_NUM_THREADS=1, which slows down many other things,
+    we write our own.
+    """
+    cdef double au
+    cdef size_t i, j
+    for i in range(X.shape[0]):
+        au = alpha * u[i]
+        for j in range(X.shape[1]):
+            X[i,j] += au * v[j]
 
-    cdef size_t m, n
 
-    def __init__(self, size_t m, size_t n, entryfunc):
-        self.m = m
-        self.n = n
-        self.shape = (m,n)
-        self.entryfunc = entryfunc
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef void aca3d_update(double[:,:,::1] X, double alpha, double[::1] u, double[:,::1] V):
+    cdef double au
+    cdef size_t i, j, k
+    for i in range(X.shape[0]):
+        au = alpha * u[i]
+        for j in range(X.shape[1]):
+            for k in range(X.shape[2]):
+                X[i,j,k] += au * V[j,k]
 
-    cpdef double entry(self, size_t i, size_t j):
-        """Generate the entry at row i and column j"""
-        return self.entryfunc(i, j)
-
-    def row(self, size_t i):
-        """Generate the i-th row"""
-        cdef double[:] result = np.empty(self.n)
-        for j in range(self.n):
-            result[j] = self.entry(i, j)
-        return result
-
-    def column(self, size_t j):
-        """Generate the j-th column"""
-        cdef double[:] result = np.empty(self.m)
-        for i in range(self.m):
-            result[i] = self.entry(i, j)
-        return result
-
-    def full(self):
-        """Generate the entire matrix as an np.ndarray"""
-        cdef double[:,:] X = np.empty(self.shape)
-        for i in range(self.m):
-            for j in range(self.n):
-                X[i,j] = self.entry(i, j)
-        return X

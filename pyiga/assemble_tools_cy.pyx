@@ -182,29 +182,6 @@ cdef IntInterval find_joint_support_functions(ssize_t[:,::1] meshsupp, long i) n
         maxj = j
         j += 1
     return make_intv(minj, maxj+1)
-    #return IntInterval(minj, maxj+1)
-
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-cdef void outer_prod(double[::1] x1, double[::1] x2, double[:,:] out) nogil:
-    cdef size_t n1 = x1.shape[0], n2 = x2.shape[0]
-    cdef size_t i, j
-
-    for i in range(n1):
-        for j in range(n2):
-            out[i,j] = x1[i] * x2[j]
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-cdef void outer_prod3(double[::1] x1, double[::1] x2, double[::1] x3, double[:,:,:] out) nogil:
-    cdef size_t n1 = x1.shape[0], n2 = x2.shape[0], n3 = x3.shape[0]
-    cdef size_t i, j, k
-
-    for i in range(n1):
-        for j in range(n2):
-            for k in range(n3):
-                out[i,j,k] = x1[i] * x2[j] * x3[k]
 
 
 #### determinants and inverses

@@ -9,6 +9,7 @@ tmpl_generic = Template(r'''
 cdef class BaseAssembler{{DIM}}D:
     cdef int nqp
     cdef size_t[{{DIM}}] ndofs
+    cdef int[{{DIM}}] p
     cdef vector[ssize_t[:,::1]] meshsupp
     cdef list _asm_pool     # list of shared clones for multithreading
 
@@ -16,6 +17,7 @@ cdef class BaseAssembler{{DIM}}D:
         assert len(kvs) == {{DIM}}, "Assembler requires two knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
+        self.p[:]     = [kv.p for kv in kvs]
         self.meshsupp = [kvs[k].mesh_support_idx_all() for k in range({{DIM}})]
         self._asm_pool = []
 
@@ -175,7 +177,7 @@ cdef void _asm_core_{{DIM}}d_kernel(
 cdef generic_assemble_{{DIM}}d_parallel(BaseAssembler{{DIM}}D asm, symmetric=False):
     mlb = MLBandedMatrix(
         tuple(asm.ndofs),
-        {{DIM}} * (asm.nqp - 1,)
+        tuple(asm.p)
     )
     X = generic_assemble_core_{{DIM}}d(asm, mlb.bidx, symmetric=symmetric)
     mlb.data = X

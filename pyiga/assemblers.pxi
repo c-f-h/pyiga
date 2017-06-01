@@ -7,6 +7,7 @@
 cdef class BaseAssembler2D:
     cdef int nqp
     cdef size_t[2] ndofs
+    cdef int[2] p
     cdef vector[ssize_t[:,::1]] meshsupp
     cdef list _asm_pool     # list of shared clones for multithreading
 
@@ -14,6 +15,7 @@ cdef class BaseAssembler2D:
         assert len(kvs) == 2, "Assembler requires two knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
+        self.p[:]     = [kv.p for kv in kvs]
         self.meshsupp = [kvs[k].mesh_support_idx_all() for k in range(2)]
         self._asm_pool = []
 
@@ -170,7 +172,7 @@ cdef void _asm_core_2d_kernel(
 cdef generic_assemble_2d_parallel(BaseAssembler2D asm, symmetric=False):
     mlb = MLBandedMatrix(
         tuple(asm.ndofs),
-        2 * (asm.nqp - 1,)
+        tuple(asm.p)
     )
     X = generic_assemble_core_2d(asm, mlb.bidx, symmetric=symmetric)
     mlb.data = X
@@ -346,6 +348,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
 cdef class BaseAssembler3D:
     cdef int nqp
     cdef size_t[3] ndofs
+    cdef int[3] p
     cdef vector[ssize_t[:,::1]] meshsupp
     cdef list _asm_pool     # list of shared clones for multithreading
 
@@ -353,6 +356,7 @@ cdef class BaseAssembler3D:
         assert len(kvs) == 3, "Assembler requires two knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
+        self.p[:]     = [kv.p for kv in kvs]
         self.meshsupp = [kvs[k].mesh_support_idx_all() for k in range(3)]
         self._asm_pool = []
 
@@ -521,7 +525,7 @@ cdef void _asm_core_3d_kernel(
 cdef generic_assemble_3d_parallel(BaseAssembler3D asm, symmetric=False):
     mlb = MLBandedMatrix(
         tuple(asm.ndofs),
-        3 * (asm.nqp - 1,)
+        tuple(asm.p)
     )
     X = generic_assemble_core_3d(asm, mlb.bidx, symmetric=symmetric)
     mlb.data = X

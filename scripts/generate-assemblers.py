@@ -168,6 +168,79 @@ cdef generic_assemble_{{DIM}}d_parallel(BaseAssembler{{DIM}}D asm):
     return sum(results)
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef object generic_assemble_core_{{DIM}}d(BaseAssembler{{DIM}}D asm, bidx, bint symmetric=False):
+    cdef unsigned[:, ::1] {{ dimrepeat('bidx{}') }}
+    cdef long {{ dimrepeat('mu{}') }}, {{ dimrepeat('MU{}') }}
+    cdef double[{{ dimrepeat(':') }}:1] entries
+
+    {{ dimrepeat('bidx{}') }} = bidx
+    {{ dimrepeat('MU{}') }} = {{ dimrepeat('bidx{}.shape[0]') }}
+
+    cdef size_t[::1] {{ dimrepeat('transp{}') }}
+    if symmetric:
+    {%- for k in range(DIM) %}
+        transp{{k}} = get_transpose_idx_for_bidx(bidx{{k}})
+    {%- endfor %}
+
+    entries = np.zeros(({{ dimrepeat('MU{}') }}))
+
+    cdef int num_threads = pyiga.get_max_threads()
+
+    for mu0 in prange(MU0, num_threads=num_threads, nogil=True):
+        _asm_core_{{DIM}}d_kernel(asm, symmetric,
+            {{ dimrepeat('bidx{}') }},
+            {{ dimrepeat('transp{}') }},
+            entries,
+            mu0)
+    return entries
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.initializedcheck(False)
+cdef void _asm_core_{{DIM}}d_kernel(
+    BaseAssembler{{DIM}}D asm,
+    bint symmetric,
+    {{ dimrepeat('unsigned[:, ::1] bidx{}') }},
+    {{ dimrepeat('size_t[::1] transp{}') }},
+    double[{{ dimrepeat(':') }}:1] entries,
+    long _mu0
+) nogil:
+    cdef size_t[{{DIM}}] i, j
+    cdef int {{ dimrepeat('diag{}') }}
+    cdef double entry
+    cdef long {{ dimrepeat('mu{}') }}, {{ dimrepeat('MU{}') }}
+
+    mu0 = _mu0
+    {{ dimrepeat('MU{}') }} = {{ dimrepeat('bidx{}.shape[0]') }}
+
+    i[0] = bidx0[mu0, 0]
+    j[0] = bidx0[mu0, 1]
+
+    if symmetric:
+        diag0 = <int>j[0] - <int>i[0]
+        if diag0 > 0:       # block is above diagonal?
+            return
+{% for k in range(1, DIM) %}
+{{ indent(k)   }}for mu{{k}} in range(MU{{k}}):
+{{ indent(k)   }}    i[{{k}}] = bidx{{k}}[mu{{k}}, 0]
+{{ indent(k)   }}    j[{{k}}] = bidx{{k}}[mu{{k}}, 1]
+
+{{ indent(k)   }}    if symmetric:
+{{ indent(k)   }}        diag{{k}} = <int>j[{{k}}] - <int>i[{{k}}]
+{{ indent(k)   }}        if {{ dimrepeat('diag{} == 0', sep=' and ', upper=k) }} and diag{{k}} > 0:
+{{ indent(k)   }}            continue
+{% endfor %}
+{{ indent(DIM) }}entry = asm.assemble_impl(i, j)
+{{ indent(DIM) }}entries[{{ dimrepeat('mu{}') }}] = entry
+
+{{ indent(DIM) }}if symmetric:
+{{ indent(DIM) }}    if {{ dimrepeat('diag{} != 0', sep=' or ') }}:     # are we off the diagonal?
+{{ indent(DIM) }}        entries[ {{ dimrepeat('transp{0}[mu{0}]') }} ] = entry   # then also write into the transposed entry
+
+
+
 # helper function for fast low-rank assembler
 cdef double _entry_func_{{DIM}}d(size_t i, size_t j, void * data):
     return (<BaseAssembler{{DIM}}D>data).assemble(i, j)
@@ -324,8 +397,8 @@ cdef class StiffnessAssembler{{DIM}}D(BaseAssembler{{DIM}}D):
 def generate(dim):
     DIM = dim
 
-    def dimrepeat(s, sep=', '):
-        return sep.join([s.format(k) for k in range(DIM)])
+    def dimrepeat(s, sep=', ', upper=DIM):
+        return sep.join([s.format(k) for k in range(upper)])
 
     def to_seq(i, n):
         s = i[0]

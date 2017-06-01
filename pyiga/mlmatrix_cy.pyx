@@ -236,6 +236,56 @@ cpdef void ml_matvec_2d(double[:,::1] X,
             y[I] += X[i,j] * x[J]
 
 
+def get_transpose_idx_for_bidx(bidx):
+    cdef dict jidict
+    jidict = {}
+    for (k,(i,j)) in enumerate(bidx):
+        jidict[(j,i)] = k
+
+    transpose_bidx = np.empty(len(bidx), dtype=np.uintp)
+
+    for k in range(len(bidx)):
+        transpose_bidx[k] = jidict[ tuple(bidx[k]) ]
+    return transpose_bidx
+
+def symmetrize_X_2d(X, bidx):
+    cdef unsigned[:, ::1] bidx0, bidx1
+    cdef unsigned MU0, MU1
+    cdef size_t[::1] transp0, transp1
+    cdef double[:, ::1] values = X
+    cdef size_t[2] i, j
+
+    bidx0, bidx1 = bidx
+    MU0, MU1 = bidx0.shape[0], bidx1.shape[0]
+
+    transp0 = get_transpose_idx_for_bidx(bidx0)
+    transp1 = get_transpose_idx_for_bidx(bidx1)
+
+    entries = np.zeros((MU0, MU1))
+
+    for mu0 in range(MU0):
+        i[0] = bidx0[mu0, 0]
+        j[0] = bidx0[mu0, 1]
+
+        diag0 = <int>j[0] - <int>i[0]
+        if diag0 > 0:       # block is above diagonal?
+            continue
+
+        for mu1 in range(MU1):
+            i[1] = bidx1[mu1, 0]
+            j[1] = bidx1[mu1, 1]
+
+            diag1 = <int>j[1] - <int>i[1]
+            if (diag0 == 0) and (diag1 > 0):
+                continue
+
+            if diag0 != 0 or diag1 != 0:
+                values[ transp0[mu0], transp1[mu1] ] = values[ mu0, mu1 ]
+
+
+
+## 3D
+
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)

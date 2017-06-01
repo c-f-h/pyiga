@@ -100,76 +100,6 @@ cpdef void _asm_chunk_{{DIM}}d(BaseAssembler{{DIM}}D asm, size_t[:,::1] idxchunk
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef object generic_assemble_{{DIM}}d(BaseAssembler{{DIM}}D asm, long chunk_start=-1, long chunk_end=-1):
-    cdef size_t[{{DIM}}] i, j
-    cdef size_t k, ii, jj
-    cdef IntInterval intv
-
-    cdef size_t[{{DIM}}] dof_start, dof_end, neigh_j_start, neigh_j_end
-    cdef double entry
-    cdef vector[double] entries
-    cdef vector[size_t] entries_i, entries_j
-
-    dof_start[:] = ({{ dimrepeat('0') }})
-    dof_end[:] = asm.ndofs[:]
-
-    if chunk_start >= 0:
-        dof_start[0] = chunk_start
-    if chunk_end >= 0:
-        dof_end[0] = chunk_end
-
-    i[:] = dof_start[:]
-    with nogil:
-        while True:         # loop over all i
-            ii = asm.to_seq(i)
-
-            for k in range({{DIM}}):
-                intv = find_joint_support_functions(asm.meshsupp[k], i[k])
-                neigh_j_start[k] = intv.a
-                neigh_j_end[k] = intv.b
-                j[k] = neigh_j_start[k]
-
-            while True:     # loop j over all neighbors of i
-                jj = asm.to_seq(j)
-                if jj >= ii:
-                    entry = asm.assemble_impl(i, j)
-
-                    entries.push_back(entry)
-                    entries_i.push_back(ii)
-                    entries_j.push_back(jj)
-
-                    if ii != jj:
-                        entries.push_back(entry)
-                        entries_i.push_back(jj)
-                        entries_j.push_back(ii)
-
-                if not next_lexicographic{{DIM}}(j, neigh_j_start, neigh_j_end):
-                    break
-            if not next_lexicographic{{DIM}}(i, dof_start, dof_end):
-                break
-
-    cdef size_t ne = entries.size()
-    cdef size_t N = {{ dimrepeat("asm.ndofs[{}]", sep=' * ') }}
-    return scipy.sparse.coo_matrix(
-            (<double[:ne]> entries.data(),
-                (<size_t[:ne]> entries_i.data(),
-                 <size_t[:ne]> entries_j.data())),
-            shape=(N,N)).tocsr()
-
-
-cdef generic_assemble_{{DIM}}d_parallel(BaseAssembler{{DIM}}D asm):
-    num_threads = pyiga.get_max_threads()
-    if num_threads <= 1:
-        return generic_assemble_{{DIM}}d(asm)
-    def asm_chunk(rg):
-        cdef BaseAssembler{{DIM}}D asm_clone = asm.shared_clone()
-        return generic_assemble_{{DIM}}d(asm_clone, rg.start, rg.stop)
-    results = get_thread_pool().map(asm_chunk, chunk_tasks(range_it(asm.ndofs[0]), 4*num_threads))
-    return sum(results)
-
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
 cpdef object generic_assemble_core_{{DIM}}d(BaseAssembler{{DIM}}D asm, bidx, bint symmetric=False):
     cdef unsigned[:, ::1] {{ dimrepeat('bidx{}') }}
     cdef long {{ dimrepeat('mu{}') }}, {{ dimrepeat('MU{}') }}
@@ -183,6 +113,8 @@ cpdef object generic_assemble_core_{{DIM}}d(BaseAssembler{{DIM}}D asm, bidx, bin
     {%- for k in range(DIM) %}
         transp{{k}} = get_transpose_idx_for_bidx(bidx{{k}})
     {%- endfor %}
+    else:
+        {{ dimrepeat('transp{}', sep=' = ') }} = None
 
     entries = np.zeros(({{ dimrepeat('MU{}') }}))
 
@@ -239,6 +171,15 @@ cdef void _asm_core_{{DIM}}d_kernel(
 {{ indent(DIM) }}    if {{ dimrepeat('diag{} != 0', sep=' or ') }}:     # are we off the diagonal?
 {{ indent(DIM) }}        entries[ {{ dimrepeat('transp{0}[mu{0}]') }} ] = entry   # then also write into the transposed entry
 
+
+cdef generic_assemble_{{DIM}}d_parallel(BaseAssembler{{DIM}}D asm, symmetric=False):
+    mlb = MLBandedMatrix(
+        tuple(asm.ndofs),
+        {{DIM}} * (asm.nqp - 1,)
+    )
+    X = generic_assemble_core_{{DIM}}d(asm, mlb.bidx, symmetric=symmetric)
+    mlb.data = X
+    return mlb.asmatrix()
 
 
 # helper function for fast low-rank assembler

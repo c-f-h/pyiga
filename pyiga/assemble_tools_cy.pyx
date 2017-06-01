@@ -17,7 +17,7 @@ import scipy.sparse
 import pyiga
 from . import bspline
 from .quadrature import make_iterated_quadrature
-from .mlmatrix import get_transpose_idx_for_bidx
+from .mlmatrix import MLBandedMatrix, get_transpose_idx_for_bidx
 from . cimport fast_assemble_cy
 
 from concurrent.futures import ThreadPoolExecutor
@@ -442,19 +442,19 @@ include "assemblers.pxi"
 ## 2D
 
 def mass_2d(kvs, geo):
-    return generic_assemble_2d_parallel(MassAssembler2D(kvs, geo))
+    return generic_assemble_2d_parallel(MassAssembler2D(kvs, geo), symmetric=True)
 
 def stiffness_2d(kvs, geo):
-    return generic_assemble_2d_parallel(StiffnessAssembler2D(kvs, geo))
+    return generic_assemble_2d_parallel(StiffnessAssembler2D(kvs, geo), symmetric=True)
 
 
 ## 3D
 
 def mass_3d(kvs, geo):
-    return generic_assemble_3d_parallel(MassAssembler3D(kvs, geo))
+    return generic_assemble_3d_parallel(MassAssembler3D(kvs, geo), symmetric=True)
 
 def stiffness_3d(kvs, geo):
-    return generic_assemble_3d_parallel(StiffnessAssembler3D(kvs, geo))
+    return generic_assemble_3d_parallel(StiffnessAssembler3D(kvs, geo), symmetric=True)
 
 
 ################################################################################

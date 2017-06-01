@@ -17,6 +17,9 @@ def test_mlbanded_2d():
     # test asmatrix()
     X = np.kron(A, B)
     assert np.allclose(X, M.asmatrix().A)
+    # test reorder()
+    Y = np.kron(B, A)
+    assert np.allclose(Y, M.reorder((1,0)).asmatrix().A)
     # test matvec
     x = rand(M.shape[1])
     assert np.allclose(X.dot(x), M.dot(x))
@@ -40,6 +43,9 @@ def test_mlbanded_3d():
     # test asmatrix()
     X = np.kron(np.kron(A, B), C)
     assert np.allclose(X, M.asmatrix().A)
+    # test reorder()
+    Y = np.kron(np.kron(C, A), B)
+    assert np.allclose(Y, M.reorder((2,0,1)).asmatrix().A)
     # test matvec
     x = rand(M.shape[1])
     assert np.allclose(X.dot(x), M.dot(x))

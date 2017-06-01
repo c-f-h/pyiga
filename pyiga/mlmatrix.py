@@ -119,6 +119,18 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
             assert False, 'dimension %d not implemented' % self.L
         return IJ[0,:], IJ[1,:]
 
+    def reorder(self, axes):
+        """Permute the levels of the matrix according to `axes`."""
+        assert len(axes) == self.L
+        if self.data is not None:
+            newdata = np.transpose(self.data, axes)
+        else:
+            newdata = None
+        return MLBandedMatrix(
+                np.take(self.bs, axes),
+                np.take(self.bw, axes),
+                data=newdata)
+
 
 ################################################################################
 # Reordering and reindexing

@@ -9,6 +9,16 @@ def grid_eval(f, grid):
         mesh = np.meshgrid(*grid, sparse=True, indexing='ij')
         mesh.reverse() # convert order ZYX into XYZ
         values = f(*mesh)
+
+        # If f is a function which uses only some of its arguments,
+        # values may have the wrong shape. In that case, broadcast
+        # it to the full mesh extent.
+        num_dims = len(grid)
+        # if the function is not scalar, we need include the extra dimensions
+        target_shape = tuple(len(g) for g in grid) + values.shape[num_dims:]
+        if values.shape != target_shape:
+            values = np.broadcast_to(values, target_shape)
+
         return values
 
 

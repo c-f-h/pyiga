@@ -67,6 +67,7 @@ from . import assemble_tools
 from . import tensor
 from . import operators
 from . import utils
+from . import geometry
 
 from .quadrature import make_iterated_quadrature
 
@@ -318,6 +319,18 @@ def stiffness(kvs, geo=None):
         return bsp_stiffness_3d(kvs, geo)
     else:
         assert False, "Dimensions higher than 3 are currently not implemented."
+
+def divdiv(kvs, geo=None, layout='packed', format='csr'):
+    dim = _detect_dim(kvs)
+    if geo is None:
+        geo = geometry.unit_cube(dim=dim)   # TODO: fast assembling for div-div?
+    if dim == 2:
+        asm = assemble_tools.DivDivAssembler2D(kvs, geo)
+    elif dim == 3:
+        asm = assemble_tools.DivDivAssembler3D(kvs, geo)
+    else:
+        assert False, 'dimension %d not implemented' % dim
+    return assemble_tools.generic_vector_asm(kvs, asm, symmetric=True, layout=layout, format=format)
 
 def mass_fast(kvs, geo=None, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
     """Assemble a mass matrix for the given basis (B-spline basis

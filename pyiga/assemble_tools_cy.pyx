@@ -416,6 +416,27 @@ include "assemblers.pxi"
 # Driver routines for assemblers
 ################################################################################
 
+def generic_vector_asm(kvs, asm, symmetric, format, layout):
+    assert layout in ('packed', 'blocked')
+    dim = len(kvs)
+    bs = tuple(kv.numdofs for kv in kvs)
+    bw = tuple(kv.p for kv in kvs)
+    mlb = MLBandedMatrix(bs + (dim,), bw + (dim,))
+    if dim == 2:
+        X = generic_assemble_core_vec_2d(asm, mlb.bidx[:dim], symmetric)
+    elif dim == 3:
+        X = generic_assemble_core_vec_3d(asm, mlb.bidx[:dim], symmetric)
+    else:
+        assert False, 'dimension %d not implemented' % dim
+    mlb.data = X
+    if layout == 'blocked':
+        axes = (dim,) + tuple(range(dim))    # bring last axis to the front
+        mlb = mlb.reorder(axes)
+    if format == 'mlb':
+        return mlb
+    else:
+        return mlb.asmatrix(format)
+
 ## 2D
 
 def mass_2d(kvs, geo):

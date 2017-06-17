@@ -21,6 +21,19 @@ class PyCode:
     def putf(self, s, **kwargs):
         self.put(s.format(**kwargs))
 
+    def declare_local_variable(self, type, name, init=None):
+        if init is not None:
+            self.putf('cdef {type} {name} = {init}', type=type, name=name, init=init)
+        else:
+            self.putf('cdef {type} {name}', type=type, name=name)
+
+    def for_loop(self, idx, upper):
+        self.putf('for {idx} in range({upper}):', idx=idx, upper=upper)
+        self.indent()
+
+    def end_loop(self):
+        self.dedent()
+
     def result(self):
         return '\n'.join(self._lines)
 
@@ -118,20 +131,14 @@ class AsmGenerator:
                     k=k,
                     comp=self.grad_comp(var, 'i', k))
 
-    def declare_local_variable(self, type, name, init=None):
-        if init is not None:
-            self.putf('cdef {type} {name} = {init}', type=type, name=name, init=init)
-        else:
-            self.putf('cdef {type} {name}', type=type, name=name)
-
     def declare_index(self, name, init=None):
-        self.declare_local_variable('size_t', name, init)
+        self.code.declare_local_variable('size_t', name, init)
 
     def declare_scalar(self, name, init=None):
-        self.declare_local_variable('double', name, init)
+        self.code.declare_local_variable('double', name, init)
 
     def declare_pointer(self, name, init=None):
-        self.declare_local_variable('double*', name, init)
+        self.code.declare_local_variable('double*', name, init)
 
     def declare_vec(self, name, size=None):
         if size is None:
@@ -158,13 +165,6 @@ class AsmGenerator:
             self.putf('result += ({Axk}) * {yk}',
                     Axk=self.matvec_comp(A, x, k),
                     yk =self.vec_entry(y, k))
-
-    def for_loop(self, idx, upper):
-        self.putf('for {idx} in range({upper}):', idx=idx, upper=upper)
-        self.indent()
-
-    def end_loop(self):
-        self.dedent()
 
     def generate_kernel(self):
         # function definition
@@ -219,7 +219,7 @@ class AsmGenerator:
 
         # main loop over all Gauss points
         for k in range(self.dim):
-            self.for_loop('i%d' % k, 'n%d' % k)
+            self.code.for_loop('i%d' % k, 'n%d' % k)
 
         self.env['I'] = self.dimrep('i{}')
 
@@ -245,10 +245,9 @@ class AsmGenerator:
 
         # end main loop
         for _ in range(self.dim):
-            self.end_loop()
+            self.code.end_loop()
 
         self.put('return result')
-
         self.dedent()
 
     def generate_assemble_impl(self):

@@ -288,35 +288,9 @@ cdef void _asm_core_vec_2d_kernel(
                 for row in range(2):
                     for col in range(2):
                         entries[transp0[mu0], transp1[mu1], col*2 + row] = entries[mu0, mu1, row*2 + col]
-
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-@cython.initializedcheck(False)
-cdef double combine_mass_2d(
-        double[ :, ::1 ] J,
-        double* Vu0, double* Vu1,
-        double* Vv0, double* Vv1,
-    ) nogil:
-    cdef size_t n0 = J.shape[0]
-    cdef size_t n1 = J.shape[1]
-
-    cdef size_t i0, i1
-    cdef double result = 0.0
-    cdef double vu, vv
-
-    for i0 in range(n0):
-        for i1 in range(n1):
-            vu = Vu0[i0] * Vu1[i1]
-            vv = Vv0[i0] * Vv1[i1]
-
-            result += vu * vv * J[i0, i1]
-
-    return result
-
 cdef class MassAssembler2D(BaseAssembler2D):
-    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative(0)
-    cdef double[:, ::1] weights
+    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
+    cdef double[:, ::1] J
 
     def __init__(self, kvs, geo):
         assert geo.dim == 2, "Geometry has wrong dimension"
@@ -331,9 +305,38 @@ cdef class MassAssembler2D(BaseAssembler2D):
             colloc[k] = tuple(X.T.A for X in colloc[k])
         self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
 
-        geo_jac    = geo.grid_jacobian(gaussgrid)
-        geo_det    = determinants(geo_jac)
-        self.weights = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
+        geo_jac = geo.grid_jacobian(gaussgrid)
+        geo_det = determinants(geo_jac)
+        self.J = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    @staticmethod
+    cdef double combine(
+            double[:, ::1] _J,
+            double* VDu0, double* VDu1,
+            double* VDv0, double* VDv1,
+        ) nogil:
+        cdef size_t n0 = _J.shape[0]
+        cdef size_t n1 = _J.shape[1]
+
+        cdef size_t i0
+        cdef size_t i1
+        cdef double u
+        cdef double v
+        cdef double result = 0.0
+        cdef double J
+
+        for i0 in range(n0):
+            for i1 in range(n1):
+                J = _J[i0, i1]
+
+                u = VDu0[1*i0+0] * VDu1[1*i1+0]
+                v = VDv0[1*i0+0] * VDv1[1*i1+0]
+
+                result += J * v * u
+        return result
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -357,51 +360,15 @@ cdef class MassAssembler2D(BaseAssembler2D):
             values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
             values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 
-        return combine_mass_2d(
-                self.weights [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
+        return MassAssembler2D.combine(
+                self.J [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_i[0], values_i[1],
                 values_j[0], values_j[1]
         )
 
-@cython.boundscheck(False)
-@cython.wraparound(False)
-@cython.initializedcheck(False)
-cdef double combine_stiff_2d(
-        double[:, :, :, ::1] B,
-        double* VDu0, double* VDu1,
-        double* VDv0, double* VDv1,
-    ) nogil:
-    cdef size_t n0 = B.shape[0]
-    cdef size_t n1 = B.shape[1]
-
-    cdef size_t i0, i1
-    cdef double gu[2]
-    cdef double gv[2]
-    cdef double result = 0.0
-    cdef double *Bptr
-
-
-    for i0 in range(n0):
-        for i1 in range(n1):
-
-            Bptr = &B[i0, i1, 0, 0]
-
-            gu[0] = VDu0[2*i0+0] * VDu1[2*i1+1]
-            gu[1] = VDu0[2*i0+1] * VDu1[2*i1+0]
-
-            gv[0] = VDv0[2*i0+0] * VDv1[2*i1+1]
-            gv[1] = VDv0[2*i0+1] * VDv1[2*i1+0]
-
-
-            result += (Bptr[0+0]*gu[0] + Bptr[0+1]*gu[1]) * gv[0]
-            result += (Bptr[2+0]*gu[0] + Bptr[2+1]*gu[1]) * gv[1]
-
-    return result
-
-
 cdef class StiffnessAssembler2D(BaseAssembler2D):
-    cdef vector[double[:, :, ::1]] C            # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, :, :, ::1] B   # transformation matrix. Indices: DIM x mesh point, i, j
+    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
+    cdef double[:, :, :, ::1] B
 
     def __init__(self, kvs, geo):
         assert geo.dim == 2, "Geometry has wrong dimension"
@@ -419,7 +386,40 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)
         weights = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
-        self.B = matmatT_2x2(geo_jacinv) * weights[ :, :, None, None ]
+        self.B = matmatT_2x2(geo_jacinv) * weights[:, :, None, None]
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    @staticmethod
+    cdef double combine(
+            double[:, :, :, ::1] _B,
+            double* VDu0, double* VDu1,
+            double* VDv0, double* VDv1,
+        ) nogil:
+        cdef size_t n0 = _B.shape[0]
+        cdef size_t n1 = _B.shape[1]
+
+        cdef size_t i0
+        cdef size_t i1
+        cdef double gu[2]
+        cdef double gv[2]
+        cdef double result = 0.0
+        cdef double* Bptr
+
+        for i0 in range(n0):
+            for i1 in range(n1):
+                Bptr = &_B[i0, i1, 0, 0]
+
+                gu[0] = VDu0[2*i0+0] * VDu1[2*i1+1]
+                gu[1] = VDu0[2*i0+1] * VDu1[2*i1+0]
+
+                gv[0] = VDv0[2*i0+0] * VDv1[2*i1+1]
+                gv[1] = VDv0[2*i0+1] * VDv1[2*i1+0]
+
+                result += (Bptr[0]*gv[0] + Bptr[1]*gv[1]) * gu[0]
+                result += (Bptr[1]*gv[0] + Bptr[3]*gv[1]) * gu[1]
+        return result
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -443,11 +443,12 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
             values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
             values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 
-        return combine_stiff_2d(
+        return StiffnessAssembler2D.combine(
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_i[0], values_i[1],
                 values_j[0], values_j[1]
         )
+
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -546,6 +547,7 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
                 values_j[0], values_j[1],
                 result
         )
+
 ################################################################################
 # 3D Assemblers
 ################################################################################
@@ -858,37 +860,9 @@ cdef void _asm_core_vec_3d_kernel(
                     for row in range(3):
                         for col in range(3):
                             entries[transp0[mu0], transp1[mu1], transp2[mu2], col*3 + row] = entries[mu0, mu1, mu2, row*3 + col]
-
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-@cython.initializedcheck(False)
-cdef double combine_mass_3d(
-        double[ :, :, ::1 ] J,
-        double* Vu0, double* Vu1, double* Vu2,
-        double* Vv0, double* Vv1, double* Vv2,
-    ) nogil:
-    cdef size_t n0 = J.shape[0]
-    cdef size_t n1 = J.shape[1]
-    cdef size_t n2 = J.shape[2]
-
-    cdef size_t i0, i1, i2
-    cdef double result = 0.0
-    cdef double vu, vv
-
-    for i0 in range(n0):
-        for i1 in range(n1):
-            for i2 in range(n2):
-                vu = Vu0[i0] * Vu1[i1] * Vu2[i2]
-                vv = Vv0[i0] * Vv1[i1] * Vv2[i2]
-
-                result += vu * vv * J[i0, i1, i2]
-
-    return result
-
 cdef class MassAssembler3D(BaseAssembler3D):
-    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative(0)
-    cdef double[:, :, ::1] weights
+    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
+    cdef double[:, :, ::1] J
 
     def __init__(self, kvs, geo):
         assert geo.dim == 3, "Geometry has wrong dimension"
@@ -903,9 +877,41 @@ cdef class MassAssembler3D(BaseAssembler3D):
             colloc[k] = tuple(X.T.A for X in colloc[k])
         self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
 
-        geo_jac    = geo.grid_jacobian(gaussgrid)
-        geo_det    = determinants(geo_jac)
-        self.weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
+        geo_jac = geo.grid_jacobian(gaussgrid)
+        geo_det = determinants(geo_jac)
+        self.J = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    @staticmethod
+    cdef double combine(
+            double[:, :, ::1] _J,
+            double* VDu0, double* VDu1, double* VDu2,
+            double* VDv0, double* VDv1, double* VDv2,
+        ) nogil:
+        cdef size_t n0 = _J.shape[0]
+        cdef size_t n1 = _J.shape[1]
+        cdef size_t n2 = _J.shape[2]
+
+        cdef size_t i0
+        cdef size_t i1
+        cdef size_t i2
+        cdef double u
+        cdef double v
+        cdef double result = 0.0
+        cdef double J
+
+        for i0 in range(n0):
+            for i1 in range(n1):
+                for i2 in range(n2):
+                    J = _J[i0, i1, i2]
+
+                    u = VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0]
+                    v = VDv0[1*i0+0] * VDv1[1*i1+0] * VDv2[1*i2+0]
+
+                    result += J * v * u
+        return result
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -929,56 +935,15 @@ cdef class MassAssembler3D(BaseAssembler3D):
             values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
             values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 
-        return combine_mass_3d(
-                self.weights [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
+        return MassAssembler3D.combine(
+                self.J [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_i[0], values_i[1], values_i[2],
                 values_j[0], values_j[1], values_j[2]
         )
 
-@cython.boundscheck(False)
-@cython.wraparound(False)
-@cython.initializedcheck(False)
-cdef double combine_stiff_3d(
-        double[:, :, :, :, ::1] B,
-        double* VDu0, double* VDu1, double* VDu2,
-        double* VDv0, double* VDv1, double* VDv2,
-    ) nogil:
-    cdef size_t n0 = B.shape[0]
-    cdef size_t n1 = B.shape[1]
-    cdef size_t n2 = B.shape[2]
-
-    cdef size_t i0, i1, i2
-    cdef double gu[3]
-    cdef double gv[3]
-    cdef double result = 0.0
-    cdef double *Bptr
-
-
-    for i0 in range(n0):
-        for i1 in range(n1):
-            for i2 in range(n2):
-
-                Bptr = &B[i0, i1, i2, 0, 0]
-
-                gu[0] = VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1]
-                gu[1] = VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0]
-                gu[2] = VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0]
-
-                gv[0] = VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1]
-                gv[1] = VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0]
-                gv[2] = VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0]
-
-
-                result += (Bptr[0+0]*gu[0] + Bptr[0+1]*gu[1] + Bptr[0+2]*gu[2]) * gv[0]
-                result += (Bptr[3+0]*gu[0] + Bptr[3+1]*gu[1] + Bptr[3+2]*gu[2]) * gv[1]
-                result += (Bptr[6+0]*gu[0] + Bptr[6+1]*gu[1] + Bptr[6+2]*gu[2]) * gv[2]
-
-    return result
-
-
 cdef class StiffnessAssembler3D(BaseAssembler3D):
-    cdef vector[double[:, :, ::1]] C            # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, :, :, :, ::1] B   # transformation matrix. Indices: DIM x mesh point, i, j
+    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
+    cdef double[:, :, :, :, ::1] B
 
     def __init__(self, kvs, geo):
         assert geo.dim == 3, "Geometry has wrong dimension"
@@ -996,7 +961,46 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)
         weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
-        self.B = matmatT_3x3(geo_jacinv) * weights[ :, :, :, None, None ]
+        self.B = matmatT_3x3(geo_jacinv) * weights[:, :, :, None, None]
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    @staticmethod
+    cdef double combine(
+            double[:, :, :, :, ::1] _B,
+            double* VDu0, double* VDu1, double* VDu2,
+            double* VDv0, double* VDv1, double* VDv2,
+        ) nogil:
+        cdef size_t n0 = _B.shape[0]
+        cdef size_t n1 = _B.shape[1]
+        cdef size_t n2 = _B.shape[2]
+
+        cdef size_t i0
+        cdef size_t i1
+        cdef size_t i2
+        cdef double gu[3]
+        cdef double gv[3]
+        cdef double result = 0.0
+        cdef double* Bptr
+
+        for i0 in range(n0):
+            for i1 in range(n1):
+                for i2 in range(n2):
+                    Bptr = &_B[i0, i1, i2, 0, 0]
+
+                    gu[0] = VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1]
+                    gu[1] = VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0]
+                    gu[2] = VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0]
+
+                    gv[0] = VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1]
+                    gv[1] = VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0]
+                    gv[2] = VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0]
+
+                    result += (Bptr[0]*gv[0] + Bptr[1]*gv[1] + Bptr[2]*gv[2]) * gu[0]
+                    result += (Bptr[1]*gv[0] + Bptr[4]*gv[1] + Bptr[5]*gv[2]) * gu[1]
+                    result += (Bptr[2]*gv[0] + Bptr[5]*gv[1] + Bptr[8]*gv[2]) * gu[2]
+        return result
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1020,11 +1024,12 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
             values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
             values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 
-        return combine_stiff_3d(
+        return StiffnessAssembler3D.combine(
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_i[0], values_i[1], values_i[2],
                 values_j[0], values_j[1], values_j[2]
         )
+
 
 @cython.boundscheck(False)
 @cython.wraparound(False)

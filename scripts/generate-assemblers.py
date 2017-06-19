@@ -283,23 +283,22 @@ class AsmGenerator:
         self.dedent()
 
     def generate_init(self):
-        self.dedent()
-        for line in """
-    def __init__(self, kvs, geo):
-        assert geo.dim == {dim}, "Geometry has wrong dimension"
-        self.base_init(kvs)
+        self.put('def __init__(self, kvs, geo):')
+        self.indent()
+        for line in \
+"""assert geo.dim == {dim}, "Geometry has wrong dimension"
+self.base_init(kvs)
 
-        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
-        gaussgrid = [g[0] for g in gauss]
-        gaussweights = [g[1] for g in gauss]
+gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
+gaussgrid = [g[0] for g in gauss]
+gaussweights = [g[1] for g in gauss]
 
-        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs={maxderiv}) for k in range({dim})]
-        for k in range({dim}):
-            colloc[k] = tuple(X.T.A for X in colloc[k])
-        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]""".splitlines():
+colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs={maxderiv}) for k in range({dim})]
+for k in range({dim}):
+    colloc[k] = tuple(X.T.A for X in colloc[k])
+self.C = [np.stack(Cs, axis=-1) for Cs in colloc]""".splitlines():
             self.putf(line)
         self.put('')
-        self.indent(2)
 
         if self.need_jacinv or self.need_det: self.need_jac = True
         if self.need_jac:
@@ -326,6 +325,7 @@ class AsmGenerator:
             self.putf('cdef double[{X}:1] {name}',
                     X=', '.join((self.dim + var['numdims']) * ':'),
                     name=name)
+        self.put('')
         self.generate_init()
         self.generate_kernel()
         self.generate_assemble_impl()

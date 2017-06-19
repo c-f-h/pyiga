@@ -451,8 +451,8 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
 
 cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, ::1] J
     cdef double[:, :, :, ::1] B
+    cdef double[:, ::1] J
 
     def __init__(self, kvs, geo):
         assert geo.dim == 2, "Geometry has wrong dimension"
@@ -477,26 +477,26 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     @cython.initializedcheck(False)
     @staticmethod
     cdef void combine(
-            double[:, ::1] _J,
             double[:, :, :, ::1] _B,
+            double[:, ::1] _J,
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
             double result[]
         ) nogil:
-        cdef size_t n0 = _J.shape[0]
-        cdef size_t n1 = _J.shape[1]
+        cdef size_t n0 = _B.shape[0]
+        cdef size_t n1 = _B.shape[1]
 
         cdef size_t i0
         cdef size_t i1
         cdef double gu[2]
         cdef double gv[2]
-        cdef double J
         cdef double* Bptr
+        cdef double J
 
         for i0 in range(n0):
             for i1 in range(n1):
-                J = _J[i0, i1]
                 Bptr = &_B[i0, i1, 0, 0]
+                J = _J[i0, i1]
 
                 gu[0] = VDu0[2*i0+0] * VDu1[2*i1+1]
                 gu[1] = VDu0[2*i0+1] * VDu1[2*i1+0]
@@ -536,8 +536,8 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
             values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 
         DivDivAssembler2D.combine(
-                self.J [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
+                self.J [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_i[0], values_i[1],
                 values_j[0], values_j[1],
                 result
@@ -1027,8 +1027,8 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
 
 cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, :, ::1] J
     cdef double[:, :, :, :, ::1] B
+    cdef double[:, :, ::1] J
 
     def __init__(self, kvs, geo):
         assert geo.dim == 3, "Geometry has wrong dimension"
@@ -1053,29 +1053,29 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     @cython.initializedcheck(False)
     @staticmethod
     cdef void combine(
-            double[:, :, ::1] _J,
             double[:, :, :, :, ::1] _B,
+            double[:, :, ::1] _J,
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
             double result[]
         ) nogil:
-        cdef size_t n0 = _J.shape[0]
-        cdef size_t n1 = _J.shape[1]
-        cdef size_t n2 = _J.shape[2]
+        cdef size_t n0 = _B.shape[0]
+        cdef size_t n1 = _B.shape[1]
+        cdef size_t n2 = _B.shape[2]
 
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
         cdef double gu[3]
         cdef double gv[3]
-        cdef double J
         cdef double* Bptr
+        cdef double J
 
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    J = _J[i0, i1, i2]
                     Bptr = &_B[i0, i1, i2, 0, 0]
+                    J = _J[i0, i1, i2]
 
                     gu[0] = VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1]
                     gu[1] = VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0]
@@ -1127,8 +1127,8 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
             values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 
         DivDivAssembler3D.combine(
-                self.J [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
+                self.J [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_i[0], values_i[1], values_i[2],
                 values_j[0], values_j[1], values_j[2],
                 result

@@ -1,5 +1,6 @@
 import os.path
 from jinja2 import Template
+from collections import OrderedDict
 
 class PyCode:
     def __init__(self):
@@ -45,7 +46,7 @@ class AsmGenerator:
         self.dim = dim
         self.vec = vec
         self.numderiv = numderiv
-        self.vars = {}
+        self.vars = OrderedDict()
         # variables provided during initialization (geo_XXX)
         self.need_det = False
         self.need_jac = False

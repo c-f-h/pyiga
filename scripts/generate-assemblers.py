@@ -43,6 +43,7 @@ class AsmGenerator:
         self.classname = classname
         self.code = code
         self.dim = dim
+        self.vec = False
         self.env = {
             'dim': dim,
             'nderiv': numderiv+1, # includes 0-th derivative
@@ -172,7 +173,8 @@ class AsmGenerator:
         self.put('@cython.wraparound(False)')
         self.put('@cython.initializedcheck(False)')
         self.put('@staticmethod')
-        self.putf('cdef double combine(')
+        rettype = 'void' if self.vec else 'double'
+        self.putf('cdef {rettype} combine(', rettype=rettype)
         self.indent(2)
 
         # parameters
@@ -183,6 +185,8 @@ class AsmGenerator:
 
         self.put(self.dimrep('double* VDu{}') + ',')
         self.put(self.dimrep('double* VDv{}') + ',')
+        if self.vec:    # for vector assemblers, result is passed as a pointer
+            self.put('double result[]')
         self.dedent()
         self.put(') nogil:')
 
@@ -206,7 +210,8 @@ class AsmGenerator:
             self.declare_vec('gu')
             self.declare_vec('gv')
 
-        self.declare_scalar('result', '0.0')
+        if not self.vec:    # for vector assemblers, result is passed as a pointer
+            self.declare_scalar('result', '0.0')
 
         # temp storage for field variables
         for name, var in self.vars.items():
@@ -247,25 +252,30 @@ class AsmGenerator:
         for _ in range(self.dim):
             self.code.end_loop()
 
-        self.put('return result')
+        if not self.vec:
+            self.put('return result')
         self.dedent()
 
     def generate_assemble_impl(self):
-        tmpl = Template(macros + '    {{ assemble_impl_header() }}')
-        src = tmpl.render({'DIM': self.dim})
-        self.dedent()
+        src = gen_assemble_impl_header(dim=self.dim, vec=self.vec)
         for line in src.splitlines():
             self.put(line)
-        self.indent(2)
+
+        self.indent(1)
 
         self.put('')
-        self.putf('return {classname}{dim}D.combine(', classname=self.classname)
+        if self.vec:
+            self.putf('{classname}{dim}D.combine(', classname=self.classname)
+        else:
+            self.putf('return {classname}{dim}D.combine(', classname=self.classname)
         self.indent(2)
         for name in self.vars:
             self.putf('self.{name} [ {idx} ],', name=name,
                     idx=self.dimrep('g_sta[{0}]:g_end[{0}]'))
         self.put(self.dimrep('values_i[{0}]') + ',')
-        self.put(self.dimrep('values_j[{0}]'))
+        self.put(self.dimrep('values_j[{0}]') + ',')
+        if self.vec:
+            self.put('result')
         self.dedent(2)
         self.put(')')
         self.dedent()
@@ -304,8 +314,9 @@ class AsmGenerator:
         self.dedent()
 
     def generate(self):
-        self.putf('cdef class {classname}{dim}D(BaseAssembler{dim}D):',
-                classname=self.classname)
+        baseclass = 'BaseVectorAssembler' if self.vec else 'BaseAssembler'
+        self.putf('cdef class {classname}{dim}D({base}{dim}D):',
+                classname=self.classname, base=baseclass)
         self.indent()
         self.put('cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative')
         # declare field variables
@@ -618,118 +629,39 @@ cdef void _asm_core_vec_{{DIM}}d_kernel(
 
 ''')
 
-macros = r"""
-{%- macro init_basis_vals(numderivs) -%}
-        assert geo.dim == {{DIM}}, "Geometry has wrong dimension"
-        self.base_init(kvs)
-
-        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
-        gaussgrid = [g[0] for g in gauss]
-        gaussweights = [g[1] for g in gauss]
-
-        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs={{numderivs}}) for k in range({{DIM}})]
-        for k in range({{DIM}}):
-            colloc[k] = tuple(X.T.A for X in colloc[k])
-        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
-{%- endmacro %}
-
-{%- macro assemble_impl_header(vec=0) -%}
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.initializedcheck(False)
-    cdef {{ 'void' if vec else 'double' }} assemble_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j{% if vec %}, double result[]{% endif %}) nogil:
-        cdef int k
-        cdef IntInterval intv
-        cdef size_t g_sta[{{DIM}}]
-        cdef size_t g_end[{{DIM}}]
-        cdef (double*) values_i[{{DIM}}]
-        cdef (double*) values_j[{{DIM}}]
-
-        for k in range({{DIM}}):
-            intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
-                                       make_intv(self.meshsupp[k][j[k],0], self.meshsupp[k][j[k],1]))
-            if intv.a >= intv.b:
-{%- if vec -%}
-{%- for k in range(vec) %}
-                result[{{k}}] = 0.0
-{%- endfor %}
-                return          # no intersection of support
-{%- else %}
-                return 0.0      # no intersection of support
-{%- endif %}
-            g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
-            g_end[k] = self.nqp * intv.b    # end of Gauss nodes
-
-            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
-            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
-{% endmacro %}
-
-{%- macro make_grad(output, var, idx) -%}
-{% for k in range(DIM) %}
-{{output}}[{{k}}] = {{ grad_comp(var, idx, k) }}
-{%- endfor %}
-{% endmacro %}
-"""
-
-tmpl_divdiv_asm = Template(macros + r"""
+def gen_assemble_impl_header(dim, vec=0):
+    templ = Template(r"""
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.initializedcheck(False)
-cdef void combine_divdiv_{{DIM}}d(
-        double[{{ dimrepeat(':') }}:1] J,
-        double[{{ dimrepeat(':') }}, :, ::1] B,
-        {{ dimrepeat('double* VDu{}') }},
-        {{ dimrepeat('double* VDv{}') }},
-        double result[]
-    ) nogil:
-{%- for k in range(DIM) %}
-    cdef size_t n{{k}} = B.shape[{{k}}]
+cdef {{ 'void' if vec else 'double' }} assemble_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j{% if vec %}, double result[]{% endif %}) nogil:
+    cdef int k
+    cdef IntInterval intv
+    cdef size_t g_sta[{{DIM}}]
+    cdef size_t g_end[{{DIM}}]
+    cdef (double*) values_i[{{DIM}}]
+    cdef (double*) values_j[{{DIM}}]
+
+    for k in range({{DIM}}):
+        intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
+                                   make_intv(self.meshsupp[k][j[k],0], self.meshsupp[k][j[k],1]))
+        if intv.a >= intv.b:
+{%- if vec -%}
+{%- for k in range(vec) %}
+            result[{{k}}] = 0.0
 {%- endfor %}
-    cdef size_t {{ dimrepeat('i{}') }}
-    cdef double gu[{{DIM}}]
-    cdef double Bgu[{{DIM}}]
-    cdef double gv[{{DIM}}]
-    cdef double Bgv[{{DIM}}]
-    cdef double w
-{% for k in range(DIM) %}
-    {{ indent(k) }}for i{{k}} in range(n{{k}}):
-{%- endfor %}
-{%- set I = dimrepeat('i{}') %}
-{{ make_grad('gu', 'VDu', 'i') | indent(4*(DIM + 1)) }}
-{{ make_grad('gv', 'VDv', 'i') | indent(4*(DIM + 1)) }}
+            return          # no intersection of support
+{%- else %}
+            return 0.0      # no intersection of support
+{%- endif %}
+        g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
+        g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-{{ matvec('Bgu', 'B[' + I + ', {i}, {j}]', 'gu') | indent(4*(DIM + 1), True) }}
-
-{{ matvec('Bgv', 'B[' + I + ', {i}, {j}]', 'gv') | indent(4*(DIM + 1), True) }}
-
-{{ indent(DIM) }}    w = J[{{I}}]
-{% for M in range(DIM*DIM) %}
-{{ indent(DIM) }}    result[{{M}}] += w * Bgv[{{ M % DIM }}] * Bgu[{{ M // DIM }}]
-{%- endfor %}
-
-cdef class DivDivAssembler{{DIM}}D(BaseVectorAssembler{{DIM}}D):
-    cdef vector[double[:, :, ::1]] C            # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[{{ dimrepeat(':') }}:1] J       # weights
-    cdef double[{{ dimrepeat(':') }}, :, ::1] B   # transformation matrix. Indices: DIM x mesh point, i, j
-
-    def __init__(self, kvs, geo):
-        {{ init_basis_vals(numderivs=1) }}
-
-        geo_jac = geo.grid_jacobian(gaussgrid)
-        geo_det, geo_jacinv = det_and_inv(geo_jac)
-        self.J = {{ tensorprod('gaussweights') }} * np.abs(geo_det)
-        self.B = np.asarray(np.swapaxes(geo_jacinv, -2, -1), order='C')
-
-    {{ assemble_impl_header(vec=DIM*DIM) }}
-        combine_divdiv_{{DIM}}d(
-                self.J [ {{ dimrepeat("g_sta[{0}]:g_end[{0}]") }} ],
-                self.B [ {{ dimrepeat("g_sta[{0}]:g_end[{0}]") }} ],
-                {{ dimrepeat("values_i[{}]") }},
-                {{ dimrepeat("values_j[{}]") }},
-                result
-        )
-
+        values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
+        values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 """)
+    return templ.render(DIM=dim, vec=vec)
+
 
 class MassAsmGen(AsmGenerator):
     def __init__(self, code, dim):
@@ -761,6 +693,25 @@ class StiffnessAsmGen(AsmGenerator):
         self.add_matvecvec('B', 'gv', 'gu')
 
 
+class DivDivAsmGen(AsmGenerator):
+    def __init__(self, code, dim):
+        AsmGenerator.__init__(self, 'DivDivAssembler', code, dim, numderiv=1)
+        self.vec = dim
+        self.register_scalar_field('J')
+        self.register_matrix_field('B')
+        self.need_grad = True
+        self.need_det = self.need_jacinv = True
+
+    def initialize_fields(self):
+        self.putf('self.J = {gweights} * np.abs(geo_det)', gweights=self.tensorprod('gaussweights'))
+        self.put("self.B = np.asarray(np.swapaxes(geo_jacinv, -2, -1), order='C')")
+
+    def generate_biform(self):
+        for i in range(self.dim):
+            for j in range(self.dim):
+                self.putf('result[{k}] += J * gv[{j}] * gu[{i}]', k=self.dim*i + j, i=i, j=j)
+
+
 def generate(dim):
     DIM = dim
 
@@ -773,41 +724,8 @@ def generate(dim):
             s = '({0}) * {1} + {2}'.format(s, n[k], i[k])
         return s
 
-    def extend_dim(i):
-        # ex.: i = 1  ->  'None,:,None'
-        slices = DIM * ['None']
-        slices[i] = ':'
-        return ','.join(slices)
-
-    def tensorprod(var):
-        return ' * '.join(['{0}[{1}][{2}]'.format(var, k, extend_dim(k)) for k in range(DIM)])
-
     def indent(num):
         return num * '    ';
-
-    def grad_comp(var, idx, j):
-        factors = [
-                "{var}{k}[2*{idx}{k}+{ofs}]".format(
-                    var = var,
-                    idx = idx,
-                    k   = k,
-                    ofs = (1 if k + j + 1 == DIM else 0)
-                )
-                for k in range(DIM)]
-        return ' * '.join(factors)
-
-    def matvec(result, Aij, x):
-        aijxj = Aij + ' * ' + x + '[{j}]'   # template for single product A[i,j]*x[j]
-        components = [
-                ' + '.join([
-                    aijxj.format(i=i, j=j)
-                    for j in range(DIM) ])
-                for i in range(DIM) ]
-        out = [
-                result + ('[%d] = ' % i) + comp
-                for i, comp in enumerate(components)
-              ]
-        return "\n".join(out)
 
     # helper variables for to_seq
     indices = ['ii[%d]' % k for k in range(DIM)]
@@ -816,11 +734,10 @@ def generate(dim):
     code = PyCode()
     MassAsmGen(code, DIM).generate()
     StiffnessAsmGen(code, DIM).generate()
+    DivDivAsmGen(code, DIM).generate()
 
-    env = locals()
-    s = tmpl_generic.render(env)
+    s = tmpl_generic.render(locals())
     s += code.result()
-    s += tmpl_divdiv_asm.render(env)
     return s
 
 if __name__ == '__main__':

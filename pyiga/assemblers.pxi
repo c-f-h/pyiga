@@ -363,7 +363,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
         return MassAssembler2D.combine(
                 self.J [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_i[0], values_i[1],
-                values_j[0], values_j[1]
+                values_j[0], values_j[1],
         )
 
 cdef class StiffnessAssembler2D(BaseAssembler2D):
@@ -446,55 +446,13 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         return StiffnessAssembler2D.combine(
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_i[0], values_i[1],
-                values_j[0], values_j[1]
+                values_j[0], values_j[1],
         )
 
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-@cython.initializedcheck(False)
-cdef void combine_divdiv_2d(
-        double[:, ::1] J,
-        double[:, :, :, ::1] B,
-        double* VDu0, double* VDu1,
-        double* VDv0, double* VDv1,
-        double result[]
-    ) nogil:
-    cdef size_t n0 = B.shape[0]
-    cdef size_t n1 = B.shape[1]
-    cdef size_t i0, i1
-    cdef double gu[2]
-    cdef double Bgu[2]
-    cdef double gv[2]
-    cdef double Bgv[2]
-    cdef double w
-
-    for i0 in range(n0):
-        for i1 in range(n1):
-
-            gu[0] = VDu0[2*i0+0] * VDu1[2*i1+1]
-            gu[1] = VDu0[2*i0+1] * VDu1[2*i1+0]
-
-            gv[0] = VDv0[2*i0+0] * VDv1[2*i1+1]
-            gv[1] = VDv0[2*i0+1] * VDv1[2*i1+0]
-
-            Bgu[0] = B[i0, i1, 0, 0] * gu[0] + B[i0, i1, 0, 1] * gu[1]
-            Bgu[1] = B[i0, i1, 1, 0] * gu[0] + B[i0, i1, 1, 1] * gu[1]
-
-            Bgv[0] = B[i0, i1, 0, 0] * gv[0] + B[i0, i1, 0, 1] * gv[1]
-            Bgv[1] = B[i0, i1, 1, 0] * gv[0] + B[i0, i1, 1, 1] * gv[1]
-
-            w = J[i0, i1]
-
-            result[0] += w * Bgv[0] * Bgu[0]
-            result[1] += w * Bgv[1] * Bgu[0]
-            result[2] += w * Bgv[0] * Bgu[1]
-            result[3] += w * Bgv[1] * Bgu[1]
-
 cdef class DivDivAssembler2D(BaseVectorAssembler2D):
-    cdef vector[double[:, :, ::1]] C            # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, ::1] J       # weights
-    cdef double[:, :, :, ::1] B   # transformation matrix. Indices: DIM x mesh point, i, j
+    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
+    cdef double[:, ::1] J
+    cdef double[:, :, :, ::1] B
 
     def __init__(self, kvs, geo):
         assert geo.dim == 2, "Geometry has wrong dimension"
@@ -517,6 +475,43 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
+    @staticmethod
+    cdef void combine(
+            double[:, ::1] _J,
+            double[:, :, :, ::1] _B,
+            double* VDu0, double* VDu1,
+            double* VDv0, double* VDv1,
+            double result[]
+        ) nogil:
+        cdef size_t n0 = _J.shape[0]
+        cdef size_t n1 = _J.shape[1]
+
+        cdef size_t i0
+        cdef size_t i1
+        cdef double gu[2]
+        cdef double gv[2]
+        cdef double J
+        cdef double* Bptr
+
+        for i0 in range(n0):
+            for i1 in range(n1):
+                J = _J[i0, i1]
+                Bptr = &_B[i0, i1, 0, 0]
+
+                gu[0] = VDu0[2*i0+0] * VDu1[2*i1+1]
+                gu[1] = VDu0[2*i0+1] * VDu1[2*i1+0]
+
+                gv[0] = VDv0[2*i0+0] * VDv1[2*i1+1]
+                gv[1] = VDv0[2*i0+1] * VDv1[2*i1+0]
+
+                result[0] += J * gv[0] * gu[0]
+                result[1] += J * gv[1] * gu[0]
+                result[2] += J * gv[0] * gu[1]
+                result[3] += J * gv[1] * gu[1]
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
     cdef void assemble_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
         cdef int k
         cdef IntInterval intv
@@ -531,8 +526,6 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
             if intv.a >= intv.b:
                 result[0] = 0.0
                 result[1] = 0.0
-                result[2] = 0.0
-                result[3] = 0.0
                 return          # no intersection of support
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
@@ -540,7 +533,7 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
             values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
             values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 
-        combine_divdiv_2d(
+        DivDivAssembler2D.combine(
                 self.J [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_i[0], values_i[1],
@@ -938,7 +931,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
         return MassAssembler3D.combine(
                 self.J [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_i[0], values_i[1], values_i[2],
-                values_j[0], values_j[1], values_j[2]
+                values_j[0], values_j[1], values_j[2],
         )
 
 cdef class StiffnessAssembler3D(BaseAssembler3D):
@@ -1027,66 +1020,13 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         return StiffnessAssembler3D.combine(
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_i[0], values_i[1], values_i[2],
-                values_j[0], values_j[1], values_j[2]
+                values_j[0], values_j[1], values_j[2],
         )
 
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-@cython.initializedcheck(False)
-cdef void combine_divdiv_3d(
-        double[:, :, ::1] J,
-        double[:, :, :, :, ::1] B,
-        double* VDu0, double* VDu1, double* VDu2,
-        double* VDv0, double* VDv1, double* VDv2,
-        double result[]
-    ) nogil:
-    cdef size_t n0 = B.shape[0]
-    cdef size_t n1 = B.shape[1]
-    cdef size_t n2 = B.shape[2]
-    cdef size_t i0, i1, i2
-    cdef double gu[3]
-    cdef double Bgu[3]
-    cdef double gv[3]
-    cdef double Bgv[3]
-    cdef double w
-
-    for i0 in range(n0):
-        for i1 in range(n1):
-            for i2 in range(n2):
-
-                gu[0] = VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1]
-                gu[1] = VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0]
-                gu[2] = VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0]
-
-                gv[0] = VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1]
-                gv[1] = VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0]
-                gv[2] = VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0]
-
-                Bgu[0] = B[i0, i1, i2, 0, 0] * gu[0] + B[i0, i1, i2, 0, 1] * gu[1] + B[i0, i1, i2, 0, 2] * gu[2]
-                Bgu[1] = B[i0, i1, i2, 1, 0] * gu[0] + B[i0, i1, i2, 1, 1] * gu[1] + B[i0, i1, i2, 1, 2] * gu[2]
-                Bgu[2] = B[i0, i1, i2, 2, 0] * gu[0] + B[i0, i1, i2, 2, 1] * gu[1] + B[i0, i1, i2, 2, 2] * gu[2]
-
-                Bgv[0] = B[i0, i1, i2, 0, 0] * gv[0] + B[i0, i1, i2, 0, 1] * gv[1] + B[i0, i1, i2, 0, 2] * gv[2]
-                Bgv[1] = B[i0, i1, i2, 1, 0] * gv[0] + B[i0, i1, i2, 1, 1] * gv[1] + B[i0, i1, i2, 1, 2] * gv[2]
-                Bgv[2] = B[i0, i1, i2, 2, 0] * gv[0] + B[i0, i1, i2, 2, 1] * gv[1] + B[i0, i1, i2, 2, 2] * gv[2]
-
-                w = J[i0, i1, i2]
-
-                result[0] += w * Bgv[0] * Bgu[0]
-                result[1] += w * Bgv[1] * Bgu[0]
-                result[2] += w * Bgv[2] * Bgu[0]
-                result[3] += w * Bgv[0] * Bgu[1]
-                result[4] += w * Bgv[1] * Bgu[1]
-                result[5] += w * Bgv[2] * Bgu[1]
-                result[6] += w * Bgv[0] * Bgu[2]
-                result[7] += w * Bgv[1] * Bgu[2]
-                result[8] += w * Bgv[2] * Bgu[2]
-
 cdef class DivDivAssembler3D(BaseVectorAssembler3D):
-    cdef vector[double[:, :, ::1]] C            # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, :, ::1] J       # weights
-    cdef double[:, :, :, :, ::1] B   # transformation matrix. Indices: DIM x mesh point, i, j
+    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
+    cdef double[:, :, ::1] J
+    cdef double[:, :, :, :, ::1] B
 
     def __init__(self, kvs, geo):
         assert geo.dim == 3, "Geometry has wrong dimension"
@@ -1109,6 +1049,53 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
+    @staticmethod
+    cdef void combine(
+            double[:, :, ::1] _J,
+            double[:, :, :, :, ::1] _B,
+            double* VDu0, double* VDu1, double* VDu2,
+            double* VDv0, double* VDv1, double* VDv2,
+            double result[]
+        ) nogil:
+        cdef size_t n0 = _J.shape[0]
+        cdef size_t n1 = _J.shape[1]
+        cdef size_t n2 = _J.shape[2]
+
+        cdef size_t i0
+        cdef size_t i1
+        cdef size_t i2
+        cdef double gu[3]
+        cdef double gv[3]
+        cdef double J
+        cdef double* Bptr
+
+        for i0 in range(n0):
+            for i1 in range(n1):
+                for i2 in range(n2):
+                    J = _J[i0, i1, i2]
+                    Bptr = &_B[i0, i1, i2, 0, 0]
+
+                    gu[0] = VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1]
+                    gu[1] = VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0]
+                    gu[2] = VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0]
+
+                    gv[0] = VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1]
+                    gv[1] = VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0]
+                    gv[2] = VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0]
+
+                    result[0] += J * gv[0] * gu[0]
+                    result[1] += J * gv[1] * gu[0]
+                    result[2] += J * gv[2] * gu[0]
+                    result[3] += J * gv[0] * gu[1]
+                    result[4] += J * gv[1] * gu[1]
+                    result[5] += J * gv[2] * gu[1]
+                    result[6] += J * gv[0] * gu[2]
+                    result[7] += J * gv[1] * gu[2]
+                    result[8] += J * gv[2] * gu[2]
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
     cdef void assemble_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
         cdef int k
         cdef IntInterval intv
@@ -1124,12 +1111,6 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
                 result[0] = 0.0
                 result[1] = 0.0
                 result[2] = 0.0
-                result[3] = 0.0
-                result[4] = 0.0
-                result[5] = 0.0
-                result[6] = 0.0
-                result[7] = 0.0
-                result[8] = 0.0
                 return          # no intersection of support
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
@@ -1137,7 +1118,7 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
             values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
             values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 
-        combine_divdiv_3d(
+        DivDivAssembler3D.combine(
                 self.J [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_i[0], values_i[1], values_i[2],

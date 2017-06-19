@@ -39,11 +39,12 @@ class PyCode:
 
 
 class AsmGenerator:
-    def __init__(self, classname, code, dim, numderiv):
+    def __init__(self, classname, code, dim, numderiv, vec=False):
         self.classname = classname
         self.code = code
         self.dim = dim
-        self.vec = False
+        self.vec = vec
+        self.numderiv = numderiv
         self.env = {
             'dim': dim,
             'nderiv': numderiv+1, # includes 0-th derivative
@@ -240,6 +241,7 @@ class AsmGenerator:
             self.put('v = ' + self.basisval('VDv', 'i'))
             self.put('')
         if self.need_grad:
+            assert self.numderiv >= 1, 'Insufficient derivatives computed'
             self.make_grad('gu', 'VDu')
             self.put('')
             self.make_grad('gv', 'VDv')
@@ -695,8 +697,7 @@ class StiffnessAsmGen(AsmGenerator):
 
 class DivDivAsmGen(AsmGenerator):
     def __init__(self, code, dim):
-        AsmGenerator.__init__(self, 'DivDivAssembler', code, dim, numderiv=1)
-        self.vec = dim
+        AsmGenerator.__init__(self, 'DivDivAssembler', code, dim, numderiv=1, vec=dim**2)
         self.register_scalar_field('J')
         self.register_matrix_field('B')
         self.need_grad = True

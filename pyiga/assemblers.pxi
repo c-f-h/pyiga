@@ -526,6 +526,8 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
             if intv.a >= intv.b:
                 result[0] = 0.0
                 result[1] = 0.0
+                result[2] = 0.0
+                result[3] = 0.0
                 return          # no intersection of support
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
@@ -1111,6 +1113,12 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
                 result[0] = 0.0
                 result[1] = 0.0
                 result[2] = 0.0
+                result[3] = 0.0
+                result[4] = 0.0
+                result[5] = 0.0
+                result[6] = 0.0
+                result[7] = 0.0
+                result[8] = 0.0
                 return          # no intersection of support
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes

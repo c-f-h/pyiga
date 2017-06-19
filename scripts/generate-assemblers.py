@@ -52,7 +52,8 @@ class AsmGenerator:
         }
         self.vars = {}
         self.need_val = False
-        self.need_grad = False
+        self.need_grad = False      # gradient in parameter domain
+        self.need_phys_grad = False # gradient in physical domain
         self.need_det = False
         self.need_jac = False
         self.need_jacinv = False
@@ -162,6 +163,13 @@ class AsmGenerator:
                 self.mat_entry(A, i, j) + '*' + self.vec_entry(x, j)
                 for j in range(self.dim))
 
+    def matvec(self, out, A, x):
+        for k in range(self.dim):
+            self.put(
+                self.vec_entry(out, k)
+                + ' = ' +
+                self.matvec_comp(A, x, k))
+
     def add_matvecvec(self, A, x, y):
         for k in range(self.dim):
             self.putf('result += ({Axk}) * {yk}',
@@ -208,8 +216,12 @@ class AsmGenerator:
             self.declare_scalar('u')
             self.declare_scalar('v')
         if self.need_grad:
+            assert self.numderiv >= 1, 'Insufficient derivatives computed'
             self.declare_vec('gu')
             self.declare_vec('gv')
+        if self.need_phys_grad:
+            self.declare_vec('gradu')
+            self.declare_vec('gradv')
 
         if not self.vec:    # for vector assemblers, result is passed as a pointer
             self.declare_scalar('result', '0.0')
@@ -241,11 +253,15 @@ class AsmGenerator:
             self.put('v = ' + self.basisval('VDv', 'i'))
             self.put('')
         if self.need_grad:
-            assert self.numderiv >= 1, 'Insufficient derivatives computed'
             self.make_grad('gu', 'VDu')
             self.put('')
             self.make_grad('gv', 'VDv')
             self.put('')
+            if self.need_phys_grad:
+                self.matvec('gradu', 'JacInvT', 'gu')
+                self.put('')
+                self.matvec('gradv', 'JacInvT', 'gv')
+                self.put('')
 
         # compute the bilinear form a(v,u)
         self.generate_biform()
@@ -310,11 +326,19 @@ self.C = [np.stack(Cs, axis=-1) for Cs in colloc]""".splitlines():
         elif self.need_jacinv:
             self.put('geo_jacinv = inverses(geo_jac)')
 
+        if self.need_phys_grad:
+            self.put("self.JacInvT = np.asarray(np.swapaxes(geo_jacinv, -2, -1), order='C')")
+
         self.initialize_fields()
         self.put('')
         self.dedent()
 
     def generate(self):
+        if self.need_phys_grad:
+            self.register_matrix_field('JacInvT')
+            self.need_jacinv = True
+            self.need_grad = True
+
         baseclass = 'BaseVectorAssembler' if self.vec else 'BaseAssembler'
         self.putf('cdef class {classname}{dim}D({base}{dim}D):',
                 classname=self.classname, base=baseclass)
@@ -699,18 +723,16 @@ class DivDivAsmGen(AsmGenerator):
     def __init__(self, code, dim):
         AsmGenerator.__init__(self, 'DivDivAssembler', code, dim, numderiv=1, vec=dim**2)
         self.register_scalar_field('J')
-        self.register_matrix_field('B')
-        self.need_grad = True
-        self.need_det = self.need_jacinv = True
+        self.need_phys_grad = True
+        self.need_det = True
 
     def initialize_fields(self):
         self.putf('self.J = {gweights} * np.abs(geo_det)', gweights=self.tensorprod('gaussweights'))
-        self.put("self.B = np.asarray(np.swapaxes(geo_jacinv, -2, -1), order='C')")
 
     def generate_biform(self):
         for i in range(self.dim):
             for j in range(self.dim):
-                self.putf('result[{k}] += J * gv[{j}] * gu[{i}]', k=self.dim*i + j, i=i, j=j)
+                self.putf('result[{k}] += J * gradv[{j}] * gradu[{i}]', k=self.dim*i + j, i=i, j=j)
 
 
 def generate(dim):

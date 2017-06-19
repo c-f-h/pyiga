@@ -151,7 +151,7 @@ class AsmGenerator:
         if sym and i > j:
             i, j = j, i
         idx = i*self.dim + j
-        return '{name}ptr[{idx}]'.format(name=name, idx=idx)
+        return '{name}[{idx}]'.format(name=name, idx=idx)
 
     def vec_entry(self, name, i):
         return '{name}[{i}]'.format(name=name, i=i)
@@ -228,7 +228,7 @@ class AsmGenerator:
             if var['type'] == 'scalar':
                 self.declare_scalar(name)
             elif var['type'] == 'matrix':
-                self.declare_pointer(name + 'ptr')
+                self.declare_pointer(name)
 
         self.put('')
 
@@ -242,7 +242,7 @@ class AsmGenerator:
             if var['type'] == 'scalar':
                 self.putf('{name} = _{name}[{I}]', name=name)
             elif var['type'] == 'matrix':
-                self.putf('{name}ptr = &_{name}[{I}, 0, 0]', name=name)
+                self.putf('{name} = &_{name}[{I}, 0, 0]', name=name)
         self.put('')
 
         if self.need_val:

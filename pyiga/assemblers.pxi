@@ -405,11 +405,11 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         cdef double gu[2]
         cdef double gv[2]
         cdef double result = 0.0
-        cdef double* Bptr
+        cdef double* B
 
         for i0 in range(n0):
             for i1 in range(n1):
-                Bptr = &_B[i0, i1, 0, 0]
+                B = &_B[i0, i1, 0, 0]
 
                 gu[0] = VDu0[2*i0+0] * VDu1[2*i1+1]
                 gu[1] = VDu0[2*i0+1] * VDu1[2*i1+0]
@@ -417,8 +417,8 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
                 gv[0] = VDv0[2*i0+0] * VDv1[2*i1+1]
                 gv[1] = VDv0[2*i0+1] * VDv1[2*i1+0]
 
-                result += (Bptr[0]*gv[0] + Bptr[1]*gv[1]) * gu[0]
-                result += (Bptr[1]*gv[0] + Bptr[3]*gv[1]) * gu[1]
+                result += (B[0]*gv[0] + B[1]*gv[1]) * gu[0]
+                result += (B[1]*gv[0] + B[3]*gv[1]) * gu[1]
         return result
 
     @cython.boundscheck(False)
@@ -493,12 +493,12 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         cdef double gradu[2]
         cdef double gradv[2]
         cdef double J
-        cdef double* JacInvTptr
+        cdef double* JacInvT
 
         for i0 in range(n0):
             for i1 in range(n1):
                 J = _J[i0, i1]
-                JacInvTptr = &_JacInvT[i0, i1, 0, 0]
+                JacInvT = &_JacInvT[i0, i1, 0, 0]
 
                 gu[0] = VDu0[2*i0+0] * VDu1[2*i1+1]
                 gu[1] = VDu0[2*i0+1] * VDu1[2*i1+0]
@@ -506,11 +506,11 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
                 gv[0] = VDv0[2*i0+0] * VDv1[2*i1+1]
                 gv[1] = VDv0[2*i0+1] * VDv1[2*i1+0]
 
-                gradu[0] = JacInvTptr[0]*gu[0] + JacInvTptr[1]*gu[1]
-                gradu[1] = JacInvTptr[2]*gu[0] + JacInvTptr[3]*gu[1]
+                gradu[0] = JacInvT[0]*gu[0] + JacInvT[1]*gu[1]
+                gradu[1] = JacInvT[2]*gu[0] + JacInvT[3]*gu[1]
 
-                gradv[0] = JacInvTptr[0]*gv[0] + JacInvTptr[1]*gv[1]
-                gradv[1] = JacInvTptr[2]*gv[0] + JacInvTptr[3]*gv[1]
+                gradv[0] = JacInvT[0]*gv[0] + JacInvT[1]*gv[1]
+                gradv[1] = JacInvT[2]*gv[0] + JacInvT[3]*gv[1]
 
                 result[0] += J * gradv[0] * gradu[0]
                 result[1] += J * gradv[1] * gradu[0]
@@ -985,12 +985,12 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         cdef double gu[3]
         cdef double gv[3]
         cdef double result = 0.0
-        cdef double* Bptr
+        cdef double* B
 
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    Bptr = &_B[i0, i1, i2, 0, 0]
+                    B = &_B[i0, i1, i2, 0, 0]
 
                     gu[0] = VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1]
                     gu[1] = VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0]
@@ -1000,9 +1000,9 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                     gv[1] = VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0]
                     gv[2] = VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0]
 
-                    result += (Bptr[0]*gv[0] + Bptr[1]*gv[1] + Bptr[2]*gv[2]) * gu[0]
-                    result += (Bptr[1]*gv[0] + Bptr[4]*gv[1] + Bptr[5]*gv[2]) * gu[1]
-                    result += (Bptr[2]*gv[0] + Bptr[5]*gv[1] + Bptr[8]*gv[2]) * gu[2]
+                    result += (B[0]*gv[0] + B[1]*gv[1] + B[2]*gv[2]) * gu[0]
+                    result += (B[1]*gv[0] + B[4]*gv[1] + B[5]*gv[2]) * gu[1]
+                    result += (B[2]*gv[0] + B[5]*gv[1] + B[8]*gv[2]) * gu[2]
         return result
 
     @cython.boundscheck(False)
@@ -1079,13 +1079,13 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         cdef double gradu[3]
         cdef double gradv[3]
         cdef double J
-        cdef double* JacInvTptr
+        cdef double* JacInvT
 
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
                     J = _J[i0, i1, i2]
-                    JacInvTptr = &_JacInvT[i0, i1, i2, 0, 0]
+                    JacInvT = &_JacInvT[i0, i1, i2, 0, 0]
 
                     gu[0] = VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1]
                     gu[1] = VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0]
@@ -1095,13 +1095,13 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
                     gv[1] = VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0]
                     gv[2] = VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0]
 
-                    gradu[0] = JacInvTptr[0]*gu[0] + JacInvTptr[1]*gu[1] + JacInvTptr[2]*gu[2]
-                    gradu[1] = JacInvTptr[3]*gu[0] + JacInvTptr[4]*gu[1] + JacInvTptr[5]*gu[2]
-                    gradu[2] = JacInvTptr[6]*gu[0] + JacInvTptr[7]*gu[1] + JacInvTptr[8]*gu[2]
+                    gradu[0] = JacInvT[0]*gu[0] + JacInvT[1]*gu[1] + JacInvT[2]*gu[2]
+                    gradu[1] = JacInvT[3]*gu[0] + JacInvT[4]*gu[1] + JacInvT[5]*gu[2]
+                    gradu[2] = JacInvT[6]*gu[0] + JacInvT[7]*gu[1] + JacInvT[8]*gu[2]
 
-                    gradv[0] = JacInvTptr[0]*gv[0] + JacInvTptr[1]*gv[1] + JacInvTptr[2]*gv[2]
-                    gradv[1] = JacInvTptr[3]*gv[0] + JacInvTptr[4]*gv[1] + JacInvTptr[5]*gv[2]
-                    gradv[2] = JacInvTptr[6]*gv[0] + JacInvTptr[7]*gv[1] + JacInvTptr[8]*gv[2]
+                    gradv[0] = JacInvT[0]*gv[0] + JacInvT[1]*gv[1] + JacInvT[2]*gv[2]
+                    gradv[1] = JacInvT[3]*gv[0] + JacInvT[4]*gv[1] + JacInvT[5]*gv[2]
+                    gradv[2] = JacInvT[6]*gv[0] + JacInvT[7]*gv[1] + JacInvT[8]*gv[2]
 
                     result[0] += J * gradv[0] * gradu[0]
                     result[1] += J * gradv[1] * gradu[0]

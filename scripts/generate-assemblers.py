@@ -55,6 +55,7 @@ class AsmGenerator:
         self.need_val = False       # basis function values (u, v)
         self.need_grad = False      # gradient in parameter domain (gu, gv)
         self.need_phys_grad = False # gradient in physical domain (gradu, gradv)
+        self.need_phys_weights = False  # W = Gauss weights * abs(geo_det)
 
     def register_scalar_field(self, name):
         self.vars[name] = {
@@ -326,15 +327,25 @@ self.C = [np.stack(Cs, axis=-1) for Cs in colloc]""".splitlines():
         if self.need_phys_grad:
             self.put("self.JacInvT = np.asarray(np.swapaxes(geo_jacinv, -2, -1), order='C')")
 
+        if self.need_phys_weights:
+            self.put('self.W = %s * np.abs(geo_det)' % self.tensorprod('gaussweights'))
+
         self.initialize_fields()
         self.put('')
         self.dedent()
+
+    def initialize_fields(self):
+        pass
 
     def generate(self):
         if self.need_phys_grad:
             self.register_matrix_field('JacInvT')
             self.need_jacinv = True
             self.need_grad = True
+
+        if self.need_phys_weights:
+            self.register_scalar_field('W')
+            self.need_det = True
 
         if self.need_grad:
             self.numderiv = max(self.numderiv, 1) # ensure 1st derivatives
@@ -702,15 +713,11 @@ cdef {{ 'void' if vec else 'double' }} assemble_impl(self, size_t[{{DIM}}] i, si
 class MassAsmGen(AsmGenerator):
     def __init__(self, code, dim):
         AsmGenerator.__init__(self, 'MassAssembler', code, dim)
-        self.register_scalar_field('J')
         self.need_val = True
-        self.need_det = True
-
-    def initialize_fields(self):
-        self.putf('self.J = {gweights} * np.abs(geo_det)', gweights=self.tensorprod('gaussweights'))
+        self.need_phys_weights = True
 
     def generate_biform(self):
-        self.put('result += J * v * u')
+        self.put('result += W * v * u')
 
 
 class StiffnessAsmGen(AsmGenerator):
@@ -732,17 +739,13 @@ class StiffnessAsmGen(AsmGenerator):
 class DivDivAsmGen(AsmGenerator):
     def __init__(self, code, dim):
         AsmGenerator.__init__(self, 'DivDivAssembler', code, dim, vec=dim**2)
-        self.register_scalar_field('J')
         self.need_phys_grad = True
-        self.need_det = True
-
-    def initialize_fields(self):
-        self.putf('self.J = {gweights} * np.abs(geo_det)', gweights=self.tensorprod('gaussweights'))
+        self.need_phys_weights = True
 
     def generate_biform(self):
         for i in range(self.dim):
             for j in range(self.dim):
-                self.putf('result[{k}] += J * gradv[{j}] * gradu[{i}]', k=self.dim*i + j, i=i, j=j)
+                self.putf('result[{k}] += W * gradv[{j}] * gradu[{i}]', k=self.dim*i + j, i=i, j=j)
 
 
 def generate(dim):

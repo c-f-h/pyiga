@@ -290,7 +290,7 @@ cdef void _asm_core_vec_2d_kernel(
                         entries[transp0[mu0], transp1[mu1], col*2 + row] = entries[mu0, mu1, row*2 + col]
 cdef class MassAssembler2D(BaseAssembler2D):
     cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, ::1] J
+    cdef double[:, ::1] W
 
     def __init__(self, kvs, geo):
         assert geo.dim == 2, "Geometry has wrong dimension"
@@ -307,35 +307,35 @@ cdef class MassAssembler2D(BaseAssembler2D):
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det = determinants(geo_jac)
-        self.J = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
+        self.W = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
     @staticmethod
     cdef double combine(
-            double[:, ::1] _J,
+            double[:, ::1] _W,
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
         ) nogil:
-        cdef size_t n0 = _J.shape[0]
-        cdef size_t n1 = _J.shape[1]
+        cdef size_t n0 = _W.shape[0]
+        cdef size_t n1 = _W.shape[1]
 
         cdef size_t i0
         cdef size_t i1
         cdef double u
         cdef double v
         cdef double result = 0.0
-        cdef double J
+        cdef double W
 
         for i0 in range(n0):
             for i1 in range(n1):
-                J = _J[i0, i1]
+                W = _W[i0, i1]
 
                 u = VDu0[1*i0+0] * VDu1[1*i1+0]
                 v = VDv0[1*i0+0] * VDv1[1*i1+0]
 
-                result += J * v * u
+                result += W * v * u
         return result
 
     @cython.boundscheck(False)
@@ -361,7 +361,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
             values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 
         return MassAssembler2D.combine(
-                self.J [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
+                self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_i[0], values_i[1],
                 values_j[0], values_j[1],
         )
@@ -451,8 +451,8 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
 
 cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, ::1] J
     cdef double[:, :, :, ::1] JacInvT
+    cdef double[:, ::1] W
 
     def __init__(self, kvs, geo):
         assert geo.dim == 2, "Geometry has wrong dimension"
@@ -470,21 +470,21 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)
         self.JacInvT = np.asarray(np.swapaxes(geo_jacinv, -2, -1), order='C')
-        self.J = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
+        self.W = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
     @staticmethod
     cdef void combine(
-            double[:, ::1] _J,
             double[:, :, :, ::1] _JacInvT,
+            double[:, ::1] _W,
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
             double result[]
         ) nogil:
-        cdef size_t n0 = _J.shape[0]
-        cdef size_t n1 = _J.shape[1]
+        cdef size_t n0 = _JacInvT.shape[0]
+        cdef size_t n1 = _JacInvT.shape[1]
 
         cdef size_t i0
         cdef size_t i1
@@ -492,13 +492,13 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         cdef double gv[2]
         cdef double gradu[2]
         cdef double gradv[2]
-        cdef double J
         cdef double* JacInvT
+        cdef double W
 
         for i0 in range(n0):
             for i1 in range(n1):
-                J = _J[i0, i1]
                 JacInvT = &_JacInvT[i0, i1, 0, 0]
+                W = _W[i0, i1]
 
                 gu[0] = VDu0[2*i0+0] * VDu1[2*i1+1]
                 gu[1] = VDu0[2*i0+1] * VDu1[2*i1+0]
@@ -512,10 +512,10 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
                 gradv[0] = JacInvT[0]*gv[0] + JacInvT[1]*gv[1]
                 gradv[1] = JacInvT[2]*gv[0] + JacInvT[3]*gv[1]
 
-                result[0] += J * gradv[0] * gradu[0]
-                result[1] += J * gradv[1] * gradu[0]
-                result[2] += J * gradv[0] * gradu[1]
-                result[3] += J * gradv[1] * gradu[1]
+                result[0] += W * gradv[0] * gradu[0]
+                result[1] += W * gradv[1] * gradu[0]
+                result[2] += W * gradv[0] * gradu[1]
+                result[3] += W * gradv[1] * gradu[1]
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -544,8 +544,8 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
             values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 
         DivDivAssembler2D.combine(
-                self.J [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 self.JacInvT [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
+                self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_i[0], values_i[1],
                 values_j[0], values_j[1],
                 result
@@ -865,7 +865,7 @@ cdef void _asm_core_vec_3d_kernel(
                             entries[transp0[mu0], transp1[mu1], transp2[mu2], col*3 + row] = entries[mu0, mu1, mu2, row*3 + col]
 cdef class MassAssembler3D(BaseAssembler3D):
     cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, :, ::1] J
+    cdef double[:, :, ::1] W
 
     def __init__(self, kvs, geo):
         assert geo.dim == 3, "Geometry has wrong dimension"
@@ -882,20 +882,20 @@ cdef class MassAssembler3D(BaseAssembler3D):
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det = determinants(geo_jac)
-        self.J = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
+        self.W = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
     @staticmethod
     cdef double combine(
-            double[:, :, ::1] _J,
+            double[:, :, ::1] _W,
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
         ) nogil:
-        cdef size_t n0 = _J.shape[0]
-        cdef size_t n1 = _J.shape[1]
-        cdef size_t n2 = _J.shape[2]
+        cdef size_t n0 = _W.shape[0]
+        cdef size_t n1 = _W.shape[1]
+        cdef size_t n2 = _W.shape[2]
 
         cdef size_t i0
         cdef size_t i1
@@ -903,17 +903,17 @@ cdef class MassAssembler3D(BaseAssembler3D):
         cdef double u
         cdef double v
         cdef double result = 0.0
-        cdef double J
+        cdef double W
 
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    J = _J[i0, i1, i2]
+                    W = _W[i0, i1, i2]
 
                     u = VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0]
                     v = VDv0[1*i0+0] * VDv1[1*i1+0] * VDv2[1*i2+0]
 
-                    result += J * v * u
+                    result += W * v * u
         return result
 
     @cython.boundscheck(False)
@@ -939,7 +939,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
             values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 
         return MassAssembler3D.combine(
-                self.J [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
+                self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_i[0], values_i[1], values_i[2],
                 values_j[0], values_j[1], values_j[2],
         )
@@ -1035,8 +1035,8 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
 
 cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, :, ::1] J
     cdef double[:, :, :, :, ::1] JacInvT
+    cdef double[:, :, ::1] W
 
     def __init__(self, kvs, geo):
         assert geo.dim == 3, "Geometry has wrong dimension"
@@ -1054,22 +1054,22 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)
         self.JacInvT = np.asarray(np.swapaxes(geo_jacinv, -2, -1), order='C')
-        self.J = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
+        self.W = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
     @staticmethod
     cdef void combine(
-            double[:, :, ::1] _J,
             double[:, :, :, :, ::1] _JacInvT,
+            double[:, :, ::1] _W,
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
             double result[]
         ) nogil:
-        cdef size_t n0 = _J.shape[0]
-        cdef size_t n1 = _J.shape[1]
-        cdef size_t n2 = _J.shape[2]
+        cdef size_t n0 = _JacInvT.shape[0]
+        cdef size_t n1 = _JacInvT.shape[1]
+        cdef size_t n2 = _JacInvT.shape[2]
 
         cdef size_t i0
         cdef size_t i1
@@ -1078,14 +1078,14 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         cdef double gv[3]
         cdef double gradu[3]
         cdef double gradv[3]
-        cdef double J
         cdef double* JacInvT
+        cdef double W
 
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    J = _J[i0, i1, i2]
                     JacInvT = &_JacInvT[i0, i1, i2, 0, 0]
+                    W = _W[i0, i1, i2]
 
                     gu[0] = VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1]
                     gu[1] = VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0]
@@ -1103,15 +1103,15 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
                     gradv[1] = JacInvT[3]*gv[0] + JacInvT[4]*gv[1] + JacInvT[5]*gv[2]
                     gradv[2] = JacInvT[6]*gv[0] + JacInvT[7]*gv[1] + JacInvT[8]*gv[2]
 
-                    result[0] += J * gradv[0] * gradu[0]
-                    result[1] += J * gradv[1] * gradu[0]
-                    result[2] += J * gradv[2] * gradu[0]
-                    result[3] += J * gradv[0] * gradu[1]
-                    result[4] += J * gradv[1] * gradu[1]
-                    result[5] += J * gradv[2] * gradu[1]
-                    result[6] += J * gradv[0] * gradu[2]
-                    result[7] += J * gradv[1] * gradu[2]
-                    result[8] += J * gradv[2] * gradu[2]
+                    result[0] += W * gradv[0] * gradu[0]
+                    result[1] += W * gradv[1] * gradu[0]
+                    result[2] += W * gradv[2] * gradu[0]
+                    result[3] += W * gradv[0] * gradu[1]
+                    result[4] += W * gradv[1] * gradu[1]
+                    result[5] += W * gradv[2] * gradu[1]
+                    result[6] += W * gradv[0] * gradu[2]
+                    result[7] += W * gradv[1] * gradu[2]
+                    result[8] += W * gradv[2] * gradu[2]
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1145,8 +1145,8 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
             values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 
         DivDivAssembler3D.combine(
-                self.J [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 self.JacInvT [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
+                self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_i[0], values_i[1], values_i[2],
                 values_j[0], values_j[1], values_j[2],
                 result

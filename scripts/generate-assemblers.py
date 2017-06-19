@@ -39,24 +39,21 @@ class PyCode:
 
 
 class AsmGenerator:
-    def __init__(self, classname, code, dim, numderiv, vec=False):
+    def __init__(self, classname, code, dim, numderiv=0, vec=False):
         self.classname = classname
         self.code = code
         self.dim = dim
         self.vec = vec
         self.numderiv = numderiv
-        self.env = {
-            'dim': dim,
-            'nderiv': numderiv+1, # includes 0-th derivative
-            'maxderiv': numderiv,
-        }
         self.vars = {}
-        self.need_val = False
-        self.need_grad = False      # gradient in parameter domain
-        self.need_phys_grad = False # gradient in physical domain
+        # variables provided during initialization (geo_XXX)
         self.need_det = False
         self.need_jac = False
         self.need_jacinv = False
+        # variables provided during assembling
+        self.need_val = False       # basis function values (u, v)
+        self.need_grad = False      # gradient in parameter domain (gu, gv)
+        self.need_phys_grad = False # gradient in physical domain (gradu, gradv)
 
     def register_scalar_field(self, name):
         self.vars[name] = {
@@ -216,7 +213,6 @@ class AsmGenerator:
             self.declare_scalar('u')
             self.declare_scalar('v')
         if self.need_grad:
-            assert self.numderiv >= 1, 'Insufficient derivatives computed'
             self.declare_vec('gu')
             self.declare_vec('gv')
         if self.need_phys_grad:
@@ -339,10 +335,21 @@ self.C = [np.stack(Cs, axis=-1) for Cs in colloc]""".splitlines():
             self.need_jacinv = True
             self.need_grad = True
 
+        if self.need_grad:
+            self.numderiv = max(self.numderiv, 1) # ensure 1st derivatives
+
+        self.env = {
+            'dim': self.dim,
+            'nderiv': self.numderiv+1, # includes 0-th derivative
+            'maxderiv': self.numderiv,
+        }
+
         baseclass = 'BaseVectorAssembler' if self.vec else 'BaseAssembler'
         self.putf('cdef class {classname}{dim}D({base}{dim}D):',
                 classname=self.classname, base=baseclass)
         self.indent()
+
+        # declare instance variables
         self.put('cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative')
         # declare field variables
         for name, var in self.vars.items():
@@ -350,6 +357,8 @@ self.C = [np.stack(Cs, axis=-1) for Cs in colloc]""".splitlines():
                     X=', '.join((self.dim + var['numdims']) * ':'),
                     name=name)
         self.put('')
+
+        # generate methods
         self.generate_init()
         self.generate_kernel()
         self.generate_assemble_impl()
@@ -691,7 +700,7 @@ cdef {{ 'void' if vec else 'double' }} assemble_impl(self, size_t[{{DIM}}] i, si
 
 class MassAsmGen(AsmGenerator):
     def __init__(self, code, dim):
-        AsmGenerator.__init__(self, 'MassAssembler', code, dim, numderiv=0)
+        AsmGenerator.__init__(self, 'MassAssembler', code, dim)
         self.register_scalar_field('J')
         self.need_val = True
         self.need_det = True
@@ -705,7 +714,7 @@ class MassAsmGen(AsmGenerator):
 
 class StiffnessAsmGen(AsmGenerator):
     def __init__(self, code, dim):
-        AsmGenerator.__init__(self, 'StiffnessAssembler', code, dim, numderiv=1)
+        AsmGenerator.__init__(self, 'StiffnessAssembler', code, dim)
         self.register_matrix_field('B', symmetric=True)
         self.need_grad = True
         self.need_det = self.need_jacinv = True
@@ -721,7 +730,7 @@ class StiffnessAsmGen(AsmGenerator):
 
 class DivDivAsmGen(AsmGenerator):
     def __init__(self, code, dim):
-        AsmGenerator.__init__(self, 'DivDivAssembler', code, dim, numderiv=1, vec=dim**2)
+        AsmGenerator.__init__(self, 'DivDivAssembler', code, dim, vec=dim**2)
         self.register_scalar_field('J')
         self.need_phys_grad = True
         self.need_det = True

@@ -361,6 +361,9 @@ cdef double[:,:,:,:,::1] inverses_3x3(double[:,:,:,:,::1] X):
     return Y
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.initializedcheck(False)
 cpdef double[:,:,:,::1] matmatT_2x2(double[:,:,:,::1] B):
     """Compute B * B^T for each matrix in the input."""
     cdef double[:,:,:,::1] X = np.zeros_like(B, order='C')
@@ -374,6 +377,9 @@ cpdef double[:,:,:,::1] matmatT_2x2(double[:,:,:,::1] B):
                         X[i0,i1, j,l] += B[i0,i1, j,k] * B[i0,i1, l,k]
     return X
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.initializedcheck(False)
 cpdef double[:,:,:,:,::1] matmatT_3x3(double[:,:,:,:,::1] B):
     """Compute B * B^T for each matrix in the input."""
     cdef double[:,:,:,:,::1] X = np.zeros_like(B, order='C')

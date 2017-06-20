@@ -51,6 +51,7 @@ class AsmGenerator:
         self.init_det = False
         self.init_jac = False
         self.init_jacinv = False
+        self.init_weights = False       # geo_weights = Gauss weights * abs(geo_det)
         # variables provided pointwise during assembling
         self.need_val = False           # basis function values (u, v)
         self.need_grad = False          # gradient in parameter domain (gu, gv)
@@ -314,9 +315,15 @@ self.C = [np.stack(Cs, axis=-1) for Cs in colloc]""".splitlines():
             self.putf(line)
         self.put('')
 
+        # dependencies
+        if self.init_weights: self.init_det = True
         if self.init_jacinv or self.init_det: self.init_jac = True
+
+        # compute Jacobian
         if self.init_jac:
             self.put('geo_jac = geo.grid_jacobian(gaussgrid)')
+
+        # determinant and/or inverse of Jacobian
         if self.init_det and self.init_jacinv:
             self.put('geo_det, geo_jacinv = det_and_inv(geo_jac)')
         elif self.init_det:
@@ -324,11 +331,14 @@ self.C = [np.stack(Cs, axis=-1) for Cs in colloc]""".splitlines():
         elif self.init_jacinv:
             self.put('geo_jacinv = inverses(geo_jac)')
 
+        if self.init_weights:
+            self.put('geo_weights = %s * np.abs(geo_det)' % self.tensorprod('gaussweights'))
+
         if self.need_phys_grad:
             self.put("self.JacInvT = np.asarray(np.swapaxes(geo_jacinv, -2, -1), order='C')")
 
-        if self.need_phys_weights:
-            self.put('self.W = %s * np.abs(geo_det)' % self.tensorprod('gaussweights'))
+        if self.need_phys_weights:  # store weights as field variable
+            self.put('self.W = geo_weights')
 
         self.initialize_fields()
         self.put('')
@@ -345,7 +355,7 @@ self.C = [np.stack(Cs, axis=-1) for Cs in colloc]""".splitlines():
 
         if self.need_phys_weights:
             self.register_scalar_field('W')
-            self.init_det = True
+            self.init_weights = True
 
         if self.need_grad:
             self.numderiv = max(self.numderiv, 1) # ensure 1st derivatives
@@ -724,12 +734,11 @@ class StiffnessAsmGen(AsmGenerator):
     def __init__(self, code, dim):
         AsmGenerator.__init__(self, 'StiffnessAssembler', code, dim)
         self.register_matrix_field('B', symmetric=True)
+        self.init_jacinv = self.init_weights = True
         self.need_grad = True
-        self.init_det = self.init_jacinv = True
 
     def initialize_fields(self):
-        self.putf('weights = {gweights} * np.abs(geo_det)', gweights=self.tensorprod('gaussweights'))
-        self.putf('self.B = matmatT_{dim}x{dim}(geo_jacinv) * weights[{slices}, None, None]',
+        self.putf('self.B = matmatT_{dim}x{dim}(geo_jacinv) * geo_weights[{slices}, None, None]',
             slices=self.dimrep(':'))
 
     def generate_biform(self):

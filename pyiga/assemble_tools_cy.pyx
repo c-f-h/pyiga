@@ -3,8 +3,6 @@
 # cython: linetrace=False
 # cython: binding=False
 
-from builtins import range as range_it   # Python 2 compatibility
-
 cimport cython
 from cython.parallel import prange
 from libcpp.vector cimport vector

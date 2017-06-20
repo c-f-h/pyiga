@@ -534,10 +534,6 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
             intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
                                        make_intv(self.meshsupp[k][j[k],0], self.meshsupp[k][j[k],1]))
             if intv.a >= intv.b:
-                result[0] = 0.0
-                result[1] = 0.0
-                result[2] = 0.0
-                result[3] = 0.0
                 return          # no intersection of support
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
@@ -1132,15 +1128,6 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
             intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
                                        make_intv(self.meshsupp[k][j[k],0], self.meshsupp[k][j[k],1]))
             if intv.a >= intv.b:
-                result[0] = 0.0
-                result[1] = 0.0
-                result[2] = 0.0
-                result[3] = 0.0
-                result[4] = 0.0
-                result[5] = 0.0
-                result[6] = 0.0
-                result[7] = 0.0
-                result[8] = 0.0
                 return          # no intersection of support
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes

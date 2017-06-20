@@ -703,10 +703,7 @@ cdef {{ 'void' if vec else 'double' }} assemble_impl(self, size_t[{{DIM}}] i, si
         intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
                                    make_intv(self.meshsupp[k][j[k],0], self.meshsupp[k][j[k],1]))
         if intv.a >= intv.b:
-{%- if vec -%}
-{%- for k in range(vec) %}
-            result[{{k}}] = 0.0
-{%- endfor %}
+{%- if vec %}
             return          # no intersection of support
 {%- else %}
             return 0.0      # no intersection of support

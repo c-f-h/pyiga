@@ -389,6 +389,14 @@ cpdef double[:,:,:,:,::1] matmatT_3x3(double[:,:,:,:,::1] B):
                             X[i0,i1,i2, j,l] += B[i0,i1,i2, j,k] * B[i0,i1,i2, l,k]
     return X
 
+def matmatT(B):
+    if len(B.shape) == 4 and B.shape[-2:] == (2,2):
+        return matmatT_2x2(B)
+    elif len(B.shape) == 5 and B.shape[-2:] == (3,3):
+        return matmatT_3x3(B)
+    else:
+        assert False, 'matmatT not implemented for shape %s' % B.shape
+
 
 #### Parallelization
 

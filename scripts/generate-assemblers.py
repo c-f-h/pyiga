@@ -738,7 +738,7 @@ class StiffnessAsmGen(AsmGenerator):
         self.need_grad = True
 
     def initialize_fields(self):
-        self.putf('self.B = matmatT_{dim}x{dim}(geo_jacinv) * geo_weights[{slices}, None, None]',
+        self.putf('self.B = matmatT(geo_jacinv) * geo_weights[{slices}, None, None]',
             slices=self.dimrep(':'))
 
     def generate_biform(self):

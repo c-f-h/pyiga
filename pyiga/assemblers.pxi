@@ -387,7 +387,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)
         geo_weights = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
-        self.B = matmatT_2x2(geo_jacinv) * geo_weights[:, :, None, None]
+        self.B = matmatT(geo_jacinv) * geo_weights[:, :, None, None]
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -967,7 +967,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)
         geo_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
-        self.B = matmatT_3x3(geo_jacinv) * geo_weights[:, :, :, None, None]
+        self.B = matmatT(geo_jacinv) * geo_weights[:, :, :, None, None]
 
     @cython.boundscheck(False)
     @cython.wraparound(False)

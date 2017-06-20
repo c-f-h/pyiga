@@ -686,35 +686,40 @@ cdef void _asm_core_vec_{{DIM}}d_kernel(
 
 ''')
 
-def gen_assemble_impl_header(dim, vec=0):
-    templ = Template(r"""
+def gen_assemble_impl_header(dim, vec=False):
+    if vec:
+        funcdecl = 'cdef void assemble_impl(self, size_t[{dim}] i, size_t[{dim}] j, double result[]) nogil:'.format(dim=dim)
+    else:
+        funcdecl = 'cdef double assemble_impl(self, size_t[{dim}] i, size_t[{dim}] j) nogil:'.format(dim=dim)
+    zeroret = '' if vec else '0.0'  # for vector assemblers, result[] is 0-initialized
+
+    return r"""
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.initializedcheck(False)
-cdef {{ 'void' if vec else 'double' }} assemble_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j{% if vec %}, double result[]{% endif %}) nogil:
+{funcdecl}
     cdef int k
     cdef IntInterval intv
-    cdef size_t g_sta[{{DIM}}]
-    cdef size_t g_end[{{DIM}}]
-    cdef (double*) values_i[{{DIM}}]
-    cdef (double*) values_j[{{DIM}}]
+    cdef size_t g_sta[{dim}]
+    cdef size_t g_end[{dim}]
+    cdef (double*) values_i[{dim}]
+    cdef (double*) values_j[{dim}]
 
-    for k in range({{DIM}}):
+    for k in range({dim}):
         intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
                                    make_intv(self.meshsupp[k][j[k],0], self.meshsupp[k][j[k],1]))
         if intv.a >= intv.b:
-{%- if vec %}
-            return          # no intersection of support
-{%- else %}
-            return 0.0      # no intersection of support
-{%- endif %}
+            return {zeroret}      # no intersection of support
         g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
         g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
         values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
         values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
-""")
-    return templ.render(DIM=dim, vec=vec)
+""".format(
+        dim=dim,
+        funcdecl=funcdecl,
+        zeroret=zeroret
+    )
 
 
 class MassAsmGen(AsmGenerator):

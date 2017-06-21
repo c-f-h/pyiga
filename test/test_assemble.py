@@ -149,3 +149,5 @@ def test_inner_products():
     def f(x,y,z): return np.cos(x) * np.exp(y) * np.sin(z)
     inp = inner_products(kvs, f)
     assert inp.shape == tuple(kv.numdofs for kv in kvs)
+    inp2 = inner_products(kvs, f, geo=geometry.unit_cube())
+    assert np.allclose(inp, inp2)

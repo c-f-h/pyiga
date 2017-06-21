@@ -245,7 +245,7 @@ def bsp_stiffness_3d(knotvecs, geo=None):
 # Assembling right-hand sides
 ################################################################################
 
-def inner_products(kvs, f):
+def inner_products(kvs, f, geo=None):
     """Compute the :math:`L_2` inner products between each basis
     function in a tensor product B-spline basis and the function `f`
     (i.e., the load vector).
@@ -254,6 +254,9 @@ def inner_products(kvs, f):
         kvs (seq): a list of :class:`pyiga.bspline.KnotVector`,
                    representing a tensor product basis
         f: a function or :class:`pyiga.geometry.BSplinePatch` object
+        geo: a :class:`pyiga.geometry.BSplinePatch` which describes
+             the integration domain; if not given, the integrals are
+             computed in the parameter domain
 
     Returns:
         ndarray: the inner products as an array of size
@@ -266,13 +269,19 @@ def inner_products(kvs, f):
     # compute quadrature rules
     nqp = max(kv.p for kv in kvs) + 1
     gauss = [make_iterated_quadrature(kv.mesh, nqp) for kv in kvs]
+    gaussgrid = [g[0] for g in gauss]
     # evaluate function f on grid
-    fvals = utils.grid_eval(f, [g[0] for g in gauss])
+    fvals = utils.grid_eval(f, gaussgrid)
     # multiply function values with quadrature weights
     fvals = tensor.apply_tprod(
               [operators.DiagonalOperator(g[1]) for g in gauss], fvals)
-    # multiply with spline collocation matrices
-    Ct = [bspline.collocation(kvs[i], gauss[i][0]).T
+    # if geometry was specified, multiply by abs(det(jac))
+    if geo is not None:
+        geo_jac = geo.grid_jacobian(gaussgrid)
+        geo_det = np.abs(assemble_tools.determinants(geo_jac))
+        fvals *= geo_det
+    # apply transposed spline collocation matrices (sum over Gauss nodes)
+    Ct = [bspline.collocation(kvs[i], gaussgrid[i]).T
             for i in range(len(kvs))]
     return tensor.apply_tprod(Ct, fvals)
 

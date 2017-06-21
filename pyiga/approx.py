@@ -51,7 +51,7 @@ def project_L2(kvs, f, geo=None):
         return tensor.apply_tprod(Minvs, rhs)
     else:
         # in the physical domain, use the Kronecker product as a preconditioner
-        M = assemble.mass(kvs)
+        M = assemble.mass(kvs, geo=geo)
         b = rhs.ravel()
         assert b.shape[0] == M.shape[1], 'L2 projection with geometry only implemented for scalar functions'
         x, info = scipy.sparse.linalg.cg(M, b, tol=1e-12, maxiter=100,

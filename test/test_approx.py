@@ -43,3 +43,11 @@ def test_interpolate_vector():
 
 def test_interpolate_matrix():
     _test_approx(interpolate, [2,2]) # matrix-valued
+
+
+def test_interpolate_physical():
+    f = lambda x,y,z: np.cos(x)*np.sin(y)*np.exp(z)
+    kvs = 3 * (bspline.make_knots(3, 0.0, 1.0, 10),)
+    x1 = interpolate(kvs, f)
+    x2 = interpolate(kvs, f, geo=geometry.unit_cube())
+    assert np.allclose(x1, x2)

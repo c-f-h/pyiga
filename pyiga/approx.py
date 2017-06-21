@@ -11,18 +11,32 @@ from . import utils
 import sys
 import scipy.sparse.linalg
 
-def interpolate(kvs, f, nodes=None):
+def interpolate(kvs, f, geo=None, nodes=None):
     """Compute the coefficients for the interpolant of the function `f` in
     the tensor product B-spline basis `kvs`.
 
-    `nodes` should be a tensor grid. If not specified, the Gréville abscissae
-    are used.
+    By default, `f` is assumed to be defined on the parameter domain. If a
+    geometry is passed in `geo`, interpolation is instead done in physical
+    coordinates.
+
+    `nodes` should be a tensor grid in the parameter domain specifying the
+    interpolation nodes. If not specified, the Gréville abscissae are used.
     """
     if nodes is None:
         nodes = [kv.greville() for kv in kvs]
+
+    if geo is not None:
+        # transform interpolation nodes - shape: shape(grid) x dim
+        geo_nodes = utils.grid_eval(geo, nodes)
+        # extract coordinate components
+        X = tuple(geo_nodes[..., i] for i in range(geo_nodes.shape[-1]))
+        # evaluate the function
+        rhs = f(*X)
+    else:
+        rhs = utils.grid_eval(f, nodes)
+
     Cinvs = [operators.make_solver(bspline.collocation(kvs[i], nodes[i]))
                 for i in range(len(kvs))]
-    rhs = utils.grid_eval(f, nodes)
     return tensor.apply_tprod(Cinvs, rhs)
 
 def project_L2(kvs, f, geo=None):

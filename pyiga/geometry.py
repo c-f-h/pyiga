@@ -73,6 +73,30 @@ class BSplineFunc:
         colloc = [bspline.collocation(self.kvs[i], gridaxes[i]).A for i in range(self.sdim)]
         return apply_tprod(colloc, self.coeffs)
 
+    def grid_jacobian(self, gridaxes):
+        """Evaluate the Jacobian on a tensor product grid.
+
+        Args:
+            gridaxes (seq): list of 1D vectors describing the tensor product grid.
+
+        .. note::
+
+            The gridaxes should be given in reverse order, i.e.,
+            the x axis last.
+
+        Returns:
+            ndarray: array of Jacobians (`dim x sdim`); shape corresponds to input grid.
+        """
+        assert np.shape(gridaxes)[0] == self.sdim
+        colloc = [bspline.collocation_derivs(self.kvs[i], gridaxes[i], derivs=1) for i in range(self.sdim)]
+        colloc = [(C.A, Cd.A) for (C,Cd) in colloc]
+
+        grad_components = []
+        for i in reversed(range(self.sdim)):  # x-component is the last one
+            ops = [colloc[j][1 if j==i else 0] for j in range(self.sdim)] # deriv. in i-th direction
+            grad_components.append(apply_tprod(ops, self.coeffs))   # shape: shape(grid) x self.dim
+        return np.stack(grad_components, axis=-1)   # shape: shape(grid) x self.dim x self.sdim
+
 
 class BSplinePatch(BSplineFunc):
     """Represents a `d`-dimensional tensor product B-spline patch.
@@ -106,30 +130,6 @@ class BSplinePatch(BSplineFunc):
         """Construct a `d`-dimensional tensor product B-spline patch with the given knot vectors and coefficients."""
         BSplineFunc.__init__(self, kvs, coeffs)
         assert self.dim == self.sdim, "Wrong dimension: should be %s, not %s" % (self.sdim, self.dim)
-
-    def grid_jacobian(self, gridaxes):
-        """Evaluate the Jacobian on a tensor product grid.
-
-        Args:
-            gridaxes (seq): list of 1D vectors describing the tensor product grid.
-
-        .. note::
-
-            The gridaxes should be given in reverse order, i.e.,
-            the x axis last.
-
-        Returns:
-            ndarray: array of Jacobians (`dim x dim`); shape corresponds to input grid.
-        """
-        assert np.shape(gridaxes)[0] == self.dim
-        colloc = [bspline.collocation_derivs(self.kvs[i], gridaxes[i], derivs=1) for i in range(self.dim)]
-        colloc = [(C.A, Cd.A) for (C,Cd) in colloc]
-
-        grad_components = []
-        for i in reversed(range(self.dim)):  # x-component is the last one
-            ops = [colloc[j][1 if j==i else 0] for j in range(self.dim)] # deriv. in j-th direction
-            grad_components.append(apply_tprod(ops, self.coeffs))
-        return np.stack(grad_components, axis=-1)
 
     def extrude(self, z0=0.0, z1=1.0):
         """Create a patch with one additional space dimension by

@@ -27,6 +27,14 @@ def test_project_L2_matrix():
     _test_approx(project_L2, [2,2]) # matrix-valued
 
 
+def test_project_L2_geo():
+    f = lambda x,y,z: np.cos(x)*np.sin(y)*np.exp(z)
+    kvs = 3 * (bspline.make_knots(3, 0.0, 1.0, 10),)
+    x1 = project_L2(kvs, f)
+    x2 = project_L2(kvs, f, geo=geometry.unit_cube())
+    assert np.allclose(x1, x2)
+
+
 def test_interpolate():
     _test_approx(interpolate, [])    # scalar-valued
 

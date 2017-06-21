@@ -51,3 +51,15 @@ def test_interpolate_physical():
     x1 = interpolate(kvs, f)
     x2 = interpolate(kvs, f, geo=geometry.unit_cube())
     assert np.allclose(x1, x2)
+
+def test_compare_intproj():
+    f = lambda x,y: np.cos(x)*np.exp(y)
+    kvs = 2 * (bspline.make_knots(3, 0.0, 1.0, 50),)
+    x1 = interpolate(kvs, f)
+    x2 = project_L2(kvs, f)
+    assert abs(x1-x2).max() < 1e-5
+
+    geo = geometry.bspline_quarter_annulus()
+    x1 = interpolate(kvs, f, geo=geo)
+    x2 = project_L2(kvs, f, f_physical=True, geo=geo)
+    assert abs(x1-x2).max() < 1e-5

@@ -39,14 +39,18 @@ def interpolate(kvs, f, geo=None, nodes=None):
                 for i in range(len(kvs))]
     return tensor.apply_tprod(Cinvs, rhs)
 
-def project_L2(kvs, f, geo=None):
+def project_L2(kvs, f, f_physical=False, geo=None):
     """Compute the coefficients for the :math:`L_2`-projection of the function `f` into
     the tensor product B-spline basis `kvs`. Optionally, a geometry transform `geo` can
     be specified to compute the projection in a physical domain.
+
+    By default, `f` is assumed to be given in the parameter domain. If it is given in
+    physical coordinates, pass `f_physical=True`. This requires `geo` to be specified.
     """
     Minvs = [operators.make_solver(assemble.mass(kv), spd=True) for kv in kvs]
-    rhs = assemble.inner_products(kvs, f, geo=geo)
+    rhs = assemble.inner_products(kvs, f, f_physical=f_physical, geo=geo)
     if geo is None:
+        assert not f_physical, 'Cannot use physical coordinates without geometry'
         # in the parameter domain, we simply apply the Kronecker product of the M^{-1}
         return tensor.apply_tprod(Minvs, rhs)
     else:

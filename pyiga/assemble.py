@@ -245,18 +245,20 @@ def bsp_stiffness_3d(knotvecs, geo=None):
 # Assembling right-hand sides
 ################################################################################
 
-def inner_products(kvs, f, geo=None):
+def inner_products(kvs, f, f_physical=False, geo=None):
     """Compute the :math:`L_2` inner products between each basis
     function in a tensor product B-spline basis and the function `f`
     (i.e., the load vector).
 
     Args:
         kvs (seq): a list of :class:`pyiga.bspline.KnotVector`,
-                   representing a tensor product basis
+            representing a tensor product basis
         f: a function or :class:`pyiga.geometry.BSplinePatch` object
+        f_physical (bool): whether `f` is given in physical coordinates.
+            If `True`, `geo` must be passed as well.
         geo: a :class:`pyiga.geometry.BSplinePatch` which describes
-             the integration domain; if not given, the integrals are
-             computed in the parameter domain
+            the integration domain; if not given, the integrals are
+            computed in the parameter domain
 
     Returns:
         ndarray: the inner products as an array of size
@@ -270,8 +272,19 @@ def inner_products(kvs, f, geo=None):
     nqp = max(kv.p for kv in kvs) + 1
     gauss = [make_iterated_quadrature(kv.mesh, nqp) for kv in kvs]
     gaussgrid = [g[0] for g in gauss]
-    # evaluate function f on grid
-    fvals = utils.grid_eval(f, gaussgrid)
+
+    # evaluate function f on grid or transformed grid
+    if f_physical:
+        assert geo is not None, 'inner_products in physical domain requires geometry'
+        # transform quadrature grid - shape: shape(grid) x dim
+        geo_grid = utils.grid_eval(geo, gaussgrid)
+        # extract coordinate components
+        X = tuple(geo_grid[..., i] for i in range(geo_grid.shape[-1]))
+        # evaluate the function
+        fvals = f(*X)
+    else:
+        fvals = utils.grid_eval(f, gaussgrid)
+
     # multiply function values with quadrature weights
     fvals = tensor.apply_tprod(
               [operators.DiagonalOperator(g[1]) for g in gauss], fvals)

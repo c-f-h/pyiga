@@ -25,6 +25,12 @@ class BSplineFunc:
 
     For convenience, if `coeffs` is a vector, it is reshaped to the proper
     size for the tensor product basis. The result is a scalar-valued function.
+
+    Attributes:
+        kvs (seq): the knot vectors representing the tensor product basis
+        coeffs (ndarray): the coefficients for the function or geometry
+        sdim (int): dimension of the parameter domain
+        dim (int): dimension of the output of the function
     """
     def __init__(self, kvs, coeffs):
         self.kvs = kvs
@@ -117,13 +123,6 @@ class BSplinePatch(BSplineFunc):
     is given by ``coeffs[i1, ..., id, :]``.
     The j-th component of the geometry is
     represented by the coefficients ``coeffs[..., j]``.
-
-    Attributes:
-        kvs (seq): the knot vectors representing the tensor product basis
-        coeffs (ndarray): the coefficients for the geometry.
-            An array of shape `(n1, n2, ..., nd, dim)`, where
-            `ni` is the number of dofs in the *i*-th basis.
-        dim (int): dimension of the space in which the geometry lies
     """
 
     def __init__(self, kvs, coeffs):

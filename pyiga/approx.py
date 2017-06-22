@@ -12,19 +12,23 @@ import sys
 import scipy.sparse.linalg
 
 def interpolate(kvs, f, geo=None, nodes=None):
-    """Compute the coefficients for the interpolant of the function `f` in
-    the tensor product B-spline basis `kvs`.
+    """Perform interpolation in a spline space.
 
-    By default, `f` is assumed to be defined on the parameter domain. If a
+    Returns the coefficients for the interpolant of the function `f` in the
+    tensor product B-spline basis `kvs`.
+
+    By default, `f` is assumed to be defined in the parameter domain. If a
     geometry is passed in `geo`, interpolation is instead done in physical
     coordinates.
 
-    `nodes` should be a tensor grid in the parameter domain specifying the
-    interpolation nodes. If not specified, the Gréville abscissae are used.
+    `nodes` should be a tensor grid (i.e., a sequence of one-dimensional
+    arrays) in the parameter domain specifying the interpolation nodes. If not
+    specified, the Gréville abscissae are used.
     """
     if nodes is None:
         nodes = [kv.greville() for kv in kvs]
 
+    # evaluate f at interpolation nodes
     if geo is not None:
         # transform interpolation nodes - shape: shape(grid) x dim
         geo_nodes = utils.grid_eval(geo, nodes)
@@ -40,12 +44,16 @@ def interpolate(kvs, f, geo=None, nodes=None):
     return tensor.apply_tprod(Cinvs, rhs)
 
 def project_L2(kvs, f, f_physical=False, geo=None):
-    """Compute the coefficients for the :math:`L_2`-projection of the function `f` into
-    the tensor product B-spline basis `kvs`. Optionally, a geometry transform `geo` can
-    be specified to compute the projection in a physical domain.
+    """Perform :math:`L_2`-projection into a spline space.
 
-    By default, `f` is assumed to be given in the parameter domain. If it is given in
-    physical coordinates, pass `f_physical=True`. This requires `geo` to be specified.
+    Returns the coefficients for the :math:`L_2`-projection of the function `f`
+    into the tensor product B-spline basis `kvs`. Optionally, a geometry
+    transform `geo` can be specified to compute the projection in a physical
+    domain.
+
+    By default, `f` is assumed to be defined in the parameter domain. If it is
+    given in physical coordinates, pass `f_physical=True`. This requires `geo`
+    to be specified.
     """
     Minvs = [operators.make_solver(assemble.mass(kv), spd=True) for kv in kvs]
     rhs = assemble.inner_products(kvs, f, f_physical=f_physical, geo=geo)

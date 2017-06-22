@@ -33,7 +33,7 @@ class BSplineFunc:
         dim (int): dimension of the output of the function
     """
     def __init__(self, kvs, coeffs):
-        self.kvs = kvs
+        self.kvs = tuple(kvs)
         self.sdim = len(kvs)    # source dimension
 
         N = tuple(kv.numdofs for kv in kvs)
@@ -102,6 +102,26 @@ class BSplineFunc:
             ops = [colloc[j][1 if j==i else 0] for j in range(self.sdim)] # deriv. in i-th direction
             grad_components.append(apply_tprod(ops, self.coeffs))   # shape: shape(grid) x self.dim
         return np.stack(grad_components, axis=-1)   # shape: shape(grid) x self.dim x self.sdim
+
+    def boundary(self, axis, side):
+        """Return one side of the boundary as a :class:`BSplineFunc`.
+
+        Args:
+            axis (int): the index of the axis along which to take the boundary.
+            side (int): 0 for the "lower" or 1 for the "upper" boundary along
+                the given axis
+
+        Returns:
+            :class:`BSplineFunc`: representation of the boundary side;
+            has `sdim` reduced by 1 and the same `dim` as this function
+        """
+        assert 0 <= axis < self.sdim, 'Invalid axis'
+        slices = self.sdim * [slice(None)]
+        slices[axis] = (0 if side==0 else -1)
+        coeffs = self.coeffs[slices]
+        kvs = list(self.kvs)
+        del kvs[axis]
+        return BSplineFunc(kvs, coeffs)
 
 
 class BSplinePatch(BSplineFunc):

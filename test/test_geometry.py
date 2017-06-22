@@ -68,3 +68,10 @@ def test_unitsquare():
     S1 = unit_square()
     S2 = unit_square(num_intervals=10)
     assert geos_roughly_equal(S1, S2)
+
+def test_boundary():
+    geo = twisted_box()
+    bd = geo.boundary(axis=2, side=1)
+    assert bd.sdim == geo.sdim - 1
+    assert bd.dim == geo.dim
+    assert np.allclose(geo.eval(1,1,0), bd.eval(1,0))

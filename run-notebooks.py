@@ -34,7 +34,7 @@ if __name__ == '__main__':
 
     for nbfile in nbfiles:
         print('========== Running', nbfile, '==========')
-        nb, errors = run_notebook('notebooks/subspace-correction-mg.ipynb', timeout=120)
+        nb, errors = run_notebook(nbfile, timeout=120)
         count += 1
         if errors:
             count_err += 1

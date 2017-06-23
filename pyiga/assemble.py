@@ -57,6 +57,15 @@ Right-hand sides
 
 .. autofunction:: inner_products
 
+Boundary conditions
+-------------------
+
+.. autofunction:: compute_dirichlet_bc
+.. autofunction:: combine_bcs
+
+.. autoclass:: RestrictedLinearSystem
+    :members:
+
 """
 import numpy as np
 import scipy
@@ -297,6 +306,101 @@ def inner_products(kvs, f, f_physical=False, geo=None):
     Ct = [bspline.collocation(kvs[i], gaussgrid[i]).T
             for i in range(len(kvs))]
     return tensor.apply_tprod(Ct, fvals)
+
+################################################################################
+# Incorporating essential boundary conditions
+################################################################################
+
+def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
+    """Compute indices and values for a Dirichlet boundary condition using
+    interpolation.
+
+    Args:
+        kvs: a tensor product B-spline basis
+        geo (:class:`pyiga.geometry.BSplinePatch`): the geometry transform
+        bdspec: a pair `(axis, side)`. `axis` denotes the axis along
+            which the boundary condition lies, and `side` is either
+            0 for the "lower" boundary or 1 for the "upper" boundary.
+        dir_func: a function which will be interpolated to obtain the
+            Dirichlet boundary values
+
+    Returns:
+        A pair of arrays `(indices, values)` which denote the indices of the
+        dofs within the tensor product basis which lie along the Dirichlet
+        boundary and their values, respectively.
+    """
+    bdax, bdside = bdspec
+
+    bdbasis = list(kvs)
+    del bdbasis[bdax]
+
+    bdgeo = geo.boundary(bdax, bdside)
+    from .approx import interpolate
+    dircoeffs = interpolate(bdbasis, dir_func, geo=bdgeo).ravel()
+
+    N = tuple(kv.numdofs for kv in kvs)
+    bddofs = [range(n) for n in N]
+    bddofs[bdax] = (0 if bdside==0 else N[bdax]-1)
+    bdindices = np.ravel_multi_index(bddofs, N)   # raveled boundary indices
+
+    return bdindices, dircoeffs
+
+
+def combine_bcs(bcs):
+    """Given a list of `(indices, values)` pairs such as returned by
+    :func:`compute_dirichlet_bc`, combine them into a single pair
+    `(indices, values)`.
+
+    Dofs which occur in more than one `indices` array take their
+    value from an arbitrary corresponding `values` array.
+    """
+    indices = np.concatenate([ind for ind,_ in bcs])
+    values  = np.concatenate([val for _,val in bcs])
+
+    uidx, lookup = np.unique(indices, return_index=True)
+    return uidx, values[lookup]
+
+
+class RestrictedLinearSystem:
+    """Represents a linear system with some of its dofs eliminated.
+
+    Args:
+        A: the full matrix
+        b: the right-hand side (may be 0)
+        indices (ndarray): the indices of the dofs to be eliminated
+        values (ndarray): the values of the dofs to be eliminated
+
+    Once constructed, the restricted linear system can be accessed through
+    the following attributes:
+
+    Attributes:
+        A: the restricted matrix
+        b: the restricted and updated right-hand side
+    """
+    def __init__(self, A, b, indices, values):
+        if np.isscalar(b):
+            b = np.broadcast_to(b, A.shape[0])
+        if np.isscalar(values):
+            values = np.broadcast_to(values, indices.shape[0])
+
+        I = scipy.sparse.eye(A.shape[0], format='csr')
+        # compute mask which contains non-eliminated dofs
+        mask = np.ones(A.shape[0], dtype=bool)
+        mask[list(indices)] = False
+
+        self.R_free = I[mask]
+        self.R_elim = I[np.logical_not(mask)]
+        self.values = values
+
+        self.A = self.R_free.dot(A).dot(self.R_free.T)
+        self.b = self.R_free.dot(b - A.dot(self.R_elim.T.dot(values)))
+
+    def complete(self, u):
+        """Given a solution `u` of the restricted linear system, complete it
+        with the values of the eliminated dofs to a solution of the original
+        system.
+        """
+        return self.R_free.T.dot(u) + self.R_elim.T.dot(self.values)
 
 ################################################################################
 # Convenience functions

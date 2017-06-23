@@ -187,7 +187,7 @@ def from_seq(i, dims):
 def to_seq(I, dims):
     """Convert multiindex into sequential (lexicographic) index.
 
-    Same as np.ravel_multiindex(I, dims).
+    Same as np.ravel_multi_index(I, dims).
     """
     i = 0
     for k in range(len(dims)):

@@ -9,6 +9,11 @@ pyiga |travis| |appveyor|
 
 ``pyiga`` is a Python research toolbox for Isogeometric Analysis.
 
+For a simple example which shows how to solve a Poisson equation with ``pyiga`` and plot
+the solution, have a look at the notebook
+`solve-poisson.ipynb <https://github.com/c-f-h/pyiga/blob/master/notebooks/solve-poisson.ipynb>`_.
+
+To find out more, have a look at the `API reference`_.
 
 Installation
 ------------

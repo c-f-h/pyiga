@@ -101,9 +101,9 @@ def tucker_prod(Uk, X):
 def hosvd(X):
     """Compute higher-order SVD (Tucker decomposition).
 
-    The result is a tuple (C, (U0,U1,...,Un)), where the
-    core tensor C has the same shape as X and the
-    Uk are square, orthogonal matrices of size X.shape[k]."""
+    The result is a tuple `((U0,U1,...,Un), C)`, where the
+    core tensor `C` has the same shape as `X` and the
+    `Uk` are square, orthogonal matrices of size `X.shape[k]`."""
     # left singular vectors for each matricization
     U = [scipy.linalg.svd(matricize(X,k), full_matrices=False, check_finite=False)[0]
             for k in range(X.ndim)]

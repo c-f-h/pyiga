@@ -142,7 +142,6 @@ def make_knots(p, a, b, n):
 
     Returns:
         :class:`KnotVector`: the new knot vector
-    
     """
     kv = np.concatenate((np.repeat(a, p), np.arange(a, b, (b-a) / n), np.repeat(b, p+1)))
     return KnotVector(kv, p)
@@ -152,7 +151,7 @@ def make_knots(p, a, b, n):
 
 def ev(knotvec, coeffs, u):
     """Evaluate a spline with given B-spline coefficients at all points `u`.
-    
+
     Args:
         knotvec (:class:`KnotVector`): B-spline knot vector
         coeffs (`ndarray`): 1D array of coefficients, length `knotvec.numdofs`
@@ -165,7 +164,7 @@ def ev(knotvec, coeffs, u):
 
 def deriv(knotvec, coeffs, deriv, u):
     """Evaluate a derivative of the spline with given B-spline coefficients at all points `u`.
-    
+
     Args:
         knotvec (:class:`KnotVector`): B-spline knot vector
         coeffs (`ndarray`): 1D array of coefficients, length `knotvec.numdofs`

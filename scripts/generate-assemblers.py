@@ -104,35 +104,37 @@ class AsmGenerator:
         return ' * '.join(['{0}[{1}][{2}]'.format(var, k, self.extend_dim(k))
             for k in range(self.dim)])
 
-    def grad_comp(self, var, idx, j):
+    def pderiv(self, var, D, idx='i'):
+        """Partial derivative of `var` of order `D=(Dx1, ..., Dxd)`"""
+        D = tuple(reversed(D))  # x is last axis
+        assert len(D) == self.dim
+        assert all(0 <= d <= self.numderiv for d in D)
         factors = [
-                "{var}{k}[{nderiv}*{idx}{k}+{ofs}]".format(
+                "VD{var}{k}[{nderiv}*{idx}{k}+{ofs}]".format(
                     var = var,
                     idx = idx,
                     k   = k,
-                    ofs = (1 if k + j + 1 == self.dim else 0),
+                    ofs = D[k],
                     **self.env
                 )
                 for k in range(self.dim)]
         return ' * '.join(factors)
 
-    def basisval(self, var, idx):
-        factors = [
-                "{var}{k}[{nderiv}*{idx}{k}+0]".format(
-                    var = var,
-                    idx = idx,
-                    k   = k,
-                    **self.env
-                )
-                for k in range(self.dim)]
-        return ' * '.join(factors)
+    def grad_comp(self, var, j, idx='i'):
+        # compute first derivative in j-th direction
+        D = self.dim * [0]
+        D[j] = 1
+        return self.pderiv(var, D, idx=idx)
+
+    def basisval(self, var, idx='i'):
+        return self.pderiv(var, self.dim * (0,), idx=idx)
 
     def make_grad(self, result, var):
         for k in range(self.dim):
             self.putf('{res}[{k}] = {comp}',
                     res=result,
                     k=k,
-                    comp=self.grad_comp(var, 'i', k))
+                    comp=self.grad_comp(var, k))
 
     def declare_index(self, name, init=None):
         self.code.declare_local_variable('size_t', name, init)
@@ -248,13 +250,13 @@ class AsmGenerator:
         self.put('')
 
         if self.need_val:
-            self.put('u = ' + self.basisval('VDu', 'i'))
-            self.put('v = ' + self.basisval('VDv', 'i'))
+            self.put('u = ' + self.basisval('u'))
+            self.put('v = ' + self.basisval('v'))
             self.put('')
         if self.need_grad:
-            self.make_grad('gu', 'VDu')
+            self.make_grad('gu', 'u')
             self.put('')
-            self.make_grad('gv', 'VDv')
+            self.make_grad('gv', 'v')
             self.put('')
             if self.need_phys_grad:
                 self.matvec('gradu', 'JacInvT', 'gu')

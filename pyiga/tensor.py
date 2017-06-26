@@ -1,9 +1,9 @@
 r"""Functions for manipulating tensors in full and in Tucker format,
 and for tensor approximation.
 
-A full tensor is simply represented as a Numpy ndarray.
+A **full tensor** is simply represented as a :class:`numpy.ndarray`.
 
-A *d*-dimensional tensor in Tucker format is given as a list of *d* basis matrices
+A *d*-dimensional tensor in **Tucker format** is given as a list of *d* basis matrices
 
 .. math::
     U_k \in \mathbb R^{n_k \times m_k}, \qquad k=1,\ldots,d
@@ -13,10 +13,15 @@ and a (typically small) core coefficient tensor
 .. math::
     X \in \mathbb R^{m_1 \times \ldots \times m_d}.
 
-When expanded, it represents a full tensor
+When expanded (using :func:`tucker_prod`), a Tucker tensor turns into a full
+tensor
 
 .. math::
     A \in \mathbb R^{n_1 \times \ldots \times n_d}.
+
+One way to compute a Tucker tensor approximation from a full tensor is to first
+compute the HOSVD using :func:`hosvd` and then truncate it using
+:func:`truncate` to the rank estimated by :func:`find_truncation_rank`.
 """
 import numpy as np
 import numpy.linalg

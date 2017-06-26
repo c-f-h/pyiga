@@ -262,7 +262,7 @@ class AsmGenerator:
                 self.matvec('gradv', 'JacInvT', 'gv')
                 self.put('')
 
-        # compute the bilinear form a(v,u)
+        # compute the bilinear form a(u,v)
         self.generate_biform()
 
         # end main loop
@@ -289,8 +289,9 @@ class AsmGenerator:
         for name in self.vars:
             self.putf('self.{name} [ {idx} ],', name=name,
                     idx=self.dimrep('g_sta[{0}]:g_end[{0}]'))
-        self.put(self.dimrep('values_i[{0}]') + ',')
+        # a_ij = a(phi_j, phi_i)  -- pass values for j first
         self.put(self.dimrep('values_j[{0}]') + ',')
+        self.put(self.dimrep('values_i[{0}]') + ',')
         if self.vec:
             self.put('result')
         self.dedent(2)
@@ -729,7 +730,7 @@ class MassAsmGen(AsmGenerator):
         self.need_phys_weights = True
 
     def generate_biform(self):
-        self.put('result += W * v * u')
+        self.put('result += W * u * v')
 
 
 class StiffnessAsmGen(AsmGenerator):
@@ -744,7 +745,7 @@ class StiffnessAsmGen(AsmGenerator):
             slices=self.dimrep(':'))
 
     def generate_biform(self):
-        self.add_matvecvec('B', 'gv', 'gu')
+        self.add_matvecvec('B', 'gu', 'gv')
 
 
 class DivDivAsmGen(AsmGenerator):
@@ -756,7 +757,7 @@ class DivDivAsmGen(AsmGenerator):
     def generate_biform(self):
         for i in range(self.dim):
             for j in range(self.dim):
-                self.putf('result[{k}] += W * gradv[{j}] * gradu[{i}]', k=self.dim*i + j, i=i, j=j)
+                self.putf('result[{k}] += W * gradu[{j}] * gradv[{i}]', k=self.dim*i + j, i=i, j=j)
 
 
 def generate(dim):

@@ -336,7 +336,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
                 u = VDu0[1*i0+0] * VDu1[1*i1+0]
                 v = VDv0[1*i0+0] * VDv1[1*i1+0]
 
-                result += W * v * u
+                result += W * u * v
         return result
 
     @cython.boundscheck(False)
@@ -363,8 +363,8 @@ cdef class MassAssembler2D(BaseAssembler2D):
 
         return MassAssembler2D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
-                values_i[0], values_i[1],
                 values_j[0], values_j[1],
+                values_i[0], values_i[1],
         )
 
 cdef class StiffnessAssembler2D(BaseAssembler2D):
@@ -418,8 +418,8 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
                 gv[0] = VDv0[2*i0+0] * VDv1[2*i1+1]
                 gv[1] = VDv0[2*i0+1] * VDv1[2*i1+0]
 
-                result += (B[0]*gv[0] + B[1]*gv[1]) * gu[0]
-                result += (B[1]*gv[0] + B[3]*gv[1]) * gu[1]
+                result += (B[0]*gu[0] + B[1]*gu[1]) * gv[0]
+                result += (B[1]*gu[0] + B[3]*gu[1]) * gv[1]
         return result
 
     @cython.boundscheck(False)
@@ -446,8 +446,8 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
 
         return StiffnessAssembler2D.combine(
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
-                values_i[0], values_i[1],
                 values_j[0], values_j[1],
+                values_i[0], values_i[1],
         )
 
 cdef class DivDivAssembler2D(BaseVectorAssembler2D):
@@ -514,10 +514,10 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
                 gradv[0] = JacInvT[0]*gv[0] + JacInvT[1]*gv[1]
                 gradv[1] = JacInvT[2]*gv[0] + JacInvT[3]*gv[1]
 
-                result[0] += W * gradv[0] * gradu[0]
-                result[1] += W * gradv[1] * gradu[0]
-                result[2] += W * gradv[0] * gradu[1]
-                result[3] += W * gradv[1] * gradu[1]
+                result[0] += W * gradu[0] * gradv[0]
+                result[1] += W * gradu[1] * gradv[0]
+                result[2] += W * gradu[0] * gradv[1]
+                result[3] += W * gradu[1] * gradv[1]
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -544,8 +544,8 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         DivDivAssembler2D.combine(
                 self.JacInvT [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
-                values_i[0], values_i[1],
                 values_j[0], values_j[1],
+                values_i[0], values_i[1],
                 result
         )
 
@@ -912,7 +912,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
                     u = VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0]
                     v = VDv0[1*i0+0] * VDv1[1*i1+0] * VDv2[1*i2+0]
 
-                    result += W * v * u
+                    result += W * u * v
         return result
 
     @cython.boundscheck(False)
@@ -939,8 +939,8 @@ cdef class MassAssembler3D(BaseAssembler3D):
 
         return MassAssembler3D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
-                values_i[0], values_i[1], values_i[2],
                 values_j[0], values_j[1], values_j[2],
+                values_i[0], values_i[1], values_i[2],
         )
 
 cdef class StiffnessAssembler3D(BaseAssembler3D):
@@ -999,9 +999,9 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                     gv[1] = VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0]
                     gv[2] = VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0]
 
-                    result += (B[0]*gv[0] + B[1]*gv[1] + B[2]*gv[2]) * gu[0]
-                    result += (B[1]*gv[0] + B[4]*gv[1] + B[5]*gv[2]) * gu[1]
-                    result += (B[2]*gv[0] + B[5]*gv[1] + B[8]*gv[2]) * gu[2]
+                    result += (B[0]*gu[0] + B[1]*gu[1] + B[2]*gu[2]) * gv[0]
+                    result += (B[1]*gu[0] + B[4]*gu[1] + B[5]*gu[2]) * gv[1]
+                    result += (B[2]*gu[0] + B[5]*gu[1] + B[8]*gu[2]) * gv[2]
         return result
 
     @cython.boundscheck(False)
@@ -1028,8 +1028,8 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
 
         return StiffnessAssembler3D.combine(
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
-                values_i[0], values_i[1], values_i[2],
                 values_j[0], values_j[1], values_j[2],
+                values_i[0], values_i[1], values_i[2],
         )
 
 cdef class DivDivAssembler3D(BaseVectorAssembler3D):
@@ -1103,15 +1103,15 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
                     gradv[1] = JacInvT[3]*gv[0] + JacInvT[4]*gv[1] + JacInvT[5]*gv[2]
                     gradv[2] = JacInvT[6]*gv[0] + JacInvT[7]*gv[1] + JacInvT[8]*gv[2]
 
-                    result[0] += W * gradv[0] * gradu[0]
-                    result[1] += W * gradv[1] * gradu[0]
-                    result[2] += W * gradv[2] * gradu[0]
-                    result[3] += W * gradv[0] * gradu[1]
-                    result[4] += W * gradv[1] * gradu[1]
-                    result[5] += W * gradv[2] * gradu[1]
-                    result[6] += W * gradv[0] * gradu[2]
-                    result[7] += W * gradv[1] * gradu[2]
-                    result[8] += W * gradv[2] * gradu[2]
+                    result[0] += W * gradu[0] * gradv[0]
+                    result[1] += W * gradu[1] * gradv[0]
+                    result[2] += W * gradu[2] * gradv[0]
+                    result[3] += W * gradu[0] * gradv[1]
+                    result[4] += W * gradu[1] * gradv[1]
+                    result[5] += W * gradu[2] * gradv[1]
+                    result[6] += W * gradu[0] * gradv[2]
+                    result[7] += W * gradu[1] * gradv[2]
+                    result[8] += W * gradu[2] * gradv[2]
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1138,7 +1138,7 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         DivDivAssembler3D.combine(
                 self.JacInvT [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
-                values_i[0], values_i[1], values_i[2],
                 values_j[0], values_j[1], values_j[2],
+                values_i[0], values_i[1], values_i[2],
                 result
         )

@@ -217,7 +217,9 @@ def bsp_mass_2d(knotvecs, geo=None):
         M2 = bsp_mass_1d(kv2)
         return scipy.sparse.kron(M1, M2, format='csr')
     else:
-        return assemble_tools.mass_2d(knotvecs, geo)
+        return assemble_tools.assemble(
+                assemble_tools.MassAssembler2D(knotvecs, geo),
+                symmetric=True)
 
 def bsp_stiffness_2d(knotvecs, geo=None):
     if geo is None:
@@ -228,7 +230,9 @@ def bsp_stiffness_2d(knotvecs, geo=None):
         K2 = bsp_stiffness_1d(kv2)
         return scipy.sparse.kron(K1, M2, format='csr') + scipy.sparse.kron(M1, K2, format='csr')
     else:
-        return assemble_tools.stiffness_2d(knotvecs, geo)
+        return assemble_tools.assemble(
+                assemble_tools.StiffnessAssembler2D(knotvecs, geo),
+                symmetric=True)
 
 def bsp_mass_3d(knotvecs, geo=None):
     if geo is None:
@@ -237,7 +241,9 @@ def bsp_mass_3d(knotvecs, geo=None):
             return scipy.sparse.kron(A, B, format='csr')
         return k(M[0], k(M[1], M[2]))
     else:
-        return assemble_tools.mass_3d(knotvecs, geo)
+        return assemble_tools.assemble(
+                assemble_tools.MassAssembler3D(knotvecs, geo),
+                symmetric=True)
 
 def bsp_stiffness_3d(knotvecs, geo=None):
     if geo is None:
@@ -248,7 +254,9 @@ def bsp_stiffness_3d(knotvecs, geo=None):
         K12 = k(MK[1][1], MK[2][0]) + k(MK[1][0], MK[2][1])
         return k(MK[0][1], M12) + k(MK[0][0], K12)
     else:
-        return assemble_tools.stiffness_3d(knotvecs, geo)
+        return assemble_tools.assemble(
+                assemble_tools.StiffnessAssembler3D(knotvecs, geo),
+                symmetric=True)
 
 ################################################################################
 # Assembling right-hand sides

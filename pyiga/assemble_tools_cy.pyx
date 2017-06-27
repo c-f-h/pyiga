@@ -428,6 +428,14 @@ include "assemblers.pxi"
 # Driver routines for assemblers
 ################################################################################
 
+def assemble(asm, symmetric=False):
+    if isinstance(asm, BaseAssembler2D):
+        return generic_assemble_2d_parallel(asm, symmetric=symmetric)
+    elif isinstance(asm, BaseAssembler3D):
+        return generic_assemble_3d_parallel(asm, symmetric=symmetric)
+    else:
+        assert False, 'Unknown assembler type'
+
 def generic_vector_asm(kvs, asm, symmetric, format, layout):
     assert layout in ('packed', 'blocked')
     dim = len(kvs)
@@ -448,23 +456,6 @@ def generic_vector_asm(kvs, asm, symmetric, format, layout):
         return mlb
     else:
         return mlb.asmatrix(format)
-
-## 2D
-
-def mass_2d(kvs, geo):
-    return generic_assemble_2d_parallel(MassAssembler2D(kvs, geo), symmetric=True)
-
-def stiffness_2d(kvs, geo):
-    return generic_assemble_2d_parallel(StiffnessAssembler2D(kvs, geo), symmetric=True)
-
-
-## 3D
-
-def mass_3d(kvs, geo):
-    return generic_assemble_3d_parallel(MassAssembler3D(kvs, geo), symmetric=True)
-
-def stiffness_3d(kvs, geo):
-    return generic_assemble_3d_parallel(StiffnessAssembler3D(kvs, geo), symmetric=True)
 
 
 ################################################################################

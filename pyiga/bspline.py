@@ -22,6 +22,11 @@ class KnotVector:
     The B-splines are normalized in the sense that they satisfy a
     partition of unity property.
 
+    Tensor product B-spline bases are typically represented simply as tuples of
+    the univariate knot spans. E.g., ``(kv1, kv2)`` would represent the tensor
+    product basis formed from the two B-spline bases over the
+    :class:`KnotVector` instances ``kv1`` and ``kv2``.
+
     A more convenient way to create knot vectors is the :func:`make_knots` function.
 
     Attributes:

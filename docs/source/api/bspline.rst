@@ -1,5 +1,5 @@
-B-spline functions
-==================
+B-splines
+=========
 
 .. automodule:: pyiga.bspline
     :members:

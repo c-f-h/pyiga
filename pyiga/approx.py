@@ -25,6 +25,8 @@ def interpolate(kvs, f, geo=None, nodes=None):
     arrays) in the parameter domain specifying the interpolation nodes. If not
     specified, the Gréville abscissae are used.
     """
+    if isinstance(kvs, bspline.KnotVector):
+        kvs = (kvs,)
     if nodes is None:
         nodes = [kv.greville() for kv in kvs]
 
@@ -55,6 +57,8 @@ def project_L2(kvs, f, f_physical=False, geo=None):
     given in physical coordinates, pass `f_physical=True`. This requires `geo`
     to be specified.
     """
+    if isinstance(kvs, bspline.KnotVector):
+        kvs = (kvs,)
     Minvs = [operators.make_solver(assemble.mass(kv), spd=True) for kv in kvs]
     rhs = assemble.inner_products(kvs, f, f_physical=f_physical, geo=geo)
     if geo is None:

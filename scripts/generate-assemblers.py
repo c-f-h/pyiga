@@ -172,6 +172,13 @@ class AsmGenerator:
                 + ' = ' +
                 self.matvec_comp(A, x, k))
 
+    def inner(self, x, y, dims=None):
+        if dims is None:
+            dims = range(self.dim)
+        return ' + '.join(
+                self.vec_entry(x, j) + ' * ' + self.vec_entry(y, j)
+                for j in dims)
+
     def add_matvecvec(self, A, x, y):
         for k in range(self.dim):
             self.putf('result += ({Axk}) * {yk}',
@@ -750,6 +757,19 @@ class StiffnessAsmGen(AsmGenerator):
         self.add_matvecvec('B', 'gu', 'gv')
 
 
+class Heat_ST_AsmGen(AsmGenerator):
+    def __init__(self, code, dim):
+        AsmGenerator.__init__(self, 'Heat_ST_Assembler', code, dim)
+        self.need_val = True
+        self.need_phys_grad = True
+        self.need_phys_weights = True
+
+    def generate_biform(self):
+        timederiv = "gradu[%d] * v" % (self.dim-1)
+        gradgrad = self.inner('gradu', 'gradv', dims=range(self.dim-1))
+        self.put('result += W * (%s + %s)' % (gradgrad, timederiv))
+
+
 class DivDivAsmGen(AsmGenerator):
     def __init__(self, code, dim):
         AsmGenerator.__init__(self, 'DivDivAssembler', code, dim, vec=dim**2)
@@ -784,6 +804,7 @@ def generate(dim):
     code = PyCode()
     MassAsmGen(code, DIM).generate()
     StiffnessAsmGen(code, DIM).generate()
+    Heat_ST_AsmGen(code, DIM).generate()
     DivDivAsmGen(code, DIM).generate()
 
     s = tmpl_generic.render(locals())

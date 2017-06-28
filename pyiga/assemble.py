@@ -334,7 +334,8 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
             which the boundary condition lies, and `side` is either
             0 for the "lower" boundary or 1 for the "upper" boundary.
         dir_func: a function which will be interpolated to obtain the
-            Dirichlet boundary values
+            Dirichlet boundary values. Assumed to be given in physical
+            coordinates.
 
     Returns:
         A pair of arrays `(indices, values)` which denote the indices of the

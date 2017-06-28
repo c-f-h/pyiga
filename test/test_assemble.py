@@ -49,6 +49,16 @@ def test_stiffness_asym():
     assert(K_12.shape[0] == kv1.numdofs)
     assert(K_12.shape[1] == kv2.numdofs)
 
+def test_mixed_deriv_biform():
+    kv = bspline.make_knots(4, 0.0, 1.0, 20)
+    DxxD0 = bsp_mixed_deriv_biform_1d(kv, 2, 0)
+    DxxDx = bsp_mixed_deriv_biform_1d(kv, 2, 1)
+    from pyiga.approx import interpolate
+    u = interpolate(kv, lambda x: x)
+    # second derivative of linear function x -> x is 0
+    assert abs(DxxD0.dot(u)).max() < 1e-10
+    assert abs(DxxDx.dot(u)).max() < 1e-10
+
 def test_stiffness_2d():
     kvs = (bspline.make_knots(4, 0.0, 1.0, 10),
            bspline.make_knots(3, 0.0, 1.0, 12))

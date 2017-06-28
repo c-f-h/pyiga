@@ -344,13 +344,16 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
     """
     bdax, bdside = bdspec
 
+    # get basis for the boundary face
     bdbasis = list(kvs)
     del bdbasis[bdax]
 
+    # get boundary geometry and interpolate dir_func
     bdgeo = geo.boundary(bdax, bdside)
     from .approx import interpolate
     dircoeffs = interpolate(bdbasis, dir_func, geo=bdgeo).ravel()
 
+    # compute indices for eliminated dofs
     N = tuple(kv.numdofs for kv in kvs)
     bddofs = [range(n) for n in N]
     bddofs[bdax] = (0 if bdside==0 else N[bdax]-1)

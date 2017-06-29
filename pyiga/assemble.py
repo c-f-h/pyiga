@@ -57,10 +57,11 @@ Right-hand sides
 
 .. autofunction:: inner_products
 
-Boundary conditions
--------------------
+Boundary and initial conditions
+-------------------------------
 
 .. autofunction:: compute_dirichlet_bc
+.. autofunction:: compute_initial_condition_01
 .. autofunction:: combine_bcs
 
 .. autoclass:: RestrictedLinearSystem
@@ -357,7 +358,7 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
     Returns:
         A pair of arrays `(indices, values)` which denote the indices of the
         dofs within the tensor product basis which lie along the Dirichlet
-        boundary and their values, respectively.
+        boundary and their computed values, respectively.
     """
     bdax, bdside = bdspec
 
@@ -375,6 +376,65 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
     bdindices = slice_indices(bdax, 0 if bdside==0 else N[bdax]-1, N, ravel=True)
 
     return bdindices, dircoeffs
+
+
+def compute_initial_condition_01(kvs, geo, bdspec, g0, g1):
+    r"""Compute indices and values for an initial condition including function
+    value and derivative for a space-time discretization using interpolation.
+    This only works for a space-time cylinder with constant (in time) geometry.
+    To be precise, the space-time geometry transform `geo` should have the form
+
+    .. math:: G(\vec x, t) = (\widetilde G(\vec x), t).
+
+    Args:
+        kvs: a tensor product B-spline basis
+        geo (:class:`pyiga.geometry.BSplinePatch`): the geometry transform of
+            the space-time cylinder
+        bdspec: a pair `(axis, side)`. `axis` denotes the time axis of `geo`,
+            and `side` is either 0 for the "lower" boundary or 1 for the
+            "upper" boundary.
+        g0: a function which will be interpolated to obtain the initial
+            function values
+        g1: a function which will be interpolated to obtain the initial
+            derivatives. Both `g0` and `g1` are assumed to be given in physical
+            coordinates.
+
+    Returns:
+        A pair of arrays `(indices, values)` which denote the indices of the
+        dofs within the tensor product basis which lie along the initial face
+        of the space-time cylinder and their computed values, respectively.
+    """
+    bdax, bdside = bdspec
+
+    bdbasis = list(kvs)
+    del bdbasis[bdax]
+
+    bdgeo = geo.boundary(bdax, bdside)
+    from .approx import interpolate
+    coeffs01 = np.stack((  # coefficients for 0th and 1st derivatives, respectively
+        interpolate(bdbasis, g0, geo=bdgeo).ravel(),
+        interpolate(bdbasis, g1, geo=bdgeo).ravel()
+    ))
+
+    # compute 2x2 matrix which maps the two boundary coefficients to 0-th and 1-st derivative
+    # at the boundary (only two basis functions have contributions there!)
+    if bdside == 0:
+        bdcolloc = bspline.active_deriv(kvs[bdax], 0.0, 1)[:2, :2] # first two basis functions
+    else:
+        bdcolloc = bspline.active_deriv(kvs[bdax], 1.0, 1)[:2, -2:] # last two basis functions
+
+    # note: this only works for a space-time cylinder with constant geometry!
+    coll_coeffs = np.linalg.solve(bdcolloc, coeffs01)
+
+    # compute indices for the two boundary slices
+    N = tuple(kv.numdofs for kv in kvs)
+    firstidx = (0 if bdside==0 else N[bdax]-2)
+    bdindices = np.concatenate((
+        slice_indices(bdax, firstidx,   N, ravel=True),
+        slice_indices(bdax, firstidx+1, N, ravel=True)
+    ))
+
+    return bdindices, coll_coeffs.ravel()
 
 
 def combine_bcs(bcs):

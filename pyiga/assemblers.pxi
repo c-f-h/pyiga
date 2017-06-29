@@ -551,6 +551,106 @@ cdef class Heat_ST_Assembler2D(BaseAssembler2D):
                 values_i[0], values_i[1],
         )
 
+cdef class WaveAssembler_ST2D(BaseAssembler2D):
+    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
+    cdef double[:, :, :, ::1] JacInvT
+    cdef double[:, ::1] W
+
+    def __init__(self, kvs, geo):
+        assert geo.dim == 2, "Geometry has wrong dimension"
+        self.base_init(kvs)
+
+        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
+        gaussgrid = [g[0] for g in gauss]
+        gaussweights = [g[1] for g in gauss]
+
+        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=2) for k in range(2)]
+        for k in range(2):
+            colloc[k] = tuple(X.T.A for X in colloc[k])
+        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
+
+        geo_jac = geo.grid_jacobian(gaussgrid)
+        geo_det, geo_jacinv = det_and_inv(geo_jac)
+        geo_weights = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
+        self.JacInvT = np.asarray(np.swapaxes(geo_jacinv, -2, -1), order='C')
+        self.W = geo_weights
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    @staticmethod
+    cdef double combine(
+            double[:, :, :, ::1] _JacInvT,
+            double[:, ::1] _W,
+            double* VDu0, double* VDu1,
+            double* VDv0, double* VDv1,
+        ) nogil:
+        cdef size_t n0 = _JacInvT.shape[0]
+        cdef size_t n1 = _JacInvT.shape[1]
+
+        cdef size_t i0
+        cdef size_t i1
+        cdef double gu[2]
+        cdef double gv[2]
+        cdef double gradu[2]
+        cdef double gradv[2]
+        cdef double result = 0.0
+        cdef double* JacInvT
+        cdef double W
+        cdef double dtgv[1]
+        cdef double dtgradv[1]
+
+        for i0 in range(n0):
+            for i1 in range(n1):
+                JacInvT = &_JacInvT[i0, i1, 0, 0]
+                W = _W[i0, i1]
+
+                gu[0] = VDu0[3*i0+0] * VDu1[3*i1+1]
+                gu[1] = VDu0[3*i0+1] * VDu1[3*i1+0]
+
+                gv[0] = VDv0[3*i0+0] * VDv1[3*i1+1]
+                gv[1] = VDv0[3*i0+1] * VDv1[3*i1+0]
+
+                gradu[0] = JacInvT[0]*gu[0] + JacInvT[1]*gu[1]
+                gradu[1] = JacInvT[2]*gu[0] + JacInvT[3]*gu[1]
+
+                gradv[0] = JacInvT[0]*gv[0] + JacInvT[1]*gv[1]
+                gradv[1] = JacInvT[2]*gv[0] + JacInvT[3]*gv[1]
+
+                dtgv[0] = VDv0[3*i0+1] * VDv1[3*i1+1]
+                dtgradv[0] = JacInvT[0]*dtgv[0]
+                result += W * ((VDu0[3*i0+2] * VDu1[3*i1+0]) * (VDv0[3*i0+1] * VDv1[3*i1+0]) + gradu[0] * dtgradv[0])
+        return result
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    cdef double assemble_impl(self, size_t[2] i, size_t[2] j) nogil:
+        cdef int k
+        cdef IntInterval intv
+        cdef size_t g_sta[2]
+        cdef size_t g_end[2]
+        cdef (double*) values_i[2]
+        cdef (double*) values_j[2]
+
+        for k in range(2):
+            intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
+                                       make_intv(self.meshsupp[k][j[k],0], self.meshsupp[k][j[k],1]))
+            if intv.a >= intv.b:
+                return 0.0      # no intersection of support
+            g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
+            g_end[k] = self.nqp * intv.b    # end of Gauss nodes
+
+            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
+            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
+
+        return WaveAssembler_ST2D.combine(
+                self.JacInvT [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
+                self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
+                values_j[0], values_j[1],
+                values_i[0], values_i[1],
+        )
+
 cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
     cdef double[:, :, :, ::1] JacInvT
@@ -1235,6 +1335,115 @@ cdef class Heat_ST_Assembler3D(BaseAssembler3D):
             values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 
         return Heat_ST_Assembler3D.combine(
+                self.JacInvT [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
+                self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
+                values_j[0], values_j[1], values_j[2],
+                values_i[0], values_i[1], values_i[2],
+        )
+
+cdef class WaveAssembler_ST3D(BaseAssembler3D):
+    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
+    cdef double[:, :, :, :, ::1] JacInvT
+    cdef double[:, :, ::1] W
+
+    def __init__(self, kvs, geo):
+        assert geo.dim == 3, "Geometry has wrong dimension"
+        self.base_init(kvs)
+
+        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
+        gaussgrid = [g[0] for g in gauss]
+        gaussweights = [g[1] for g in gauss]
+
+        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=2) for k in range(3)]
+        for k in range(3):
+            colloc[k] = tuple(X.T.A for X in colloc[k])
+        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
+
+        geo_jac = geo.grid_jacobian(gaussgrid)
+        geo_det, geo_jacinv = det_and_inv(geo_jac)
+        geo_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
+        self.JacInvT = np.asarray(np.swapaxes(geo_jacinv, -2, -1), order='C')
+        self.W = geo_weights
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    @staticmethod
+    cdef double combine(
+            double[:, :, :, :, ::1] _JacInvT,
+            double[:, :, ::1] _W,
+            double* VDu0, double* VDu1, double* VDu2,
+            double* VDv0, double* VDv1, double* VDv2,
+        ) nogil:
+        cdef size_t n0 = _JacInvT.shape[0]
+        cdef size_t n1 = _JacInvT.shape[1]
+        cdef size_t n2 = _JacInvT.shape[2]
+
+        cdef size_t i0
+        cdef size_t i1
+        cdef size_t i2
+        cdef double gu[3]
+        cdef double gv[3]
+        cdef double gradu[3]
+        cdef double gradv[3]
+        cdef double result = 0.0
+        cdef double* JacInvT
+        cdef double W
+        cdef double dtgv[2]
+        cdef double dtgradv[2]
+
+        for i0 in range(n0):
+            for i1 in range(n1):
+                for i2 in range(n2):
+                    JacInvT = &_JacInvT[i0, i1, i2, 0, 0]
+                    W = _W[i0, i1, i2]
+
+                    gu[0] = VDu0[3*i0+0] * VDu1[3*i1+0] * VDu2[3*i2+1]
+                    gu[1] = VDu0[3*i0+0] * VDu1[3*i1+1] * VDu2[3*i2+0]
+                    gu[2] = VDu0[3*i0+1] * VDu1[3*i1+0] * VDu2[3*i2+0]
+
+                    gv[0] = VDv0[3*i0+0] * VDv1[3*i1+0] * VDv2[3*i2+1]
+                    gv[1] = VDv0[3*i0+0] * VDv1[3*i1+1] * VDv2[3*i2+0]
+                    gv[2] = VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+0]
+
+                    gradu[0] = JacInvT[0]*gu[0] + JacInvT[1]*gu[1] + JacInvT[2]*gu[2]
+                    gradu[1] = JacInvT[3]*gu[0] + JacInvT[4]*gu[1] + JacInvT[5]*gu[2]
+                    gradu[2] = JacInvT[6]*gu[0] + JacInvT[7]*gu[1] + JacInvT[8]*gu[2]
+
+                    gradv[0] = JacInvT[0]*gv[0] + JacInvT[1]*gv[1] + JacInvT[2]*gv[2]
+                    gradv[1] = JacInvT[3]*gv[0] + JacInvT[4]*gv[1] + JacInvT[5]*gv[2]
+                    gradv[2] = JacInvT[6]*gv[0] + JacInvT[7]*gv[1] + JacInvT[8]*gv[2]
+
+                    dtgv[0] = VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+1]
+                    dtgv[1] = VDv0[3*i0+1] * VDv1[3*i1+1] * VDv2[3*i2+0]
+                    dtgradv[0] = JacInvT[0]*dtgv[0] + JacInvT[1]*dtgv[1]
+                    dtgradv[1] = JacInvT[3]*dtgv[0] + JacInvT[4]*dtgv[1]
+                    result += W * ((VDu0[3*i0+2] * VDu1[3*i1+0] * VDu2[3*i2+0]) * (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+0]) + gradu[0] * dtgradv[0] + gradu[1] * dtgradv[1])
+        return result
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    cdef double assemble_impl(self, size_t[3] i, size_t[3] j) nogil:
+        cdef int k
+        cdef IntInterval intv
+        cdef size_t g_sta[3]
+        cdef size_t g_end[3]
+        cdef (double*) values_i[3]
+        cdef (double*) values_j[3]
+
+        for k in range(3):
+            intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
+                                       make_intv(self.meshsupp[k][j[k],0], self.meshsupp[k][j[k],1]))
+            if intv.a >= intv.b:
+                return 0.0      # no intersection of support
+            g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
+            g_end[k] = self.nqp * intv.b    # end of Gauss nodes
+
+            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
+            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
+
+        return WaveAssembler_ST3D.combine(
                 self.JacInvT [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_j[0], values_j[1], values_j[2],

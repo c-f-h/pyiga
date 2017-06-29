@@ -105,7 +105,7 @@ class AsmGenerator:
             for k in range(self.dim)])
 
     def pderiv(self, var, D, idx='i'):
-        """Partial derivative of `var` of order `D=(Dx1, ..., Dxd)`"""
+        """Parametric partial derivative of `var` of order `D=(Dx1, ..., Dxd)`"""
         D = tuple(reversed(D))  # x is last axis
         assert len(D) == self.dim
         assert all(0 <= d <= self.numderiv for d in D)
@@ -160,17 +160,21 @@ class AsmGenerator:
     def vec_entry(self, name, i):
         return '{name}[{i}]'.format(name=name, i=i)
 
-    def matvec_comp(self, A, x, i):
+    def matvec_comp(self, A, x, i, dims=None):
+        if dims is None:
+            dims = range(self.dim)
         return ' + '.join(
                 self.mat_entry(A, i, j) + '*' + self.vec_entry(x, j)
-                for j in range(self.dim))
+                for j in dims)
 
-    def matvec(self, out, A, x):
-        for k in range(self.dim):
+    def matvec(self, out, A, x, dims=None):
+        if dims is None:
+            dims = range(self.dim)
+        for k in dims:
             self.put(
                 self.vec_entry(out, k)
                 + ' = ' +
-                self.matvec_comp(A, x, k))
+                self.matvec_comp(A, x, k, dims=dims))
 
     def inner(self, x, y, dims=None):
         if dims is None:
@@ -240,6 +244,8 @@ class AsmGenerator:
                 self.declare_scalar(name)
             elif var['type'] == 'matrix':
                 self.declare_pointer(name)
+
+        self.declare_temp_variables()
 
         self.put('')
 
@@ -353,6 +359,9 @@ self.C = [np.stack(Cs, axis=-1) for Cs in colloc]""".splitlines():
         self.initialize_fields()
         self.put('')
         self.dedent()
+
+    def declare_temp_variables(self):
+        pass
 
     def initialize_fields(self):
         pass
@@ -770,6 +779,32 @@ class Heat_ST_AsmGen(AsmGenerator):
         self.put('result += W * (%s + %s)' % (gradgrad, timederiv))
 
 
+class Wave_ST_AsmGen(AsmGenerator):
+    def __init__(self, code, dim):
+        AsmGenerator.__init__(self, 'WaveAssembler_ST', code, dim, numderiv=2)
+        self.need_phys_grad = True
+        self.need_phys_weights = True
+
+    def declare_temp_variables(self):
+        self.declare_vec('dtgv', size=self.dim-1)
+        self.declare_vec('dtgradv', size=self.dim-1)
+
+    def generate_biform(self):
+        utt_vt = '(%s) * (%s)' % (
+            self.pderiv('u', (self.dim-1) * (0,) + (2,)),
+            self.pderiv('v', (self.dim-1) * (0,) + (1,)))
+
+        spacedims, timedim = range(self.dim-1), self.dim-1
+        for k in spacedims:
+            D = self.dim * [0]
+            D[k] = D[timedim] = 1   # mixer derivative: dt dx_k
+            self.putf('dtgv[{k}] = {comp}', k=k, comp=self.pderiv('v', D))
+        self.matvec('dtgradv', 'JacInvT', 'dtgv', dims=spacedims)
+        gradu_dtgradv = self.inner('gradu', 'dtgradv', dims=spacedims)
+
+        self.put('result += W * (%s + %s)' % (utt_vt, gradu_dtgradv))
+
+
 class DivDivAsmGen(AsmGenerator):
     def __init__(self, code, dim):
         AsmGenerator.__init__(self, 'DivDivAssembler', code, dim, vec=dim**2)
@@ -805,6 +840,7 @@ def generate(dim):
     MassAsmGen(code, DIM).generate()
     StiffnessAsmGen(code, DIM).generate()
     Heat_ST_AsmGen(code, DIM).generate()
+    Wave_ST_AsmGen(code, DIM).generate()
     DivDivAsmGen(code, DIM).generate()
 
     s = tmpl_generic.render(locals())

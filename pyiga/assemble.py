@@ -70,6 +70,7 @@ Boundary conditions
 import numpy as np
 import scipy
 import scipy.sparse
+import itertools
 
 from . import bspline
 from . import assemble_tools
@@ -356,8 +357,9 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
     # compute indices for eliminated dofs
     N = tuple(kv.numdofs for kv in kvs)
     bddofs = [range(n) for n in N]
-    bddofs[bdax] = (0 if bdside==0 else N[bdax]-1)
-    bdindices = np.ravel_multi_index(bddofs, N)   # raveled boundary indices
+    bddofs[bdax] = [0 if bdside==0 else N[bdax]-1]
+    multi_indices = np.array(list(itertools.product(*bddofs))).T
+    bdindices = np.ravel_multi_index(multi_indices, N)   # raveled boundary indices
 
     return bdindices, dircoeffs
 

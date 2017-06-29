@@ -150,11 +150,15 @@ class BSplinePatch(BSplineFunc):
         BSplineFunc.__init__(self, kvs, coeffs)
         assert self.dim == self.sdim, "Wrong dimension: should be %s, not %s" % (self.sdim, self.dim)
 
-    def extrude(self, z0=0.0, z1=1.0):
+    def extrude(self, z0=0.0, z1=1.0, support=(0.0, 1.0)):
         """Create a patch with one additional space dimension by
         linearly extruding along the new axis from `z0` to `z1`.
+
+        By default, the new knot vector will be defined over the
+        interval (0, 1). A different interval can be specified through
+        the `support` parameter.
         """
-        kvz = bspline.make_knots(1, 0.0, 1.0, 1)      # linear KV with a single interval
+        kvz = bspline.make_knots(1, support[0], support[1], 1)      # linear KV with a single interval
 
         pad0 = np.expand_dims(np.tile(z0, self.coeffs.shape[:-1]), axis=-1)
         pad1 = np.expand_dims(np.tile(z1, self.coeffs.shape[:-1]), axis=-1)

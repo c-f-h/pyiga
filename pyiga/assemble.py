@@ -324,6 +324,22 @@ def inner_products(kvs, f, f_physical=False, geo=None):
 # Incorporating essential boundary conditions
 ################################################################################
 
+def slice_indices(ax, idx, shape, ravel=False):
+    """Return dof indices for a slice of a tensor product basis with size
+    `shape`. The slice is taken across index `idx` on axis `ax`.
+
+    The indices are returned either as a `N x dim` array of multiindices or,
+    with `ravel=True`, as an array of sequential (raveled) indices.
+    """
+    shape = tuple(shape)
+    axdofs = [range(n) for n in shape]
+    axdofs[ax] = [idx]
+    multi_indices = np.array(list(itertools.product(*axdofs)))
+    if ravel:
+        multi_indices = np.ravel_multi_index(multi_indices.T, shape)
+    return multi_indices
+
+
 def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
     """Compute indices and values for a Dirichlet boundary condition using
     interpolation.
@@ -354,12 +370,9 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
     from .approx import interpolate
     dircoeffs = interpolate(bdbasis, dir_func, geo=bdgeo).ravel()
 
-    # compute indices for eliminated dofs
+    # compute sequential indices for eliminated dofs
     N = tuple(kv.numdofs for kv in kvs)
-    bddofs = [range(n) for n in N]
-    bddofs[bdax] = [0 if bdside==0 else N[bdax]-1]
-    multi_indices = np.array(list(itertools.product(*bddofs))).T
-    bdindices = np.ravel_multi_index(multi_indices, N)   # raveled boundary indices
+    bdindices = slice_indices(bdax, 0 if bdside==0 else N[bdax]-1, N, ravel=True)
 
     return bdindices, dircoeffs
 

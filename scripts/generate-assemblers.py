@@ -320,9 +320,7 @@ class AsmGenerator:
 """assert geo.dim == {dim}, "Geometry has wrong dimension"
 self.base_init(kvs)
 
-gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
-gaussgrid = [g[0] for g in gauss]
-gaussweights = [g[1] for g in gauss]
+gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
 colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs={maxderiv}) for k in range({dim})]
 for k in range({dim}):

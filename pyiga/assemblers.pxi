@@ -296,9 +296,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
         assert geo.dim == 2, "Geometry has wrong dimension"
         self.base_init(kvs)
 
-        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
-        gaussgrid = [g[0] for g in gauss]
-        gaussweights = [g[1] for g in gauss]
+        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
         colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=0) for k in range(2)]
         for k in range(2):
@@ -375,9 +373,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         assert geo.dim == 2, "Geometry has wrong dimension"
         self.base_init(kvs)
 
-        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
-        gaussgrid = [g[0] for g in gauss]
-        gaussweights = [g[1] for g in gauss]
+        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
         colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=1) for k in range(2)]
         for k in range(2):
@@ -459,9 +455,7 @@ cdef class Heat_ST_Assembler2D(BaseAssembler2D):
         assert geo.dim == 2, "Geometry has wrong dimension"
         self.base_init(kvs)
 
-        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
-        gaussgrid = [g[0] for g in gauss]
-        gaussweights = [g[1] for g in gauss]
+        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
         colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=1) for k in range(2)]
         for k in range(2):
@@ -560,9 +554,7 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         assert geo.dim == 2, "Geometry has wrong dimension"
         self.base_init(kvs)
 
-        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
-        gaussgrid = [g[0] for g in gauss]
-        gaussweights = [g[1] for g in gauss]
+        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
         colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=2) for k in range(2)]
         for k in range(2):
@@ -660,9 +652,7 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         assert geo.dim == 2, "Geometry has wrong dimension"
         self.base_init(kvs)
 
-        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
-        gaussgrid = [g[0] for g in gauss]
-        gaussweights = [g[1] for g in gauss]
+        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
         colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=1) for k in range(2)]
         for k in range(2):
@@ -1070,9 +1060,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
         assert geo.dim == 3, "Geometry has wrong dimension"
         self.base_init(kvs)
 
-        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
-        gaussgrid = [g[0] for g in gauss]
-        gaussweights = [g[1] for g in gauss]
+        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
         colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=0) for k in range(3)]
         for k in range(3):
@@ -1152,9 +1140,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         assert geo.dim == 3, "Geometry has wrong dimension"
         self.base_init(kvs)
 
-        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
-        gaussgrid = [g[0] for g in gauss]
-        gaussweights = [g[1] for g in gauss]
+        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
         colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=1) for k in range(3)]
         for k in range(3):
@@ -1242,9 +1228,7 @@ cdef class Heat_ST_Assembler3D(BaseAssembler3D):
         assert geo.dim == 3, "Geometry has wrong dimension"
         self.base_init(kvs)
 
-        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
-        gaussgrid = [g[0] for g in gauss]
-        gaussweights = [g[1] for g in gauss]
+        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
         colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=1) for k in range(3)]
         for k in range(3):
@@ -1350,9 +1334,7 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         assert geo.dim == 3, "Geometry has wrong dimension"
         self.base_init(kvs)
 
-        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
-        gaussgrid = [g[0] for g in gauss]
-        gaussweights = [g[1] for g in gauss]
+        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
         colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=2) for k in range(3)]
         for k in range(3):
@@ -1459,9 +1441,7 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         assert geo.dim == 3, "Geometry has wrong dimension"
         self.base_init(kvs)
 
-        gauss = [make_iterated_quadrature(np.unique(kv.kv), self.nqp) for kv in kvs]
-        gaussgrid = [g[0] for g in gauss]
-        gaussweights = [g[1] for g in gauss]
+        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
         colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=1) for k in range(3)]
         for k in range(3):

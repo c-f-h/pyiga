@@ -80,7 +80,7 @@ from . import operators
 from . import utils
 from . import geometry
 
-from .quadrature import make_iterated_quadrature
+from .quadrature import make_iterated_quadrature, make_tensor_quadrature
 
 ################################################################################
 # 1D assembling routines
@@ -293,8 +293,7 @@ def inner_products(kvs, f, f_physical=False, geo=None):
         kvs = (kvs,)
     # compute quadrature rules
     nqp = max(kv.p for kv in kvs) + 1
-    gauss = [make_iterated_quadrature(kv.mesh, nqp) for kv in kvs]
-    gaussgrid = [g[0] for g in gauss]
+    gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], nqp)
 
     # evaluate function f on grid or transformed grid
     if f_physical:
@@ -305,7 +304,7 @@ def inner_products(kvs, f, f_physical=False, geo=None):
 
     # multiply function values with quadrature weights
     fvals = tensor.apply_tprod(
-              [operators.DiagonalOperator(g[1]) for g in gauss], fvals)
+              [operators.DiagonalOperator(gw) for gw in gaussweights], fvals)
     # if geometry was specified, multiply by abs(det(jac))
     if geo is not None:
         geo_jac = geo.grid_jacobian(gaussgrid)

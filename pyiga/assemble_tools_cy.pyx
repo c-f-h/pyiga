@@ -14,7 +14,7 @@ import scipy.sparse
 
 import pyiga
 from . import bspline
-from .quadrature import make_iterated_quadrature
+from .quadrature import make_tensor_quadrature
 from .mlmatrix import MLBandedMatrix, get_transpose_idx_for_bidx
 from . cimport fast_assemble_cy
 

@@ -2,7 +2,7 @@ import numpy as np
 
 def gauss_rule(deg, a, b):
     """Return nodes and weights for Gauss-Legendre rule of given degree in (a,b).
-    
+
     a and b are arrays containing the start and end points of the intervals."""
     m = 0.5*(a + b)     # array of interval midpoints
     h = 0.5*(b - a)     # array of halved interval lengths
@@ -14,3 +14,8 @@ def gauss_rule(deg, a, b):
 def make_iterated_quadrature(intervals, nqp):
     return gauss_rule(nqp, intervals[:-1], intervals[1:])
 
+def make_tensor_quadrature(meshes, nqp):
+    gauss = tuple(make_iterated_quadrature(mesh, nqp) for mesh in meshes)
+    grid    = tuple(g[0] for g in gauss)
+    weights = tuple(g[1] for g in gauss)
+    return grid, weights

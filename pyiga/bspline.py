@@ -61,9 +61,12 @@ class KnotVector:
         """Number of nontrivial intervals in the knot vector"""
         return np.unique(self.kv).size - 1
 
-    def support(self, j):
-        """Support of j-th B-spline"""
-        return (self.kv[j], self.kv[j+self.p+1])
+    def support(self, j=None):
+        """Support of the knot vector or, if `j` is passed, of the j-th B-spline"""
+        if j is None:
+            return (self.kv[0], self.kv[-1])
+        else:
+            return (self.kv[j], self.kv[j+self.p+1])
 
     def support_idx(self, j):
         """Knot indices of support of j-th B-spline"""

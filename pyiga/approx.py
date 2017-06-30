@@ -32,12 +32,7 @@ def interpolate(kvs, f, geo=None, nodes=None):
 
     # evaluate f at interpolation nodes
     if geo is not None:
-        # transform interpolation nodes - shape: shape(grid) x dim
-        geo_nodes = utils.grid_eval(geo, nodes)
-        # extract coordinate components
-        X = tuple(geo_nodes[..., i] for i in range(geo_nodes.shape[-1]))
-        # evaluate the function
-        rhs = f(*X)
+        rhs = utils.grid_eval_transformed(f, nodes, geo)
     else:
         rhs = utils.grid_eval(f, nodes)
 

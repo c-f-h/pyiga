@@ -299,12 +299,7 @@ def inner_products(kvs, f, f_physical=False, geo=None):
     # evaluate function f on grid or transformed grid
     if f_physical:
         assert geo is not None, 'inner_products in physical domain requires geometry'
-        # transform quadrature grid - shape: shape(grid) x dim
-        geo_grid = utils.grid_eval(geo, gaussgrid)
-        # extract coordinate components
-        X = tuple(geo_grid[..., i] for i in range(geo_grid.shape[-1]))
-        # evaluate the function
-        fvals = f(*X)
+        fvals = utils.grid_eval_transformed(f, gaussgrid, geo)
     else:
         fvals = utils.grid_eval(f, gaussgrid)
 

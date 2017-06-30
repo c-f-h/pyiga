@@ -32,6 +32,15 @@ def grid_eval(f, grid):
 
         return values
 
+def grid_eval_transformed(f, grid, geo):
+    """Transform the tensor grid `grid` by the geometry transform `geo` and
+    evaluate `f` on the resulting grid.
+    """
+    trf_grid = grid_eval(geo, grid) # array of size shape(grid) x dim
+    # extract coordinate components
+    X = tuple(trf_grid[..., i] for i in range(trf_grid.shape[-1]))
+    # evaluate the function
+    return f(*X)
 
 def read_sparse_matrix(fname):
     I,J,vals = np.loadtxt(fname, skiprows=1, unpack=True)

@@ -508,7 +508,7 @@ cpdef void _asm_chunk_{{DIM}}d(BaseAssembler{{DIM}}D asm, size_t[:,::1] idxchunk
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef object generic_assemble_core_{{DIM}}d(BaseAssembler{{DIM}}D asm, bidx, bint symmetric=False):
+cdef object generic_assemble_core_{{DIM}}d(BaseAssembler{{DIM}}D asm, bidx, bint symmetric=False):
     cdef unsigned[:, ::1] {{ dimrepeat('bidx{}') }}
     cdef long {{ dimrepeat('mu{}') }}, {{ dimrepeat('MU{}') }}
     cdef double[{{ dimrepeat(':') }}:1] entries
@@ -631,7 +631,7 @@ cdef class BaseVectorAssembler{{DIM}}D:
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef object generic_assemble_core_vec_{{DIM}}d(BaseVectorAssembler{{DIM}}D asm, bidx, bint symmetric=False):
+cdef object generic_assemble_core_vec_{{DIM}}d(BaseVectorAssembler{{DIM}}D asm, bidx, bint symmetric=False):
     cdef unsigned[:, ::1] {{ dimrepeat('bidx{}') }}
     cdef long {{ dimrepeat('mu{}') }}, {{ dimrepeat('MU{}') }}
     cdef double[{{ dimrepeat(':') }}, ::1] entries

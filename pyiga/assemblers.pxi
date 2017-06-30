@@ -98,7 +98,7 @@ cpdef void _asm_chunk_2d(BaseAssembler2D asm, size_t[:,::1] idxchunk, double[::1
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef object generic_assemble_core_2d(BaseAssembler2D asm, bidx, bint symmetric=False):
+cdef object generic_assemble_core_2d(BaseAssembler2D asm, bidx, bint symmetric=False):
     cdef unsigned[:, ::1] bidx0, bidx1
     cdef long mu0, mu1, MU0, MU1
     cdef double[:, ::1] entries
@@ -218,7 +218,7 @@ cdef class BaseVectorAssembler2D:
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef object generic_assemble_core_vec_2d(BaseVectorAssembler2D asm, bidx, bint symmetric=False):
+cdef object generic_assemble_core_vec_2d(BaseVectorAssembler2D asm, bidx, bint symmetric=False):
     cdef unsigned[:, ::1] bidx0, bidx1
     cdef long mu0, mu1, MU0, MU1
     cdef double[:, :, ::1] entries
@@ -850,7 +850,7 @@ cpdef void _asm_chunk_3d(BaseAssembler3D asm, size_t[:,::1] idxchunk, double[::1
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef object generic_assemble_core_3d(BaseAssembler3D asm, bidx, bint symmetric=False):
+cdef object generic_assemble_core_3d(BaseAssembler3D asm, bidx, bint symmetric=False):
     cdef unsigned[:, ::1] bidx0, bidx1, bidx2
     cdef long mu0, mu1, mu2, MU0, MU1, MU2
     cdef double[:, :, ::1] entries
@@ -982,7 +982,7 @@ cdef class BaseVectorAssembler3D:
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef object generic_assemble_core_vec_3d(BaseVectorAssembler3D asm, bidx, bint symmetric=False):
+cdef object generic_assemble_core_vec_3d(BaseVectorAssembler3D asm, bidx, bint symmetric=False):
     cdef unsigned[:, ::1] bidx0, bidx1, bidx2
     cdef long mu0, mu1, mu2, MU0, MU1, MU2
     cdef double[:, :, :, ::1] entries

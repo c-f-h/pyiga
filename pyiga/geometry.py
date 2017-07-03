@@ -105,6 +105,11 @@ class BSplineFunc:
             grad_components.append(apply_tprod(ops, self.coeffs))   # shape: shape(grid) x self.dim
         return np.stack(grad_components, axis=-1)   # shape: shape(grid) x self.dim x self.sdim
 
+    def transformed_jacobian(self, geo):
+        """Create a function which evaluates the physical (transformed) gradient of the current
+        function after a geometry transform."""
+        return PhysicalGradientFunc(self, geo)
+
     def boundary(self, axis, side):
         """Return one side of the boundary as a :class:`BSplineFunc`.
 
@@ -177,6 +182,23 @@ class BSplinePatch(BSplineFunc):
         by noise of the given magnitude."""
         return BSplinePatch(self.kvs,
             self.coeffs + 2*noise*(np.random.random_sample(self.coeffs.shape) - 0.5))
+
+class PhysicalGradientFunc:
+    """A class for function objects which evaluate physical (transformed) gradients of
+    scalar functions with geometry transforms.
+    """
+    def __init__(self, func, geo):
+        assert func.dim == 1, 'Transformed gradients only implemented for scalar functions'
+        self.func = func
+        self.geo = geo
+        self.dim = self.sdim = func.sdim
+
+    def grid_eval(self, gridaxes):
+        geojac = self.geo.grid_jacobian(gridaxes)
+        geojacinvT = np.linalg.inv(geojac).swapaxes(-2, -1)
+
+        u_grad = self.func.grid_jacobian(gridaxes)
+        return np.matmul(geojacinvT, u_grad[..., None])[..., 0]
 
 ################################################################################
 # Examples of 2D geometries

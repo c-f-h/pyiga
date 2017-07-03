@@ -72,7 +72,7 @@ class BSplineFunc:
         """
         assert len(gridaxes) == self.sdim, "Input has wrong dimension"
         # make sure axes are one-dimensional
-        if not all(ax.ndim == 1 for ax in gridaxes):
+        if not all(np.ndim(ax) == 1 for ax in gridaxes):
             gridaxes = tuple(np.squeeze(ax) for ax in gridaxes)
             assert all(ax.ndim == 1 for ax in gridaxes), \
                 "Grid axes should be one-dimensional"
@@ -92,6 +92,8 @@ class BSplineFunc:
 
         Returns:
             ndarray: array of Jacobians (`dim x sdim`); shape corresponds to input grid.
+            For scalar functions, the output is a vector of length `sdim` (the gradient)
+            per grid point.
         """
         assert np.shape(gridaxes)[0] == self.sdim
         colloc = [bspline.collocation_derivs(self.kvs[i], gridaxes[i], derivs=1) for i in range(self.sdim)]

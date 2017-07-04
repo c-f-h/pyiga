@@ -544,9 +544,9 @@ def divdiv(kvs, geo=None, layout='packed', format='csr'):
     return assemble_tools.generic_vector_asm(kvs, asm, symmetric=True, layout=layout, format=format)
 
 def mass_fast(kvs, geo=None, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
-    """Assemble a mass matrix for the given basis (B-spline basis
-    or tensor product B-spline basis) with an optional geometry transform,
-    using the fast low-rank assembling algorithm.
+    """Assemble a mass matrix for the given tensor product B-spline basis with
+    an optional geometry transform, using the fast low-rank assembling
+    algorithm.
     """
     if geo is None:
         # the default assemblers use Kronecker product assembling if no geometry present
@@ -563,9 +563,9 @@ def mass_fast(kvs, geo=None, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, ve
         assert False, "Dimensions higher than 3 are currently not implemented."
 
 def stiffness_fast(kvs, geo=None, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
-    """Assemble a stiffness matrix for the given basis (B-spline basis
-    or tensor product B-spline basis) with an optional geometry transform,
-    using the fast low-rank assembling algorithm.
+    """Assemble a stiffness matrix for the given tensor product B-spline basis
+    with an optional geometry transform, using the fast low-rank assembling
+    algorithm.
     """
     if geo is None:
         # the default assemblers use Kronecker product assembling if no geometry present

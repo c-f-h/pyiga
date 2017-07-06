@@ -327,6 +327,8 @@ def slice_indices(ax, idx, shape, ravel=False):
     with `ravel=True`, as an array of sequential (raveled) indices.
     """
     shape = tuple(shape)
+    if idx < 0:
+        idx += shape[ax]     # wrap around
     axdofs = [range(n) for n in shape]
     axdofs[ax] = [idx]
     multi_indices = np.array(list(itertools.product(*axdofs)))
@@ -367,7 +369,7 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
 
     # compute sequential indices for eliminated dofs
     N = tuple(kv.numdofs for kv in kvs)
-    bdindices = slice_indices(bdax, 0 if bdside==0 else N[bdax]-1, N, ravel=True)
+    bdindices = slice_indices(bdax, 0 if bdside==0 else -1, N, ravel=True)
 
     return bdindices, dircoeffs
 
@@ -422,7 +424,7 @@ def compute_initial_condition_01(kvs, geo, bdspec, g0, g1):
 
     # compute indices for the two boundary slices
     N = tuple(kv.numdofs for kv in kvs)
-    firstidx = (0 if bdside==0 else N[bdax]-2)
+    firstidx = (0 if bdside==0 else -2)
     bdindices = np.concatenate((
         slice_indices(bdax, firstidx,   N, ravel=True),
         slice_indices(bdax, firstidx+1, N, ravel=True)

@@ -183,6 +183,81 @@ class BSplinePatch(BSplineFunc):
         return BSplinePatch(self.kvs,
             self.coeffs + 2*noise*(np.random.random_sample(self.coeffs.shape) - 0.5))
 
+
+class NurbsFunc:
+    """Any function that is given in terms of a tensor product NURBS basis with
+    coefficients and weights.
+
+    Arguments:
+        kvs (seq): tuple of `d` :class:`pyiga.bspline.KnotVector`.
+        coeffs (ndarray): coefficient array; see :class:`BSplineFunc` for format.
+            The constructor may modify `coeffs` during premultiplication!
+        weights (ndarray): coefficients for weight function in the same format
+            as `coeffs`. If `weights=None` is passed, the weights are assumed to
+            be given as the last vector component of `coeffs` instead.
+
+    Attributes:
+        kvs (seq): the knot vectors representing the tensor product basis
+        coeffs (ndarray): the premultiplied coefficients for the function,
+            including the weights in the last vector component
+        sdim (int): dimension of the parameter domain
+        dim (int): dimension of the output of the function
+
+    The evaluation functions have the same prototypes and behavior as those in
+    :class:`BSplineFunc`.
+    """
+    def __init__(self, kvs, coeffs, weights):
+        self.kvs = tuple(kvs)
+        self.sdim = len(self.kvs)    # source dimension
+
+        N = tuple(kv.numdofs for kv in self.kvs)
+        if coeffs.ndim == 1:
+            assert coeffs.shape[0] == np.prod(N), "Wrong length of coefficient vector"
+            coeffs = coeffs.reshape(N)
+        assert N == coeffs.shape[:self.sdim], "Wrong shape of coefficients"
+        self.coeffs = coeffs
+
+        # determine target dimension
+        dim = coeffs.shape[self.sdim:]
+        if len(dim) == 0:
+            dim = 1
+        elif len(dim) == 1:
+            dim = dim[0]
+        else:
+            assert False, 'Tensor-valued NURBS functions not implemented'
+        self.dim = dim
+
+        if weights is None:
+            assert self.dim > 1, 'Weights must be specified in the coeffs array'
+            self.dim -= 1       # weights are already built into coeffs
+        else:
+            assert weights.shape == N, 'Wrong shape of weights array'
+            if self.coeffs.shape == N:  # no trailing dimensions
+                self.coeffs = np.stack((self.coeffs, weights), axis=-1)  # create new axis
+            else:   # already have a trailing dimension
+                self.coeffs = np.concatenate((self.coeffs, weights[..., None]), axis=-1)
+
+        # pre-multiply coefficients by weights
+        self.coeffs[..., :-1] *= self.coeffs[..., -1:]
+
+    def eval(self, *x):
+        coords = tuple(np.asarray([t]) for t in reversed(x))
+        return self.grid_eval(coords)
+
+    def grid_eval(self, gridaxes):
+        assert len(gridaxes) == self.sdim, "Input has wrong dimension"
+        # make sure axes are one-dimensional
+        if not all(np.ndim(ax) == 1 for ax in gridaxes):
+            gridaxes = tuple(np.squeeze(ax) for ax in gridaxes)
+            assert all(ax.ndim == 1 for ax in gridaxes), \
+                "Grid axes should be one-dimensional"
+        colloc = [bspline.collocation(self.kvs[i], gridaxes[i]).A for i in range(self.sdim)]
+        vals = apply_tprod(colloc, self.coeffs)
+        return vals[..., :-1] / vals[..., -1:]       # divide by weight function
+
+    # TODO: implement grid_jacobian for NURBS
+
+
 class PhysicalGradientFunc:
     """A class for function objects which evaluate physical (transformed) gradients of
     scalar functions with geometry transforms.
@@ -256,6 +331,29 @@ def bspline_quarter_annulus(r1=1.0, r2=2.0):
              [0.0,  r2]],
     ])
     return BSplinePatch((kvy,kvx), coeffs)
+
+def quarter_annulus(r1=1.0, r2=2.0):
+    """A NURBS representation of a quarter annulus in the first quadrant.
+
+    Args:
+        r1 (float): inner radius
+        r2 (float): outer radius
+
+    Returns:
+        :class:`NurbsFunc` 2D geometry
+    """
+    kvx = bspline.make_knots(1, 0.0, 1.0, 1)
+    kvy = bspline.make_knots(2, 0.0, 1.0, 1)
+
+    coeffs = np.array([
+            [[ r1, 0.0, 1.0],
+             [ r2, 0.0, 1.0]],
+            [[ r1,  r1, 1.0 / np.sqrt(2.0)],
+             [ r2,  r2, 1.0 / np.sqrt(2.0)]],
+            [[0.0,  r1, 1.0],
+             [0.0,  r2, 1.0]],
+    ])
+    return NurbsFunc((kvy,kvx), coeffs, weights=None)
 
 ################################################################################
 # Examples of 3D geometries

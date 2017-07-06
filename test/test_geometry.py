@@ -1,5 +1,5 @@
 from pyiga.geometry import *
-from pyiga import approx
+from pyiga import approx, bspline
 
 def geos_roughly_equal(geo1, geo2, n=25):
     x = np.linspace(0.0, 1.0, n)
@@ -85,3 +85,22 @@ def test_trf_gradient():
     grd = 2 * (np.linspace(0, 1, 10),)
     grads = u_grad.grid_eval(grd)
     assert np.allclose(grads[:, :, 0], 1) and np.allclose(grads[:, :, 1], -1)
+
+def test_nurbs():
+    kv = bspline.make_knots(2, 0.0, 1.0, 1)
+    r = 2.0
+    # construct quarter circle using NURBS
+    coeffs = np.array([
+            [  r, 0.0, 1.0],
+            [  r,   r, 1.0 / np.sqrt(2.0)],
+            [0.0,   r, 1.0]])
+
+    grid = (np.linspace(0.0, 1.0, 20),)
+
+    nurbs = NurbsFunc((kv,), coeffs.copy(), weights=None)
+    vals = nurbs.grid_eval(grid)
+    assert abs(r - np.linalg.norm(vals, axis=-1)).max() < 1e-12
+
+    nurbs = NurbsFunc((kv,), coeffs[:, :2], weights=coeffs[:, -1])
+    vals = nurbs.grid_eval(grid)
+    assert abs(r - np.linalg.norm(vals, axis=-1)).max() < 1e-12

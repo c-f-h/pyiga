@@ -133,6 +133,7 @@ class BSplineFunc:
 
 class BSplinePatch(BSplineFunc):
     """Represents a `d`-dimensional tensor product B-spline patch.
+    Inherits from :class:`BSplineFunc`.
 
     Arguments:
         kvs (seq): tuple of `d` :class:`pyiga.bspline.KnotVector`.

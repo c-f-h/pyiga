@@ -443,6 +443,7 @@ def combine_bcs(bcs):
     """
     indices = np.concatenate([ind for ind,_ in bcs])
     values  = np.concatenate([val for _,val in bcs])
+    assert indices.shape == values.shape, 'Inconsistent BC sizes'
 
     uidx, lookup = np.unique(indices, return_index=True)
     return uidx, values[lookup]

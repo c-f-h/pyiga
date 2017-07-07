@@ -33,6 +33,8 @@ class BSplineFunc:
         dim (int): dimension of the output of the function
     """
     def __init__(self, kvs, coeffs):
+        if isinstance(kvs, bspline.KnotVector):
+            kvs = (kvs,)
         self.kvs = tuple(kvs)
         self.sdim = len(kvs)    # source dimension
 
@@ -208,6 +210,8 @@ class NurbsFunc:
     :class:`BSplineFunc`.
     """
     def __init__(self, kvs, coeffs, weights):
+        if isinstance(kvs, bspline.KnotVector):
+            kvs = (kvs,)
         self.kvs = tuple(kvs)
         self.sdim = len(self.kvs)    # source dimension
 

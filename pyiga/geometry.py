@@ -1,4 +1,5 @@
-"""Classes and functions for creating and manipulating tensor product B-spline patches."""
+"""Classes and functions for creating and manipulating tensor product B-spline
+and NURBS patches."""
 import numpy as np
 import numpy.random
 

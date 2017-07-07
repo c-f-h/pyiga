@@ -413,3 +413,34 @@ def twisted_box():
 
     return BSplinePatch((kv1,kv2,kv3), coeffs)
 
+def circular_arc(alpha, r=1.0):
+    """Construct a circular arc with angle `alpha` and radius `r`.
+
+    The arc is centered at the origin, starts on the positive `x` axis and
+    travels in counterclockwise direction.
+    The angle `alpha` must be between 0 and `pi`.
+    """
+    # formulas adapted from
+    # https://www.cs.mtu.edu/~shene/COURSES/cs3621/NOTES/spline/NURBS/RB-circles.html
+    assert 0.0 < alpha < np.pi, 'Invalid angle'
+    beta = np.pi/2 - alpha/2
+    d = 1.0 / np.sin(beta)
+
+    coeffs = r * np.array([
+        [1.0, 0.0, 1.0],
+        [d * np.cos(alpha/2), d * np.sin(alpha/2), np.sin(beta)],
+        [np.cos(alpha), np.sin(alpha), 1.0]
+    ])
+    return NurbsFunc(bspline.make_knots(2, 0.0, 1.0, 1), coeffs, weights=None)
+
+def circle(r=1.0):
+    """Construct a circle with radius `r` using NURBS."""
+    knots = np.array([0,0,0, 1./3., 1./3., 2./3., 2./3, 1,1,1])
+    kv = bspline.KnotVector(knots, 2)
+
+    pts = r * np.array([(np.cos(a), np.sin(a)) for a in np.linspace(0, 2*np.pi, 7)])
+    pts[1] *= 2
+    pts[3] *= 2
+    pts[5] *= 2
+    W = np.array([1, .5, 1, .5, 1, .5, 1])
+    return NurbsFunc(kv, pts, weights=W)

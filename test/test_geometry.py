@@ -104,3 +104,21 @@ def test_nurbs():
     nurbs = NurbsFunc((kv,), coeffs[:, :2], weights=coeffs[:, -1])
     vals = nurbs.grid_eval(grid)
     assert abs(r - np.linalg.norm(vals, axis=-1)).max() < 1e-12
+
+def test_circular_arc():
+    alpha = 2./3.*np.pi
+    geo = circular_arc(alpha, r=2)
+    grd = np.linspace(0., 1., 50)
+    v = geo.grid_eval((grd,))
+    assert np.allclose(v[0], [2,0])
+    assert np.allclose(v[-1], [2*np.cos(alpha), 2*np.sin(alpha)])
+    assert abs(2. - np.linalg.norm(v, axis=-1)).max() < 1e-12
+
+def test_circle():
+    r = 1.75
+    geo = circle(r=r)
+    grd = np.linspace(0., 1., 50)
+    v = geo.grid_eval((grd,))
+    assert np.allclose(v[0],  [r,0])
+    assert np.allclose(v[-1], [r,0])
+    assert abs(r - np.linalg.norm(v, axis=-1)).max() < 1e-12

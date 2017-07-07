@@ -374,7 +374,7 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
     return bdindices, dircoeffs
 
 
-def compute_initial_condition_01(kvs, geo, bdspec, g0, g1):
+def compute_initial_condition_01(kvs, geo, bdspec, g0, g1, physical=True):
     r"""Compute indices and values for an initial condition including function
     value and derivative for a space-time discretization using interpolation.
     This only works for a space-time cylinder with constant (in time) geometry.
@@ -392,8 +392,10 @@ def compute_initial_condition_01(kvs, geo, bdspec, g0, g1):
         g0: a function which will be interpolated to obtain the initial
             function values
         g1: a function which will be interpolated to obtain the initial
-            derivatives. Both `g0` and `g1` are assumed to be given in physical
-            coordinates.
+            derivatives.
+        physical (bool): whether the functions `g0` and `g1` are given in
+            physical (True) or parametric (False) coordinates. Physical
+            coordinates are assumed by default.
 
     Returns:
         A pair of arrays `(indices, values)` which denote the indices of the
@@ -405,7 +407,7 @@ def compute_initial_condition_01(kvs, geo, bdspec, g0, g1):
     bdbasis = list(kvs)
     del bdbasis[bdax]
 
-    bdgeo = geo.boundary(bdax, bdside)
+    bdgeo = geo.boundary(bdax, bdside) if physical else None
     from .approx import interpolate
     coeffs01 = np.stack((  # coefficients for 0th and 1st derivatives, respectively
         interpolate(bdbasis, g0, geo=bdgeo).ravel(),

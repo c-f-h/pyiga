@@ -298,10 +298,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
-        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=0) for k in range(2)]
-        for k in range(2):
-            colloc[k] = tuple(X.T.A for X in colloc[k])
-        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
+        self.C = compute_values_derivs(kvs, gaussgrid, derivs=0)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det = determinants(geo_jac)
@@ -375,10 +372,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
-        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=1) for k in range(2)]
-        for k in range(2):
-            colloc[k] = tuple(X.T.A for X in colloc[k])
-        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
+        self.C = compute_values_derivs(kvs, gaussgrid, derivs=1)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)
@@ -457,10 +451,7 @@ cdef class Heat_ST_Assembler2D(BaseAssembler2D):
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
-        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=1) for k in range(2)]
-        for k in range(2):
-            colloc[k] = tuple(X.T.A for X in colloc[k])
-        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
+        self.C = compute_values_derivs(kvs, gaussgrid, derivs=1)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)
@@ -556,10 +547,7 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
-        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=2) for k in range(2)]
-        for k in range(2):
-            colloc[k] = tuple(X.T.A for X in colloc[k])
-        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
+        self.C = compute_values_derivs(kvs, gaussgrid, derivs=2)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)
@@ -654,10 +642,7 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
-        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=1) for k in range(2)]
-        for k in range(2):
-            colloc[k] = tuple(X.T.A for X in colloc[k])
-        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
+        self.C = compute_values_derivs(kvs, gaussgrid, derivs=1)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)
@@ -1062,10 +1047,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
-        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=0) for k in range(3)]
-        for k in range(3):
-            colloc[k] = tuple(X.T.A for X in colloc[k])
-        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
+        self.C = compute_values_derivs(kvs, gaussgrid, derivs=0)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det = determinants(geo_jac)
@@ -1142,10 +1124,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
-        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=1) for k in range(3)]
-        for k in range(3):
-            colloc[k] = tuple(X.T.A for X in colloc[k])
-        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
+        self.C = compute_values_derivs(kvs, gaussgrid, derivs=1)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)
@@ -1230,10 +1209,7 @@ cdef class Heat_ST_Assembler3D(BaseAssembler3D):
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
-        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=1) for k in range(3)]
-        for k in range(3):
-            colloc[k] = tuple(X.T.A for X in colloc[k])
-        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
+        self.C = compute_values_derivs(kvs, gaussgrid, derivs=1)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)
@@ -1336,10 +1312,7 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
-        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=2) for k in range(3)]
-        for k in range(3):
-            colloc[k] = tuple(X.T.A for X in colloc[k])
-        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
+        self.C = compute_values_derivs(kvs, gaussgrid, derivs=2)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)
@@ -1443,10 +1416,7 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
-        colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=1) for k in range(3)]
-        for k in range(3):
-            colloc[k] = tuple(X.T.A for X in colloc[k])
-        self.C = [np.stack(Cs, axis=-1) for Cs in colloc]
+        self.C = compute_values_derivs(kvs, gaussgrid, derivs=1)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)

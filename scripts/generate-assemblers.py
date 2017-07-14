@@ -322,10 +322,7 @@ self.base_init(kvs)
 
 gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 
-colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs={maxderiv}) for k in range({dim})]
-for k in range({dim}):
-    colloc[k] = tuple(X.T.A for X in colloc[k])
-self.C = [np.stack(Cs, axis=-1) for Cs in colloc]""".splitlines():
+self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines():
             self.putf(line)
         self.put('')
 

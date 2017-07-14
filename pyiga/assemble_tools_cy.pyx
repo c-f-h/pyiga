@@ -181,6 +181,14 @@ cdef IntInterval find_joint_support_functions(ssize_t[:,::1] meshsupp, long i) n
         j += 1
     return make_intv(minj, maxj+1)
 
+# each returned array has axes (basis function, grid point, derivative)
+def compute_values_derivs(kvs, gaussgrid, derivs):
+    dim = len(kvs)
+    colloc = [bspline.collocation_derivs(kvs[k], gaussgrid[k], derivs=derivs) for k in range(dim)]
+    for k in range(dim):
+        colloc[k] = tuple(X.T.A for X in colloc[k])
+    return [np.stack(Cs, axis=-1) for Cs in colloc]
+
 
 #### determinants and inverses
 

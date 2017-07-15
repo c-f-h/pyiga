@@ -195,13 +195,6 @@ class AsmGenerator:
                 self.matvec_comp(A, x, k, dims=dims))
         return LiteralExpr(out, vecsize=len(dims))
 
-    def inner(self, x, y, dims=None):
-        if dims is None:
-            dims = range(self.dim)
-        return ' + '.join(
-                self.vec_entry(x, j) + ' * ' + self.vec_entry(y, j)
-                for j in dims)
-
     def add_matvecvec(self, A, x, y):
         for k in range(self.dim):
             self.putf('result += ({Axk}) * {yk}',

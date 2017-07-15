@@ -173,7 +173,7 @@ class AsmGenerator:
         if sym and i > j:
             i, j = j, i
         idx = i*self.dim + j
-        return '{name}[{idx}]'.format(name=name, idx=idx)
+        return LiteralExpr('{name}[{idx}]'.format(name=name, idx=idx))
 
     def vec_entry(self, name, i):
         return '{name}[{i}]'.format(name=name, i=i)
@@ -181,9 +181,8 @@ class AsmGenerator:
     def matvec_comp(self, A, x, i, dims=None):
         if dims is None:
             dims = range(self.dim)
-        return ' + '.join(
-                self.mat_entry(A, i, j) + '*' + x[j].s
-                for j in dims)
+        factors = [self.mat_entry(A, i, j) * x[j] for j in dims]
+        return reduce(operator.add, factors)
 
     def matvec(self, out, A, x, dims=None):
         if dims is None:
@@ -192,14 +191,12 @@ class AsmGenerator:
             self.put(
                 self.vec_entry(out, k)
                 + ' = ' +
-                self.matvec_comp(A, x, k, dims=dims))
+                self.matvec_comp(A, x, k, dims=dims).s)
         return LiteralExpr(out, vecsize=len(dims))
 
     def add_matvecvec(self, A, x, y):
         for k in range(self.dim):
-            self.putf('result += ({Axk}) * {yk}',
-                    Axk=self.matvec_comp(A, x, k),
-                    yk =y[k].s)
+            self.add(self.matvec_comp(A, x, k) * y[k])
 
     def generate_kernel(self):
         # function definition

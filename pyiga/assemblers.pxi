@@ -331,7 +331,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
                 u = VDu0[1*i0+0] * VDu1[1*i1+0]
                 v = VDv0[1*i0+0] * VDv1[1*i1+0]
 
-                result += W * u * v
+                result += ((W * u) * v)
         return result
 
     @cython.boundscheck(False)
@@ -504,7 +504,7 @@ cdef class Heat_ST_Assembler2D(BaseAssembler2D):
                 gradv[0] = JacInvT[0]*gv[0] + JacInvT[1]*gv[1]
                 gradv[1] = JacInvT[2]*gv[0] + JacInvT[3]*gv[1]
 
-                result += W * (gradu[0] * gradv[0] + gradu[1] * v)
+                result += (W * ((gradu[0] * gradv[0]) + (gradu[1] * v)))
         return result
 
     @cython.boundscheck(False)
@@ -599,7 +599,7 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
 
                 dtgv[0] = VDv0[3*i0+1] * VDv1[3*i1+1]
                 dtgradv[0] = JacInvT[0]*dtgv[0]
-                result += W * ((VDu0[3*i0+2] * VDu1[3*i1+0]) * (VDv0[3*i0+1] * VDv1[3*i1+0]) + gradu[0] * dtgradv[0])
+                result += (W * (((VDu0[3*i0+2] * VDu1[3*i1+0]) * (VDv0[3*i0+1] * VDv1[3*i1+0])) + (gradu[0] * dtgradv[0])))
         return result
 
     @cython.boundscheck(False)
@@ -690,10 +690,10 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
                 gradv[0] = JacInvT[0]*gv[0] + JacInvT[1]*gv[1]
                 gradv[1] = JacInvT[2]*gv[0] + JacInvT[3]*gv[1]
 
-                result[0] += W * gradu[0] * gradv[0]
-                result[1] += W * gradu[1] * gradv[0]
-                result[2] += W * gradu[0] * gradv[1]
-                result[3] += W * gradu[1] * gradv[1]
+                result[0] += ((W * gradu[0]) * gradv[0])
+                result[1] += ((W * gradu[1]) * gradv[0])
+                result[2] += ((W * gradu[0]) * gradv[1])
+                result[3] += ((W * gradu[1]) * gradv[1])
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1083,7 +1083,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
                     u = VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0]
                     v = VDv0[1*i0+0] * VDv1[1*i1+0] * VDv2[1*i2+0]
 
-                    result += W * u * v
+                    result += ((W * u) * v)
         return result
 
     @cython.boundscheck(False)
@@ -1269,7 +1269,7 @@ cdef class Heat_ST_Assembler3D(BaseAssembler3D):
                     gradv[1] = JacInvT[3]*gv[0] + JacInvT[4]*gv[1] + JacInvT[5]*gv[2]
                     gradv[2] = JacInvT[6]*gv[0] + JacInvT[7]*gv[1] + JacInvT[8]*gv[2]
 
-                    result += W * (gradu[0] * gradv[0] + gradu[1] * gradv[1] + gradu[2] * v)
+                    result += (W * (((gradu[0] * gradv[0]) + (gradu[1] * gradv[1])) + (gradu[2] * v)))
         return result
 
     @cython.boundscheck(False)
@@ -1373,7 +1373,7 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
                     dtgv[1] = VDv0[3*i0+1] * VDv1[3*i1+1] * VDv2[3*i2+0]
                     dtgradv[0] = JacInvT[0]*dtgv[0] + JacInvT[1]*dtgv[1]
                     dtgradv[1] = JacInvT[3]*dtgv[0] + JacInvT[4]*dtgv[1]
-                    result += W * ((VDu0[3*i0+2] * VDu1[3*i1+0] * VDu2[3*i2+0]) * (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+0]) + gradu[0] * dtgradv[0] + gradu[1] * dtgradv[1])
+                    result += (W * (((VDu0[3*i0+2] * VDu1[3*i1+0] * VDu2[3*i2+0]) * (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+0])) + ((gradu[0] * dtgradv[0]) + (gradu[1] * dtgradv[1]))))
         return result
 
     @cython.boundscheck(False)
@@ -1471,15 +1471,15 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
                     gradv[1] = JacInvT[3]*gv[0] + JacInvT[4]*gv[1] + JacInvT[5]*gv[2]
                     gradv[2] = JacInvT[6]*gv[0] + JacInvT[7]*gv[1] + JacInvT[8]*gv[2]
 
-                    result[0] += W * gradu[0] * gradv[0]
-                    result[1] += W * gradu[1] * gradv[0]
-                    result[2] += W * gradu[2] * gradv[0]
-                    result[3] += W * gradu[0] * gradv[1]
-                    result[4] += W * gradu[1] * gradv[1]
-                    result[5] += W * gradu[2] * gradv[1]
-                    result[6] += W * gradu[0] * gradv[2]
-                    result[7] += W * gradu[1] * gradv[2]
-                    result[8] += W * gradu[2] * gradv[2]
+                    result[0] += ((W * gradu[0]) * gradv[0])
+                    result[1] += ((W * gradu[1]) * gradv[0])
+                    result[2] += ((W * gradu[2]) * gradv[0])
+                    result[3] += ((W * gradu[0]) * gradv[1])
+                    result[4] += ((W * gradu[1]) * gradv[1])
+                    result[5] += ((W * gradu[2]) * gradv[1])
+                    result[6] += ((W * gradu[0]) * gradv[2])
+                    result[7] += ((W * gradu[1]) * gradv[2])
+                    result[8] += ((W * gradu[2]) * gradv[2])
 
     @cython.boundscheck(False)
     @cython.wraparound(False)

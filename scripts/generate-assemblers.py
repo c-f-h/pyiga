@@ -1,6 +1,8 @@
 import os.path
 from jinja2 import Template
 from collections import OrderedDict
+from functools import reduce
+import operator
 
 class PyCode:
     def __init__(self):
@@ -85,6 +87,16 @@ class AsmGenerator:
         env.update(kwargs)
         self.code.putf(s, **env)
 
+    def add(self, expr):
+        assert not self.vec, 'add() is only for scalar assemblers; use add_at()'
+        assert not expr.vecsize, 'cannot add vector to scalar result'
+        self.put('result += ' + expr.s)
+
+    def add_at(self, idx, expr):
+        assert self.vec, 'add_at() is only for vector assemblers; use add()'
+        assert not expr.vecsize, 'cannot add vector to scalar result'
+        self.put(('result[%d] += ' % idx) + expr.s)
+
     def indent(self, num=1):
         self.code.indent(num)
 
@@ -104,7 +116,7 @@ class AsmGenerator:
         return ' * '.join(['{0}[{1}][{2}]'.format(var, k, self.extend_dim(k))
             for k in range(self.dim)])
 
-    def pderiv(self, var, D, idx='i'):
+    def pderiv(self, var, D, idx='i', as_expr=False):
         """Parametric partial derivative of `var` of order `D=(Dx1, ..., Dxd)`"""
         D = tuple(reversed(D))  # x is last axis
         assert len(D) == self.dim
@@ -118,7 +130,11 @@ class AsmGenerator:
                     **self.env
                 )
                 for k in range(self.dim)]
-        return ' * '.join(factors)
+        s = ' * '.join(factors)
+        if as_expr:
+            return LiteralExpr('(' + s + ')')
+        else:
+            return s
 
     def grad_comp(self, var, j, idx='i'):
         # compute first derivative in j-th direction
@@ -175,6 +191,7 @@ class AsmGenerator:
                 self.vec_entry(out, k)
                 + ' = ' +
                 self.matvec_comp(A, x, k, dims=dims))
+        return LiteralExpr(out, vecsize=len(dims))
 
     def inner(self, x, y, dims=None):
         if dims is None:
@@ -228,12 +245,18 @@ class AsmGenerator:
         if self.need_val:
             self.declare_scalar('u')
             self.declare_scalar('v')
+            self.u = LiteralExpr('u')
+            self.v = LiteralExpr('v')
         if self.need_grad:
             self.declare_vec('gu')
             self.declare_vec('gv')
+            self.gu = LiteralExpr('gu', vecsize=self.dim)
+            self.gv = LiteralExpr('gv', vecsize=self.dim)
         if self.need_phys_grad:
             self.declare_vec('gradu')
             self.declare_vec('gradv')
+            self.gradu = LiteralExpr('gradu', vecsize=self.dim)
+            self.gradv = LiteralExpr('gradv', vecsize=self.dim)
 
         if not self.vec:    # for vector assemblers, result is passed as a pointer
             self.declare_scalar('result', '0.0')
@@ -350,6 +373,7 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
 
         if self.need_phys_weights:  # store weights as field variable
             self.put('self.W = geo_weights')
+            self.W = LiteralExpr('W')
 
         self.initialize_fields()
         self.put('')
@@ -735,6 +759,70 @@ def gen_assemble_impl_header(dim, vec=False):
         zeroret=zeroret
     )
 
+class Expr:
+    def __add__(self, other): return BinExpr('+', self, other)
+    def __sub__(self, other): return BinExpr('-', self, other)
+    def __mul__(self, other): return BinExpr('*', self, other)
+    def __div__(self, other): return BinExpr('/', self, other)
+    def __getitem__(self, i):
+        if isinstance(i, slice) or isinstance(i, range):
+            return SliceExpr(self, i)
+        else:
+            return IndexExpr(self, i)
+
+class LiteralExpr(Expr):
+    def __init__(self, s, vecsize=None):
+        self.s = s
+        self.vecsize = vecsize
+
+class BinExpr(Expr):
+    def __init__(self, oper, x, y):
+        self.vecsize = None
+        self.oper = oper
+        self.args = (x,y)
+        self.s = '({x} {op} {y})'.format(op=oper, x=x.s, y=y.s)
+
+class IndexExpr(Expr):
+    def __init__(self, x, i):
+        self.vecsize = None
+        assert x.vecsize, 'indexed expression is not a vector'
+        self.x = x
+        if i < 0:
+            i += x.vecsize
+        self.i = i
+        self.s = '{x}[{i}]'.format(x=x.s, i=int(i))
+
+def _indices_from_slice(sl, n):
+    start = sl.start
+    if start is None: start = 0
+    if start < 0: start += n
+    stop = sl.stop
+    if stop is None: stop = n
+    if stop < 0: stop += n
+    step = sl.step
+    if step is None: step = 1
+    return tuple(range(start, stop, step))
+
+class SliceExpr(Expr):
+    def __init__(self, x, sl):
+        assert x.vecsize, 'expression is not a vector'
+        self.x = x
+        if isinstance(sl, slice):
+            self.indices = _indices_from_slice(sl, x.vecsize)
+        else:   # range?
+            self.indices = tuple(sl)
+        for i in self.indices:
+            assert 0 <= i < x.vecsize, 'slice index out of range'
+        self.vecsize = len(self.indices)
+
+    def __getitem__(self, i):
+        assert not isinstance(i, slice), 'slicing of slices not implemented'
+        return self.x[self.indices[i]]
+
+def inner(x, y):
+    assert x.vecsize and y.vecsize, 'inner() requires vector expressions'
+    assert x.vecsize == y.vecsize, 'incompatible sizes'
+    return reduce(operator.add, (x[i] * y[i] for i in range(x.vecsize)))
 
 class MassAsmGen(AsmGenerator):
     def __init__(self, code, dim):
@@ -743,7 +831,7 @@ class MassAsmGen(AsmGenerator):
         self.need_phys_weights = True
 
     def generate_biform(self):
-        self.put('result += W * u * v')
+        self.add(self.W * self.u * self.v)
 
 
 class StiffnessAsmGen(AsmGenerator):
@@ -769,9 +857,9 @@ class Heat_ST_AsmGen(AsmGenerator):
         self.need_phys_weights = True
 
     def generate_biform(self):
-        timederiv = "gradu[%d] * v" % (self.dim-1)
-        gradgrad = self.inner('gradu', 'gradv', dims=range(self.dim-1))
-        self.put('result += W * (%s + %s)' % (gradgrad, timederiv))
+        timederiv = self.gradu[-1] * self.v
+        gradgrad = inner(self.gradu[:-1], self.gradv[:-1])
+        self.add(self.W * (gradgrad + timederiv))
 
 
 class Wave_ST_AsmGen(AsmGenerator):
@@ -785,19 +873,22 @@ class Wave_ST_AsmGen(AsmGenerator):
         self.declare_vec('dtgradv', size=self.dim-1)
 
     def generate_biform(self):
-        utt_vt = '(%s) * (%s)' % (
-            self.pderiv('u', (self.dim-1) * (0,) + (2,)),
-            self.pderiv('v', (self.dim-1) * (0,) + (1,)))
+        utt_vt = (
+            self.pderiv('u', (self.dim-1) * (0,) + (2,), as_expr=True)
+            *
+            self.pderiv('v', (self.dim-1) * (0,) + (1,), as_expr=True)
+        )
 
         spacedims, timedim = range(self.dim-1), self.dim-1
         for k in spacedims:
             D = self.dim * [0]
-            D[k] = D[timedim] = 1   # mixer derivative: dt dx_k
+            D[k] = D[timedim] = 1   # mixed derivative: dt dx_k
             self.putf('dtgv[{k}] = {comp}', k=k, comp=self.pderiv('v', D))
-        self.matvec('dtgradv', 'JacInvT', 'dtgv', dims=spacedims)
-        gradu_dtgradv = self.inner('gradu', 'dtgradv', dims=spacedims)
 
-        self.put('result += W * (%s + %s)' % (utt_vt, gradu_dtgradv))
+        dtgradv = self.matvec('dtgradv', 'JacInvT', 'dtgv', dims=spacedims)
+        gradu_dtgradv = inner(self.gradu[:-1], dtgradv)
+
+        self.add(self.W * (utt_vt + gradu_dtgradv))
 
 
 class DivDivAsmGen(AsmGenerator):
@@ -809,7 +900,7 @@ class DivDivAsmGen(AsmGenerator):
     def generate_biform(self):
         for i in range(self.dim):
             for j in range(self.dim):
-                self.putf('result[{k}] += W * gradu[{j}] * gradv[{i}]', k=self.dim*i + j, i=i, j=j)
+                self.add_at(self.dim*i + j, self.W * self.gradu[j] * self.gradv[i])
 
 
 def generate(dim):

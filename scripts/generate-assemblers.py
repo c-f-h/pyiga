@@ -116,7 +116,7 @@ class AsmGenerator:
         return ' * '.join(['{0}[{1}][{2}]'.format(var, k, self.extend_dim(k))
             for k in range(self.dim)])
 
-    def pderiv(self, var, D, idx='i', as_expr=False):
+    def pderiv(self, var, D, idx='i'):
         """Parametric partial derivative of `var` of order `D=(Dx1, ..., Dxd)`"""
         D = tuple(reversed(D))  # x is last axis
         assert len(D) == self.dim
@@ -130,27 +130,29 @@ class AsmGenerator:
                     **self.env
                 )
                 for k in range(self.dim)]
-        s = ' * '.join(factors)
-        if as_expr:
-            return LiteralExpr('(' + s + ')')
-        else:
-            return s
+        return ' * '.join(factors)
 
-    def grad_comp(self, var, j, idx='i'):
-        # compute first derivative in j-th direction
-        D = self.dim * [0]
-        D[j] = 1
-        return self.pderiv(var, D, idx=idx)
+    # same as pderiv(), but returns an expression
+    def partial_deriv(self, var, D):
+        return LiteralExpr('(' + self.pderiv(var, D) + ')')
 
     def basisval(self, var, idx='i'):
         return self.pderiv(var, self.dim * (0,), idx=idx)
 
-    def make_grad(self, result, var):
-        for k in range(self.dim):
+    def make_grad(self, result, var, dims=None, additional_derivs=None):
+        if dims is None:
+            dims = range(self.dim)
+        if additional_derivs is None:
+            additional_derivs = self.dim * [0]
+
+        for k in dims:
+            D = list(additional_derivs)
+            D[k] += 1
             self.putf('{res}[{k}] = {comp}',
                     res=result,
                     k=k,
-                    comp=self.grad_comp(var, k))
+                    comp=self.pderiv(var, D))
+        return LiteralExpr(result, len(dims))
 
     def declare_index(self, name, init=None):
         self.code.declare_local_variable('size_t', name, init)
@@ -180,7 +182,7 @@ class AsmGenerator:
         if dims is None:
             dims = range(self.dim)
         return ' + '.join(
-                self.mat_entry(A, i, j) + '*' + self.vec_entry(x, j)
+                self.mat_entry(A, i, j) + '*' + x[j].s
                 for j in dims)
 
     def matvec(self, out, A, x, dims=None):
@@ -204,7 +206,7 @@ class AsmGenerator:
         for k in range(self.dim):
             self.putf('result += ({Axk}) * {yk}',
                     Axk=self.matvec_comp(A, x, k),
-                    yk =self.vec_entry(y, k))
+                    yk =y[k].s)
 
     def generate_kernel(self):
         # function definition
@@ -245,18 +247,12 @@ class AsmGenerator:
         if self.need_val:
             self.declare_scalar('u')
             self.declare_scalar('v')
-            self.u = LiteralExpr('u')
-            self.v = LiteralExpr('v')
         if self.need_grad:
             self.declare_vec('gu')
             self.declare_vec('gv')
-            self.gu = LiteralExpr('gu', vecsize=self.dim)
-            self.gv = LiteralExpr('gv', vecsize=self.dim)
         if self.need_phys_grad:
             self.declare_vec('gradu')
             self.declare_vec('gradv')
-            self.gradu = LiteralExpr('gradu', vecsize=self.dim)
-            self.gradv = LiteralExpr('gradv', vecsize=self.dim)
 
         if not self.vec:    # for vector assemblers, result is passed as a pointer
             self.declare_scalar('result', '0.0')
@@ -288,16 +284,18 @@ class AsmGenerator:
         if self.need_val:
             self.put('u = ' + self.basisval('u'))
             self.put('v = ' + self.basisval('v'))
+            self.u = LiteralExpr('u')
+            self.v = LiteralExpr('v')
             self.put('')
         if self.need_grad:
-            self.make_grad('gu', 'u')
+            self.gu = self.make_grad('gu', 'u')
             self.put('')
-            self.make_grad('gv', 'v')
+            self.gv = self.make_grad('gv', 'v')
             self.put('')
             if self.need_phys_grad:
-                self.matvec('gradu', 'JacInvT', 'gu')
+                self.gradu = self.matvec('gradu', 'JacInvT', self.gu)
                 self.put('')
-                self.matvec('gradv', 'JacInvT', 'gv')
+                self.gradv = self.matvec('gradv', 'JacInvT', self.gv)
                 self.put('')
 
         # compute the bilinear form a(u,v)
@@ -846,7 +844,7 @@ class StiffnessAsmGen(AsmGenerator):
             slices=self.dimrep(':'))
 
     def generate_biform(self):
-        self.add_matvecvec('B', 'gu', 'gv')
+        self.add_matvecvec('B', self.gu, self.gv)
 
 
 class Heat_ST_AsmGen(AsmGenerator):
@@ -873,19 +871,16 @@ class Wave_ST_AsmGen(AsmGenerator):
         self.declare_vec('dtgradv', size=self.dim-1)
 
     def generate_biform(self):
-        utt_vt = (
-            self.pderiv('u', (self.dim-1) * (0,) + (2,), as_expr=True)
-            *
-            self.pderiv('v', (self.dim-1) * (0,) + (1,), as_expr=True)
-        )
+        Dt = (self.dim-1) * (0,) + (1,)
+        utt_vt = self.partial_deriv('u', Dt[:-1] + (2,)) * self.partial_deriv('v', Dt)
 
         spacedims, timedim = range(self.dim-1), self.dim-1
-        for k in spacedims:
-            D = self.dim * [0]
-            D[k] = D[timedim] = 1   # mixed derivative: dt dx_k
-            self.putf('dtgv[{k}] = {comp}', k=k, comp=self.pderiv('v', D))
+        dtgv = self.make_grad('dtgv', 'v',
+                dims=spacedims,
+                additional_derivs=Dt    # additional derivative in time direction
+        )
 
-        dtgradv = self.matvec('dtgradv', 'JacInvT', 'dtgv', dims=spacedims)
+        dtgradv = self.matvec('dtgradv', 'JacInvT', dtgv, dims=spacedims)
         gradu_dtgradv = inner(self.gradu[:-1], dtgradv)
 
         self.add(self.W * (utt_vt + gradu_dtgradv))

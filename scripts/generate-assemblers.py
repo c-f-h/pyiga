@@ -3,6 +3,7 @@ from jinja2 import Template
 from collections import OrderedDict
 from functools import reduce
 import operator
+import numpy as np
 
 class PyCode:
     def __init__(self):
@@ -79,6 +80,12 @@ class AsmGenerator:
             'symmetric': symmetric
         }
 
+    def indent(self, num=1):
+        self.code.indent(num)
+
+    def dedent(self, num=1):
+        self.code.dedent(num)
+
     def put(self, s):
         self.code.put(s)
 
@@ -97,12 +104,6 @@ class AsmGenerator:
         assert not expr.vecsize, 'cannot add vector to scalar result'
         self.put(('result[%d] += ' % idx) + expr.s)
 
-    def indent(self, num=1):
-        self.code.indent(num)
-
-    def dedent(self, num=1):
-        self.code.dedent(num)
-
     def dimrep(self, s, sep=', '):
         return sep.join([s.format(k, **self.env) for k in range(self.dim)])
 
@@ -116,7 +117,7 @@ class AsmGenerator:
         return ' * '.join(['{0}[{1}][{2}]'.format(var, k, self.extend_dim(k))
             for k in range(self.dim)])
 
-    def pderiv(self, var, D, idx='i'):
+    def partial_deriv(self, var, D, idx='i'):
         """Parametric partial derivative of `var` of order `D=(Dx1, ..., Dxd)`"""
         D = tuple(reversed(D))  # x is last axis
         assert len(D) == self.dim
@@ -130,29 +131,23 @@ class AsmGenerator:
                     **self.env
                 )
                 for k in range(self.dim)]
-        return ' * '.join(factors)
+        return LiteralExpr('(' + ' * '.join(factors) + ')')
 
-    # same as pderiv(), but returns an expression
-    def partial_deriv(self, var, D):
-        return LiteralExpr('(' + self.pderiv(var, D) + ')')
+    def basisval(self, var):
+        return self.partial_deriv(var, self.dim * (0,))
 
-    def basisval(self, var, idx='i'):
-        return self.pderiv(var, self.dim * (0,), idx=idx)
-
-    def make_grad(self, result, var, dims=None, additional_derivs=None):
+    def gradient(self, var, dims=None, additional_derivs=None):
         if dims is None:
             dims = range(self.dim)
         if additional_derivs is None:
             additional_derivs = self.dim * [0]
 
+        entries = []
         for k in dims:
             D = list(additional_derivs)
             D[k] += 1
-            self.putf('{res}[{k}] = {comp}',
-                    res=result,
-                    k=k,
-                    comp=self.pderiv(var, D))
-        return LiteralExpr(result, len(dims))
+            entries.append(self.partial_deriv(var, D))
+        return LiteralVectorExpr(entries)
 
     def declare_index(self, name, init=None):
         self.code.declare_local_variable('size_t', name, init)
@@ -178,25 +173,20 @@ class AsmGenerator:
     def vec_entry(self, name, i):
         return '{name}[{i}]'.format(name=name, i=i)
 
-    def matvec_comp(self, A, x, i, dims=None):
-        if dims is None:
-            dims = range(self.dim)
-        factors = [self.mat_entry(A, i, j) * x[j] for j in dims]
-        return reduce(operator.add, factors)
-
-    def matvec(self, out, A, x, dims=None):
-        if dims is None:
-            dims = range(self.dim)
-        for k in dims:
-            self.put(
-                self.vec_entry(out, k)
-                + ' = ' +
-                self.matvec_comp(A, x, k, dims=dims).s)
-        return LiteralExpr(out, vecsize=len(dims))
+    def let(self, out, expr):
+        if expr.vecsize:
+            for k in range(expr.vecsize):
+                self.put(self.vec_entry(out, k) + ' = ' + expr[k].s)
+        elif expr.matsize:
+            assert False, 'matrix assignment not implemented'
+        else:
+            self.put(out + ' = ' + expr.s)
+        return LiteralExpr(out, vecsize=expr.vecsize)
 
     def add_matvecvec(self, A, x, y):
+        Ax = matmul(A, x)
         for k in range(self.dim):
-            self.add(self.matvec_comp(A, x, k) * y[k])
+            self.add(Ax[k] * y[k])
 
     def generate_kernel(self):
         # function definition
@@ -272,20 +262,18 @@ class AsmGenerator:
         self.put('')
 
         if self.need_val:
-            self.put('u = ' + self.basisval('u'))
-            self.put('v = ' + self.basisval('v'))
-            self.u = LiteralExpr('u')
-            self.v = LiteralExpr('v')
+            self.u = self.let('u', self.basisval('u'))
+            self.v = self.let('v', self.basisval('v'))
             self.put('')
         if self.need_grad:
-            self.gu = self.make_grad('gu', 'u')
+            self.gu = self.let('gu', self.gradient('u'))
             self.put('')
-            self.gv = self.make_grad('gv', 'v')
+            self.gv = self.let('gv', self.gradient('v'))
             self.put('')
             if self.need_phys_grad:
-                self.gradu = self.matvec('gradu', 'JacInvT', self.gu)
+                self.gradu = self.let('gradu', matmul(self.JacInvT, self.gu))
                 self.put('')
-                self.gradv = self.matvec('gradv', 'JacInvT', self.gv)
+                self.gradv = self.let('gradv', matmul(self.JacInvT, self.gv))
                 self.put('')
 
         # compute the bilinear form a(u,v)
@@ -376,6 +364,10 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
     def generate(self):
         if self.need_phys_grad:
             self.register_matrix_field('JacInvT')
+            self.JacInvT = LiteralMatrixExpr([
+                [self.mat_entry('JacInvT', i, j) for j in range(self.dim)]
+                for i in range(self.dim)
+            ])
             self.init_jacinv = True
             self.need_grad = True
 
@@ -762,21 +754,52 @@ class LiteralExpr(Expr):
     def __init__(self, s, vecsize=None):
         self.s = s
         self.vecsize = vecsize
+        self.matsize = None
+
+class LiteralVectorExpr(Expr):
+    def __init__(self, entries):
+        self.vecsize = len(entries)
+        self.matsize = None
+        self.entries = entries
+
+    def __getitem__(self, i):
+        if i < 0: i += self.vecsize
+        assert 0 <= i < self.vecsize, 'index out of bounds'
+        return self.entries[i]
+
+class LiteralMatrixExpr(Expr):
+    def __init__(self, entries):
+        self.vecsize = None
+        self.matsize = len(entries), len(entries[0])
+        self.entries = np.array(entries, dtype=object)
+
+    def __getitem__(self, ij):
+        if isinstance(ij[0], range) and isinstance(ij[1], range):
+            # hackish support for double range slicing
+            ij = np.ix_(*ij)
+        result = self.entries[ij]
+        if isinstance(result, np.ndarray):
+            return LiteralMatrixExpr(result)
+        else:
+            return result
 
 class BinExpr(Expr):
     def __init__(self, oper, x, y):
-        self.vecsize = None
+        assert None == x.vecsize == y.vecsize and \
+               None == x.matsize == y.matsize, 'expected scalars'
+        self.vecsize = x.vecsize
+        self.matsize = x.matsize
         self.oper = oper
         self.args = (x,y)
         self.s = '({x} {op} {y})'.format(op=oper, x=x.s, y=y.s)
 
 class IndexExpr(Expr):
     def __init__(self, x, i):
-        self.vecsize = None
+        self.vecsize = self.matsize = None
         assert x.vecsize, 'indexed expression is not a vector'
         self.x = x
-        if i < 0:
-            i += x.vecsize
+        if i < 0: i += x.vecsize
+        assert 0 <= i < x.vecsize, 'index out of range'
         self.i = i
         self.s = '{x}[{i}]'.format(x=x.s, i=int(i))
 
@@ -802,15 +825,33 @@ class SliceExpr(Expr):
         for i in self.indices:
             assert 0 <= i < x.vecsize, 'slice index out of range'
         self.vecsize = len(self.indices)
+        self.matsize = None
 
     def __getitem__(self, i):
         assert not isinstance(i, slice), 'slicing of slices not implemented'
         return self.x[self.indices[i]]
 
+class MatMulExpr(Expr):
+    def __init__(self, A, x):
+        assert A.matsize[1] == x.vecsize, 'incompatible shapes'
+        self.vecsize = A.matsize[0]
+        self.matsize = None
+        self.A = A
+        self.x = x
+
+    def __getitem__(self, i):
+        if i < 0: i += self.vecsize
+        assert 0 <= i < self.vecsize
+        factors = [self.A[i, j] * self.x[j] for j in range(self.x.vecsize)]
+        return reduce(operator.add, factors)
+
 def inner(x, y):
     assert x.vecsize and y.vecsize, 'inner() requires vector expressions'
     assert x.vecsize == y.vecsize, 'incompatible sizes'
     return reduce(operator.add, (x[i] * y[i] for i in range(x.vecsize)))
+
+def matmul(A, x):
+    return MatMulExpr(A, x)
 
 class MassAsmGen(AsmGenerator):
     def __init__(self, code, dim):
@@ -832,9 +873,13 @@ class StiffnessAsmGen(AsmGenerator):
     def initialize_fields(self):
         self.putf('self.B = matmatT(geo_jacinv) * geo_weights[{slices}, None, None]',
             slices=self.dimrep(':'))
+        self.B = LiteralMatrixExpr([
+            [self.mat_entry('B', i, j) for j in range(self.dim)]
+            for i in range(self.dim)
+        ])
 
     def generate_biform(self):
-        self.add_matvecvec('B', self.gu, self.gv)
+        self.add_matvecvec(self.B, self.gu, self.gv)
 
 
 class Heat_ST_AsmGen(AsmGenerator):
@@ -865,12 +910,12 @@ class Wave_ST_AsmGen(AsmGenerator):
         utt_vt = self.partial_deriv('u', Dt[:-1] + (2,)) * self.partial_deriv('v', Dt)
 
         spacedims, timedim = range(self.dim-1), self.dim-1
-        dtgv = self.make_grad('dtgv', 'v',
+        dtgv = self.let('dtgv', self.gradient('v',
                 dims=spacedims,
                 additional_derivs=Dt    # additional derivative in time direction
-        )
+        ))
 
-        dtgradv = self.matvec('dtgradv', 'JacInvT', dtgv, dims=spacedims)
+        dtgradv = self.let('dtgradv', matmul(self.JacInvT[spacedims, spacedims], dtgv))
         gradu_dtgradv = inner(self.gradu[:-1], dtgradv)
 
         self.add(self.W * (utt_vt + gradu_dtgradv))

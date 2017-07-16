@@ -50,6 +50,7 @@ class AsmGenerator:
         self.vec = vec
         self.numderiv = numderiv
         self.vars = OrderedDict()
+        self.exprs = []     # expressions to be added to the result
         # variables provided during initialization (geo_XXX)
         self.init_det = False
         self.init_jac = False
@@ -79,6 +80,10 @@ class AsmGenerator:
             'numdims': 2,
             'symmetric': symmetric
         }
+        return LiteralMatrixExpr([
+            [self.mat_entry(name, i, j) for j in range(self.dim)]
+            for i in range(self.dim)
+        ])
 
     def indent(self, num=1):
         self.code.indent(num)
@@ -97,12 +102,12 @@ class AsmGenerator:
     def add(self, expr):
         assert not self.vec, 'add() is only for scalar assemblers; use add_at()'
         assert not expr.vecsize, 'cannot add vector to scalar result'
-        self.put('result += ' + expr.s)
+        self.exprs.append(expr)
 
     def add_at(self, idx, expr):
         assert self.vec, 'add_at() is only for vector assemblers; use add()'
         assert not expr.vecsize, 'cannot add vector to scalar result'
-        self.put(('result[%d] += ' % idx) + expr.s)
+        self.exprs.append((idx, expr))
 
     def dimrep(self, s, sep=', '):
         return sep.join([s.format(k, **self.env) for k in range(self.dim)])
@@ -254,6 +259,7 @@ class AsmGenerator:
 
         self.env['I'] = self.dimrep('i{}')
 
+        # generate assignments for field variables
         for name, var in self.vars.items():
             if var['type'] == 'scalar':
                 self.putf('{name} = _{name}[{I}]', name=name)
@@ -262,22 +268,30 @@ class AsmGenerator:
         self.put('')
 
         if self.need_val:
-            self.u = self.let('u', self.basisval('u'))
-            self.v = self.let('v', self.basisval('v'))
+            self.let('u', self.basisval('u'))
+            self.let('v', self.basisval('v'))
             self.put('')
         if self.need_grad:
-            self.gu = self.let('gu', self.gradient('u'))
+            self.let('gu', self.gradient('u'))
             self.put('')
-            self.gv = self.let('gv', self.gradient('v'))
+            self.let('gv', self.gradient('v'))
             self.put('')
             if self.need_phys_grad:
-                self.gradu = self.let('gradu', matmul(self.JacInvT, self.gu))
+                self.let('gradu', matmul(self.JacInvT, self.gu))
                 self.put('')
-                self.gradv = self.let('gradv', matmul(self.JacInvT, self.gv))
+                self.let('gradv', matmul(self.JacInvT, self.gv))
                 self.put('')
 
-        # compute the bilinear form a(u,v)
+        # if not yet done, compute expressions for the bilinear form a(u,v)
         self.generate_biform()
+
+        # generate code for all expressions in the bilinear form
+        if self.vec:
+            for idx, expr in self.exprs:
+                self.put(('result[%d] += ' % idx) + expr.s)
+        else:
+            for expr in self.exprs:
+                self.put('result += ' + expr.s)
 
         # end main loop
         for _ in range(self.dim):
@@ -349,7 +363,6 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
 
         if self.need_phys_weights:  # store weights as field variable
             self.put('self.W = geo_weights')
-            self.W = LiteralExpr('W')
 
         self.initialize_fields()
         self.put('')
@@ -361,13 +374,47 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
     def initialize_fields(self):
         pass
 
+    def generate_biform(self):
+        pass
+
+    @property
+    def W(self):
+        self.need_phys_weights = True
+        return LiteralExpr('W')
+
+    @property
+    def u(self):
+        self.need_val = True
+        return LiteralExpr('u')
+
+    @property
+    def v(self):
+        self.need_val = True
+        return LiteralExpr('v')
+
+    @property
+    def gu(self):
+        self.need_grad = True
+        return LiteralExpr('gu', vecsize=self.dim)
+
+    @property
+    def gv(self):
+        self.need_grad = True
+        return LiteralExpr('gv', vecsize=self.dim)
+
+    @property
+    def gradu(self):
+        self.need_phys_grad = True
+        return LiteralExpr('gradu', vecsize=self.dim)
+
+    @property
+    def gradv(self):
+        self.need_phys_grad = True
+        return LiteralExpr('gradv', vecsize=self.dim)
+
     def generate(self):
         if self.need_phys_grad:
-            self.register_matrix_field('JacInvT')
-            self.JacInvT = LiteralMatrixExpr([
-                [self.mat_entry('JacInvT', i, j) for j in range(self.dim)]
-                for i in range(self.dim)
-            ])
+            self.JacInvT = self.register_matrix_field('JacInvT')
             self.init_jacinv = True
             self.need_grad = True
 
@@ -856,40 +903,25 @@ def matmul(A, x):
 class MassAsmGen(AsmGenerator):
     def __init__(self, code, dim):
         AsmGenerator.__init__(self, 'MassAssembler', code, dim)
-        self.need_val = True
-        self.need_phys_weights = True
-
-    def generate_biform(self):
         self.add(self.W * self.u * self.v)
 
 
 class StiffnessAsmGen(AsmGenerator):
     def __init__(self, code, dim):
         AsmGenerator.__init__(self, 'StiffnessAssembler', code, dim)
-        self.register_matrix_field('B', symmetric=True)
         self.init_jacinv = self.init_weights = True
-        self.need_grad = True
+
+        B = self.register_matrix_field('B', symmetric=True)
+        self.add_matvecvec(B, self.gu, self.gv)
 
     def initialize_fields(self):
         self.putf('self.B = matmatT(geo_jacinv) * geo_weights[{slices}, None, None]',
             slices=self.dimrep(':'))
-        self.B = LiteralMatrixExpr([
-            [self.mat_entry('B', i, j) for j in range(self.dim)]
-            for i in range(self.dim)
-        ])
-
-    def generate_biform(self):
-        self.add_matvecvec(self.B, self.gu, self.gv)
 
 
 class Heat_ST_AsmGen(AsmGenerator):
     def __init__(self, code, dim):
         AsmGenerator.__init__(self, 'Heat_ST_Assembler', code, dim)
-        self.need_val = True
-        self.need_phys_grad = True
-        self.need_phys_weights = True
-
-    def generate_biform(self):
         timederiv = self.gradu[-1] * self.v
         gradgrad = inner(self.gradu[:-1], self.gradv[:-1])
         self.add(self.W * (gradgrad + timederiv))
@@ -924,10 +956,6 @@ class Wave_ST_AsmGen(AsmGenerator):
 class DivDivAsmGen(AsmGenerator):
     def __init__(self, code, dim):
         AsmGenerator.__init__(self, 'DivDivAssembler', code, dim, vec=dim**2)
-        self.need_phys_grad = True
-        self.need_phys_weights = True
-
-    def generate_biform(self):
         for i in range(self.dim):
             for j in range(self.dim):
                 self.add_at(self.dim*i + j, self.W * self.gradu[j] * self.gradv[i])

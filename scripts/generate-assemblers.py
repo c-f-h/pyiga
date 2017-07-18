@@ -253,11 +253,14 @@ class AsmGenerator:
         else:
             self.put(out + ' = ' + expr.gencode())
 
-    def generate_kernel(self):
-        # function definition
+    def cython_pragmas(self):
         self.put('@cython.boundscheck(False)')
         self.put('@cython.wraparound(False)')
         self.put('@cython.initializedcheck(False)')
+
+    def generate_kernel(self):
+        # function definition
+        self.cython_pragmas()
         self.put('@staticmethod')
         rettype = 'void' if self.vec else 'double'
         self.putf('cdef {rettype} combine(', rettype=rettype)
@@ -357,11 +360,8 @@ class AsmGenerator:
             funcdecl = 'cdef double assemble_impl(self, size_t[{dim}] i, size_t[{dim}] j) nogil:'.format(dim=self.dim)
         zeroret = '' if self.vec else '0.0'  # for vector assemblers, result[] is 0-initialized
 
-        src = r"""
-@cython.boundscheck(False)
-@cython.wraparound(False)
-@cython.initializedcheck(False)
-{funcdecl}
+        self.cython_pragmas()
+        src = r"""{funcdecl}
     cdef int k
     cdef IntInterval intv
     cdef size_t g_sta[{dim}]
@@ -449,7 +449,6 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
             self.put('self.W = geo_weights')
 
         self.initialize_fields()
-        self.put('')
         self.end_function()
 
     # main code generation entry point
@@ -484,7 +483,9 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
 
         # generate methods
         self.generate_init()
+        self.put('')
         self.generate_kernel()
+        self.put('')
         self.generate_assemble_impl()
         self.dedent()
         self.put('')
@@ -1015,6 +1016,7 @@ def generate(dim):
     DivDivAsmGen(code, DIM).generate()
 
     s = tmpl_generic.render(locals())
+    s += '\n\n'
     s += code.result()
     return s
 

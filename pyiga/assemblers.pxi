@@ -288,6 +288,8 @@ cdef void _asm_core_vec_2d_kernel(
                 for row in range(2):
                     for col in range(2):
                         entries[transp0[mu0], transp1[mu1], col*2 + row] = entries[mu0, mu1, row*2 + col]
+
+
 cdef class MassAssembler2D(BaseAssembler2D):
     cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
     cdef double[:, ::1] W
@@ -1013,6 +1015,8 @@ cdef void _asm_core_vec_3d_kernel(
                     for row in range(3):
                         for col in range(3):
                             entries[transp0[mu0], transp1[mu1], transp2[mu2], col*3 + row] = entries[mu0, mu1, mu2, row*3 + col]
+
+
 cdef class MassAssembler3D(BaseAssembler3D):
     cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
     cdef double[:, :, ::1] W

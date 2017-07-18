@@ -58,8 +58,7 @@ class AsmGenerator:
         self.init_jacinv = False
         self.init_weights = False       # geo_weights = Gauss weights * abs(geo_det)
         # variables provided pointwise during assembling
-        self.need_grad = False          # gradient in parameter domain (gu, gv)
-        self.need_phys_grad = False     # gradient in physical domain (gradu, gradv)
+        self.need_jacinvt = False     # gradient in physical domain (gradu, gradv)
         self.need_phys_weights = False  # W = Gauss weight * abs(geo_det)
         # misc
         self.predefined_vars = {
@@ -366,7 +365,7 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         if self.init_weights:
             self.put('geo_weights = %s * np.abs(geo_det)' % self.tensorprod('gaussweights'))
 
-        if self.need_phys_grad:
+        if self.need_jacinvt:
             self.put("self.JacInvT = np.asarray(np.swapaxes(geo_jacinv, -2, -1), order='C')")
 
         if self.need_phys_weights:  # store weights as field variable
@@ -403,21 +402,17 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
     @property
     def JacInvT(self):
         if not 'JacInvT' in self.cached_vars:
-            self.need_phys_grad = True      # TODO: may not need this, only JacInvT itself!
+            self.need_jacinvt = True
             self.cached_vars['JacInvT'] = self.register_matrix_field('JacInvT')
         return self.cached_vars['JacInvT']
 
     def generate(self):
-        if self.need_phys_grad:
+        if self.need_jacinvt:
             self.init_jacinv = True
-            self.need_grad = True
 
         if self.need_phys_weights:
             self.register_scalar_field('W')
             self.init_weights = True
-
-        if self.need_grad:
-            self.numderiv = max(self.numderiv, 1) # ensure 1st derivatives
 
         self.env = {
             'dim': self.dim,

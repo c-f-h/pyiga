@@ -49,18 +49,18 @@ class AsmGenerator:
         self.dim = dim
         self.vec = vec
         self.numderiv = numderiv
-        self.vars = OrderedDict()
-        self.assignments = []   # assignment statements for vars used in expr
+        self.field_vars = OrderedDict()
+        self.assignments = []   # assignment statements for local vars used in expr
         self.exprs = []         # expressions to be added to the result
         # variables provided during initialization (geo_XXX)
         self.init_det = False
         self.init_jac = False
         self.init_jacinv = False
         self.init_weights = False       # geo_weights = Gauss weights * abs(geo_det)
-        # variables provided pointwise during assembling
-        self.need_jacinvt = False     # gradient in physical domain (gradu, gradv)
+        # field variables provided pointwise during assembling
+        self.need_jacinvt = False       # JacInvT: transposed inverse of geometry Jacobian
         self.need_phys_weights = False  # W = Gauss weight * abs(geo_det)
-        # misc
+        # predefined local variables with their generators (created on demand)
         self.predefined_vars = {
             'u':     lambda self: self.basisval('u'),
             'v':     lambda self: self.basisval('v'),
@@ -73,19 +73,19 @@ class AsmGenerator:
 
 
     def register_scalar_field(self, name):
-        self.vars[name] = {
+        self.field_vars[name] = {
             'type': 'scalar',
             'numdims': 0
         }
 
     def register_vector_field(self, name):
-        self.vars[name] = {
+        self.field_vars[name] = {
             'type': 'vector',
             'numdims': 1
         }
 
     def register_matrix_field(self, name, symmetric=False):
-        self.vars[name] = {
+        self.field_vars[name] = {
             'type': 'matrix',
             'numdims': 2,
             'symmetric': symmetric
@@ -184,7 +184,7 @@ class AsmGenerator:
         self.putf('cdef double {name}[{size}]', name=name, size=size)
 
     def mat_entry(self, name, i, j):
-        sym = self.vars[name]['symmetric']
+        sym = self.field_vars[name]['symmetric']
         if sym and i > j:
             i, j = j, i
         idx = i*self.dim + j
@@ -222,7 +222,7 @@ class AsmGenerator:
         self.indent(2)
 
         # parameters
-        for name, var in self.vars.items():
+        for name, var in self.field_vars.items():
             self.putf('double[{X}:1] _{name},',
                     X=', '.join((self.dim + var['numdims']) * ':'),
                     name=name)
@@ -235,7 +235,7 @@ class AsmGenerator:
         self.put(') nogil:')
 
         # get input size from an arbitrary field variable
-        first_var = list(self.vars)[0]
+        first_var = list(self.field_vars)[0]
         for k in range(self.dim):
             self.declare_index(
                     'n%d' % k,
@@ -251,13 +251,13 @@ class AsmGenerator:
             self.declare_scalar('result', '0.0')
 
         # temp storage for field variables
-        for name, var in self.vars.items():
+        for name, var in self.field_vars.items():
             if var['type'] == 'scalar':
                 self.declare_scalar(name)
             elif var['type'] == 'matrix':
                 self.declare_pointer(name)
 
-        # temp storage for user-defined field variables (TODO: unify with above)
+        # temp storage for local variables
         for varname, expr in self.assignments:
             if expr.vecsize:
                 self.declare_vec(varname, size=expr.vecsize)
@@ -277,19 +277,19 @@ class AsmGenerator:
         self.env['I'] = self.dimrep('i{}')
 
         # generate assignments for field variables
-        for name, var in self.vars.items():
+        for name, var in self.field_vars.items():
             if var['type'] == 'scalar':
                 self.putf('{name} = _{name}[{I}]', name=name)
             elif var['type'] == 'matrix':
                 self.putf('{name} = &_{name}[{I}, 0, 0]', name=name)
         self.put('')
 
-        # generate deferred assignment statements
+        # generate assignment statements for local variables
         for varname, expr in self.assignments:
             self.gen_assign(varname, expr)
         self.assignments = None     # disallow further assignments
 
-        # if not yet done, compute expressions for the bilinear form a(u,v)
+        # if needed, generate custom code for the bilinear form a(u,v)
         self.generate_biform()
 
         # generate code for all expressions in the bilinear form
@@ -321,7 +321,7 @@ class AsmGenerator:
         else:
             self.putf('return {classname}{dim}D.combine(', classname=self.classname)
         self.indent(2)
-        for name in self.vars:
+        for name in self.field_vars:
             self.putf('self.{name} [ {idx} ],', name=name,
                     idx=self.dimrep('g_sta[{0}]:g_end[{0}]'))
         # a_ij = a(phi_j, phi_i)  -- pass values for j first
@@ -384,7 +384,7 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
     def generate_biform(self):
         pass
 
-    # automatically produce caching getters for predefined variables
+    # automatically produce caching getters for predefined local variables
     def __getattr__(self, name):
         if name in self.predefined_vars:
             if not name in self.cached_vars:
@@ -393,6 +393,8 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         else:
             msg = "'{0}' object has no attribute '{1}'"
             raise AttributeError(msg.format(type(self).__name__, name))
+
+    # on-demand field variables (cannot currently be autogenerated)
 
     @property
     def W(self):
@@ -405,6 +407,8 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
             self.need_jacinvt = True
             self.cached_vars['JacInvT'] = self.register_matrix_field('JacInvT')
         return self.cached_vars['JacInvT']
+
+    # main code generation entry point
 
     def generate(self):
         if self.need_jacinvt:
@@ -428,7 +432,7 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         # declare instance variables
         self.put('cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative')
         # declare field variables
-        for name, var in self.vars.items():
+        for name, var in self.field_vars.items():
             self.putf('cdef double[{X}:1] {name}',
                     X=', '.join((self.dim + var['numdims']) * ':'),
                     name=name)
@@ -775,6 +779,11 @@ def gen_assemble_impl_header(dim, vec=False):
         zeroret=zeroret
     )
 
+
+################################################################################
+# Expressions for use in assembler generators
+################################################################################
+
 class Expr:
     def __add__(self, other): return OperExpr('+', self, other)
     def __sub__(self, other): return OperExpr('-', self, other)
@@ -908,6 +917,11 @@ def inner(x, y):
 def matmul(A, x):
     return MatMulExpr(A, x)
 
+
+################################################################################
+# concrete assembler generators
+################################################################################
+
 class MassAsmGen(AsmGenerator):
     def __init__(self, code, dim):
         AsmGenerator.__init__(self, 'MassAssembler', code, dim)
@@ -960,6 +974,10 @@ class DivDivAsmGen(AsmGenerator):
             for j in range(dim):
                 self.add_at(dim*i + j, self.W * self.gradu[j] * self.gradv[i])
 
+
+################################################################################
+# Assembler generation script, main entry point
+################################################################################
 
 def generate(dim):
     DIM = dim

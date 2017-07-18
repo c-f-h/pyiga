@@ -961,17 +961,17 @@ def Heat_ST_AsmGen(code, dim):
 
 def Wave_ST_AsmGen(code, dim):
     A = AsmGenerator('WaveAssembler_ST', code, dim)
-    Dt = (dim-1) * (0,) + (1,)
-    utt_vt = A.partial_deriv('u', Dt[:-1] + (2,)) * A.partial_deriv('v', Dt)
 
     spacedims, timedim = range(dim-1), dim-1
-    dtgv = A.let('dtgv', A.gradient('v',
-            dims=spacedims,
-            additional_derivs=Dt    # additional derivative in time direction
-    ))
+    Dt  = (dim-1) * (0,) + (1,)     # first time derivative
+    Dtt = (dim-1) * (0,) + (2,)     # second time derivative
 
+    utt_vt = A.partial_deriv('u', Dtt) * A.partial_deriv('v', Dt)
+
+    # compute time derivative of gradient of v (assumes ST cylinder)
+    dtgv = A.let('dtgv', A.gradient('v', dims=spacedims, additional_derivs=Dt))
     dtgradv = A.let('dtgradv', matmul(A.JacInvT[spacedims, spacedims], dtgv))
-    gradu_dtgradv = inner(A.gradu[:-1], dtgradv)
+    gradu_dtgradv = inner(A.gradu[spacedims], dtgradv)
 
     A.add(A.W * (utt_vt + gradu_dtgradv))
     return A

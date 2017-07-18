@@ -182,11 +182,11 @@ class AsmGenerator:
     def gen_assign(self, out, expr):
         if expr.vecsize:
             for k in range(expr.vecsize):
-                self.put(self.vec_entry(out, k) + ' = ' + expr[k].s)
+                self.put(self.vec_entry(out, k) + ' = ' + expr[k].gencode())
         elif expr.matsize:
             assert False, 'matrix assignment not implemented'
         else:
-            self.put(out + ' = ' + expr.s)
+            self.put(out + ' = ' + expr.gencode())
 
     def let(self, varname, expr):
         #self.assignments.append((varname, expr))
@@ -298,10 +298,10 @@ class AsmGenerator:
         # generate code for all expressions in the bilinear form
         if self.vec:
             for idx, expr in self.exprs:
-                self.put(('result[%d] += ' % idx) + expr.s)
+                self.put(('result[%d] += ' % idx) + expr.gencode())
         else:
             for expr in self.exprs:
-                self.put('result += ' + expr.s)
+                self.put('result += ' + expr.gencode())
 
         # end main loop
         for _ in range(self.dim):
@@ -797,10 +797,10 @@ def gen_assemble_impl_header(dim, vec=False):
     )
 
 class Expr:
-    def __add__(self, other): return BinExpr('+', self, other)
-    def __sub__(self, other): return BinExpr('-', self, other)
-    def __mul__(self, other): return BinExpr('*', self, other)
-    def __div__(self, other): return BinExpr('/', self, other)
+    def __add__(self, other): return OperExpr('+', self, other)
+    def __sub__(self, other): return OperExpr('-', self, other)
+    def __mul__(self, other): return OperExpr('*', self, other)
+    def __div__(self, other): return OperExpr('/', self, other)
     def __getitem__(self, i):
         if isinstance(i, slice) or isinstance(i, range):
             return SliceExpr(self, i)
@@ -812,6 +812,9 @@ class LiteralExpr(Expr):
         self.s = s
         self.vecsize = vecsize
         self.matsize = None
+
+    def gencode(self):
+        return self.s
 
 class LiteralVectorExpr(Expr):
     def __init__(self, entries):
@@ -840,7 +843,7 @@ class LiteralMatrixExpr(Expr):
         else:
             return result
 
-class BinExpr(Expr):
+class OperExpr(Expr):
     def __init__(self, oper, x, y):
         assert None == x.vecsize == y.vecsize and \
                None == x.matsize == y.matsize, 'expected scalars'
@@ -848,17 +851,23 @@ class BinExpr(Expr):
         self.matsize = x.matsize
         self.oper = oper
         self.args = (x,y)
-        self.s = '({x} {op} {y})'.format(op=oper, x=x.s, y=y.s)
+
+    def gencode(self):
+        sep = ' ' + self.oper + ' '
+        return '(' + sep.join(x.gencode() for x in self.args) + ')'
 
 class IndexExpr(Expr):
     def __init__(self, x, i):
         self.vecsize = self.matsize = None
         assert x.vecsize, 'indexed expression is not a vector'
         self.x = x
+        i = int(i)
         if i < 0: i += x.vecsize
         assert 0 <= i < x.vecsize, 'index out of range'
         self.i = i
-        self.s = '{x}[{i}]'.format(x=x.s, i=int(i))
+
+    def gencode(self):
+        return '{x}[{i}]'.format(x=self.x.gencode(), i=self.i)
 
 def _indices_from_slice(sl, n):
     start = sl.start

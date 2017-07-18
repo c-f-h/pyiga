@@ -62,6 +62,8 @@ class AsmGenerator:
         self.need_grad = False          # gradient in parameter domain (gu, gv)
         self.need_phys_grad = False     # gradient in physical domain (gradu, gradv)
         self.need_phys_weights = False  # W = Gauss weight * abs(geo_det)
+        # misc
+        self._JacInvT = None
 
     def register_scalar_field(self, name):
         self.vars[name] = {
@@ -426,9 +428,16 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         self.need_phys_grad = True
         return LiteralExpr('gradv', vecsize=self.dim)
 
+    @property
+    def JacInvT(self):
+        if not self._JacInvT:
+            self.need_phys_grad = True      # TODO: may not need this, only JacInvT itself!
+            self._JacInvT = self.register_matrix_field('JacInvT')
+        return self._JacInvT
+
     def generate(self):
         if self.need_phys_grad:
-            self.JacInvT = self.register_matrix_field('JacInvT')
+            self._JacInvT = self.register_matrix_field('JacInvT')   # TODO: duplicated code
             self.init_jacinv = True
             self.need_grad = True
 

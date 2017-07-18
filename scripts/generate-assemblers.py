@@ -143,6 +143,7 @@ class AsmGenerator:
 
     def partial_deriv(self, var, D):
         """Parametric partial derivative of `var` of order `D=(Dx1, ..., Dxd)`"""
+        self.numderiv = max(max(D), self.numderiv)    # make sure derivatives are computed
         return PartialDerivExpr(var, D, self)
 
     def basisval(self, var):
@@ -979,7 +980,7 @@ class Heat_ST_AsmGen(AsmGenerator):
 
 class Wave_ST_AsmGen(AsmGenerator):
     def __init__(self, code, dim):
-        AsmGenerator.__init__(self, 'WaveAssembler_ST', code, dim, numderiv=2)
+        AsmGenerator.__init__(self, 'WaveAssembler_ST', code, dim)
         Dt = (dim-1) * (0,) + (1,)
         utt_vt = self.partial_deriv('u', Dt[:-1] + (2,)) * self.partial_deriv('v', Dt)
 

@@ -319,10 +319,10 @@ cdef class MassAssembler2D(BaseAssembler2D):
 
         cdef size_t i0
         cdef size_t i1
-        cdef double u
-        cdef double v
         cdef double result = 0.0
         cdef double W
+        cdef double u
+        cdef double v
 
         for i0 in range(n0):
             for i1 in range(n1):
@@ -330,7 +330,6 @@ cdef class MassAssembler2D(BaseAssembler2D):
 
                 u = (VDu0[1*i0+0] * VDu1[1*i1+0])
                 v = (VDv0[1*i0+0] * VDv1[1*i1+0])
-
                 result += ((W * u) * v)
         return result
 
@@ -393,10 +392,10 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
 
         cdef size_t i0
         cdef size_t i1
-        cdef double gu[2]
-        cdef double gv[2]
         cdef double result = 0.0
         cdef double* B
+        cdef double gu[2]
+        cdef double gv[2]
 
         for i0 in range(n0):
             for i1 in range(n1):
@@ -404,10 +403,8 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
 
                 gu[0] = (VDu0[2*i0+0] * VDu1[2*i1+1])
                 gu[1] = (VDu0[2*i0+1] * VDu1[2*i1+0])
-
                 gv[0] = (VDv0[2*i0+0] * VDv1[2*i1+1])
                 gv[1] = (VDv0[2*i0+1] * VDv1[2*i1+0])
-
                 result += (((B[0] * gu[0]) + (B[1] * gu[1])) * gv[0])
                 result += (((B[1] * gu[0]) + (B[3] * gu[1])) * gv[1])
         return result
@@ -474,36 +471,29 @@ cdef class Heat_ST_Assembler2D(BaseAssembler2D):
 
         cdef size_t i0
         cdef size_t i1
-        cdef double u
-        cdef double v
-        cdef double gu[2]
-        cdef double gv[2]
-        cdef double gradu[2]
-        cdef double gradv[2]
         cdef double result = 0.0
         cdef double* JacInvT
         cdef double W
+        cdef double gu[2]
+        cdef double gradu[2]
+        cdef double v
+        cdef double gv[2]
+        cdef double gradv[2]
 
         for i0 in range(n0):
             for i1 in range(n1):
                 JacInvT = &_JacInvT[i0, i1, 0, 0]
                 W = _W[i0, i1]
 
-                u = (VDu0[2*i0+0] * VDu1[2*i1+0])
-                v = (VDv0[2*i0+0] * VDv1[2*i1+0])
-
                 gu[0] = (VDu0[2*i0+0] * VDu1[2*i1+1])
                 gu[1] = (VDu0[2*i0+1] * VDu1[2*i1+0])
-
-                gv[0] = (VDv0[2*i0+0] * VDv1[2*i1+1])
-                gv[1] = (VDv0[2*i0+1] * VDv1[2*i1+0])
-
                 gradu[0] = ((JacInvT[0] * gu[0]) + (JacInvT[1] * gu[1]))
                 gradu[1] = ((JacInvT[2] * gu[0]) + (JacInvT[3] * gu[1]))
-
+                v = (VDv0[2*i0+0] * VDv1[2*i1+0])
+                gv[0] = (VDv0[2*i0+0] * VDv1[2*i1+1])
+                gv[1] = (VDv0[2*i0+1] * VDv1[2*i1+0])
                 gradv[0] = ((JacInvT[0] * gv[0]) + (JacInvT[1] * gv[1]))
                 gradv[1] = ((JacInvT[2] * gv[0]) + (JacInvT[3] * gv[1]))
-
                 result += (W * ((gradu[0] * gradv[0]) + (gradu[1] * v)))
         return result
 
@@ -570,35 +560,25 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
 
         cdef size_t i0
         cdef size_t i1
-        cdef double gu[2]
-        cdef double gv[2]
-        cdef double gradu[2]
-        cdef double gradv[2]
         cdef double result = 0.0
         cdef double* JacInvT
         cdef double W
         cdef double dtgv[1]
         cdef double dtgradv[1]
+        cdef double gu[2]
+        cdef double gradu[2]
 
         for i0 in range(n0):
             for i1 in range(n1):
                 JacInvT = &_JacInvT[i0, i1, 0, 0]
                 W = _W[i0, i1]
 
-                gu[0] = (VDu0[3*i0+0] * VDu1[3*i1+1])
-                gu[1] = (VDu0[3*i0+1] * VDu1[3*i1+0])
-
-                gv[0] = (VDv0[3*i0+0] * VDv1[3*i1+1])
-                gv[1] = (VDv0[3*i0+1] * VDv1[3*i1+0])
-
-                gradu[0] = ((JacInvT[0] * gu[0]) + (JacInvT[1] * gu[1]))
-                gradu[1] = ((JacInvT[2] * gu[0]) + (JacInvT[3] * gu[1]))
-
-                gradv[0] = ((JacInvT[0] * gv[0]) + (JacInvT[1] * gv[1]))
-                gradv[1] = ((JacInvT[2] * gv[0]) + (JacInvT[3] * gv[1]))
-
                 dtgv[0] = (VDv0[3*i0+1] * VDv1[3*i1+1])
                 dtgradv[0] = (JacInvT[0] * dtgv[0])
+                gu[0] = (VDu0[3*i0+0] * VDu1[3*i1+1])
+                gu[1] = (VDu0[3*i0+1] * VDu1[3*i1+0])
+                gradu[0] = ((JacInvT[0] * gu[0]) + (JacInvT[1] * gu[1]))
+                gradu[1] = ((JacInvT[2] * gu[0]) + (JacInvT[3] * gu[1]))
                 result += (W * (((VDu0[3*i0+2] * VDu1[3*i1+0]) * (VDv0[3*i0+1] * VDv1[3*i1+0])) + (gradu[0] * dtgradv[0])))
         return result
 
@@ -666,12 +646,12 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
 
         cdef size_t i0
         cdef size_t i1
-        cdef double gu[2]
-        cdef double gv[2]
-        cdef double gradu[2]
-        cdef double gradv[2]
         cdef double* JacInvT
         cdef double W
+        cdef double gu[2]
+        cdef double gradu[2]
+        cdef double gv[2]
+        cdef double gradv[2]
 
         for i0 in range(n0):
             for i1 in range(n1):
@@ -680,16 +660,12 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
 
                 gu[0] = (VDu0[2*i0+0] * VDu1[2*i1+1])
                 gu[1] = (VDu0[2*i0+1] * VDu1[2*i1+0])
-
-                gv[0] = (VDv0[2*i0+0] * VDv1[2*i1+1])
-                gv[1] = (VDv0[2*i0+1] * VDv1[2*i1+0])
-
                 gradu[0] = ((JacInvT[0] * gu[0]) + (JacInvT[1] * gu[1]))
                 gradu[1] = ((JacInvT[2] * gu[0]) + (JacInvT[3] * gu[1]))
-
+                gv[0] = (VDv0[2*i0+0] * VDv1[2*i1+1])
+                gv[1] = (VDv0[2*i0+1] * VDv1[2*i1+0])
                 gradv[0] = ((JacInvT[0] * gv[0]) + (JacInvT[1] * gv[1]))
                 gradv[1] = ((JacInvT[2] * gv[0]) + (JacInvT[3] * gv[1]))
-
                 result[0] += ((W * gradu[0]) * gradv[0])
                 result[1] += ((W * gradu[1]) * gradv[0])
                 result[2] += ((W * gradu[0]) * gradv[1])
@@ -1070,10 +1046,10 @@ cdef class MassAssembler3D(BaseAssembler3D):
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
-        cdef double u
-        cdef double v
         cdef double result = 0.0
         cdef double W
+        cdef double u
+        cdef double v
 
         for i0 in range(n0):
             for i1 in range(n1):
@@ -1082,7 +1058,6 @@ cdef class MassAssembler3D(BaseAssembler3D):
 
                     u = (VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0])
                     v = (VDv0[1*i0+0] * VDv1[1*i1+0] * VDv2[1*i2+0])
-
                     result += ((W * u) * v)
         return result
 
@@ -1147,10 +1122,10 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
-        cdef double gu[3]
-        cdef double gv[3]
         cdef double result = 0.0
         cdef double* B
+        cdef double gu[3]
+        cdef double gv[3]
 
         for i0 in range(n0):
             for i1 in range(n1):
@@ -1160,11 +1135,9 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                     gu[0] = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
                     gu[1] = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
                     gu[2] = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
-
                     gv[0] = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
                     gv[1] = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
                     gv[2] = (VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0])
-
                     result += ((((B[0] * gu[0]) + (B[1] * gu[1])) + (B[2] * gu[2])) * gv[0])
                     result += ((((B[1] * gu[0]) + (B[4] * gu[1])) + (B[5] * gu[2])) * gv[1])
                     result += ((((B[2] * gu[0]) + (B[5] * gu[1])) + (B[8] * gu[2])) * gv[2])
@@ -1234,15 +1207,14 @@ cdef class Heat_ST_Assembler3D(BaseAssembler3D):
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
-        cdef double u
-        cdef double v
-        cdef double gu[3]
-        cdef double gv[3]
-        cdef double gradu[3]
-        cdef double gradv[3]
         cdef double result = 0.0
         cdef double* JacInvT
         cdef double W
+        cdef double gu[3]
+        cdef double gradu[3]
+        cdef double v
+        cdef double gv[3]
+        cdef double gradv[3]
 
         for i0 in range(n0):
             for i1 in range(n1):
@@ -1250,25 +1222,19 @@ cdef class Heat_ST_Assembler3D(BaseAssembler3D):
                     JacInvT = &_JacInvT[i0, i1, i2, 0, 0]
                     W = _W[i0, i1, i2]
 
-                    u = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+0])
-                    v = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+0])
-
                     gu[0] = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
                     gu[1] = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
                     gu[2] = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
-
-                    gv[0] = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
-                    gv[1] = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
-                    gv[2] = (VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0])
-
                     gradu[0] = (((JacInvT[0] * gu[0]) + (JacInvT[1] * gu[1])) + (JacInvT[2] * gu[2]))
                     gradu[1] = (((JacInvT[3] * gu[0]) + (JacInvT[4] * gu[1])) + (JacInvT[5] * gu[2]))
                     gradu[2] = (((JacInvT[6] * gu[0]) + (JacInvT[7] * gu[1])) + (JacInvT[8] * gu[2]))
-
+                    v = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+0])
+                    gv[0] = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
+                    gv[1] = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
+                    gv[2] = (VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0])
                     gradv[0] = (((JacInvT[0] * gv[0]) + (JacInvT[1] * gv[1])) + (JacInvT[2] * gv[2]))
                     gradv[1] = (((JacInvT[3] * gv[0]) + (JacInvT[4] * gv[1])) + (JacInvT[5] * gv[2]))
                     gradv[2] = (((JacInvT[6] * gv[0]) + (JacInvT[7] * gv[1])) + (JacInvT[8] * gv[2]))
-
                     result += (W * (((gradu[0] * gradv[0]) + (gradu[1] * gradv[1])) + (gradu[2] * v)))
         return result
 
@@ -1337,15 +1303,13 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
-        cdef double gu[3]
-        cdef double gv[3]
-        cdef double gradu[3]
-        cdef double gradv[3]
         cdef double result = 0.0
         cdef double* JacInvT
         cdef double W
         cdef double dtgv[2]
         cdef double dtgradv[2]
+        cdef double gu[3]
+        cdef double gradu[3]
 
         for i0 in range(n0):
             for i1 in range(n1):
@@ -1353,26 +1317,16 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
                     JacInvT = &_JacInvT[i0, i1, i2, 0, 0]
                     W = _W[i0, i1, i2]
 
-                    gu[0] = (VDu0[3*i0+0] * VDu1[3*i1+0] * VDu2[3*i2+1])
-                    gu[1] = (VDu0[3*i0+0] * VDu1[3*i1+1] * VDu2[3*i2+0])
-                    gu[2] = (VDu0[3*i0+1] * VDu1[3*i1+0] * VDu2[3*i2+0])
-
-                    gv[0] = (VDv0[3*i0+0] * VDv1[3*i1+0] * VDv2[3*i2+1])
-                    gv[1] = (VDv0[3*i0+0] * VDv1[3*i1+1] * VDv2[3*i2+0])
-                    gv[2] = (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+0])
-
-                    gradu[0] = (((JacInvT[0] * gu[0]) + (JacInvT[1] * gu[1])) + (JacInvT[2] * gu[2]))
-                    gradu[1] = (((JacInvT[3] * gu[0]) + (JacInvT[4] * gu[1])) + (JacInvT[5] * gu[2]))
-                    gradu[2] = (((JacInvT[6] * gu[0]) + (JacInvT[7] * gu[1])) + (JacInvT[8] * gu[2]))
-
-                    gradv[0] = (((JacInvT[0] * gv[0]) + (JacInvT[1] * gv[1])) + (JacInvT[2] * gv[2]))
-                    gradv[1] = (((JacInvT[3] * gv[0]) + (JacInvT[4] * gv[1])) + (JacInvT[5] * gv[2]))
-                    gradv[2] = (((JacInvT[6] * gv[0]) + (JacInvT[7] * gv[1])) + (JacInvT[8] * gv[2]))
-
                     dtgv[0] = (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+1])
                     dtgv[1] = (VDv0[3*i0+1] * VDv1[3*i1+1] * VDv2[3*i2+0])
                     dtgradv[0] = ((JacInvT[0] * dtgv[0]) + (JacInvT[1] * dtgv[1]))
                     dtgradv[1] = ((JacInvT[3] * dtgv[0]) + (JacInvT[4] * dtgv[1]))
+                    gu[0] = (VDu0[3*i0+0] * VDu1[3*i1+0] * VDu2[3*i2+1])
+                    gu[1] = (VDu0[3*i0+0] * VDu1[3*i1+1] * VDu2[3*i2+0])
+                    gu[2] = (VDu0[3*i0+1] * VDu1[3*i1+0] * VDu2[3*i2+0])
+                    gradu[0] = (((JacInvT[0] * gu[0]) + (JacInvT[1] * gu[1])) + (JacInvT[2] * gu[2]))
+                    gradu[1] = (((JacInvT[3] * gu[0]) + (JacInvT[4] * gu[1])) + (JacInvT[5] * gu[2]))
+                    gradu[2] = (((JacInvT[6] * gu[0]) + (JacInvT[7] * gu[1])) + (JacInvT[8] * gu[2]))
                     result += (W * (((VDu0[3*i0+2] * VDu1[3*i1+0] * VDu2[3*i2+0]) * (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+0])) + ((gradu[0] * dtgradv[0]) + (gradu[1] * dtgradv[1]))))
         return result
 
@@ -1442,12 +1396,12 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
-        cdef double gu[3]
-        cdef double gv[3]
-        cdef double gradu[3]
-        cdef double gradv[3]
         cdef double* JacInvT
         cdef double W
+        cdef double gu[3]
+        cdef double gradu[3]
+        cdef double gv[3]
+        cdef double gradv[3]
 
         for i0 in range(n0):
             for i1 in range(n1):
@@ -1458,19 +1412,15 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
                     gu[0] = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
                     gu[1] = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
                     gu[2] = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
-
-                    gv[0] = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
-                    gv[1] = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
-                    gv[2] = (VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0])
-
                     gradu[0] = (((JacInvT[0] * gu[0]) + (JacInvT[1] * gu[1])) + (JacInvT[2] * gu[2]))
                     gradu[1] = (((JacInvT[3] * gu[0]) + (JacInvT[4] * gu[1])) + (JacInvT[5] * gu[2]))
                     gradu[2] = (((JacInvT[6] * gu[0]) + (JacInvT[7] * gu[1])) + (JacInvT[8] * gu[2]))
-
+                    gv[0] = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
+                    gv[1] = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
+                    gv[2] = (VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0])
                     gradv[0] = (((JacInvT[0] * gv[0]) + (JacInvT[1] * gv[1])) + (JacInvT[2] * gv[2]))
                     gradv[1] = (((JacInvT[3] * gv[0]) + (JacInvT[4] * gv[1])) + (JacInvT[5] * gv[2]))
                     gradv[2] = (((JacInvT[6] * gv[0]) + (JacInvT[7] * gv[1])) + (JacInvT[8] * gv[2]))
-
                     result[0] += ((W * gradu[0]) * gradv[0])
                     result[1] += ((W * gradu[1]) * gradv[0])
                     result[2] += ((W * gradu[2]) * gradv[0])

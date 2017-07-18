@@ -58,12 +58,20 @@ class AsmGenerator:
         self.init_jacinv = False
         self.init_weights = False       # geo_weights = Gauss weights * abs(geo_det)
         # variables provided pointwise during assembling
-        self.need_val = False           # basis function values (u, v)
         self.need_grad = False          # gradient in parameter domain (gu, gv)
         self.need_phys_grad = False     # gradient in physical domain (gradu, gradv)
         self.need_phys_weights = False  # W = Gauss weight * abs(geo_det)
         # misc
-        self._JacInvT = None
+        self.predefined_vars = {
+            'u':     lambda self: self.basisval('u'),
+            'v':     lambda self: self.basisval('v'),
+            'gu':    lambda self: self.gradient('u'),
+            'gv':    lambda self: self.gradient('v'),
+            'gradu': lambda self: matmul(self.JacInvT, self.gu),
+            'gradv': lambda self: matmul(self.JacInvT, self.gv),
+        }
+        self.cached_vars = {}
+
 
     def register_scalar_field(self, name):
         self.vars[name] = {
@@ -240,16 +248,6 @@ class AsmGenerator:
         for k in range(self.dim):
             self.declare_index('i%d' % k)
 
-        if self.need_val:
-            self.declare_scalar('u')
-            self.declare_scalar('v')
-        if self.need_grad:
-            self.declare_vec('gu')
-            self.declare_vec('gv')
-        if self.need_phys_grad:
-            self.declare_vec('gradu')
-            self.declare_vec('gradv')
-
         if not self.vec:    # for vector assemblers, result is passed as a pointer
             self.declare_scalar('result', '0.0')
 
@@ -286,21 +284,6 @@ class AsmGenerator:
             elif var['type'] == 'matrix':
                 self.putf('{name} = &_{name}[{I}, 0, 0]', name=name)
         self.put('')
-
-        if self.need_val:
-            self.gen_assign('u', self.basisval('u'))
-            self.gen_assign('v', self.basisval('v'))
-            self.put('')
-        if self.need_grad:
-            self.gen_assign('gu', self.gradient('u'))
-            self.put('')
-            self.gen_assign('gv', self.gradient('v'))
-            self.put('')
-            if self.need_phys_grad:
-                self.gen_assign('gradu', matmul(self.JacInvT, self.gu))
-                self.put('')
-                self.gen_assign('gradv', matmul(self.JacInvT, self.gv))
-                self.put('')
 
         # generate deferred assignment statements
         for varname, expr in self.assignments:
@@ -402,51 +385,30 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
     def generate_biform(self):
         pass
 
+    # automatically produce caching getters for predefined variables
+    def __getattr__(self, name):
+        if name in self.predefined_vars:
+            if not name in self.cached_vars:
+                self.cached_vars[name] = self.let(name, self.predefined_vars[name](self))
+            return self.cached_vars[name]
+        else:
+            msg = "'{0}' object has no attribute '{1}'"
+            raise AttributeError(msg.format(type(self).__name__, name))
+
     @property
     def W(self):
         self.need_phys_weights = True
         return LiteralExpr('W')
 
     @property
-    def u(self):
-        self.need_val = True
-        return LiteralExpr('u')
-
-    @property
-    def v(self):
-        self.need_val = True
-        return LiteralExpr('v')
-
-    @property
-    def gu(self):
-        self.need_grad = True
-        return LiteralExpr('gu', vecsize=self.dim)
-
-    @property
-    def gv(self):
-        self.need_grad = True
-        return LiteralExpr('gv', vecsize=self.dim)
-
-    @property
-    def gradu(self):
-        self.need_phys_grad = True
-        return LiteralExpr('gradu', vecsize=self.dim)
-
-    @property
-    def gradv(self):
-        self.need_phys_grad = True
-        return LiteralExpr('gradv', vecsize=self.dim)
-
-    @property
     def JacInvT(self):
-        if not self._JacInvT:
+        if not 'JacInvT' in self.cached_vars:
             self.need_phys_grad = True      # TODO: may not need this, only JacInvT itself!
-            self._JacInvT = self.register_matrix_field('JacInvT')
-        return self._JacInvT
+            self.cached_vars['JacInvT'] = self.register_matrix_field('JacInvT')
+        return self.cached_vars['JacInvT']
 
     def generate(self):
         if self.need_phys_grad:
-            self._JacInvT = self.register_matrix_field('JacInvT')   # TODO: duplicated code
             self.init_jacinv = True
             self.need_grad = True
 

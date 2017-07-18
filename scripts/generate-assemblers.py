@@ -195,8 +195,7 @@ class AsmGenerator:
             self.put(out + ' = ' + expr.gencode())
 
     def let(self, varname, expr):
-        #self.assignments.append((varname, expr))
-        self.gen_assign(varname, expr)
+        self.assignments.append((varname, expr))
         return LiteralExpr(varname, vecsize=expr.vecsize)
 
     def add_matvecvec(self, A, x, y):
@@ -259,6 +258,15 @@ class AsmGenerator:
                 self.declare_scalar(name)
             elif var['type'] == 'matrix':
                 self.declare_pointer(name)
+
+        # temp storage for user-defined field variables (TODO: unify with above)
+        for varname, expr in self.assignments:
+            if expr.vecsize:
+                self.declare_vec(varname, size=expr.vecsize)
+            elif expr.matsize:
+                assert False, 'matrix variables not implemented'
+            else:
+                self.declare_scalar(varname)
 
         self.declare_temp_variables()
 
@@ -972,18 +980,10 @@ class Heat_ST_AsmGen(AsmGenerator):
 class Wave_ST_AsmGen(AsmGenerator):
     def __init__(self, code, dim):
         AsmGenerator.__init__(self, 'WaveAssembler_ST', code, dim, numderiv=2)
-        self.need_phys_grad = True
-        self.need_phys_weights = True
-
-    def declare_temp_variables(self):
-        self.declare_vec('dtgv', size=self.dim-1)
-        self.declare_vec('dtgradv', size=self.dim-1)
-
-    def generate_biform(self):
-        Dt = (self.dim-1) * (0,) + (1,)
+        Dt = (dim-1) * (0,) + (1,)
         utt_vt = self.partial_deriv('u', Dt[:-1] + (2,)) * self.partial_deriv('v', Dt)
 
-        spacedims, timedim = range(self.dim-1), self.dim-1
+        spacedims, timedim = range(dim-1), dim-1
         dtgv = self.let('dtgv', self.gradient('v',
                 dims=spacedims,
                 additional_derivs=Dt    # additional derivative in time direction
@@ -998,9 +998,9 @@ class Wave_ST_AsmGen(AsmGenerator):
 class DivDivAsmGen(AsmGenerator):
     def __init__(self, code, dim):
         AsmGenerator.__init__(self, 'DivDivAssembler', code, dim, vec=dim**2)
-        for i in range(self.dim):
-            for j in range(self.dim):
-                self.add_at(self.dim*i + j, self.W * self.gradu[j] * self.gradv[i])
+        for i in range(dim):
+            for j in range(dim):
+                self.add_at(dim*i + j, self.W * self.gradu[j] * self.gradv[i])
 
 
 def generate(dim):

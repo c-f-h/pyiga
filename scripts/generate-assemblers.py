@@ -922,10 +922,10 @@ def matmul(A, x):
 # concrete assembler generators
 ################################################################################
 
-class MassAsmGen(AsmGenerator):
-    def __init__(self, code, dim):
-        AsmGenerator.__init__(self, 'MassAssembler', code, dim)
-        self.add(self.W * self.u * self.v)
+def MassAsmGen(code, dim):
+    A = AsmGenerator('MassAssembler', code, dim)
+    A.add(A.W * A.u * A.v)
+    return A
 
 
 class StiffnessAsmGen(AsmGenerator):
@@ -941,38 +941,38 @@ class StiffnessAsmGen(AsmGenerator):
             slices=self.dimrep(':'))
 
 
-class Heat_ST_AsmGen(AsmGenerator):
-    def __init__(self, code, dim):
-        AsmGenerator.__init__(self, 'Heat_ST_Assembler', code, dim)
-        timederiv = self.gradu[-1] * self.v
-        gradgrad = inner(self.gradu[:-1], self.gradv[:-1])
-        self.add(self.W * (gradgrad + timederiv))
+def Heat_ST_AsmGen(code, dim):
+    A = AsmGenerator('Heat_ST_Assembler', code, dim)
+    timederiv = A.gradu[-1] * A.v
+    gradgrad = inner(A.gradu[:-1], A.gradv[:-1])
+    A.add(A.W * (gradgrad + timederiv))
+    return A
 
 
-class Wave_ST_AsmGen(AsmGenerator):
-    def __init__(self, code, dim):
-        AsmGenerator.__init__(self, 'WaveAssembler_ST', code, dim)
-        Dt = (dim-1) * (0,) + (1,)
-        utt_vt = self.partial_deriv('u', Dt[:-1] + (2,)) * self.partial_deriv('v', Dt)
+def Wave_ST_AsmGen(code, dim):
+    A = AsmGenerator('WaveAssembler_ST', code, dim)
+    Dt = (dim-1) * (0,) + (1,)
+    utt_vt = A.partial_deriv('u', Dt[:-1] + (2,)) * A.partial_deriv('v', Dt)
 
-        spacedims, timedim = range(dim-1), dim-1
-        dtgv = self.let('dtgv', self.gradient('v',
-                dims=spacedims,
-                additional_derivs=Dt    # additional derivative in time direction
-        ))
+    spacedims, timedim = range(dim-1), dim-1
+    dtgv = A.let('dtgv', A.gradient('v',
+            dims=spacedims,
+            additional_derivs=Dt    # additional derivative in time direction
+    ))
 
-        dtgradv = self.let('dtgradv', matmul(self.JacInvT[spacedims, spacedims], dtgv))
-        gradu_dtgradv = inner(self.gradu[:-1], dtgradv)
+    dtgradv = A.let('dtgradv', matmul(A.JacInvT[spacedims, spacedims], dtgv))
+    gradu_dtgradv = inner(A.gradu[:-1], dtgradv)
 
-        self.add(self.W * (utt_vt + gradu_dtgradv))
+    A.add(A.W * (utt_vt + gradu_dtgradv))
+    return A
 
 
-class DivDivAsmGen(AsmGenerator):
-    def __init__(self, code, dim):
-        AsmGenerator.__init__(self, 'DivDivAssembler', code, dim, vec=dim**2)
-        for i in range(dim):
-            for j in range(dim):
-                self.add_at(dim*i + j, self.W * self.gradu[j] * self.gradv[i])
+def DivDivAsmGen(code, dim):
+    A = AsmGenerator('DivDivAssembler', code, dim, vec=dim**2)
+    for i in range(dim):
+        for j in range(dim):
+            A.add_at(dim*i + j, A.W * A.gradu[j] * A.gradv[i])
+    return A
 
 
 ################################################################################

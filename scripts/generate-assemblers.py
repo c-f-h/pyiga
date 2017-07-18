@@ -123,8 +123,8 @@ class AsmGenerator:
         return ' * '.join(['{0}[{1}][{2}]'.format(var, k, self.extend_dim(k))
             for k in range(self.dim)])
 
-    def partial_deriv(self, var, D, idx='i'):
-        """Parametric partial derivative of `var` of order `D=(Dx1, ..., Dxd)`"""
+    def gen_pderiv(self, var, D, idx='i'):
+        """Generate code for computing parametric partial derivative of `var` of order `D=(Dx1, ..., Dxd)`"""
         D = tuple(reversed(D))  # x is last axis
         assert len(D) == self.dim
         assert all(0 <= d <= self.numderiv for d in D)
@@ -137,7 +137,11 @@ class AsmGenerator:
                     **self.env
                 )
                 for k in range(self.dim)]
-        return LiteralExpr('(' + ' * '.join(factors) + ')')
+        return '(' + ' * '.join(factors) + ')'
+
+    def partial_deriv(self, var, D):
+        """Parametric partial derivative of `var` of order `D=(Dx1, ..., Dxd)`"""
+        return PartialDerivExpr(var, D, self)
 
     def basisval(self, var):
         return self.partial_deriv(var, self.dim * (0,))
@@ -868,6 +872,16 @@ class IndexExpr(Expr):
 
     def gencode(self):
         return '{x}[{i}]'.format(x=self.x.gencode(), i=self.i)
+
+class PartialDerivExpr(Expr):
+    def __init__(self, var, D, asmgen):
+        self.vecsize = self.matsize = None
+        self.var = var
+        self.D = D
+        self.asmgen = asmgen
+
+    def gencode(self):
+        return self.asmgen.gen_pderiv(self.var, self.D)
 
 def _indices_from_slice(sl, n):
     start = sl.start

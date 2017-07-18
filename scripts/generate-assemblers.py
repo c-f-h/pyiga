@@ -50,7 +50,8 @@ class AsmGenerator:
         self.vec = vec
         self.numderiv = numderiv
         self.vars = OrderedDict()
-        self.exprs = []     # expressions to be added to the result
+        self.assignments = []   # assignment statements for vars used in expr
+        self.exprs = []         # expressions to be added to the result
         # variables provided during initialization (geo_XXX)
         self.init_det = False
         self.init_jac = False
@@ -178,7 +179,7 @@ class AsmGenerator:
     def vec_entry(self, name, i):
         return '{name}[{i}]'.format(name=name, i=i)
 
-    def let(self, out, expr):
+    def gen_assign(self, out, expr):
         if expr.vecsize:
             for k in range(expr.vecsize):
                 self.put(self.vec_entry(out, k) + ' = ' + expr[k].s)
@@ -186,7 +187,11 @@ class AsmGenerator:
             assert False, 'matrix assignment not implemented'
         else:
             self.put(out + ' = ' + expr.s)
-        return LiteralExpr(out, vecsize=expr.vecsize)
+
+    def let(self, varname, expr):
+        #self.assignments.append((varname, expr))
+        self.gen_assign(varname, expr)
+        return LiteralExpr(varname, vecsize=expr.vecsize)
 
     def add_matvecvec(self, A, x, y):
         Ax = matmul(A, x)
@@ -268,19 +273,24 @@ class AsmGenerator:
         self.put('')
 
         if self.need_val:
-            self.let('u', self.basisval('u'))
-            self.let('v', self.basisval('v'))
+            self.gen_assign('u', self.basisval('u'))
+            self.gen_assign('v', self.basisval('v'))
             self.put('')
         if self.need_grad:
-            self.let('gu', self.gradient('u'))
+            self.gen_assign('gu', self.gradient('u'))
             self.put('')
-            self.let('gv', self.gradient('v'))
+            self.gen_assign('gv', self.gradient('v'))
             self.put('')
             if self.need_phys_grad:
-                self.let('gradu', matmul(self.JacInvT, self.gu))
+                self.gen_assign('gradu', matmul(self.JacInvT, self.gu))
                 self.put('')
-                self.let('gradv', matmul(self.JacInvT, self.gv))
+                self.gen_assign('gradv', matmul(self.JacInvT, self.gv))
                 self.put('')
+
+        # generate deferred assignment statements
+        for varname, expr in self.assignments:
+            self.gen_assign(varname, expr)
+        self.assignments = None     # disallow further assignments
 
         # if not yet done, compute expressions for the bilinear form a(u,v)
         self.generate_biform()

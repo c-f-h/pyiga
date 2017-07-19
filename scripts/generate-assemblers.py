@@ -97,12 +97,12 @@ class AsmGenerator:
 
     def add(self, expr):
         assert not self.vec, 'add() is only for scalar assemblers; use add_at()'
-        assert not expr.vecsize, 'cannot add vector to scalar result'
+        assert expr.is_scalar(), 'require scalar expression'
         self.exprs.append(expr)
 
     def add_at(self, idx, expr):
         assert self.vec, 'add_at() is only for vector assemblers; use add()'
-        assert not expr.vecsize, 'cannot add vector to scalar result'
+        assert expr.is_scalar(), 'require scalar expression'
         self.exprs.append((idx, expr))
 
     def partial_deriv(self, var, D):
@@ -128,7 +128,7 @@ class AsmGenerator:
 
     def let(self, varname, expr):
         self.assignments.append((varname, expr))
-        return LiteralExpr(varname, vecsize=expr.vecsize)
+        return LiteralExpr(varname, shape=expr.shape)
 
     def add_matvecvec(self, A, x, y):
         Ax = matmul(A, x)
@@ -242,13 +242,13 @@ class AsmGenerator:
         return LiteralExpr('{name}[{idx}]'.format(name=name, idx=idx))
 
     def gen_assign(self, out, expr):
-        if expr.vecsize:
-            for k in range(expr.vecsize):
+        if expr.is_vector():
+            for k in range(expr.shape[0]):
                 self.putf('{name}[{k}] = {rhs}',
                         name=out,
                         k=k,
                         rhs=expr[k].gencode())
-        elif expr.matsize:
+        elif expr.is_matrix():
             assert False, 'matrix assignment not implemented'
         else:
             self.put(out + ' = ' + expr.gencode())
@@ -304,9 +304,9 @@ class AsmGenerator:
 
         # temp storage for local variables
         for varname, expr in self.assignments:
-            if expr.vecsize:
-                self.declare_vec(varname, size=expr.vecsize)
-            elif expr.matsize:
+            if expr.is_vector():
+                self.declare_vec(varname, size=expr.shape[0])
+            elif expr.is_matrix():
                 assert False, 'local matrix variables not implemented'
             else:
                 self.declare_scalar(varname)
@@ -804,31 +804,31 @@ class Expr:
             return SliceExpr(self, i)
         else:
             return IndexExpr(self, i)
+    def is_scalar(self):    return self.shape is ()
+    def is_vector(self):    return len(self.shape) == 1
+    def is_matrix(self):    return len(self.shape) == 2
 
 class LiteralExpr(Expr):
-    def __init__(self, s, vecsize=None):
+    def __init__(self, s, shape=()):
         self.s = s
-        self.vecsize = vecsize
-        self.matsize = None
+        self.shape = shape
 
     def gencode(self):
         return self.s
 
 class LiteralVectorExpr(Expr):
     def __init__(self, entries):
-        self.vecsize = len(entries)
-        self.matsize = None
+        self.shape = (len(entries),)
         self.entries = entries
 
     def __getitem__(self, i):
-        if i < 0: i += self.vecsize
-        assert 0 <= i < self.vecsize, 'index out of bounds'
+        if i < 0: i += self.shape[0]
+        assert 0 <= i < self.shape[0], 'index out of bounds'
         return self.entries[i]
 
 class LiteralMatrixExpr(Expr):
     def __init__(self, entries):
-        self.vecsize = None
-        self.matsize = len(entries), len(entries[0])
+        self.shape = len(entries), len(entries[0])
         self.entries = np.array(entries, dtype=object)
 
     def __getitem__(self, ij):
@@ -843,10 +843,9 @@ class LiteralMatrixExpr(Expr):
 
 class OperExpr(Expr):
     def __init__(self, oper, x, y):
-        assert None == x.vecsize == y.vecsize and \
-               None == x.matsize == y.matsize, 'expected scalars'
-        self.vecsize = x.vecsize
-        self.matsize = x.matsize
+        assert x.is_scalar() and y.is_scalar(), 'expected scalars'
+        assert x.shape == y.shape
+        self.shape = x.shape
         self.oper = oper
         self.args = (x,y)
 
@@ -856,12 +855,12 @@ class OperExpr(Expr):
 
 class IndexExpr(Expr):
     def __init__(self, x, i):
-        self.vecsize = self.matsize = None
-        assert x.vecsize, 'indexed expression is not a vector'
+        self.shape = ()
+        assert x.is_vector(), 'indexed expression is not a vector'
         self.x = x
         i = int(i)
-        if i < 0: i += x.vecsize
-        assert 0 <= i < x.vecsize, 'index out of range'
+        if i < 0: i += x.shape[0]
+        assert 0 <= i < x.shape[0], 'index out of range'
         self.i = i
 
     def gencode(self):
@@ -869,7 +868,7 @@ class IndexExpr(Expr):
 
 class PartialDerivExpr(Expr):
     def __init__(self, var, D, asmgen):
-        self.vecsize = self.matsize = None
+        self.shape = ()
         self.var = var
         self.D = D
         self.asmgen = asmgen
@@ -890,16 +889,15 @@ def _indices_from_slice(sl, n):
 
 class SliceExpr(Expr):
     def __init__(self, x, sl):
-        assert x.vecsize, 'expression is not a vector'
+        assert x.is_vector(), 'expression is not a vector'
         self.x = x
         if isinstance(sl, slice):
-            self.indices = _indices_from_slice(sl, x.vecsize)
+            self.indices = _indices_from_slice(sl, x.shape[0])
         else:   # range?
             self.indices = tuple(sl)
         for i in self.indices:
-            assert 0 <= i < x.vecsize, 'slice index out of range'
-        self.vecsize = len(self.indices)
-        self.matsize = None
+            assert 0 <= i < x.shape[0], 'slice index out of range'
+        self.shape = (len(self.indices),)
 
     def __getitem__(self, i):
         assert not isinstance(i, slice), 'slicing of slices not implemented'
@@ -907,22 +905,22 @@ class SliceExpr(Expr):
 
 class MatMulExpr(Expr):
     def __init__(self, A, x):
-        assert A.matsize[1] == x.vecsize, 'incompatible shapes'
-        self.vecsize = A.matsize[0]
-        self.matsize = None
+        assert A.is_matrix() and x.is_vector()
+        assert A.shape[1] == x.shape[0], 'incompatible shapes'
+        self.shape = (A.shape[0],)
         self.A = A
         self.x = x
 
     def __getitem__(self, i):
-        if i < 0: i += self.vecsize
-        assert 0 <= i < self.vecsize
-        factors = [self.A[i, j] * self.x[j] for j in range(self.x.vecsize)]
+        if i < 0: i += self.shape[0]
+        assert 0 <= i < self.shape[0]
+        factors = [self.A[i, j] * self.x[j] for j in range(self.x.shape[0])]
         return reduce(operator.add, factors)
 
 def inner(x, y):
-    assert x.vecsize and y.vecsize, 'inner() requires vector expressions'
-    assert x.vecsize == y.vecsize, 'incompatible sizes'
-    return reduce(operator.add, (x[i] * y[i] for i in range(x.vecsize)))
+    assert x.is_vector() and y.is_vector(), 'inner() requires vector expressions'
+    assert x.shape == y.shape, 'incompatible shapes'
+    return reduce(operator.add, (x[i] * y[i] for i in range(x.shape[0])))
 
 def matmul(A, x):
     return MatMulExpr(A, x)

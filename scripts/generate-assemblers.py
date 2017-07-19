@@ -127,11 +127,6 @@ class AsmGenerator:
         self.assignments.append((varname, expr))
         return named_expr(varname, shape=expr.shape)
 
-    def add_matvecvec(self, A, x, y):
-        Ax = matmul(A, x)
-        for k in range(self.dim):
-            self.add(Ax[k] * y[k])
-
     # hooks for custom code generation
 
     def declare_temp_variables(self):
@@ -1026,11 +1021,9 @@ class StiffnessAsmGen(AsmGenerator):
         self.init_jacinv = self.init_weights = True
 
         B = self.register_matrix_field('B', symmetric=True)
-        self.add_matvecvec(B, self.gu, self.gv)
-        #self.add(self.W * inner(matmul(B, self.gu), self.gv))
+        self.add(inner(matmul(B, self.gu), self.gv))
 
     def initialize_fields(self):
-        #self.putf('self.B = matmatT(geo_jacinv)')
         self.putf('self.B = matmatT(geo_jacinv) * geo_weights[{slices}, None, None]',
             slices=self.dimrep(':'))
 

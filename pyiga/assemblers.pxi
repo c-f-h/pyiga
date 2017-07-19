@@ -407,8 +407,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
                 gu[1] = (VDu0[2*i0+1] * VDu1[2*i1+0])
                 gv[0] = (VDv0[2*i0+0] * VDv1[2*i1+1])
                 gv[1] = (VDv0[2*i0+1] * VDv1[2*i1+0])
-                result += (((B[0] * gu[0]) + (B[1] * gu[1])) * gv[0])
-                result += (((B[1] * gu[0]) + (B[3] * gu[1])) * gv[1])
+                result += ((((B[0] * gu[0]) + (B[1] * gu[1])) * gv[0]) + (((B[1] * gu[0]) + (B[3] * gu[1])) * gv[1]))
         return result
 
     @cython.boundscheck(False)
@@ -1142,9 +1141,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                     gv[0] = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
                     gv[1] = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
                     gv[2] = (VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0])
-                    result += ((((B[0] * gu[0]) + (B[1] * gu[1])) + (B[2] * gu[2])) * gv[0])
-                    result += ((((B[1] * gu[0]) + (B[4] * gu[1])) + (B[5] * gu[2])) * gv[1])
-                    result += ((((B[2] * gu[0]) + (B[5] * gu[1])) + (B[8] * gu[2])) * gv[2])
+                    result += ((((((B[0] * gu[0]) + (B[1] * gu[1])) + (B[2] * gu[2])) * gv[0]) + ((((B[1] * gu[0]) + (B[4] * gu[1])) + (B[5] * gu[2])) * gv[1])) + ((((B[2] * gu[0]) + (B[5] * gu[1])) + (B[8] * gu[2])) * gv[2]))
         return result
 
     @cython.boundscheck(False)

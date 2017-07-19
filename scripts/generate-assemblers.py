@@ -125,7 +125,7 @@ class AsmGenerator:
 
     def let(self, varname, expr):
         self.assignments.append((varname, expr))
-        return LiteralExpr(varname, shape=expr.shape)
+        return named_expr(varname, shape=expr.shape)
 
     def add_matvecvec(self, A, x, y):
         Ax = matmul(A, x)
@@ -158,7 +158,7 @@ class AsmGenerator:
     @property
     def W(self):
         self.need_phys_weights = True
-        return LiteralExpr('W')
+        return named_expr('W')
 
     @property
     def JacInv(self):
@@ -239,7 +239,14 @@ class AsmGenerator:
                         k=k,
                         rhs=expr[k].gencode())
         elif expr.is_matrix():
-            assert False, 'matrix assignment not implemented'
+            m, n = expr.shape
+            for i in range(m):
+                for j in range(n):
+                    # TODO: symmetry optimization
+                    self.putf('{name}[{k}] = {rhs}',
+                            name=out,
+                            k=i*m + j,
+                            rhs=expr[i,j].gencode())
         else:
             self.put(out + ' = ' + expr.gencode())
 
@@ -297,7 +304,7 @@ class AsmGenerator:
             if expr.is_vector():
                 self.declare_vec(varname, size=expr.shape[0])
             elif expr.is_matrix():
-                assert False, 'local matrix variables not implemented'
+                self.declare_vec(varname, size=expr.shape[0]*expr.shape[1])
             else:
                 self.declare_scalar(varname)
 
@@ -803,6 +810,14 @@ class MatrixExpr(Expr):
     def T(self):
         return TransposedMatrixExpr(self)
 
+def named_expr(s, shape=()):
+    if shape is () or len(shape) == 1:
+        return LiteralExpr(s, shape)
+    elif len(shape) == 2:
+        return NamedMatrixExpr(s, shape)
+    else:
+        assert False, 'invalid shape'
+
 class LiteralExpr(Expr):
     def __init__(self, s, shape=()):
         self.s = s
@@ -949,7 +964,7 @@ class SliceExpr(Expr):
         assert not isinstance(i, slice), 'slicing of slices not implemented'
         return self.x[self.indices[i]]
 
-class MatMulExpr(Expr):
+class MatVecExpr(Expr):
     def __init__(self, A, x):
         assert A.is_matrix() and x.is_vector()
         assert A.shape[1] == x.shape[0], 'incompatible shapes'
@@ -960,16 +975,39 @@ class MatMulExpr(Expr):
     def __getitem__(self, i):
         if i < 0: i += self.shape[0]
         assert 0 <= i < self.shape[0]
-        factors = [self.A[i, j] * self.x[j] for j in range(self.x.shape[0])]
-        return reduce(operator.add, factors)
+        return reduce(operator.add,
+            (self.A[i, j] * self.x[j] for j in range(self.x.shape[0])))
+
+class MatMatExpr(Expr):
+    def __init__(self, A, B):
+        assert A.is_matrix() and B.is_matrix()
+        assert A.shape[1] == B.shape[0], 'incompatible shapes'
+        self.shape = (A.shape[0], B.shape[1])
+        self.A = A
+        self.B = B
+
+    def __getitem__(self, ij):
+        assert len(ij) == 2
+        i, j = ij
+        if i < 0: i += self.shape[0]
+        assert 0 <= i < self.shape[0]
+        if j < 0: j += self.shape[1]
+        assert 0 <= j < self.shape[1]
+        return reduce(operator.add,
+            (self.A[i, k] * self.B[k, j] for k in range(self.A.shape[1])))
 
 def inner(x, y):
     assert x.is_vector() and y.is_vector(), 'inner() requires vector expressions'
     assert x.shape == y.shape, 'incompatible shapes'
     return reduce(operator.add, (x[i] * y[i] for i in range(x.shape[0])))
 
-def matmul(A, x):
-    return MatMulExpr(A, x)
+def matmul(a, b):
+    if a.is_matrix() and b.is_vector():
+        return MatVecExpr(a, b)
+    elif a.is_matrix() and b.is_matrix():
+        return MatMatExpr(a, b)
+    else:
+        raise TypeError('invalid types in matmul')
 
 
 ################################################################################
@@ -1001,6 +1039,12 @@ class StiffnessAsmGen(AsmGenerator):
 #def StiffnessAsmGen(code, dim):
 #    A = AsmGenerator('StiffnessAssembler', code, dim)
 #    A.add(A.W * inner(A.gradu, A.gradv))
+#    return A
+
+#def StiffnessAsmGen(code, dim):
+#    A = AsmGenerator('StiffnessAssembler', code, dim)
+#    B = A.let('B', matmul(A.JacInv, A.JacInv.T))
+#    A.add(A.W * inner(matmul(B, A.gu), A.gv))
 #    return A
 
 

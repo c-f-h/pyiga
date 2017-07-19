@@ -90,10 +90,7 @@ class AsmGenerator:
             'numdims': 2,
             'symmetric': symmetric
         }
-        return LiteralMatrixExpr([
-            [self.mat_entry(name, i, j) for j in range(self.dim)]
-            for i in range(self.dim)
-        ])
+        return NamedMatrixExpr(name, shape=(self.dim,self.dim), symmetric=symmetric)
 
     def add(self, expr):
         assert not self.vec, 'add() is only for scalar assemblers; use add_at()'
@@ -233,13 +230,6 @@ class AsmGenerator:
         if size is None:
             size = self.dim
         self.putf('cdef double {name}[{size}]', name=name, size=size)
-
-    def mat_entry(self, name, i, j):
-        sym = self.field_vars[name]['symmetric']
-        if sym and i > j:
-            i, j = j, i
-        idx = i*self.dim + j
-        return LiteralExpr('{name}[{idx}]'.format(name=name, idx=idx))
 
     def gen_assign(self, out, expr):
         if expr.is_vector():
@@ -808,6 +798,11 @@ class Expr:
     def is_vector(self):    return len(self.shape) == 1
     def is_matrix(self):    return len(self.shape) == 2
 
+class MatrixExpr(Expr):
+    @property
+    def T(self):
+        return TransposedMatrixExpr(self)
+
 class LiteralExpr(Expr):
     def __init__(self, s, shape=()):
         self.s = s
@@ -817,6 +812,7 @@ class LiteralExpr(Expr):
         return self.s
 
 class LiteralVectorExpr(Expr):
+    """Vector expression which is represented by a list of individual expressions."""
     def __init__(self, entries):
         self.shape = (len(entries),)
         self.entries = entries
@@ -826,20 +822,60 @@ class LiteralVectorExpr(Expr):
         assert 0 <= i < self.shape[0], 'index out of bounds'
         return self.entries[i]
 
-class LiteralMatrixExpr(Expr):
+class LiteralMatrixExpr(MatrixExpr):
+    """Matrix expression which is represented by a 2D array of individual expressions."""
     def __init__(self, entries):
         self.entries = np.array(entries, dtype=object)
         self.shape = self.entries.shape
 
     def __getitem__(self, ij):
-        if isinstance(ij[0], range) and isinstance(ij[1], range):
-            # hackish support for double range slicing
-            ij = np.ix_(*ij)
-        result = self.entries[ij]
-        if isinstance(result, np.ndarray):
-            return LiteralMatrixExpr(result)
+        i = _to_indices(ij[0], self.shape[0])
+        j = _to_indices(ij[1], self.shape[1])
+        if np.isscalar(i) and np.isscalar(j):
+            return self.entries[i, j]
         else:
-            return result
+            return LiteralMatrixExpr(self.entries[np.ix_(i, j)])
+
+class NamedMatrixExpr(MatrixExpr):
+    """Matrix expression which is represented by a matrix reference and shape."""
+    def __init__(self, name, shape, symmetric=False):
+        self.name = name
+        self.shape = tuple(shape)
+        assert len(self.shape) == 2
+        self.symmetric = symmetric
+
+    def to_seq(self, i, j):
+        if self.symmetric and i > j:
+            i, j = j, i
+        return i * self.shape[0] + j
+
+    def __getitem__(self, ij):
+        i = _to_indices(ij[0], self.shape[0])
+        j = _to_indices(ij[1], self.shape[1])
+        if np.isscalar(i) and np.isscalar(j):
+            return MatrixEntryExpr(self, i, j)
+        else:
+            return LiteralMatrixExpr([
+                    [self[ii,jj] for jj in j]
+                    for ii in i])
+
+class MatrixEntryExpr(Expr):
+    def __init__(self, mat, i, j):
+        self.shape = ()
+        self.mat = mat
+        self.i = i
+        self.j = j
+    def gencode(self):
+        return '{name}[{k}]'.format(name=self.mat.name,
+                k=self.mat.to_seq(self.i, self.j))
+
+class TransposedMatrixExpr(MatrixExpr):
+    def __init__(self, mat):
+        assert mat.is_matrix(), 'can only transpose matrices'
+        self.mat = mat
+        self.shape = (mat.shape[1], mat.shape[0])
+    def __getitem__(self, ij):
+        return self.mat[ij[1], ij[0]]
 
 class OperExpr(Expr):
     def __init__(self, oper, x, y):
@@ -886,6 +922,16 @@ def _indices_from_slice(sl, n):
     step = sl.step
     if step is None: step = 1
     return tuple(range(start, stop, step))
+
+def _to_indices(x, n):
+    if isinstance(x, slice):
+        return _indices_from_slice(x, n)
+    elif np.isscalar(x):
+        if x < 0: x += n
+        return x
+    else:
+        return tuple(x)
+
 
 class SliceExpr(Expr):
     def __init__(self, x, sl):

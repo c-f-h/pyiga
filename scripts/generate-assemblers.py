@@ -828,8 +828,8 @@ class LiteralVectorExpr(Expr):
 
 class LiteralMatrixExpr(Expr):
     def __init__(self, entries):
-        self.shape = len(entries), len(entries[0])
         self.entries = np.array(entries, dtype=object)
+        self.shape = self.entries.shape
 
     def __getitem__(self, ij):
         if isinstance(ij[0], range) and isinstance(ij[1], range):

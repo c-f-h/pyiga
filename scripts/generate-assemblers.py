@@ -1049,7 +1049,7 @@ class StiffnessAsmGen(AsmGenerator):
 
 
 def Heat_ST_AsmGen(code, dim):
-    A = AsmGenerator('Heat_ST_Assembler', code, dim)
+    A = AsmGenerator('HeatAssembler_ST', code, dim)
     timederiv = A.gradu[-1] * A.v
     gradgrad = inner(A.gradu[:-1], A.gradv[:-1])
     A.add(A.W * (gradgrad + timederiv))

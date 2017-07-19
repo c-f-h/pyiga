@@ -439,7 +439,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
                 values_i[0], values_i[1],
         )
 
-cdef class Heat_ST_Assembler2D(BaseAssembler2D):
+cdef class HeatAssembler_ST2D(BaseAssembler2D):
     cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
     cdef double[:, :, :, ::1] JacInv
     cdef double[:, ::1] W
@@ -521,7 +521,7 @@ cdef class Heat_ST_Assembler2D(BaseAssembler2D):
             values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
             values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 
-        return Heat_ST_Assembler2D.combine(
+        return HeatAssembler_ST2D.combine(
                 self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_j[0], values_j[1],
@@ -1175,7 +1175,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                 values_i[0], values_i[1], values_i[2],
         )
 
-cdef class Heat_ST_Assembler3D(BaseAssembler3D):
+cdef class HeatAssembler_ST3D(BaseAssembler3D):
     cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
     cdef double[:, :, :, :, ::1] JacInv
     cdef double[:, :, ::1] W
@@ -1264,7 +1264,7 @@ cdef class Heat_ST_Assembler3D(BaseAssembler3D):
             values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
             values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
 
-        return Heat_ST_Assembler3D.combine(
+        return HeatAssembler_ST3D.combine(
                 self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_j[0], values_j[1], values_j[2],

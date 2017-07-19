@@ -800,10 +800,17 @@ class Expr:
     def is_vector(self):    return len(self.shape) == 1
     def is_matrix(self):    return len(self.shape) == 2
 
+class VectorExpr(Expr):
+    def dot(self, x):
+        assert x.is_vector(), 'only dot(vec, vec) implemented'
+        return inner(self, x)
+
 class MatrixExpr(Expr):
     @property
     def T(self):
         return TransposedMatrixExpr(self)
+    def dot(self, x):
+        return matmul(self, x)
 
 def named_expr(s, shape=()):
     if shape is () or len(shape) == 1:
@@ -821,7 +828,7 @@ class LiteralExpr(Expr):
     def gencode(self):
         return self.s
 
-class LiteralVectorExpr(Expr):
+class LiteralVectorExpr(VectorExpr):
     """Vector expression which is represented by a list of individual expressions."""
     def __init__(self, entries):
         self.shape = (len(entries),)
@@ -943,7 +950,7 @@ def _to_indices(x, n):
         return tuple(x)
 
 
-class SliceExpr(Expr):
+class SliceExpr(VectorExpr):
     def __init__(self, x, sl):
         assert x.is_vector(), 'expression is not a vector'
         self.x = x
@@ -959,7 +966,7 @@ class SliceExpr(Expr):
         assert not isinstance(i, slice), 'slicing of slices not implemented'
         return self.x[self.indices[i]]
 
-class MatVecExpr(Expr):
+class MatVecExpr(VectorExpr):
     def __init__(self, A, x):
         assert A.is_matrix() and x.is_vector()
         assert A.shape[1] == x.shape[0], 'incompatible shapes'
@@ -973,7 +980,7 @@ class MatVecExpr(Expr):
         return reduce(operator.add,
             (self.A[i, j] * self.x[j] for j in range(self.x.shape[0])))
 
-class MatMatExpr(Expr):
+class MatMatExpr(MatrixExpr):
     def __init__(self, A, B):
         assert A.is_matrix() and B.is_matrix()
         assert A.shape[1] == B.shape[0], 'incompatible shapes'
@@ -1021,7 +1028,7 @@ class StiffnessAsmGen(AsmGenerator):
         self.init_jacinv = self.init_weights = True
 
         B = self.register_matrix_field('B', symmetric=True)
-        self.add(inner(matmul(B, self.gu), self.gv))
+        self.add(B.dot(self.gu).dot(self.gv))
 
     def initialize_fields(self):
         self.putf('self.B = matmatT(geo_jacinv) * geo_weights[{slices}, None, None]',

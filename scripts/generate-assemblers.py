@@ -945,10 +945,19 @@ class StiffnessAsmGen(AsmGenerator):
 
         B = self.register_matrix_field('B', symmetric=True)
         self.add_matvecvec(B, self.gu, self.gv)
+        #self.add(self.W * inner(matmul(B, self.gu), self.gv))
 
     def initialize_fields(self):
+        #self.putf('self.B = matmatT(geo_jacinv)')
         self.putf('self.B = matmatT(geo_jacinv) * geo_weights[{slices}, None, None]',
             slices=self.dimrep(':'))
+
+
+## slower:
+#def StiffnessAsmGen(code, dim):
+#    A = AsmGenerator('StiffnessAssembler', code, dim)
+#    A.add(A.W * inner(A.gradu, A.gradv))
+#    return A
 
 
 def Heat_ST_AsmGen(code, dim):

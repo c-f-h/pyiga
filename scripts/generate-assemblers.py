@@ -58,7 +58,7 @@ class AsmGenerator:
         self.init_jacinv = False
         self.init_weights = False       # geo_weights = Gauss weights * abs(geo_det)
         # field variables provided pointwise during assembling
-        self.need_jacinvt = False       # JacInvT: transposed inverse of geometry Jacobian
+        self.need_jacinv = False        # JacInv: inverse of geometry Jacobian
         self.need_phys_weights = False  # W = Gauss weight * abs(geo_det)
         # predefined local variables with their generators (created on demand)
         self.predefined_vars = {
@@ -66,8 +66,8 @@ class AsmGenerator:
             'v':     lambda self: self.basisval('v'),
             'gu':    lambda self: self.gradient('u'),
             'gv':    lambda self: self.gradient('v'),
-            'gradu': lambda self: matmul(self.JacInvT, self.gu),
-            'gradv': lambda self: matmul(self.JacInvT, self.gv),
+            'gradu': lambda self: matmul(self.JacInv.T, self.gu),
+            'gradv': lambda self: matmul(self.JacInv.T, self.gv),
         }
         self.cached_vars = {}
 
@@ -161,11 +161,11 @@ class AsmGenerator:
         return LiteralExpr('W')
 
     @property
-    def JacInvT(self):
-        if not 'JacInvT' in self.cached_vars:
-            self.need_jacinvt = True
-            self.cached_vars['JacInvT'] = self.register_matrix_field('JacInvT')
-        return self.cached_vars['JacInvT']
+    def JacInv(self):
+        if not 'JacInv' in self.cached_vars:
+            self.need_jacinv = True
+            self.cached_vars['JacInv'] = self.register_matrix_field('JacInv')
+        return self.cached_vars['JacInv']
 
     ##################################################
     # code generation
@@ -432,8 +432,8 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         if self.init_weights:
             self.put('geo_weights = %s * np.abs(geo_det)' % self.tensorprod('gaussweights'))
 
-        if self.need_jacinvt:
-            self.put("self.JacInvT = np.asarray(np.swapaxes(geo_jacinv, -2, -1), order='C')")
+        if self.need_jacinv:
+            self.put("self.JacInv = geo_jacinv")
 
         if self.need_phys_weights:  # store weights as field variable
             self.put('self.W = geo_weights')
@@ -444,7 +444,7 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
     # main code generation entry point
 
     def generate(self):
-        if self.need_jacinvt:
+        if self.need_jacinv:
             self.init_jacinv = True
 
         if self.need_phys_weights:
@@ -1023,7 +1023,7 @@ def Wave_ST_AsmGen(code, dim):
 
     # compute time derivative of gradient of v (assumes ST cylinder)
     dtgv = A.let('dtgv', A.gradient('v', dims=spacedims, additional_derivs=Dt))
-    dtgradv = A.let('dtgradv', matmul(A.JacInvT[spacedims, spacedims], dtgv))
+    dtgradv = A.let('dtgradv', matmul(A.JacInv.T[spacedims, spacedims], dtgv))
     gradu_dtgradv = inner(A.gradu[spacedims], dtgradv)
 
     A.add(A.W * (utt_vt + gradu_dtgradv))

@@ -393,14 +393,21 @@ class AsmGenerator:
         else:
             self.putf('return {classname}{dim}D.combine(', classname=self.classname)
         self.indent(2)
+
+        # generate field variable arguments
+        idx = self.dimrep('g_sta[{0}]:g_end[{0}]')
         for name in self.field_vars:
-            self.putf('self.{name} [ {idx} ],', name=name,
-                    idx=self.dimrep('g_sta[{0}]:g_end[{0}]'))
-        # a_ij = a(phi_j, phi_i)  -- pass values for j first
+            self.putf('self.{name} [ {idx} ],', name=name, idx=idx)
+
+        # generate basis function value arguments
+        # a_ij = a(phi_j, phi_i)  -- pass values for j (trial function) first
         self.put(self.dimrep('values_j[{0}]') + ',')
         self.put(self.dimrep('values_i[{0}]') + ',')
+
+        # generate output argument if needed (for vector assemblers)
         if self.vec:
             self.put('result')
+
         self.dedent(2)
         self.put(')')
         self.end_function()

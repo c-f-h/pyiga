@@ -108,7 +108,7 @@ class AsmGenerator:
         if shape is None: shape = (self.dim, self.dim)
         assert len(shape) == 2
         self.vars[name] = AsmVar(name, src=src, shape=shape, local=False, symmetric=symmetric)
-        return NamedMatrixExpr(name, shape=(self.dim,self.dim), symmetric=symmetric)
+        return NamedMatrixExpr(name, shape=shape, symmetric=symmetric)
 
     def add(self, expr):
         assert not self.vec, 'add() is only for scalar assemblers; use add_at()'

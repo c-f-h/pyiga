@@ -812,6 +812,8 @@ class Expr:
     def is_scalar(self):    return self.shape is ()
     def is_vector(self):    return len(self.shape) == 1
     def is_matrix(self):    return len(self.shape) == 2
+    def depends(self):
+        return reduce(operator.or_, (x.depends() for x in self.children), set())
 
 class VectorExpr(Expr):
     def dot(self, x):
@@ -836,49 +838,30 @@ def named_expr(s, shape=()):
         assert False, 'invalid shape'
 
 class NamedScalarExpr(Expr):
-    def __init__(self, s):
-        self.s = s
+    def __init__(self, name):
+        self.name = name
         self.shape = ()
+        self.children = ()
 
     def gencode(self):
-        return self.s
+        return self.name
+    def depends(self):
+        return set((self.name,))
 
 class NamedVectorExpr(VectorExpr):
-    def __init__(self, s, shape=()):
-        self.s = s
+    def __init__(self, name, shape=()):
+        self.name = name
         assert len(shape) == 1
         self.shape = shape
+        self.children = ()
+    def depends(self):
+        return set((self.name,))
 
     def __getitem__(self, i):
         if isinstance(i, slice) or isinstance(i, range):
             return SliceExpr(self, i)
         else:
             return IndexExpr(self, i)
-
-class LiteralVectorExpr(VectorExpr):
-    """Vector expression which is represented by a list of individual expressions."""
-    def __init__(self, entries):
-        self.shape = (len(entries),)
-        self.entries = entries
-
-    def __getitem__(self, i):
-        if i < 0: i += self.shape[0]
-        assert 0 <= i < self.shape[0], 'index out of bounds'
-        return self.entries[i]
-
-class LiteralMatrixExpr(MatrixExpr):
-    """Matrix expression which is represented by a 2D array of individual expressions."""
-    def __init__(self, entries):
-        self.entries = np.array(entries, dtype=object)
-        self.shape = self.entries.shape
-
-    def __getitem__(self, ij):
-        i = _to_indices(ij[0], self.shape[0])
-        j = _to_indices(ij[1], self.shape[1])
-        if np.isscalar(i) and np.isscalar(j):
-            return self.entries[i, j]
-        else:
-            return LiteralMatrixExpr(self.entries[np.ix_(i, j)])
 
 class NamedMatrixExpr(MatrixExpr):
     """Matrix expression which is represented by a matrix reference and shape."""
@@ -887,6 +870,9 @@ class NamedMatrixExpr(MatrixExpr):
         self.shape = tuple(shape)
         assert len(self.shape) == 2
         self.symmetric = symmetric
+        self.children = ()
+    def depends(self):
+        return set((self.name,))
 
     def to_seq(self, i, j):
         if self.symmetric and i > j:
@@ -903,12 +889,40 @@ class NamedMatrixExpr(MatrixExpr):
                     [self[ii,jj] for jj in j]
                     for ii in i])
 
+class LiteralVectorExpr(VectorExpr):
+    """Vector expression which is represented by a list of individual expressions."""
+    def __init__(self, entries):
+        entries = tuple(entries)
+        self.shape = (len(entries),)
+        self.children = entries
+
+    def __getitem__(self, i):
+        if i < 0: i += self.shape[0]
+        assert 0 <= i < self.shape[0], 'index out of bounds'
+        return self.children[i]
+
+class LiteralMatrixExpr(MatrixExpr):
+    """Matrix expression which is represented by a 2D array of individual expressions."""
+    def __init__(self, entries):
+        self.entries = np.array(entries, dtype=object)
+        self.shape = self.entries.shape
+        self.children = tuple(self.entries.flat)
+
+    def __getitem__(self, ij):
+        i = _to_indices(ij[0], self.shape[0])
+        j = _to_indices(ij[1], self.shape[1])
+        if np.isscalar(i) and np.isscalar(j):
+            return self.entries[i, j]
+        else:
+            return LiteralMatrixExpr(self.entries[np.ix_(i, j)])
+
 class MatrixEntryExpr(Expr):
     def __init__(self, mat, i, j):
         self.shape = ()
         self.mat = mat
         self.i = i
         self.j = j
+        self.children = (mat,)
     def gencode(self):
         return '{name}[{k}]'.format(name=self.mat.name,
                 k=self.mat.to_seq(self.i, self.j))
@@ -918,6 +932,7 @@ class TransposedMatrixExpr(MatrixExpr):
         assert mat.is_matrix(), 'can only transpose matrices'
         self.mat = mat
         self.shape = (mat.shape[1], mat.shape[0])
+        self.children = (mat,)
     def __getitem__(self, ij):
         return self.mat[ij[1], ij[0]]
 
@@ -927,11 +942,11 @@ class OperExpr(Expr):
         assert x.shape == y.shape
         self.shape = x.shape
         self.oper = oper
-        self.args = (x,y)
+        self.children = (x,y)
 
     def gencode(self):
         sep = ' ' + self.oper + ' '
-        return '(' + sep.join(x.gencode() for x in self.args) + ')'
+        return '(' + sep.join(x.gencode() for x in self.children) + ')'
 
 class IndexExpr(Expr):
     def __init__(self, x, i):
@@ -943,9 +958,10 @@ class IndexExpr(Expr):
         if i < 0: i += x.shape[0]
         assert 0 <= i < x.shape[0], 'index out of range'
         self.i = i
+        self.children = (x,)
 
     def gencode(self):
-        return '{x}[{i}]'.format(x=self.x.s, i=self.i)
+        return '{x}[{i}]'.format(x=self.x.name, i=self.i)
 
 class PartialDerivExpr(Expr):
     def __init__(self, var, D, asmgen):
@@ -953,9 +969,12 @@ class PartialDerivExpr(Expr):
         self.var = var
         self.D = D
         self.asmgen = asmgen
+        self.children = ()
 
     def gencode(self):
         return self.asmgen.gen_pderiv(self.var, self.D)
+    def depends(self):
+        return set(('@' + self.var,))
 
 def _indices_from_slice(sl, n):
     start = sl.start
@@ -989,6 +1008,7 @@ class SliceExpr(VectorExpr):
         for i in self.indices:
             assert 0 <= i < x.shape[0], 'slice index out of range'
         self.shape = (len(self.indices),)
+        self.children = (x,)
 
     def __getitem__(self, i):
         assert not isinstance(i, slice), 'slicing of slices not implemented'
@@ -1001,6 +1021,7 @@ class MatVecExpr(VectorExpr):
         self.shape = (A.shape[0],)
         self.A = A
         self.x = x
+        self.children = (A, x)
 
     def __getitem__(self, i):
         if i < 0: i += self.shape[0]
@@ -1015,6 +1036,7 @@ class MatMatExpr(MatrixExpr):
         self.shape = (A.shape[0], B.shape[1])
         self.A = A
         self.B = B
+        self.children = (A, B)
 
     def __getitem__(self, ij):
         assert len(ij) == 2

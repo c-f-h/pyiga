@@ -4,6 +4,7 @@ from collections import OrderedDict
 from functools import reduce
 import operator
 import numpy as np
+import networkx
 
 class PyCode:
     def __init__(self):
@@ -50,6 +51,7 @@ class AsmVar:
             self.shape = src.shape
         else:
             self.src = src
+            self.expr = None
             assert shape is not None
             self.shape = shape
         self.local = local
@@ -182,6 +184,15 @@ class AsmGenerator:
             self.init_jacinv = True
             self.cached_vars['JacInv'] = self.register_matrix_field('JacInv', shape=(self.dim,self.dim), src='geo_jacinv')
         return self.cached_vars['JacInv']
+
+    def dependency_graph(self):
+        G = networkx.DiGraph()
+        for var in self.vars.values():
+            G.add_node(var.name)
+            if var.expr:
+                for dep in var.expr.depends():
+                    G.add_edge(dep, var.name)
+        return G
 
     ##################################################
     # code generation

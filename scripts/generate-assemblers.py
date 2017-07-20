@@ -809,11 +809,6 @@ class Expr:
     def __sub__(self, other): return OperExpr('-', self, other)
     def __mul__(self, other): return OperExpr('*', self, other)
     def __div__(self, other): return OperExpr('/', self, other)
-    def __getitem__(self, i):
-        if isinstance(i, slice) or isinstance(i, range):
-            return SliceExpr(self, i)
-        else:
-            return IndexExpr(self, i)
     def is_scalar(self):    return self.shape is ()
     def is_vector(self):    return len(self.shape) == 1
     def is_matrix(self):    return len(self.shape) == 2
@@ -831,20 +826,34 @@ class MatrixExpr(Expr):
         return matmul(self, x)
 
 def named_expr(s, shape=()):
-    if shape is () or len(shape) == 1:
-        return LiteralExpr(s, shape)
+    if shape is ():
+        return NamedScalarExpr(s)
+    elif len(shape) == 1:
+        return NamedVectorExpr(s, shape)
     elif len(shape) == 2:
         return NamedMatrixExpr(s, shape)
     else:
         assert False, 'invalid shape'
 
-class LiteralExpr(Expr):
-    def __init__(self, s, shape=()):
+class NamedScalarExpr(Expr):
+    def __init__(self, s):
         self.s = s
-        self.shape = shape
+        self.shape = ()
 
     def gencode(self):
         return self.s
+
+class NamedVectorExpr(VectorExpr):
+    def __init__(self, s, shape=()):
+        self.s = s
+        assert len(shape) == 1
+        self.shape = shape
+
+    def __getitem__(self, i):
+        if isinstance(i, slice) or isinstance(i, range):
+            return SliceExpr(self, i)
+        else:
+            return IndexExpr(self, i)
 
 class LiteralVectorExpr(VectorExpr):
     """Vector expression which is represented by a list of individual expressions."""
@@ -926,6 +935,7 @@ class OperExpr(Expr):
 
 class IndexExpr(Expr):
     def __init__(self, x, i):
+        assert isinstance(x, NamedVectorExpr)   # can only index named vectors
         self.shape = ()
         assert x.is_vector(), 'indexed expression is not a vector'
         self.x = x
@@ -935,7 +945,7 @@ class IndexExpr(Expr):
         self.i = i
 
     def gencode(self):
-        return '{x}[{i}]'.format(x=self.x.gencode(), i=self.i)
+        return '{x}[{i}]'.format(x=self.x.s, i=self.i)
 
 class PartialDerivExpr(Expr):
     def __init__(self, var, D, asmgen):

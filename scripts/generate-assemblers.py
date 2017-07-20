@@ -75,19 +75,22 @@ class AsmGenerator:
     def register_scalar_field(self, name):
         self.field_vars[name] = {
             'type': 'scalar',
-            'numdims': 0
+            'shape': ()
         }
 
-    def register_vector_field(self, name):
+    def register_vector_field(self, name, size=None):
+        if size is None: size = self.dim
         self.field_vars[name] = {
             'type': 'vector',
-            'numdims': 1
+            'shape': (size,)
         }
 
-    def register_matrix_field(self, name, symmetric=False):
+    def register_matrix_field(self, name, shape=None, symmetric=False):
+        if shape is None: shape = (self.dim, self.dim)
+        assert len(shape) == 2
         self.field_vars[name] = {
             'type': 'matrix',
-            'numdims': 2,
+            'shape': shape,
             'symmetric': symmetric
         }
         return NamedMatrixExpr(name, shape=(self.dim,self.dim), symmetric=symmetric)
@@ -159,7 +162,7 @@ class AsmGenerator:
     def JacInv(self):
         if not 'JacInv' in self.cached_vars:
             self.need_jacinv = True
-            self.cached_vars['JacInv'] = self.register_matrix_field('JacInv')
+            self.cached_vars['JacInv'] = self.register_matrix_field('JacInv', shape=(self.dim,self.dim))
         return self.cached_vars['JacInv']
 
     ##################################################
@@ -261,7 +264,7 @@ class AsmGenerator:
         # parameters
         for name, var in self.field_vars.items():
             self.putf('double[{X}:1] _{name},',
-                    X=', '.join((self.dim + var['numdims']) * ':'),
+                    X=', '.join((self.dim + len(var['shape'])) * ':'),
                     name=name)
 
         self.put(self.dimrep('double* VDu{}') + ',')
@@ -469,7 +472,7 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         # declare field variables
         for name, var in self.field_vars.items():
             self.putf('cdef double[{X}:1] {name}',
-                    X=', '.join((self.dim + var['numdims']) * ':'),
+                    X=', '.join((self.dim + len(var['shape'])) * ':'),
                     name=name)
         self.put('')
 

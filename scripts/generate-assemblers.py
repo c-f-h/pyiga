@@ -42,6 +42,31 @@ class PyCode:
         return '\n'.join(self._lines)
 
 
+class AsmVar:
+    def __init__(self, name, src, shape, local, symmetric=False):
+        self.name = name
+        if isinstance(src, Expr):
+            self.expr = src
+            self.shape = src.shape
+        else:
+            self.src = src
+            assert shape is not None
+            self.shape = shape
+        self.local = local
+        self.symmetric = (len(self.shape) == 2 and symmetric)
+
+    def is_scalar(self):
+        return self.shape is ()
+    def is_vector(self):
+        return len(self.shape) == 1
+    def is_matrix(self):
+        return len(self.shape) == 2
+
+    def is_local(self):
+        return self.local
+    def is_field(self):
+        return not self.local
+
 class AsmGenerator:
     def __init__(self, classname, code, dim, numderiv=0, vec=False):
         self.classname = classname
@@ -49,17 +74,13 @@ class AsmGenerator:
         self.dim = dim
         self.vec = vec
         self.numderiv = numderiv
-        self.field_vars = OrderedDict()
-        self.assignments = []   # assignment statements for local vars used in expr
+        self.vars = OrderedDict()
         self.exprs = []         # expressions to be added to the result
         # variables provided during initialization (geo_XXX)
         self.init_det = False
         self.init_jac = False
         self.init_jacinv = False
         self.init_weights = False       # geo_weights = Gauss weights * abs(geo_det)
-        # field variables provided pointwise during assembling
-        self.need_jacinv = False        # JacInv: inverse of geometry Jacobian
-        self.need_phys_weights = False  # W = Gauss weight * abs(geo_det)
         # predefined local variables with their generators (created on demand)
         self.predefined_vars = {
             'u':     lambda self: self.basisval('u'),
@@ -71,28 +92,22 @@ class AsmGenerator:
         }
         self.cached_vars = {}
 
+    def local_vars(self):
+        return (var for var in self.vars.values() if var.is_local())
+    def field_vars(self):
+        return (var for var in self.vars.values() if var.is_field())
 
-    def register_scalar_field(self, name):
-        self.field_vars[name] = {
-            'type': 'scalar',
-            'shape': ()
-        }
+    def register_scalar_field(self, name, src=''):
+        self.vars[name] = AsmVar(name, src=src, shape=(), local=False)
 
-    def register_vector_field(self, name, size=None):
+    def register_vector_field(self, name, size=None, src=''):
         if size is None: size = self.dim
-        self.field_vars[name] = {
-            'type': 'vector',
-            'shape': (size,)
-        }
+        self.vars[name] = AsmVar(name, src=src, shape=(size,), local=False)
 
-    def register_matrix_field(self, name, shape=None, symmetric=False):
+    def register_matrix_field(self, name, shape=None, symmetric=False, src=''):
         if shape is None: shape = (self.dim, self.dim)
         assert len(shape) == 2
-        self.field_vars[name] = {
-            'type': 'matrix',
-            'shape': shape,
-            'symmetric': symmetric
-        }
+        self.vars[name] = AsmVar(name, src=src, shape=shape, local=False, symmetric=symmetric)
         return NamedMatrixExpr(name, shape=(self.dim,self.dim), symmetric=symmetric)
 
     def add(self, expr):
@@ -127,7 +142,7 @@ class AsmGenerator:
         return LiteralVectorExpr(entries)
 
     def let(self, varname, expr):
-        self.assignments.append((varname, expr))
+        self.vars[varname] = AsmVar(varname, expr, shape=None, local=True)
         return named_expr(varname, shape=expr.shape)
 
     # hooks for custom code generation
@@ -155,14 +170,17 @@ class AsmGenerator:
 
     @property
     def W(self):
-        self.need_phys_weights = True
-        return named_expr('W')
+        if not 'W' in self.cached_vars:
+            self.init_weights = True
+            self.register_scalar_field('W', src='geo_weights')
+            self.cached_vars['W'] = named_expr('W')
+        return self.cached_vars['W']
 
     @property
     def JacInv(self):
         if not 'JacInv' in self.cached_vars:
-            self.need_jacinv = True
-            self.cached_vars['JacInv'] = self.register_matrix_field('JacInv', shape=(self.dim,self.dim))
+            self.init_jacinv = True
+            self.cached_vars['JacInv'] = self.register_matrix_field('JacInv', shape=(self.dim,self.dim), src='geo_jacinv')
         return self.cached_vars['JacInv']
 
     ##################################################
@@ -262,10 +280,10 @@ class AsmGenerator:
         self.indent(2)
 
         # parameters
-        for name, var in self.field_vars.items():
+        for var in self.field_vars():
             self.putf('double[{X}:1] _{name},',
-                    X=', '.join((self.dim + len(var['shape'])) * ':'),
-                    name=name)
+                    X=', '.join((self.dim + len(var.shape)) * ':'),
+                    name=var.name)
 
         self.put(self.dimrep('double* VDu{}') + ',')
         self.put(self.dimrep('double* VDv{}') + ',')
@@ -275,11 +293,11 @@ class AsmGenerator:
         self.put(') nogil:')
 
         # get input size from an arbitrary field variable
-        first_var = list(self.field_vars)[0]
+        first_var = list(self.field_vars())[0]
         for k in range(self.dim):
             self.declare_index(
                     'n%d' % k,
-                    '_{var}.shape[{k}]'.format(k=k, var=first_var)
+                    '_{var}.shape[{k}]'.format(k=k, var=first_var.name)
             )
         self.put('')
 
@@ -291,20 +309,20 @@ class AsmGenerator:
             self.declare_scalar('result', '0.0')
 
         # temp storage for field variables
-        for name, var in self.field_vars.items():
-            if var['type'] == 'scalar':
-                self.declare_scalar(name)
-            elif var['type'] == 'matrix':
-                self.declare_pointer(name)
+        for var in self.field_vars():
+            if var.is_scalar():
+                self.declare_scalar(var.name)
+            elif var.is_vector() or var.is_matrix():
+                self.declare_pointer(var.name)
 
         # temp storage for local variables
-        for varname, expr in self.assignments:
-            if expr.is_vector():
-                self.declare_vec(varname, size=expr.shape[0])
-            elif expr.is_matrix():
-                self.declare_vec(varname, size=expr.shape[0]*expr.shape[1])
+        for var in self.local_vars():
+            if var.is_vector():
+                self.declare_vec(var.name, size=var.shape[0])
+            elif var.is_matrix():
+                self.declare_vec(var.name, size=var.shape[0]*var.shape[1])
             else:
-                self.declare_scalar(varname)
+                self.declare_scalar(var.name)
 
         self.declare_temp_variables()
 
@@ -317,17 +335,16 @@ class AsmGenerator:
         I = self.dimrep('i{}')
 
         # generate assignments for field variables
-        for name, var in self.field_vars.items():
-            if var['type'] == 'scalar':
-                self.putf('{name} = _{name}[{I}]', name=name, I=I)
-            elif var['type'] == 'matrix':
-                self.putf('{name} = &_{name}[{I}, 0, 0]', name=name, I=I)
+        for var in self.field_vars():
+            if var.is_scalar():
+                self.putf('{name} = _{name}[{I}]', name=var.name, I=I)
+            elif var.is_matrix():
+                self.putf('{name} = &_{name}[{I}, 0, 0]', name=var.name, I=I)
         self.put('')
 
         # generate assignment statements for local variables
-        for varname, expr in self.assignments:
-            self.gen_assign(varname, expr)
-        self.assignments = None     # disallow further assignments
+        for var in self.local_vars():
+            self.gen_assign(var.name, var.expr)
 
         # if needed, generate custom code for the bilinear form a(u,v)
         self.generate_biform()
@@ -396,8 +413,8 @@ class AsmGenerator:
 
         # generate field variable arguments
         idx = self.dimrep('g_sta[{0}]:g_end[{0}]')
-        for name in self.field_vars:
-            self.putf('self.{name} [ {idx} ],', name=name, idx=idx)
+        for var in self.field_vars():
+            self.putf('self.{name} [ {idx} ],', name=var.name, idx=idx)
 
         # generate basis function value arguments
         # a_ij = a(phi_j, phi_i)  -- pass values for j (trial function) first
@@ -444,11 +461,9 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         if self.init_weights:
             self.put('geo_weights = %s * np.abs(geo_det)' % self.tensorprod('gaussweights'))
 
-        if self.need_jacinv:
-            self.put("self.JacInv = geo_jacinv")
-
-        if self.need_phys_weights:  # store weights as field variable
-            self.put('self.W = geo_weights')
+        for var in self.field_vars():
+            if var.src:
+                self.putf("self.{name} = {src}", name=var.name, src=var.src)
 
         self.initialize_fields()
         self.end_function()
@@ -456,13 +471,6 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
     # main code generation entry point
 
     def generate(self):
-        if self.need_jacinv:
-            self.init_jacinv = True
-
-        if self.need_phys_weights:
-            self.register_scalar_field('W')
-            self.init_weights = True
-
         self.env = {
             'dim': self.dim,
             'nderiv': self.numderiv+1, # includes 0-th derivative
@@ -477,10 +485,10 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         # declare instance variables
         self.put('cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative')
         # declare field variables
-        for name, var in self.field_vars.items():
+        for var in self.field_vars():
             self.putf('cdef double[{X}:1] {name}',
-                    X=', '.join((self.dim + len(var['shape'])) * ':'),
-                    name=name)
+                    X=', '.join((self.dim + len(var.shape)) * ':'),
+                    name=var.name)
         self.put('')
 
         # generate methods

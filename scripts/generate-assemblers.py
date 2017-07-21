@@ -49,6 +49,7 @@ class AsmVar:
         if isinstance(src, Expr):
             self.expr = src
             self.shape = src.shape
+            self.src = None
         else:
             self.src = src
             self.expr = None
@@ -112,6 +113,15 @@ class AsmGenerator:
         self.vars[name] = AsmVar(name, src=src, shape=shape, local=False, symmetric=symmetric)
         return NamedMatrixExpr(name, shape=shape, symmetric=symmetric)
 
+    def declare_sourced_var(self, name, shape, src, symmetric=False):
+        self.vars[name] = AsmVar(name, src=src, shape=shape, local=True, symmetric=symmetric)
+        if shape is ():
+            return NamedScalarExpr(name)
+        elif len(shape) == 1:
+            return NamedVectorExpr(name, shape)
+        elif len(shape) == 2:
+            return NamedMatrixExpr(name, shape, symmetric=symmetric)
+
     def add(self, expr):
         assert not self.vec, 'add() is only for scalar assemblers; use add_at()'
         assert expr.is_scalar(), 'require scalar expression'
@@ -174,15 +184,14 @@ class AsmGenerator:
     def W(self):
         if not 'W' in self.cached_vars:
             self.init_weights = True
-            self.register_scalar_field('W', src='geo_weights')
-            self.cached_vars['W'] = named_expr('W')
+            self.cached_vars['W'] = self.declare_sourced_var('W', shape=(), src='geo_weights')
         return self.cached_vars['W']
 
     @property
     def JacInv(self):
         if not 'JacInv' in self.cached_vars:
             self.init_jacinv = True
-            self.cached_vars['JacInv'] = self.register_matrix_field('JacInv', shape=(self.dim,self.dim), src='geo_jacinv')
+            self.cached_vars['JacInv'] = self.declare_sourced_var('JacInv', shape=(self.dim,self.dim), src='geo_jacinv')
         return self.cached_vars['JacInv']
 
     def dependency_graph(self):
@@ -193,6 +202,65 @@ class AsmGenerator:
                 for dep in var.expr.depends():
                     G.add_edge(dep, var.name)
         return G
+
+    def as_vars(self, vars):
+        def to_var(v):
+            return v if isinstance(v, AsmVar) else self.vars[v]
+        return [to_var(v) for v in vars]
+
+    def transitive_deps(self, vars):
+        """Return all vars on which the given vars depend directly or indirectly."""
+        vars = self.as_vars(vars)
+        deps = reduce(operator.or_,
+                (networkx.ancestors(self.dep_graph, var.name) for var in vars),
+                set())
+        deps -= {'@u', '@v'}    # remove virtual nodes
+        return [self.vars[name] for name in deps]
+
+    def linearize_vars(self, vars):
+        names = [v.name for v in self.as_vars(vars)]
+        """Returns an admissible order for computing the given vars, i.e., which
+        respects the dependency relation."""
+        return [self.vars[vn] for vn in self.linear_deps if vn in names]
+
+    def vars_without_dep_on(self, exclude):
+        """Return a linearized list of all expr vars which do not depend on the given vars."""
+        G = self.dep_graph
+        nodes = set(G.nodes())
+        # remove 'exlude' vars and anything that depends on them
+        for var in exclude:
+            nodes.discard(var)
+            nodes -= networkx.descendants(G, var)
+        # whatever remains and has an expr is a pure field variable and can be precomputed
+        precomp_vars = {var for var in nodes if self.vars[var].expr}
+        return self.linearize_vars(precomp_vars)
+
+    def dependency_analysis(self):
+        self.dep_graph = self.dependency_graph()
+        self.linear_deps = networkx.topological_sort(self.dep_graph)
+
+        # determine precomputable vars (no dependency on basis functions)
+        self.precomp = self.vars_without_dep_on(('@u', '@v'))
+        self.precomp_deps = self.transitive_deps(self.precomp)
+        for var in self.precomp:
+            # remove all dependencies since it's now precomputed
+            # this ensures kernel_deps will not depend on dependencies of precomputed vars
+            self.dep_graph.remove_edges_from(self.dep_graph.in_edges([var.name]))
+
+        if self.vec:
+            all_exprs = (expr for idx,expr in self.exprs)
+        else:
+            all_exprs = self.exprs
+        kernel_deps = reduce(operator.or_,
+                (set(expr.depends()) for expr in all_exprs), set()) - {'@u', '@v'}
+        kernel_deps = self.as_vars(kernel_deps)
+        kernel_deps = self.transitive_deps(kernel_deps) + kernel_deps
+        self.kernel_deps = self.linearize_vars(kernel_deps)
+
+        # promote precomputed/manually sourced dependencies to field variables
+        for var in self.kernel_deps:
+            if var.src or var in self.precomp:
+                var.local = False
 
     ##################################################
     # code generation
@@ -282,6 +350,9 @@ class AsmGenerator:
         self.put('@cython.wraparound(False)')
         self.put('@cython.initializedcheck(False)')
 
+    def field_type(self, var):
+        return 'double[{X}:1]'.format(X=', '.join((self.dim + len(var.shape)) * ':'))
+
     def generate_kernel(self):
         # function definition
         self.cython_pragmas()
@@ -290,11 +361,12 @@ class AsmGenerator:
         self.putf('cdef {rettype} combine(', rettype=rettype)
         self.indent(2)
 
+        field_params = [var for var in self.kernel_deps if var.is_field()]
+        local_vars   = [var for var in self.kernel_deps if var.is_local()]
+
         # parameters
-        for var in self.field_vars():
-            self.putf('double[{X}:1] _{name},',
-                    X=', '.join((self.dim + len(var.shape)) * ':'),
-                    name=var.name)
+        for var in field_params:
+            self.putf('{type} _{name},', type=self.field_type(var), name=var.name)
 
         self.put(self.dimrep('double* VDu{}') + ',')
         self.put(self.dimrep('double* VDv{}') + ',')
@@ -304,7 +376,7 @@ class AsmGenerator:
         self.put(') nogil:')
 
         # get input size from an arbitrary field variable
-        first_var = list(self.field_vars())[0]
+        first_var = field_params[0]
         for k in range(self.dim):
             self.declare_index(
                     'n%d' % k,
@@ -320,14 +392,14 @@ class AsmGenerator:
             self.declare_scalar('result', '0.0')
 
         # temp storage for field variables
-        for var in self.field_vars():
+        for var in field_params:
             if var.is_scalar():
                 self.declare_scalar(var.name)
             elif var.is_vector() or var.is_matrix():
                 self.declare_pointer(var.name)
 
         # temp storage for local variables
-        for var in self.local_vars():
+        for var in local_vars:
             if var.is_vector():
                 self.declare_vec(var.name, size=var.shape[0])
             elif var.is_matrix():
@@ -346,7 +418,7 @@ class AsmGenerator:
         I = self.dimrep('i{}')
 
         # generate assignments for field variables
-        for var in self.field_vars():
+        for var in field_params:
             if var.is_scalar():
                 self.putf('{name} = _{name}[{I}]', name=var.name, I=I)
             elif var.is_matrix():
@@ -354,7 +426,7 @@ class AsmGenerator:
         self.put('')
 
         # generate assignment statements for local variables
-        for var in self.local_vars():
+        for var in local_vars:
             self.gen_assign(var.name, var.expr)
 
         # if needed, generate custom code for the bilinear form a(u,v)
@@ -424,8 +496,9 @@ class AsmGenerator:
 
         # generate field variable arguments
         idx = self.dimrep('g_sta[{0}]:g_end[{0}]')
-        for var in self.field_vars():
-            self.putf('self.{name} [ {idx} ],', name=var.name, idx=idx)
+        for var in self.kernel_deps:
+            if var.is_field():
+                self.putf('self.{name} [ {idx} ],', name=var.name, idx=idx)
 
         # generate basis function value arguments
         # a_ij = a(phi_j, phi_i)  -- pass values for j (trial function) first
@@ -448,6 +521,7 @@ class AsmGenerator:
 self.base_init(kvs)
 
 gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
+N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
 self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines():
             self.putf(line)
@@ -475,13 +549,82 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         for var in self.field_vars():
             if var.src:
                 self.putf("self.{name} = {src}", name=var.name, src=var.src)
+            elif var.expr:  # custom precomputed field var
+                self.putf("self.{name} = np.empty(N + {shape})", name=var.name, shape=var.shape)
+
+        if self.precomp:
+            # call precompute function
+            self.putf('{classname}{dim}D.precompute_fields(', classname=self.classname)
+            self.indent(2)
+            for var in self.precomp_deps + self.precomp:
+                if var.src:
+                    self.put(var.src + ',')
+                else:
+                    self.put('self.' + var.name + ',')
+            self.dedent(2)
+            self.put(')')
 
         self.initialize_fields()
+        self.end_function()
+
+    def generate_precomp(self):
+        self.cython_pragmas()
+        self.put('@staticmethod')
+        self.put('cdef void precompute_fields(')
+        self.indent(2)
+        self.put('# input')
+        for var in self.precomp_deps:
+            self.putf('{type} _{name},', type=self.field_type(var), name=var.name)
+        self.put('# output')
+        for var in self.precomp:
+            self.putf('{type} _{name},', type=self.field_type(var), name=var.name)
+        self.dedent()
+        self.put(') nogil:')
+
+        for k in range(self.dim):
+            self.declare_index(
+                    'n%d' % k,
+                    '_{var}.shape[{k}]'.format(k=k, var=self.precomp[0].name)
+            )
+        self.put('')
+
+        # temp storage for field variables
+        # TODO: handle assignment to scalar fields
+        if any(var.is_scalar() for var in self.precomp):
+            assert False, 'precomputing of scalar fields not implemented'
+        for var in self.precomp_deps + self.precomp:
+            if var.is_scalar():
+                self.declare_scalar(var.name)
+            elif var.is_vector() or var.is_matrix():
+                self.declare_pointer(var.name)
+
+        # main loop over all Gauss points
+        for k in range(self.dim):
+            self.code.for_loop('i%d' % k, 'n%d' % k)
+
+        I = self.dimrep('i{}')
+
+        # generate assignments for field variables
+        for var in self.precomp_deps + self.precomp:
+            if var.is_scalar():
+                self.putf('{name} = _{name}[{I}]', name=var.name, I=I)
+            elif var.is_matrix():
+                self.putf('{name} = &_{name}[{I}, 0, 0]', name=var.name, I=I)
+        self.put('')
+
+        for var in self.precomp:
+            self.gen_assign(var.name, var.expr)
+
+        # end main loop
+        for _ in range(self.dim):
+            self.code.end_loop()
         self.end_function()
 
     # main code generation entry point
 
     def generate(self):
+        self.dependency_analysis()
+
         self.env = {
             'dim': self.dim,
             'nderiv': self.numderiv+1, # includes 0-th derivative
@@ -505,6 +648,9 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         # generate methods
         self.generate_init()
         self.put('')
+        if self.precomp:
+            self.generate_precomp()
+            self.put('')
         self.generate_kernel()
         self.put('')
         self.generate_assemble_impl()

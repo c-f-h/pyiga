@@ -153,9 +153,9 @@ class AsmGenerator:
             entries.append(self.partial_deriv(var, D))
         return LiteralVectorExpr(entries)
 
-    def let(self, varname, expr):
-        self.vars[varname] = AsmVar(varname, expr, shape=None, local=True)
-        return named_expr(varname, shape=expr.shape)
+    def let(self, varname, expr, symmetric=False):
+        self.vars[varname] = AsmVar(varname, expr, shape=None, local=True, symmetric=symmetric)
+        return named_expr(varname, shape=expr.shape, symmetric=symmetric)
 
     # hooks for custom code generation
 
@@ -326,24 +326,25 @@ class AsmGenerator:
             size = self.dim
         self.putf('cdef double {name}[{size}]', name=name, size=size)
 
-    def gen_assign(self, out, expr):
+    def gen_assign(self, var, expr):
         if expr.is_vector():
             for k in range(expr.shape[0]):
                 self.putf('{name}[{k}] = {rhs}',
-                        name=out,
+                        name=var.name,
                         k=k,
                         rhs=expr[k].gencode())
         elif expr.is_matrix():
             m, n = expr.shape
             for i in range(m):
                 for j in range(n):
-                    # TODO: symmetry optimization
+                    if var.symmetric and i > j:
+                        continue
                     self.putf('{name}[{k}] = {rhs}',
-                            name=out,
+                            name=var.name,
                             k=i*m + j,
                             rhs=expr[i,j].gencode())
         else:
-            self.put(out + ' = ' + expr.gencode())
+            self.put(var.name + ' = ' + expr.gencode())
 
     def cython_pragmas(self):
         self.put('@cython.boundscheck(False)')
@@ -427,7 +428,7 @@ class AsmGenerator:
 
         # generate assignment statements for local variables
         for var in local_vars:
-            self.gen_assign(var.name, var.expr)
+            self.gen_assign(var, var.expr)
 
         # if needed, generate custom code for the bilinear form a(u,v)
         self.generate_biform()
@@ -613,7 +614,7 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         self.put('')
 
         for var in self.precomp:
-            self.gen_assign(var.name, var.expr)
+            self.gen_assign(var, var.expr)
 
         # end main loop
         for _ in range(self.dim):
@@ -984,13 +985,13 @@ class MatrixExpr(Expr):
     def dot(self, x):
         return matmul(self, x)
 
-def named_expr(s, shape=()):
+def named_expr(s, shape=(), symmetric=False):
     if shape is ():
         return NamedScalarExpr(s)
     elif len(shape) == 1:
         return NamedVectorExpr(s, shape)
     elif len(shape) == 2:
-        return NamedMatrixExpr(s, shape)
+        return NamedMatrixExpr(s, shape, symmetric=symmetric)
     else:
         assert False, 'invalid shape'
 
@@ -1288,29 +1289,16 @@ def MassAsmGen(code, dim):
     return A
 
 
-class StiffnessAsmGen(AsmGenerator):
-    def __init__(self, code, dim):
-        AsmGenerator.__init__(self, 'StiffnessAssembler', code, dim)
-        self.init_jacinv = self.init_weights = True
-
-        B = self.register_matrix_field('B', symmetric=True)
-        self.add(B.dot(self.gu).dot(self.gv))
-
-    def initialize_fields(self):
-        self.putf('self.B = matmatT(geo_jacinv) * geo_weights[{slices}, None, None]',
-            slices=self.dimrep(':'))
-
+def StiffnessAsmGen(code, dim):
+    A = AsmGenerator('StiffnessAssembler', code, dim)
+    B = A.let('B', A.W * matmul(A.JacInv, A.JacInv.T), symmetric=True)
+    A.add(B.dot(A.gu).dot(A.gv))
+    return A
 
 ## slower:
 #def StiffnessAsmGen(code, dim):
 #    A = AsmGenerator('StiffnessAssembler', code, dim)
 #    A.add(A.W * inner(A.gradu, A.gradv))
-#    return A
-
-#def StiffnessAsmGen(code, dim):
-#    A = AsmGenerator('StiffnessAssembler', code, dim)
-#    B = A.let('B', A.W * matmul(A.JacInv, A.JacInv.T))
-#    A.add(inner(matmul(B, A.gu), A.gv))
 #    return A
 
 

@@ -1093,7 +1093,35 @@ class TransposedMatrixExpr(MatrixExpr):
     def __getitem__(self, ij):
         return self.mat[ij[1], ij[0]]
 
-class OperExpr(Expr):
+class BroadcastToVectorExpr(VectorExpr):
+    def __init__(self, expr, shape):
+        self.shape = shape
+        self.children = (expr,)
+    def __getitem__(self, i):
+        return self.children[0]
+
+class BroadcastToMatrixExpr(MatrixExpr):
+    def __init__(self, expr, shape):
+        self.shape = shape
+        self.children = (expr,)
+    def __getitem__(self, ij):
+        return self.children[0]
+
+def OperExpr(oper, x, y):
+    if x.is_scalar() and y.is_scalar():
+        return ScalarOperExpr(oper, x, y)
+    elif x.is_vector() and y.is_vector():
+        return VectorOperExpr(oper, x, y)
+    elif x.is_matrix() and y.is_matrix():
+        return MatrixOperExpr(oper, x, y)
+    elif x.is_scalar() and y.is_vector():
+        return OperExpr(oper, BroadcastToVectorExpr(x, y.shape), y)
+    elif x.is_scalar() and y.is_matrix():
+        return OperExpr(oper, BroadcastToMatrixExpr(x, y.shape), y)
+    else:
+        raise TypeError('operation not implemented for shapes: {} {} {}'.format(oper, x.shape, y.shape))
+
+class ScalarOperExpr(Expr):
     def __init__(self, oper, x, y):
         assert x.is_scalar() and y.is_scalar(), 'expected scalars'
         assert x.shape == y.shape
@@ -1104,6 +1132,37 @@ class OperExpr(Expr):
     def gencode(self):
         sep = ' ' + self.oper + ' '
         return '(' + sep.join(x.gencode() for x in self.children) + ')'
+
+_oper_to_func = {
+        '+': operator.add,
+        '-': operator.sub,
+        '*': operator.mul,
+        '/': operator.truediv,
+}
+
+class VectorOperExpr(VectorExpr):
+    def __init__(self, oper, x, y):
+        assert x.is_vector() and y.is_vector(), 'expected vectors'
+        assert x.shape == y.shape, 'incompatible shapes'
+        self.shape = x.shape
+        self.oper = oper
+        self.children = (x,y)
+
+    def __getitem__(self, i):
+        func = _oper_to_func[self.oper]
+        return reduce(func, (z[i] for z in self.children))
+
+class MatrixOperExpr(MatrixExpr):
+    def __init__(self, oper, x, y):
+        assert x.is_matrix() and y.is_matrix(), 'expected matrices'
+        assert x.shape == y.shape, 'incompatible shapes'
+        self.shape = x.shape
+        self.oper = oper
+        self.children = (x,y)
+
+    def __getitem__(self, ij):
+        func = _oper_to_func[self.oper]
+        return reduce(func, (z[ij] for z in self.children))
 
 class IndexExpr(Expr):
     def __init__(self, x, i):
@@ -1250,8 +1309,8 @@ class StiffnessAsmGen(AsmGenerator):
 
 #def StiffnessAsmGen(code, dim):
 #    A = AsmGenerator('StiffnessAssembler', code, dim)
-#    B = A.let('B', matmul(A.JacInv, A.JacInv.T))
-#    A.add(A.W * inner(matmul(B, A.gu), A.gv))
+#    B = A.let('B', A.W * matmul(A.JacInv, A.JacInv.T))
+#    A.add(inner(matmul(B, A.gu), A.gv))
 #    return A
 
 

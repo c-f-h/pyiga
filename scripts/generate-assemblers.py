@@ -134,7 +134,6 @@ class AsmGenerator:
 
     def partial_deriv(self, var, D):
         """Parametric partial derivative of `var` of order `D=(Dx1, ..., Dxd)`"""
-        self.numderiv = max(max(D), self.numderiv)    # make sure derivatives are computed
         return PartialDerivExpr(var, D, self)
 
     def basisval(self, var):
@@ -235,6 +234,12 @@ class AsmGenerator:
         precomp_vars = {var for var in nodes if self.vars[var].expr}
         return self.linearize_vars(precomp_vars)
 
+    def all_exprs(self):
+        if self.vec:
+            return (expr for idx,expr in self.exprs)
+        else:
+            return self.exprs
+
     def dependency_analysis(self):
         self.dep_graph = self.dependency_graph()
         self.linear_deps = networkx.topological_sort(self.dep_graph)
@@ -247,12 +252,8 @@ class AsmGenerator:
             # this ensures kernel_deps will not depend on dependencies of precomputed vars
             self.dep_graph.remove_edges_from(self.dep_graph.in_edges([var.name]))
 
-        if self.vec:
-            all_exprs = (expr for idx,expr in self.exprs)
-        else:
-            all_exprs = self.exprs
         kernel_deps = reduce(operator.or_,
-                (set(expr.depends()) for expr in all_exprs), set()) - {'@u', '@v'}
+                (set(expr.depends()) for expr in self.all_exprs()), set()) - {'@u', '@v'}
         kernel_deps = self.as_vars(kernel_deps)
         kernel_deps = self.transitive_deps(kernel_deps) + kernel_deps
         self.kernel_deps = self.linearize_vars(kernel_deps)
@@ -261,6 +262,29 @@ class AsmGenerator:
         for var in self.kernel_deps:
             if var.src or var in self.precomp:
                 var.local = False
+
+    def iterexpr(self, expr, deep=False):
+        """Iterate through all subexpressions of `expr` in depth-first order.
+
+        If `deep=True`, follow named variable references.
+        """
+        for c in expr.children:
+            yield from self.iterexpr(c, deep=deep)
+        if (deep
+                and any(isinstance(expr, T) for T in (NamedScalarExpr, NamedVectorExpr, NamedMatrixExpr))
+                and self.vars[expr.name].expr):
+            yield from self.iterexpr(self.vars[expr.name].expr, deep=deep)
+        else:
+            yield expr
+
+    def find_max_deriv(self):
+        maxderiv = 0
+        for expr in self.all_exprs():
+            for e in self.iterexpr(expr, deep=True):
+                if isinstance(e, PartialDerivExpr):
+                    maxderiv = max(maxderiv, max(e.D))
+        return maxderiv
+
 
     ##################################################
     # code generation
@@ -625,6 +649,7 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
 
     def generate(self):
         self.dependency_analysis()
+        self.numderiv = max(self.numderiv, self.find_max_deriv())
 
         self.env = {
             'dim': self.dim,

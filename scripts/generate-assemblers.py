@@ -71,12 +71,12 @@ class AsmVar:
         return not self.local
 
 class AsmGenerator:
-    def __init__(self, classname, code, dim, numderiv=0, vec=False):
+    def __init__(self, classname, code, dim, vec=False):
         self.classname = classname
         self.code = code
         self.dim = dim
         self.vec = vec
-        self.numderiv = numderiv
+        self.numderiv = 0
         self.vars = OrderedDict()
         self.exprs = []         # expressions to be added to the result
         # variables provided during initialization (geo_XXX)
@@ -307,7 +307,7 @@ class AsmGenerator:
                     idx = idx,
                     k   = k,
                     ofs = D[k],
-                    **self.env
+                    nderiv = self.numderiv+1, # includes 0-th derivative
                 )
                 for k in range(self.dim)]
         return '(' + ' * '.join(factors) + ')'
@@ -628,7 +628,6 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
 
         self.env = {
             'dim': self.dim,
-            'nderiv': self.numderiv+1, # includes 0-th derivative
             'maxderiv': self.numderiv,
         }
 

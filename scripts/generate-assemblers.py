@@ -253,9 +253,10 @@ class AsmGenerator:
             # this ensures kernel_deps will not depend on dependencies of precomputed vars
             self.dep_graph.remove_edges_from(self.dep_graph.in_edges([var.name]))
 
+        # compute linearized list of vars the kernel depends on
         kernel_deps = reduce(operator.or_,
-                (set(expr.depends()) for expr in self.all_exprs()), set()) - {'@u', '@v'}
-        kernel_deps = self.as_vars(kernel_deps)
+                (set(expr.depends()) for expr in self.all_exprs()), set())
+        kernel_deps = self.as_vars(kernel_deps - {'@u', '@v'})
         kernel_deps = self.transitive_deps(kernel_deps) + kernel_deps
         self.kernel_deps = self.linearize_vars(kernel_deps)
 

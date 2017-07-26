@@ -382,8 +382,8 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         geo_weights = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
         self.B = np.empty(N + (2, 2))
         StiffnessAssembler2D.precompute_fields(
-                geo_weights,
                 geo_jacinv,
+                geo_weights,
                 self.B,
         )
 
@@ -393,21 +393,21 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
     @staticmethod
     cdef void precompute_fields(
             # input
-            double[:, ::1] _W,
             double[:, :, :, ::1] _JacInv,
+            double[:, ::1] _W,
             # output
             double[:, :, :, ::1] _B,
         ) nogil:
         cdef size_t n0 = _B.shape[0]
         cdef size_t n1 = _B.shape[1]
 
-        cdef double W
         cdef double* JacInv
+        cdef double W
         cdef double* B
         for i0 in range(n0):
             for i1 in range(n1):
-                W = _W[i0, i1]
                 JacInv = &_JacInv[i0, i1, 0, 0]
+                W = _W[i0, i1]
                 B = &_B[i0, i1, 0, 0]
 
                 B[0] = (W * ((JacInv[0] * JacInv[0]) + (JacInv[1] * JacInv[1])))
@@ -1148,8 +1148,8 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         geo_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
         self.B = np.empty(N + (3, 3))
         StiffnessAssembler3D.precompute_fields(
-                geo_weights,
                 geo_jacinv,
+                geo_weights,
                 self.B,
         )
 
@@ -1159,8 +1159,8 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
     @staticmethod
     cdef void precompute_fields(
             # input
-            double[:, :, ::1] _W,
             double[:, :, :, :, ::1] _JacInv,
+            double[:, :, ::1] _W,
             # output
             double[:, :, :, :, ::1] _B,
         ) nogil:
@@ -1168,14 +1168,14 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         cdef size_t n1 = _B.shape[1]
         cdef size_t n2 = _B.shape[2]
 
-        cdef double W
         cdef double* JacInv
+        cdef double W
         cdef double* B
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    W = _W[i0, i1, i2]
                     JacInv = &_JacInv[i0, i1, i2, 0, 0]
+                    W = _W[i0, i1, i2]
                     B = &_B[i0, i1, i2, 0, 0]
 
                     B[0] = (W * (((JacInv[0] * JacInv[0]) + (JacInv[1] * JacInv[1])) + (JacInv[2] * JacInv[2])))

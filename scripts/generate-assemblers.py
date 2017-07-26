@@ -214,12 +214,13 @@ class AsmGenerator:
                 (networkx.ancestors(self.dep_graph, var.name) for var in vars),
                 set())
         deps -= {'@u', '@v'}    # remove virtual nodes
-        return [self.vars[name] for name in deps]
+        # return in sorted order to increase code stability
+        return [self.vars[name] for name in sorted(deps)]
 
     def linearize_vars(self, vars):
-        names = [v.name for v in self.as_vars(vars)]
         """Returns an admissible order for computing the given vars, i.e., which
         respects the dependency relation."""
+        names = [v.name for v in self.as_vars(vars)]
         return [self.vars[vn] for vn in self.linear_deps if vn in names]
 
     def vars_without_dep_on(self, exclude):

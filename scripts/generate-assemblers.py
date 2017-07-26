@@ -70,13 +70,11 @@ class AsmVar:
     def is_field(self):
         return not self.local
 
-class AsmGenerator:
-    def __init__(self, classname, code, dim, vec=False):
-        self.classname = classname
-        self.code = code
+class VForm:
+    """Abstract representation of a variational form in matrix-vector form."""
+    def __init__(self, dim, vec=False):
         self.dim = dim
         self.vec = vec
-        self.numderiv = 0
         self.vars = OrderedDict()
         self.exprs = []         # expressions to be added to the result
         # variables provided during initialization (geo_XXX)
@@ -134,7 +132,7 @@ class AsmGenerator:
 
     def partial_deriv(self, var, D):
         """Parametric partial derivative of `var` of order `D=(Dx1, ..., Dxd)`"""
-        return PartialDerivExpr(var, D, self)
+        return PartialDerivExpr(var, D)
 
     def basisval(self, var):
         return self.partial_deriv(var, self.dim * (0,))
@@ -155,17 +153,6 @@ class AsmGenerator:
     def let(self, varname, expr, symmetric=False):
         self.vars[varname] = AsmVar(varname, expr, shape=None, local=True, symmetric=symmetric)
         return named_expr(varname, shape=expr.shape, symmetric=symmetric)
-
-    # hooks for custom code generation
-
-    def declare_temp_variables(self):
-        pass
-
-    def initialize_fields(self):
-        pass
-
-    def generate_biform(self):
-        pass
 
     # automatically produce caching getters for predefined on-demand local variables
     def __getattr__(self, name):
@@ -288,9 +275,17 @@ class AsmGenerator:
         return maxderiv
 
 
-    ##################################################
-    # code generation
-    ##################################################
+
+# Code generation #############################################################
+
+class AsmGenerator:
+    """Generates a Cython assembler class from an abstract :class:`VForm`."""
+    def __init__(self, vform, classname, code):
+        self.vform = vform
+        self.classname = classname
+        self.code = code
+        self.dim = self.vform.dim
+        self.vec = self.vform.vec
 
     def indent(self, num=1):
         self.code.indent(num)
@@ -381,6 +376,12 @@ class AsmGenerator:
         return 'double[{X}:1]'.format(X=', '.join((self.dim + len(var.shape)) * ':'))
 
     def generate_kernel(self):
+        # fixup PartialDerivExprs for code generation
+        for expr in self.vform.all_exprs():
+            for e in self.vform.iterexpr(expr, deep=True):
+                if isinstance(e, PartialDerivExpr):
+                    e.asmgen = self
+
         # function definition
         self.cython_pragmas()
         self.put('@staticmethod')
@@ -388,8 +389,8 @@ class AsmGenerator:
         self.putf('cdef {rettype} combine(', rettype=rettype)
         self.indent(2)
 
-        field_params = [var for var in self.kernel_deps if var.is_field()]
-        local_vars   = [var for var in self.kernel_deps if var.is_local()]
+        field_params = [var for var in self.vform.kernel_deps if var.is_field()]
+        local_vars   = [var for var in self.vform.kernel_deps if var.is_local()]
 
         # parameters
         for var in field_params:
@@ -461,10 +462,10 @@ class AsmGenerator:
 
         # generate code for all expressions in the bilinear form
         if self.vec:
-            for idx, expr in self.exprs:
+            for idx, expr in self.vform.exprs:
                 self.put(('result[%d] += ' % idx) + expr.gencode())
         else:
-            for expr in self.exprs:
+            for expr in self.vform.exprs:
                 self.put('result += ' + expr.gencode())
 
         # end main loop
@@ -523,7 +524,7 @@ class AsmGenerator:
 
         # generate field variable arguments
         idx = self.dimrep('g_sta[{0}]:g_end[{0}]')
-        for var in self.kernel_deps:
+        for var in self.vform.kernel_deps:
             if var.is_field():
                 self.putf('self.{name} [ {idx} ],', name=var.name, idx=idx)
 
@@ -541,6 +542,8 @@ class AsmGenerator:
         self.end_function()
 
     def generate_init(self):
+        vf = self.vform
+
         self.put('def __init__(self, kvs, geo):')
         self.indent()
         for line in \
@@ -555,35 +558,35 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         self.put('')
 
         # dependencies
-        if self.init_weights: self.init_det = True
-        if self.init_jacinv or self.init_det: self.init_jac = True
+        if vf.init_weights: vf.init_det = True
+        if vf.init_jacinv or vf.init_det: vf.init_jac = True
 
         # compute Jacobian
-        if self.init_jac:
+        if vf.init_jac:
             self.put('geo_jac = geo.grid_jacobian(gaussgrid)')
 
         # determinant and/or inverse of Jacobian
-        if self.init_det and self.init_jacinv:
+        if vf.init_det and vf.init_jacinv:
             self.put('geo_det, geo_jacinv = det_and_inv(geo_jac)')
-        elif self.init_det:
+        elif vf.init_det:
             self.put('geo_det = determinants(geo_jac)')
-        elif self.init_jacinv:
+        elif vf.init_jacinv:
             self.put('geo_jacinv = inverses(geo_jac)')
 
-        if self.init_weights:
+        if vf.init_weights:
             self.put('geo_weights = %s * np.abs(geo_det)' % self.tensorprod('gaussweights'))
 
-        for var in self.field_vars():
+        for var in vf.field_vars():
             if var.src:
                 self.putf("self.{name} = {src}", name=var.name, src=var.src)
             elif var.expr:  # custom precomputed field var
                 self.putf("self.{name} = np.empty(N + {shape})", name=var.name, shape=var.shape)
 
-        if self.precomp:
+        if vf.precomp:
             # call precompute function
             self.putf('{classname}{dim}D.precompute_fields(', classname=self.classname)
             self.indent(2)
-            for var in self.precomp_deps + self.precomp:
+            for var in vf.precomp_deps + vf.precomp:
                 if var.src:
                     self.put(var.src + ',')
                 else:
@@ -595,15 +598,17 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         self.end_function()
 
     def generate_precomp(self):
+        vf = self.vform
+
         self.cython_pragmas()
         self.put('@staticmethod')
         self.put('cdef void precompute_fields(')
         self.indent(2)
         self.put('# input')
-        for var in self.precomp_deps:
+        for var in vf.precomp_deps:
             self.putf('{type} _{name},', type=self.field_type(var), name=var.name)
         self.put('# output')
-        for var in self.precomp:
+        for var in vf.precomp:
             self.putf('{type} _{name},', type=self.field_type(var), name=var.name)
         self.dedent()
         self.put(') nogil:')
@@ -611,15 +616,15 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         for k in range(self.dim):
             self.declare_index(
                     'n%d' % k,
-                    '_{var}.shape[{k}]'.format(k=k, var=self.precomp[0].name)
+                    '_{var}.shape[{k}]'.format(k=k, var=vf.precomp[0].name)
             )
         self.put('')
 
         # temp storage for field variables
         # TODO: handle assignment to scalar fields
-        if any(var.is_scalar() for var in self.precomp):
+        if any(var.is_scalar() for var in vf.precomp):
             assert False, 'precomputing of scalar fields not implemented'
-        for var in self.precomp_deps + self.precomp:
+        for var in vf.precomp_deps + vf.precomp:
             if var.is_scalar():
                 self.declare_scalar(var.name)
             elif var.is_vector() or var.is_matrix():
@@ -632,14 +637,14 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         I = self.dimrep('i{}')
 
         # generate assignments for field variables
-        for var in self.precomp_deps + self.precomp:
+        for var in vf.precomp_deps + vf.precomp:
             if var.is_scalar():
                 self.putf('{name} = _{name}[{I}]', name=var.name, I=I)
             elif var.is_matrix():
                 self.putf('{name} = &_{name}[{I}, 0, 0]', name=var.name, I=I)
         self.put('')
 
-        for var in self.precomp:
+        for var in vf.precomp:
             self.gen_assign(var, var.expr)
 
         # end main loop
@@ -650,11 +655,11 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
     # main code generation entry point
 
     def generate(self):
-        self.dependency_analysis()
-        self.numderiv = max(self.numderiv, self.find_max_deriv())
+        self.vform.dependency_analysis()
+        self.numderiv = self.vform.find_max_deriv()
 
         self.env = {
-            'dim': self.dim,
+            'dim': self.vform.dim,
             'maxderiv': self.numderiv,
         }
 
@@ -666,7 +671,7 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         # declare instance variables
         self.put('cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative')
         # declare field variables
-        for var in self.field_vars():
+        for var in self.vform.field_vars():
             self.putf('cdef double[{X}:1] {name}',
                     X=', '.join((self.dim + len(var.shape)) * ':'),
                     name=var.name)
@@ -675,7 +680,7 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         # generate methods
         self.generate_init()
         self.put('')
-        if self.precomp:
+        if self.vform.precomp:
             self.generate_precomp()
             self.put('')
         self.generate_kernel()
@@ -683,6 +688,18 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         self.generate_assemble_impl()
         self.dedent()
         self.put('')
+
+    # hooks for custom code generation
+
+    def declare_temp_variables(self):
+        pass
+
+    def initialize_fields(self):
+        pass
+
+    def generate_biform(self):
+        pass
+
 
 
 tmpl_generic = Template(r'''
@@ -1207,11 +1224,11 @@ class IndexExpr(Expr):
         return '{x}[{i}]'.format(x=self.x.name, i=self.i)
 
 class PartialDerivExpr(Expr):
-    def __init__(self, var, D, asmgen):
+    def __init__(self, var, D):
         self.shape = ()
         self.var = var
         self.D = D
-        self.asmgen = asmgen
+        self.asmgen = None  # to be set to AsmGenerator
         self.children = ()
 
     def gencode(self):
@@ -1309,57 +1326,57 @@ def matmul(a, b):
 # concrete assembler generators
 ################################################################################
 
-def MassAsmGen(code, dim):
-    A = AsmGenerator('MassAssembler', code, dim)
-    A.add(A.W * A.u * A.v)
-    return A
+def mass_vf(dim):
+    V = VForm(dim)
+    V.add(V.W * V.u * V.v)
+    return V
 
 
-def StiffnessAsmGen(code, dim):
-    A = AsmGenerator('StiffnessAssembler', code, dim)
-    B = A.let('B', A.W * matmul(A.JacInv, A.JacInv.T), symmetric=True)
-    A.add(B.dot(A.gu).dot(A.gv))
-    return A
+def stiffness_vf(dim):
+    V = VForm(dim)
+    B = V.let('B', V.W * matmul(V.JacInv, V.JacInv.T), symmetric=True)
+    V.add(B.dot(V.gu).dot(V.gv))
+    return V
 
 ## slower:
-#def StiffnessAsmGen(code, dim):
-#    A = AsmGenerator('StiffnessAssembler', code, dim)
-#    A.add(A.W * inner(A.gradu, A.gradv))
-#    return A
+#def stiffness_vf(dim):
+#    V = VForm(dim)
+#    V.add(V.W * inner(V.gradu, V.gradv))
+#    return V
 
 
-def Heat_ST_AsmGen(code, dim):
-    A = AsmGenerator('HeatAssembler_ST', code, dim)
-    timederiv = A.gradu[-1] * A.v
-    gradgrad = inner(A.gradu[:-1], A.gradv[:-1])
-    A.add(A.W * (gradgrad + timederiv))
-    return A
+def heat_st_vf(dim):
+    V = VForm(dim)
+    timederiv = V.gradu[-1] * V.v
+    gradgrad = inner(V.gradu[:-1], V.gradv[:-1])
+    V.add(V.W * (gradgrad + timederiv))
+    return V
 
 
-def Wave_ST_AsmGen(code, dim):
-    A = AsmGenerator('WaveAssembler_ST', code, dim)
+def wave_st_vf(dim):
+    V = VForm(dim)
 
     spacedims, timedim = range(dim-1), dim-1
     Dt  = (dim-1) * (0,) + (1,)     # first time derivative
     Dtt = (dim-1) * (0,) + (2,)     # second time derivative
 
-    utt_vt = A.partial_deriv('u', Dtt) * A.partial_deriv('v', Dt)
+    utt_vt = V.partial_deriv('u', Dtt) * V.partial_deriv('v', Dt)
 
     # compute time derivative of gradient of v (assumes ST cylinder)
-    dtgv = A.let('dtgv', A.gradient('v', dims=spacedims, additional_derivs=Dt))
-    dtgradv = A.let('dtgradv', matmul(A.JacInv.T[spacedims, spacedims], dtgv))
-    gradu_dtgradv = inner(A.gradu[spacedims], dtgradv)
+    dtgv = V.let('dtgv', V.gradient('v', dims=spacedims, additional_derivs=Dt))
+    dtgradv = V.let('dtgradv', matmul(V.JacInv.T[spacedims, spacedims], dtgv))
+    gradu_dtgradv = inner(V.gradu[spacedims], dtgradv)
 
-    A.add(A.W * (utt_vt + gradu_dtgradv))
-    return A
+    V.add(V.W * (utt_vt + gradu_dtgradv))
+    return V
 
 
-def DivDivAsmGen(code, dim):
-    A = AsmGenerator('DivDivAssembler', code, dim, vec=dim**2)
+def divdiv_vf(dim):
+    V = VForm(dim, vec=dim**2)
     for i in range(dim):
         for j in range(dim):
-            A.add_at(dim*i + j, A.W * A.gradu[j] * A.gradv[i])
-    return A
+            V.add_at(dim*i + j, V.W * V.gradu[j] * V.gradv[i])
+    return V
 
 
 ################################################################################
@@ -1386,11 +1403,15 @@ def generate(dim):
     ndofs   = ['self.ndofs[%d]' % k for k in range(DIM)]
 
     code = PyCode()
-    MassAsmGen(code, DIM).generate()
-    StiffnessAsmGen(code, DIM).generate()
-    Heat_ST_AsmGen(code, DIM).generate()
-    Wave_ST_AsmGen(code, DIM).generate()
-    DivDivAsmGen(code, DIM).generate()
+
+    def gen(vf, classname):
+        AsmGenerator(vf, classname, code).generate()
+
+    gen(mass_vf(DIM), 'MassAssembler')
+    gen(stiffness_vf(DIM), 'StiffnessAssembler')
+    gen(heat_st_vf(DIM), 'HeatAssembler_ST')
+    gen(wave_st_vf(DIM), 'WaveAssembler_ST')
+    gen(divdiv_vf(DIM), 'DivDivAssembler')
 
     s = tmpl_generic.render(locals())
     s += '\n\n'

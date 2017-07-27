@@ -506,10 +506,10 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         ) nogil:
         cdef double result = 0.0
         cdef double v
-        cdef double gv[2]
-        cdef double gradv[2]
-        cdef double gu[2]
-        cdef double gradu[2]
+        cdef double gv[1]
+        cdef double gradv[1]
+        cdef double gu[1]
+        cdef double gradu[1]
 
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
@@ -525,14 +525,10 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
 
                 v = (VDv0[2*i0+0] * VDv1[2*i1+0])
                 gv[0] = (VDv0[2*i0+0] * VDv1[2*i1+1])
-                gv[1] = (VDv0[2*i0+1] * VDv1[2*i1+0])
-                gradv[0] = ((JacInv[0] * gv[0]) + (JacInv[2] * gv[1]))
-                gradv[1] = ((JacInv[1] * gv[0]) + (JacInv[3] * gv[1]))
+                gradv[0] = (JacInv[0] * gv[0])
                 gu[0] = (VDu0[2*i0+0] * VDu1[2*i1+1])
-                gu[1] = (VDu0[2*i0+1] * VDu1[2*i1+0])
-                gradu[0] = ((JacInv[0] * gu[0]) + (JacInv[2] * gu[1]))
-                gradu[1] = ((JacInv[1] * gu[0]) + (JacInv[3] * gu[1]))
-                result += (W * ((gradu[0] * gradv[0]) + (gradu[1] * v)))
+                gradu[0] = (JacInv[0] * gu[0])
+                result += (W * ((gradu[0] * gradv[0]) + ((VDu0[2*i0+1] * VDu1[2*i1+0]) * v)))
         return result
 
     @cython.boundscheck(False)
@@ -597,8 +593,8 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         cdef double result = 0.0
         cdef double dtgv[1]
         cdef double dtgradv[1]
-        cdef double gu[2]
-        cdef double gradu[2]
+        cdef double gu[1]
+        cdef double gradu[1]
 
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
@@ -615,9 +611,7 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
                 dtgv[0] = (VDv0[3*i0+1] * VDv1[3*i1+1])
                 dtgradv[0] = (JacInv[0] * dtgv[0])
                 gu[0] = (VDu0[3*i0+0] * VDu1[3*i1+1])
-                gu[1] = (VDu0[3*i0+1] * VDu1[3*i1+0])
-                gradu[0] = ((JacInv[0] * gu[0]) + (JacInv[2] * gu[1]))
-                gradu[1] = ((JacInv[1] * gu[0]) + (JacInv[3] * gu[1]))
+                gradu[0] = (JacInv[0] * gu[0])
                 result += (W * (((VDu0[3*i0+2] * VDu1[3*i1+0]) * (VDv0[3*i0+1] * VDv1[3*i1+0])) + (gradu[0] * dtgradv[0])))
         return result
 
@@ -1285,10 +1279,10 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         ) nogil:
         cdef double result = 0.0
         cdef double v
-        cdef double gv[3]
-        cdef double gradv[3]
-        cdef double gu[3]
-        cdef double gradu[3]
+        cdef double gv[2]
+        cdef double gradv[2]
+        cdef double gu[2]
+        cdef double gradu[2]
 
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
@@ -1308,17 +1302,13 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
                     v = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+0])
                     gv[0] = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
                     gv[1] = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
-                    gv[2] = (VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0])
-                    gradv[0] = (((JacInv[0] * gv[0]) + (JacInv[3] * gv[1])) + (JacInv[6] * gv[2]))
-                    gradv[1] = (((JacInv[1] * gv[0]) + (JacInv[4] * gv[1])) + (JacInv[7] * gv[2]))
-                    gradv[2] = (((JacInv[2] * gv[0]) + (JacInv[5] * gv[1])) + (JacInv[8] * gv[2]))
+                    gradv[0] = ((JacInv[0] * gv[0]) + (JacInv[3] * gv[1]))
+                    gradv[1] = ((JacInv[1] * gv[0]) + (JacInv[4] * gv[1]))
                     gu[0] = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
                     gu[1] = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
-                    gu[2] = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
-                    gradu[0] = (((JacInv[0] * gu[0]) + (JacInv[3] * gu[1])) + (JacInv[6] * gu[2]))
-                    gradu[1] = (((JacInv[1] * gu[0]) + (JacInv[4] * gu[1])) + (JacInv[7] * gu[2]))
-                    gradu[2] = (((JacInv[2] * gu[0]) + (JacInv[5] * gu[1])) + (JacInv[8] * gu[2]))
-                    result += (W * (((gradu[0] * gradv[0]) + (gradu[1] * gradv[1])) + (gradu[2] * v)))
+                    gradu[0] = ((JacInv[0] * gu[0]) + (JacInv[3] * gu[1]))
+                    gradu[1] = ((JacInv[1] * gu[0]) + (JacInv[4] * gu[1]))
+                    result += (W * (((gradu[0] * gradv[0]) + (gradu[1] * gradv[1])) + ((VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0]) * v)))
         return result
 
     @cython.boundscheck(False)
@@ -1383,8 +1373,8 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         cdef double result = 0.0
         cdef double dtgv[2]
         cdef double dtgradv[2]
-        cdef double gu[3]
-        cdef double gradu[3]
+        cdef double gu[2]
+        cdef double gradu[2]
 
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
@@ -1403,14 +1393,12 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
 
                     dtgv[0] = (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+1])
                     dtgv[1] = (VDv0[3*i0+1] * VDv1[3*i1+1] * VDv2[3*i2+0])
-                    dtgradv[0] = ((JacInv[0] * dtgv[0]) + (JacInv[1] * dtgv[1]))
-                    dtgradv[1] = ((JacInv[3] * dtgv[0]) + (JacInv[4] * dtgv[1]))
+                    dtgradv[0] = ((JacInv[0] * dtgv[0]) + (JacInv[3] * dtgv[1]))
+                    dtgradv[1] = ((JacInv[1] * dtgv[0]) + (JacInv[4] * dtgv[1]))
                     gu[0] = (VDu0[3*i0+0] * VDu1[3*i1+0] * VDu2[3*i2+1])
                     gu[1] = (VDu0[3*i0+0] * VDu1[3*i1+1] * VDu2[3*i2+0])
-                    gu[2] = (VDu0[3*i0+1] * VDu1[3*i1+0] * VDu2[3*i2+0])
-                    gradu[0] = (((JacInv[0] * gu[0]) + (JacInv[3] * gu[1])) + (JacInv[6] * gu[2]))
-                    gradu[1] = (((JacInv[1] * gu[0]) + (JacInv[4] * gu[1])) + (JacInv[7] * gu[2]))
-                    gradu[2] = (((JacInv[2] * gu[0]) + (JacInv[5] * gu[1])) + (JacInv[8] * gu[2]))
+                    gradu[0] = ((JacInv[0] * gu[0]) + (JacInv[3] * gu[1]))
+                    gradu[1] = ((JacInv[1] * gu[0]) + (JacInv[4] * gu[1]))
                     result += (W * (((VDu0[3*i0+2] * VDu1[3*i1+0] * VDu2[3*i2+0]) * (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+0])) + ((gradu[0] * dtgradv[0]) + (gradu[1] * dtgradv[1]))))
         return result
 

@@ -78,9 +78,16 @@ class BasisFun:
 
 class VForm:
     """Abstract representation of a variational form in matrix-vector form."""
-    def __init__(self, dim, vec=False):
+    def __init__(self, dim, vec=False, spacetime=False):
         self.dim = dim
         self.vec = vec
+        self.spacetime = bool(spacetime)
+        if self.spacetime:
+            self.spacedims = range(self.dim - 1)
+            self.timedim = self.dim - 1
+        else:
+            self.spacedims = range(self.dim)
+
         self.vars = OrderedDict()
         self.exprs = []         # expressions to be added to the result
         self.basis_funs = (BasisFun('u', self), BasisFun('v', self))
@@ -93,10 +100,10 @@ class VForm:
         self.predefined_vars = {
             'u':     lambda self: self.basisval(self.basis_funs[0]),
             'v':     lambda self: self.basisval(self.basis_funs[1]),
-            'gu':    lambda self: self.gradient(self.basis_funs[0]),
-            'gv':    lambda self: self.gradient(self.basis_funs[1]),
-            'gradu': lambda self: matmul(self.JacInv.T, self.gu),
-            'gradv': lambda self: matmul(self.JacInv.T, self.gv),
+            'gu':    lambda self: grad(self.u),
+            'gv':    lambda self: grad(self.v),
+            'gradu': lambda self: matmul(self.JacInv.T[self.spacedims, self.spacedims], self.gu),
+            'gradv': lambda self: matmul(self.JacInv.T[self.spacedims, self.spacedims], self.gv),
         }
         self.cached_vars = {}
 
@@ -186,6 +193,13 @@ class VForm:
             self.init_jacinv = True
             self.cached_vars['JacInv'] = self.declare_sourced_var('JacInv', shape=(self.dim,self.dim), src='geo_jacinv')
         return self.cached_vars['JacInv']
+
+    @property
+    def JacInv_x(self):
+        "Inverse Jacobian only for the space dimensions. Assumes space-time cylinder."""
+        if not self.spacetime:
+            raise TypeError('JacInv_x only defined for spacetime assemblers')
+        return self.JacInv[self.spacedims, self.spacedims]
 
     def dependency_graph(self):
         G = networkx.DiGraph()
@@ -1045,6 +1059,12 @@ class Expr:
         return any(isinstance(self, T)
                 for T in (NamedScalarExpr, NamedVectorExpr, NamedMatrixExpr))
 
+    def dx(self, k, times=1):
+        return Dx(self, k, times)
+
+    def dt(self, times=1):
+        return Dt(self, times)
+
 class VectorExpr(Expr):
     def dot(self, x):
         assert x.is_vector(), 'only dot(vec, vec) implemented'
@@ -1127,8 +1147,6 @@ class LiteralVectorExpr(VectorExpr):
         self.children = entries
 
     def __getitem__(self, i):
-        if i < 0: i += self.shape[0]
-        assert 0 <= i < self.shape[0], 'index out of bounds'
         return self.children[i]
 
 class LiteralMatrixExpr(MatrixExpr):
@@ -1164,7 +1182,8 @@ class TransposedMatrixExpr(MatrixExpr):
         self.shape = (mat.shape[1], mat.shape[0])
         self.children = (mat,)
     def __getitem__(self, ij):
-        return self.mat[ij[1], ij[0]]
+        result = self.mat[ij[1], ij[0]]
+        return result.T if result.is_matrix() else result
 
 class BroadcastToVectorExpr(VectorExpr):
     def __init__(self, expr, shape):
@@ -1269,6 +1288,42 @@ class PartialDerivExpr(Expr):
         Dnew = list(self.D)
         Dnew[k] += times
         return PartialDerivExpr(self.basisfun, Dnew)
+
+def Dx(expr, k, times=1):
+    if expr.is_named_expr():
+        expr = expr.var.expr    # access underlying expression - mild hack
+    if expr.is_vector():
+        return LiteralVectorExpr(Dx(z, k, times) for z in expr)
+    elif expr.is_matrix():
+        raise NotImplementedError('derivative of matrix not implemented')
+    else:   # scalar
+        if not isinstance(expr, PartialDerivExpr):
+            raise TypeError('can only compute derivatives of basis functions')
+        return expr.dx(k, times)
+
+def Dt(expr, times=1):
+    if expr.is_named_expr():
+        expr = expr.var.expr    # access underlying expression - mild hack
+    if expr.is_vector():
+        return LiteralVectorExpr(Dt(z, times) for z in expr)
+    elif expr.is_matrix():
+        raise NotImplementedError('time derivative of matrix not implemented')
+    else:   # scalar
+        if not isinstance(expr, PartialDerivExpr):
+            raise TypeError('can only compute derivatives of basis functions')
+        if not expr.basisfun.vform.spacetime:
+            raise Exception('can only compute time derivatives in spacetime assemblers')
+        return expr.dx(expr.basisfun.vform.timedim, times)
+
+def grad(expr, dims=None):
+    if expr.is_named_expr():
+        expr = expr.var.expr    # access underlying expression - mild hack
+    if not isinstance(expr, PartialDerivExpr):
+        raise TypeError('can only compute gradient of basis function')
+    if dims is None:
+        dims = expr.basisfun.vform.spacedims
+    return LiteralVectorExpr(Dx(expr, k) for k in dims)
+
 
 def _indices_from_slice(sl, n):
     start = sl.start
@@ -1382,27 +1437,20 @@ def stiffness_vf(dim):
 
 
 def heat_st_vf(dim):
-    V = VForm(dim)
-    timederiv = V.gradu[-1] * V.v
-    gradgrad = inner(V.gradu[:-1], V.gradv[:-1])
-    V.add(V.W * (gradgrad + timederiv))
+    V = VForm(dim, spacetime=True)
+    ut_v = V.u.dt() * V.v
+    gradgrad = inner(V.gradu, V.gradv)
+    V.add(V.W * (gradgrad + ut_v))
     return V
 
 
 def wave_st_vf(dim):
-    V = VForm(dim)
+    V = VForm(dim, spacetime=True)
 
-    spacedims, timedim = range(dim-1), dim-1
-    Dt  = (dim-1) * (0,) + (1,)     # first time derivative
-    Dtt = (dim-1) * (0,) + (2,)     # second time derivative
-
-    utt_vt = V.partial_deriv(V.basis_funs[0], Dtt) * V.partial_deriv(V.basis_funs[1], Dt)
-    #utt_vt = V.u.dx(timedim, 2) * V.v.dx(timedim)
-
-    # compute time derivative of gradient of v (assumes ST cylinder)
-    dtgv = V.let('dtgv', V.gradient(V.basis_funs[1], dims=spacedims, additional_derivs=Dt))
-    dtgradv = V.let('dtgradv', matmul(V.JacInv.T[spacedims, spacedims], dtgv))
-    gradu_dtgradv = inner(V.gradu[spacedims], dtgradv)
+    utt_vt = V.u.dt(2) * V.v.dt()
+    dtgv = V.let('dtgv', grad(V.v).dt()) # time derivative of gradient (parametric coordinates)
+    dtgradv = V.let('dtgradv', matmul(V.JacInv_x.T, dtgv))  # transform space gradient
+    gradu_dtgradv = inner(V.gradu, dtgradv)
 
     V.add(V.W * (utt_vt + gradu_dtgradv))
     return V

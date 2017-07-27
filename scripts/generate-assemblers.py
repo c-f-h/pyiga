@@ -93,8 +93,6 @@ class VForm:
         }
         self.cached_vars = {}
 
-    def local_vars(self):
-        return (var for var in self.vars.values() if var.is_local())
     def field_vars(self):
         return (var for var in self.vars.values() if var.is_field())
 
@@ -187,7 +185,16 @@ class VForm:
             if var.expr:
                 for dep in var.expr.depends():
                     G.add_edge(dep, var.name)
-        return G
+
+        # compute transitive dependencies of all used expressions
+        expr_deps = set()
+        for expr in self.all_exprs():
+            for dep in expr.depends():
+                expr_deps.add(dep)
+                expr_deps |= networkx.ancestors(G, dep)
+
+        # keep only those vars which are actually used (sorted for code stability)
+        return G.subgraph(sorted(expr_deps))
 
     def as_vars(self, vars):
         def to_var(v):

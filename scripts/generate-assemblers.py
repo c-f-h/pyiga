@@ -188,7 +188,7 @@ class VForm:
 
         # compute transitive dependencies of all used expressions
         expr_deps = set()
-        for expr in self.all_exprs():
+        for expr in self.root_exprs():
             for dep in expr.depends():
                 expr_deps.add(dep)
                 expr_deps |= networkx.ancestors(G, dep)
@@ -229,7 +229,7 @@ class VForm:
         precomp_vars = {var for var in nodes if self.vars[var].expr}
         return self.linearize_vars(precomp_vars)
 
-    def all_exprs(self):
+    def root_exprs(self):
         if self.vec:
             return (expr for idx,expr in self.exprs)
         else:
@@ -249,7 +249,7 @@ class VForm:
 
         # compute linearized list of vars the kernel depends on
         kernel_deps = reduce(operator.or_,
-                (set(expr.depends()) for expr in self.all_exprs()), set())
+                (set(expr.depends()) for expr in self.root_exprs()), set())
         kernel_deps = self.as_vars(kernel_deps - {'@u', '@v'})
         kernel_deps = self.transitive_deps(kernel_deps) + kernel_deps
         self.kernel_deps = self.linearize_vars(kernel_deps)
@@ -259,27 +259,32 @@ class VForm:
             if var.src or var in self.precomp:
                 var.local = False
 
-    def iterexpr(self, expr, deep=False):
+    def iterexpr(self, expr, deep=False, type=None):
         """Iterate through all subexpressions of `expr` in depth-first order.
 
         If `deep=True`, follow named variable references.
+        If `type` is given, only exprs which are instances of that type are yielded.
         """
         for c in expr.children:
-            yield from self.iterexpr(c, deep=deep)
+            yield from self.iterexpr(c, deep=deep, type=type)
         if (deep
                 and any(isinstance(expr, T) for T in (NamedScalarExpr, NamedVectorExpr, NamedMatrixExpr))
-                and self.vars[expr.name].expr):
-            yield from self.iterexpr(self.vars[expr.name].expr, deep=deep)
+                and self.vars[expr.name].expr is not None):
+            yield from self.iterexpr(self.vars[expr.name].expr, deep=deep, type=type)
         else:
-            yield expr
+            if type is None or isinstance(expr, type):
+                yield expr
+
+    def all_exprs(self, type=None):
+        """Deep, depth-first iteration of all expressions with dependencies.
+
+        If `type` is given, only exprs which are instances of that type are yielded.
+        """
+        for expr in self.root_exprs():
+            yield from self.iterexpr(expr, deep=True, type=type)
 
     def find_max_deriv(self):
-        maxderiv = 0
-        for expr in self.all_exprs():
-            for e in self.iterexpr(expr, deep=True):
-                if isinstance(e, PartialDerivExpr):
-                    maxderiv = max(maxderiv, max(e.D))
-        return maxderiv
+        return max(max(e.D) for e in self.all_exprs(type=PartialDerivExpr))
 
 
 
@@ -295,11 +300,8 @@ class AsmGenerator:
         self.vec = self.vform.vec
 
         # fixup PartialDerivExprs for code generation
-        for expr in self.vform.all_exprs():
-            for e in self.vform.iterexpr(expr, deep=True):
-                if isinstance(e, PartialDerivExpr):
-                    e.asmgen = self
-
+        for e in self.vform.all_exprs(type=PartialDerivExpr):
+            e.asmgen = self
 
     def indent(self, num=1):
         self.code.indent(num)
@@ -1014,6 +1016,16 @@ class Expr:
     def __mul__(self, other): return OperExpr('*', self, other)
     def __div__(self, other):     return OperExpr('/', self, other)
     def __truediv__(self, other): return OperExpr('/', self, other)
+
+    def __bool__(self):  return True
+    __nonzero__ = __bool__  # Python 2 compatibility
+
+    def __len__(self):
+        if self.is_scalar():
+            raise TypeError('cannot get length of scalar')
+        else:
+            return self.shape[0]
+
     def is_scalar(self):    return self.shape is ()
     def is_vector(self):    return len(self.shape) == 1
     def is_matrix(self):    return len(self.shape) == 2
@@ -1217,7 +1229,6 @@ class IndexExpr(Expr):
         assert isinstance(x, NamedVectorExpr)   # can only index named vectors
         self.shape = ()
         assert x.is_vector(), 'indexed expression is not a vector'
-        self.x = x
         i = int(i)
         if i < 0: i += x.shape[0]
         assert 0 <= i < x.shape[0], 'index out of range'
@@ -1225,7 +1236,7 @@ class IndexExpr(Expr):
         self.children = (x,)
 
     def gencode(self):
-        return '{x}[{i}]'.format(x=self.x.name, i=self.i)
+        return '{x}[{i}]'.format(x=self.children[0].name, i=self.i)
 
 class PartialDerivExpr(Expr):
     def __init__(self, var, D):
@@ -1256,7 +1267,10 @@ def _to_indices(x, n):
         return _indices_from_slice(x, n)
     elif np.isscalar(x):
         if x < 0: x += n
-        return x
+        if 0 <= x < n:
+            return x
+        else:
+            raise IndexError
     else:
         return tuple(x)
 
@@ -1264,7 +1278,6 @@ def _to_indices(x, n):
 class SliceExpr(VectorExpr):
     def __init__(self, x, sl):
         assert x.is_vector(), 'expression is not a vector'
-        self.x = x
         if isinstance(sl, slice):
             self.indices = _indices_from_slice(sl, x.shape[0])
         else:   # range?
@@ -1276,7 +1289,7 @@ class SliceExpr(VectorExpr):
 
     def __getitem__(self, i):
         assert not isinstance(i, slice), 'slicing of slices not implemented'
-        return self.x[self.indices[i]]
+        return self.children[0][self.indices[i]]
 
 class MatVecExpr(VectorExpr):
     def __init__(self, A, x):

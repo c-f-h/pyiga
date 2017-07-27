@@ -403,6 +403,14 @@ class AsmGenerator:
             else:
                 self.declare_scalar(var.name)
 
+    def load_field_var(self, var, I, ref_only=False):
+        if var.is_scalar():
+            if not ref_only: self.putf('{name} = _{name}[{I}]', name=var.name, I=I)
+        elif var.is_vector():
+            self.putf('{name} = &_{name}[{I}, 0]', name=var.name, I=I)
+        elif var.is_matrix():
+            self.putf('{name} = &_{name}[{I}, 0, 0]', name=var.name, I=I)
+
     def start_loop_with_fields(self, fields):
         # get input size from an arbitrary field variable
         for k in range(self.dim):
@@ -423,14 +431,10 @@ class AsmGenerator:
         for k in range(self.dim):
             self.code.for_loop('i%d' % k, 'n%d' % k)
 
-        I = self.dimrep('i{}')
-
         # generate assignments for field variables
+        I = self.dimrep('i{}')  # current grid index
         for var in fields:
-            if var.is_scalar():
-                self.putf('{name} = _{name}[{I}]', name=var.name, I=I)
-            elif var.is_matrix():
-                self.putf('{name} = &_{name}[{I}, 0, 0]', name=var.name, I=I)
+            self.load_field_var(var, I)
         self.put('')
 
     def generate_kernel(self):
@@ -640,9 +644,6 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         self.put('')
 
         # temp storage for field variables
-        # TODO: handle assignment to scalar fields
-        if any(var.is_scalar() for var in vf.precomp):
-            assert False, 'precomputing of scalar fields not implemented'
         for var in vf.precomp_deps + vf.precomp:
             self.declare_var(var, ref=True)
 
@@ -652,16 +653,20 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
 
         I = self.dimrep('i{}')
 
-        # generate assignments for field variables
-        for var in vf.precomp_deps + vf.precomp:
-            if var.is_scalar():
-                self.putf('{name} = _{name}[{I}]', name=var.name, I=I)
-            elif var.is_matrix():
-                self.putf('{name} = &_{name}[{I}, 0, 0]', name=var.name, I=I)
+        # load field variables (or refs to them) into locals
+        for var in vf.precomp_deps:
+            self.load_field_var(var, I)
+        for var in vf.precomp:
+            # these have no values yet, only get a reference
+            self.load_field_var(var, I, ref_only=True)
         self.put('')
 
         for var in vf.precomp:
             self.gen_assign(var, var.expr)
+            if var.is_scalar():
+                # for scalars, we need to explicitly copy the computed value into
+                # the field array; vectors and matrices use pointers directly
+                self.putf('_{name}[{I}] = {name}', name=var.name, I=I)
 
         # end main loop
         for _ in range(self.dim):
@@ -1025,7 +1030,8 @@ class Expr:
     def __add__(self, other): return OperExpr('+', self, other)
     def __sub__(self, other): return OperExpr('-', self, other)
     def __mul__(self, other): return OperExpr('*', self, other)
-    def __div__(self, other): return OperExpr('/', self, other)
+    def __div__(self, other):     return OperExpr('/', self, other)
+    def __truediv__(self, other): return OperExpr('/', self, other)
     def is_scalar(self):    return self.shape is ()
     def is_vector(self):    return len(self.shape) == 1
     def is_matrix(self):    return len(self.shape) == 2

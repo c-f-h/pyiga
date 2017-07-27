@@ -277,7 +277,7 @@ class VForm:
         for c in expr.children:
             yield from self.iterexpr(c, deep=deep, type=type)
         if (deep
-                and any(isinstance(expr, T) for T in (NamedScalarExpr, NamedVectorExpr, NamedMatrixExpr))
+                and expr.is_named_expr()
                 and expr.var.expr is not None):
             yield from self.iterexpr(expr.var.expr, deep=deep, type=type)
         else:
@@ -1040,6 +1040,10 @@ class Expr:
     def is_matrix(self):    return len(self.shape) == 2
     def depends(self):
         return reduce(operator.or_, (x.depends() for x in self.children), set())
+
+    def is_named_expr(self):
+        return any(isinstance(self, T)
+                for T in (NamedScalarExpr, NamedVectorExpr, NamedMatrixExpr))
 
 class VectorExpr(Expr):
     def dot(self, x):

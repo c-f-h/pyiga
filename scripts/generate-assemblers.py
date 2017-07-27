@@ -287,6 +287,13 @@ class AsmGenerator:
         self.dim = self.vform.dim
         self.vec = self.vform.vec
 
+        # fixup PartialDerivExprs for code generation
+        for expr in self.vform.all_exprs():
+            for e in self.vform.iterexpr(expr, deep=True):
+                if isinstance(e, PartialDerivExpr):
+                    e.asmgen = self
+
+
     def indent(self, num=1):
         self.code.indent(num)
 
@@ -375,13 +382,51 @@ class AsmGenerator:
     def field_type(self, var):
         return 'double[{X}:1]'.format(X=', '.join((self.dim + len(var.shape)) * ':'))
 
-    def generate_kernel(self):
-        # fixup PartialDerivExprs for code generation
-        for expr in self.vform.all_exprs():
-            for e in self.vform.iterexpr(expr, deep=True):
-                if isinstance(e, PartialDerivExpr):
-                    e.asmgen = self
+    def declare_var(self, var, ref=False):
+        if ref:
+            if var.is_scalar():
+                self.declare_scalar(var.name)
+            elif var.is_vector() or var.is_matrix():
+                self.declare_pointer(var.name)
+        else:   # no ref - declare local storage
+            if var.is_vector():
+                self.declare_vec(var.name, size=var.shape[0])
+            elif var.is_matrix():
+                self.declare_vec(var.name, size=var.shape[0]*var.shape[1])
+            else:
+                self.declare_scalar(var.name)
 
+    def start_loop_with_fields(self, fields):
+        # get input size from an arbitrary field variable
+        for k in range(self.dim):
+            self.declare_index(
+                    'n%d' % k,
+                    '_{var}.shape[{k}]'.format(k=k, var=fields[0].name)
+            )
+        self.put('')
+
+        # declare iteration indices
+        for k in range(self.dim):
+            self.declare_index('i%d' % k)
+
+        # temp storage for field variables
+        for var in fields:
+            self.declare_var(var, ref=True)
+
+        for k in range(self.dim):
+            self.code.for_loop('i%d' % k, 'n%d' % k)
+
+        I = self.dimrep('i{}')
+
+        # generate assignments for field variables
+        for var in fields:
+            if var.is_scalar():
+                self.putf('{name} = _{name}[{I}]', name=var.name, I=I)
+            elif var.is_matrix():
+                self.putf('{name} = &_{name}[{I}, 0, 0]', name=var.name, I=I)
+        self.put('')
+
+    def generate_kernel(self):
         # function definition
         self.cython_pragmas()
         self.put('@staticmethod')
@@ -403,62 +448,28 @@ class AsmGenerator:
         self.dedent()
         self.put(') nogil:')
 
-        # get input size from an arbitrary field variable
-        first_var = field_params[0]
-        for k in range(self.dim):
-            self.declare_index(
-                    'n%d' % k,
-                    '_{var}.shape[{k}]'.format(k=k, var=first_var.name)
-            )
-        self.put('')
-
         # local variables
-        for k in range(self.dim):
-            self.declare_index('i%d' % k)
-
         if not self.vec:    # for vector assemblers, result is passed as a pointer
             self.declare_scalar('result', '0.0')
 
-        # temp storage for field variables
-        for var in field_params:
-            if var.is_scalar():
-                self.declare_scalar(var.name)
-            elif var.is_vector() or var.is_matrix():
-                self.declare_pointer(var.name)
-
         # temp storage for local variables
         for var in local_vars:
-            if var.is_vector():
-                self.declare_vec(var.name, size=var.shape[0])
-            elif var.is_matrix():
-                self.declare_vec(var.name, size=var.shape[0]*var.shape[1])
-            else:
-                self.declare_scalar(var.name)
+            self.declare_var(var)
 
-        self.declare_temp_variables()
+        self.declare_custom_variables()
 
         self.put('')
 
+        ############################################################
         # main loop over all Gauss points
-        for k in range(self.dim):
-            self.code.for_loop('i%d' % k, 'n%d' % k)
+        self.start_loop_with_fields(field_params)
 
-        I = self.dimrep('i{}')
-
-        # generate assignments for field variables
-        for var in field_params:
-            if var.is_scalar():
-                self.putf('{name} = _{name}[{I}]', name=var.name, I=I)
-            elif var.is_matrix():
-                self.putf('{name} = &_{name}[{I}, 0, 0]', name=var.name, I=I)
-        self.put('')
-
-        # generate assignment statements for local variables
+        # generate code for computing local variables
         for var in local_vars:
             self.gen_assign(var, var.expr)
 
         # if needed, generate custom code for the bilinear form a(u,v)
-        self.generate_biform()
+        self.generate_biform_custom()
 
         # generate code for all expressions in the bilinear form
         if self.vec:
@@ -471,6 +482,7 @@ class AsmGenerator:
         # end main loop
         for _ in range(self.dim):
             self.code.end_loop()
+        ############################################################
 
         if not self.vec:
             self.put('return result')
@@ -594,7 +606,7 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
             self.dedent(2)
             self.put(')')
 
-        self.initialize_fields()
+        self.initialize_custom_fields()
         self.end_function()
 
     def generate_precomp(self):
@@ -625,10 +637,7 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         if any(var.is_scalar() for var in vf.precomp):
             assert False, 'precomputing of scalar fields not implemented'
         for var in vf.precomp_deps + vf.precomp:
-            if var.is_scalar():
-                self.declare_scalar(var.name)
-            elif var.is_vector() or var.is_matrix():
-                self.declare_pointer(var.name)
+            self.declare_var(var, ref=True)
 
         # main loop over all Gauss points
         for k in range(self.dim):
@@ -691,13 +700,13 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
 
     # hooks for custom code generation
 
-    def declare_temp_variables(self):
+    def declare_custom_variables(self):
         pass
 
-    def initialize_fields(self):
+    def initialize_custom_fields(self):
         pass
 
-    def generate_biform(self):
+    def generate_biform_custom(self):
         pass
 
 

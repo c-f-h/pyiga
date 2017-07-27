@@ -411,7 +411,9 @@ class AsmGenerator:
         elif var.is_matrix():
             self.putf('{name} = &_{name}[{I}, 0, 0]', name=var.name, I=I)
 
-    def start_loop_with_fields(self, fields):
+    def start_loop_with_fields(self, fields_in, fields_out=[]):
+        fields = fields_in + fields_out
+
         # get input size from an arbitrary field variable
         for k in range(self.dim):
             self.declare_index(
@@ -420,21 +422,24 @@ class AsmGenerator:
             )
         self.put('')
 
-        # declare iteration indices
-        for k in range(self.dim):
-            self.declare_index('i%d' % k)
-
         # temp storage for field variables
         for var in fields:
             self.declare_var(var, ref=True)
+
+        # declare iteration indices
+        for k in range(self.dim):
+            self.declare_index('i%d' % k)
 
         for k in range(self.dim):
             self.code.for_loop('i%d' % k, 'n%d' % k)
 
         # generate assignments for field variables
         I = self.dimrep('i{}')  # current grid index
-        for var in fields:
+        for var in fields_in:
             self.load_field_var(var, I)
+        for var in fields_out:
+            # these have no values yet, only get a reference
+            self.load_field_var(var, I, ref_only=True)
         self.put('')
 
     def generate_kernel(self):
@@ -636,30 +641,7 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         self.dedent()
         self.put(') nogil:')
 
-        for k in range(self.dim):
-            self.declare_index(
-                    'n%d' % k,
-                    '_{var}.shape[{k}]'.format(k=k, var=vf.precomp[0].name)
-            )
-        self.put('')
-
-        # temp storage for field variables
-        for var in vf.precomp_deps + vf.precomp:
-            self.declare_var(var, ref=True)
-
-        # main loop over all Gauss points
-        for k in range(self.dim):
-            self.code.for_loop('i%d' % k, 'n%d' % k)
-
-        I = self.dimrep('i{}')
-
-        # load field variables (or refs to them) into locals
-        for var in vf.precomp_deps:
-            self.load_field_var(var, I)
-        for var in vf.precomp:
-            # these have no values yet, only get a reference
-            self.load_field_var(var, I, ref_only=True)
-        self.put('')
+        self.start_loop_with_fields(vf.precomp_deps, vf.precomp)
 
         for var in vf.precomp:
             self.gen_assign(var, var.expr)

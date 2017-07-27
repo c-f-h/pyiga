@@ -324,9 +324,9 @@ cdef class MassAssembler2D(BaseAssembler2D):
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
 
+        cdef double W
         cdef size_t i0
         cdef size_t i1
-        cdef double W
         for i0 in range(n0):
             for i1 in range(n1):
                 W = _W[i0, i1]
@@ -398,12 +398,14 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
             # output
             double[:, :, :, ::1] _B,
         ) nogil:
-        cdef size_t n0 = _B.shape[0]
-        cdef size_t n1 = _B.shape[1]
+        cdef size_t n0 = _JacInv.shape[0]
+        cdef size_t n1 = _JacInv.shape[1]
 
         cdef double* JacInv
         cdef double W
         cdef double* B
+        cdef size_t i0
+        cdef size_t i1
         for i0 in range(n0):
             for i1 in range(n1):
                 JacInv = &_JacInv[i0, i1, 0, 0]
@@ -430,9 +432,9 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         cdef size_t n0 = _B.shape[0]
         cdef size_t n1 = _B.shape[1]
 
+        cdef double* B
         cdef size_t i0
         cdef size_t i1
-        cdef double* B
         for i0 in range(n0):
             for i1 in range(n1):
                 B = &_B[i0, i1, 0, 0]
@@ -512,10 +514,10 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
 
-        cdef size_t i0
-        cdef size_t i1
         cdef double W
         cdef double* JacInv
+        cdef size_t i0
+        cdef size_t i1
         for i0 in range(n0):
             for i1 in range(n1):
                 W = _W[i0, i1]
@@ -601,10 +603,10 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
 
-        cdef size_t i0
-        cdef size_t i1
         cdef double W
         cdef double* JacInv
+        cdef size_t i0
+        cdef size_t i1
         for i0 in range(n0):
             for i1 in range(n1):
                 W = _W[i0, i1]
@@ -687,10 +689,10 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
 
-        cdef size_t i0
-        cdef size_t i1
         cdef double W
         cdef double* JacInv
+        cdef size_t i0
+        cdef size_t i1
         for i0 in range(n0):
             for i1 in range(n1):
                 W = _W[i0, i1]
@@ -1088,10 +1090,10 @@ cdef class MassAssembler3D(BaseAssembler3D):
         cdef size_t n1 = _W.shape[1]
         cdef size_t n2 = _W.shape[2]
 
+        cdef double W
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
-        cdef double W
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
@@ -1164,13 +1166,16 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
             # output
             double[:, :, :, :, ::1] _B,
         ) nogil:
-        cdef size_t n0 = _B.shape[0]
-        cdef size_t n1 = _B.shape[1]
-        cdef size_t n2 = _B.shape[2]
+        cdef size_t n0 = _JacInv.shape[0]
+        cdef size_t n1 = _JacInv.shape[1]
+        cdef size_t n2 = _JacInv.shape[2]
 
         cdef double* JacInv
         cdef double W
         cdef double* B
+        cdef size_t i0
+        cdef size_t i1
+        cdef size_t i2
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
@@ -1202,10 +1207,10 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         cdef size_t n1 = _B.shape[1]
         cdef size_t n2 = _B.shape[2]
 
+        cdef double* B
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
-        cdef double* B
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
@@ -1289,11 +1294,11 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         cdef size_t n1 = _W.shape[1]
         cdef size_t n2 = _W.shape[2]
 
+        cdef double W
+        cdef double* JacInv
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
-        cdef double W
-        cdef double* JacInv
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
@@ -1385,11 +1390,11 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         cdef size_t n1 = _W.shape[1]
         cdef size_t n2 = _W.shape[2]
 
+        cdef double W
+        cdef double* JacInv
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
-        cdef double W
-        cdef double* JacInv
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
@@ -1478,11 +1483,11 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         cdef size_t n1 = _W.shape[1]
         cdef size_t n2 = _W.shape[2]
 
+        cdef double W
+        cdef double* JacInv
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
-        cdef double W
-        cdef double* JacInv
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):

@@ -117,13 +117,14 @@ class VForm:
         return NamedMatrixExpr(name, shape=shape, symmetric=symmetric)
 
     def declare_sourced_var(self, name, shape, src, symmetric=False):
-        self.vars[name] = AsmVar(name, src=src, shape=shape, local=True, symmetric=symmetric)
+        var = AsmVar(name, src=src, shape=shape, local=True, symmetric=symmetric)
+        self.vars[name] = var
         if shape is ():
-            return NamedScalarExpr(name)
+            return NamedScalarExpr(var)
         elif len(shape) == 1:
-            return NamedVectorExpr(name, shape)
+            return NamedVectorExpr(var, shape)
         elif len(shape) == 2:
-            return NamedMatrixExpr(name, shape, symmetric=symmetric)
+            return NamedMatrixExpr(var, shape, symmetric=symmetric)
 
     def add(self, expr):
         assert not self.vec, 'add() is only for scalar assemblers; use add_at()'
@@ -156,8 +157,9 @@ class VForm:
         return LiteralVectorExpr(entries)
 
     def let(self, varname, expr, symmetric=False):
-        self.vars[varname] = AsmVar(varname, expr, shape=None, local=True, symmetric=symmetric)
-        return named_expr(varname, shape=expr.shape, symmetric=symmetric)
+        var = AsmVar(varname, expr, shape=None, local=True, symmetric=symmetric)
+        self.vars[varname] = var
+        return named_expr(var, shape=expr.shape, symmetric=symmetric)
 
     # automatically produce caching getters for predefined on-demand local variables
     def __getattr__(self, name):
@@ -276,8 +278,8 @@ class VForm:
             yield from self.iterexpr(c, deep=deep, type=type)
         if (deep
                 and any(isinstance(expr, T) for T in (NamedScalarExpr, NamedVectorExpr, NamedMatrixExpr))
-                and self.vars[expr.name].expr is not None):
-            yield from self.iterexpr(self.vars[expr.name].expr, deep=deep, type=type)
+                and expr.var.expr is not None):
+            yield from self.iterexpr(expr.var.expr, deep=deep, type=type)
         else:
             if type is None or isinstance(expr, type):
                 yield expr
@@ -1051,35 +1053,35 @@ class MatrixExpr(Expr):
     def dot(self, x):
         return matmul(self, x)
 
-def named_expr(s, shape=(), symmetric=False):
+def named_expr(var, shape=(), symmetric=False):
     if shape is ():
-        return NamedScalarExpr(s)
+        return NamedScalarExpr(var)
     elif len(shape) == 1:
-        return NamedVectorExpr(s, shape)
+        return NamedVectorExpr(var, shape)
     elif len(shape) == 2:
-        return NamedMatrixExpr(s, shape, symmetric=symmetric)
+        return NamedMatrixExpr(var, shape, symmetric=symmetric)
     else:
         assert False, 'invalid shape'
 
 class NamedScalarExpr(Expr):
-    def __init__(self, name):
-        self.name = name
+    def __init__(self, var):
+        self.var = var
         self.shape = ()
         self.children = ()
 
     def gencode(self):
-        return self.name
+        return self.var.name
     def depends(self):
-        return set((self.name,))
+        return set((self.var.name,))
 
 class NamedVectorExpr(VectorExpr):
-    def __init__(self, name, shape=()):
-        self.name = name
+    def __init__(self, var, shape=()):
+        self.var = var
         assert len(shape) == 1
         self.shape = shape
         self.children = ()
     def depends(self):
-        return set((self.name,))
+        return set((self.var.name,))
 
     def __getitem__(self, i):
         if isinstance(i, slice) or isinstance(i, range):
@@ -1089,14 +1091,14 @@ class NamedVectorExpr(VectorExpr):
 
 class NamedMatrixExpr(MatrixExpr):
     """Matrix expression which is represented by a matrix reference and shape."""
-    def __init__(self, name, shape, symmetric=False):
-        self.name = name
+    def __init__(self, var, shape, symmetric=False):
+        self.var = var
         self.shape = tuple(shape)
         assert len(self.shape) == 2
         self.symmetric = symmetric
         self.children = ()
     def depends(self):
-        return set((self.name,))
+        return set((self.var.name,))
 
     def to_seq(self, i, j):
         if self.symmetric and i > j:
@@ -1148,7 +1150,7 @@ class MatrixEntryExpr(Expr):
         self.j = j
         self.children = (mat,)
     def gencode(self):
-        return '{name}[{k}]'.format(name=self.mat.name,
+        return '{name}[{k}]'.format(name=self.mat.var.name,
                 k=self.mat.to_seq(self.i, self.j))
 
 class TransposedMatrixExpr(MatrixExpr):
@@ -1243,7 +1245,7 @@ class IndexExpr(Expr):
         self.children = (x,)
 
     def gencode(self):
-        return '{x}[{i}]'.format(x=self.children[0].name, i=self.i)
+        return '{x}[{i}]'.format(x=self.children[0].var.name, i=self.i)
 
 class PartialDerivExpr(Expr):
     """A scalar expression which refers to the value of a basis function or one

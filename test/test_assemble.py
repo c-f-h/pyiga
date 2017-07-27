@@ -1,7 +1,10 @@
 from pyiga.assemble import *
+from pyiga import assemble_tools
 from pyiga import geometry
-import os.path
 from pyiga.utils import read_sparse_matrix
+
+import os.path
+from scipy.sparse import kron as spkron
 
 def test_mass():
     kv = bspline.KnotVector(np.array([ 0., 0., 0., 0., 0., 0.25, 0.35, 0.45, 0.55, 0.65, 0.9, 0.9, 0.9, 0.9, 0.9 ]), 4)
@@ -78,6 +81,38 @@ def test_stiffness_3d():
         rtol=0, atol=1e-14)
     )
 
+def test_heat_st_2d():
+    T_end = 2.0
+    geo = geometry.unit_cube(dim=1).extrude(0.0, T_end, support=(0.0,T_end))
+    kv_t = bspline.make_knots(2, 0.0, T_end, 6)    # time axis
+    kv   = bspline.make_knots(3, 0.0,   1.0, 8)    # space axis
+    kvs = (kv_t, kv)
+
+    M = mass(kv)
+    M_t = mass(kv_t)
+    DxDx = stiffness(kv)
+    DtD0 = bsp_mixed_deriv_biform_1d(kv_t, 1, 0)
+    A_ref = (spkron(DtD0, M) + spkron(M_t, DxDx)).tocsr()
+
+    A = assemble_tools.assemble(assemble_tools.HeatAssembler_ST2D(kvs, geo))
+    assert abs(A_ref - A).max() < 1e-14
+
+def test_wave_st_2d():
+    T_end = 2.0
+    geo = geometry.unit_cube(dim=1).extrude(0.0, T_end, support=(0.0,T_end))
+    kv_t = bspline.make_knots(2, 0.0, T_end, 6)    # time axis
+    kv   = bspline.make_knots(3, 0.0,   1.0, 8)    # space axis
+    kvs = (kv_t, kv)
+
+    M = mass(kv)
+    DxDx = stiffness(kv)
+    D0Dt = bsp_mixed_deriv_biform_1d(kv_t, 0, 1)
+    DttDt = bsp_mixed_deriv_biform_1d(kv_t, 2, 1)
+    A_ref = (spkron(DttDt, M) + spkron(D0Dt, DxDx)).tocsr()
+
+    A = assemble_tools.assemble(assemble_tools.WaveAssembler_ST2D(kvs, geo))
+    assert abs(A_ref - A).max() < 1e-14
+
 ################################################################################
 # Test full Gauss quadrature assemblers with geometry transforms
 ################################################################################
@@ -113,6 +148,15 @@ def test_stiffness_geo_3d():
     A_ref = read_sparse_matrix(os.path.join(os.path.dirname(__file__),
         "poisson_neu_d3_p2_n10_stiff.mtx.gz"))
     assert abs(A - A_ref).max() < 1e-14
+
+def test_divdiv_geo_2d():
+    kv = bspline.make_knots(3, 0.0, 1.0, 15)
+    geo = geometry.bspline_quarter_annulus()
+    A = divdiv((kv,kv), geo, layout='packed')
+    # construct divergence-free function
+    from pyiga.approx import interpolate
+    u = interpolate((kv,kv), lambda x,y: (x,-y), geo=geo).ravel()
+    assert abs(A.dot(u)).max() < 1e-12
 
 ################################################################################
 # Test fast ACA assemblers with geometry transforms

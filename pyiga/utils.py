@@ -40,7 +40,10 @@ def grid_eval_transformed(f, grid, geo):
     # extract coordinate components
     X = tuple(trf_grid[..., i] for i in range(trf_grid.shape[-1]))
     # evaluate the function
-    return f(*X)
+    vals = f(*X)
+    if isinstance(vals, tuple):
+        vals = np.stack(vals, axis=-1)
+    return vals
 
 def read_sparse_matrix(fname):
     I,J,vals = np.loadtxt(fname, skiprows=1, unpack=True)

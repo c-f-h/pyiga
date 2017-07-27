@@ -70,6 +70,12 @@ class AsmVar:
     def is_field(self):
         return not self.local
 
+class BasisFun:
+    def __init__(self, name, vform):
+        self.name = name
+        self.vform = vform
+        self.asmgen = None  # to be set to AsmGenerator for code generation
+
 class VForm:
     """Abstract representation of a variational form in matrix-vector form."""
     def __init__(self, dim, vec=False):
@@ -77,6 +83,7 @@ class VForm:
         self.vec = vec
         self.vars = OrderedDict()
         self.exprs = []         # expressions to be added to the result
+        self.basis_funs = (BasisFun('u', self), BasisFun('v', self))
         # variables provided during initialization (geo_XXX)
         self.init_det = False
         self.init_jac = False
@@ -84,10 +91,10 @@ class VForm:
         self.init_weights = False       # geo_weights = Gauss weights * abs(geo_det)
         # predefined local variables with their generators (created on demand)
         self.predefined_vars = {
-            'u':     lambda self: self.basisval('u'),
-            'v':     lambda self: self.basisval('v'),
-            'gu':    lambda self: self.gradient('u'),
-            'gv':    lambda self: self.gradient('v'),
+            'u':     lambda self: self.basisval(self.basis_funs[0]),
+            'v':     lambda self: self.basisval(self.basis_funs[1]),
+            'gu':    lambda self: self.gradient(self.basis_funs[0]),
+            'gv':    lambda self: self.gradient(self.basis_funs[1]),
             'gradu': lambda self: matmul(self.JacInv.T, self.gu),
             'gradv': lambda self: matmul(self.JacInv.T, self.gv),
         }
@@ -128,14 +135,14 @@ class VForm:
         assert expr.is_scalar(), 'require scalar expression'
         self.exprs.append((idx, expr))
 
-    def partial_deriv(self, var, D):
-        """Parametric partial derivative of `var` of order `D=(Dx1, ..., Dxd)`"""
-        return PartialDerivExpr(var, D)
+    def partial_deriv(self, basisfun, D):
+        """Parametric partial derivative of `basisfun` of order `D=(Dx1, ..., Dxd)`"""
+        return PartialDerivExpr(basisfun, D)
 
-    def basisval(self, var):
-        return self.partial_deriv(var, self.dim * (0,))
+    def basisval(self, basisfun):
+        return self.partial_deriv(basisfun, self.dim * (0,))
 
-    def gradient(self, var, dims=None, additional_derivs=None):
+    def gradient(self, basisfun, dims=None, additional_derivs=None):
         if dims is None:
             dims = range(self.dim)
         if additional_derivs is None:
@@ -145,7 +152,7 @@ class VForm:
         for k in dims:
             D = list(additional_derivs)
             D[k] += 1
-            entries.append(self.partial_deriv(var, D))
+            entries.append(self.partial_deriv(basisfun, D))
         return LiteralVectorExpr(entries)
 
     def let(self, varname, expr, symmetric=False):
@@ -300,8 +307,8 @@ class AsmGenerator:
         self.vec = self.vform.vec
 
         # fixup PartialDerivExprs for code generation
-        for e in self.vform.all_exprs(type=PartialDerivExpr):
-            e.asmgen = self
+        for bf in self.vform.basis_funs:
+            bf.asmgen = self
 
     def indent(self, num=1):
         self.code.indent(num)
@@ -333,14 +340,14 @@ class AsmGenerator:
         return ' * '.join(['{0}[{1}][{2}]'.format(var, k, self.extend_dim(k))
             for k in range(self.dim)])
 
-    def gen_pderiv(self, var, D, idx='i'):
-        """Generate code for computing parametric partial derivative of `var` of order `D=(Dx1, ..., Dxd)`"""
+    def gen_pderiv(self, basisfun, D, idx='i'):
+        """Generate code for computing parametric partial derivative of `basisfun` of order `D=(Dx1, ..., Dxd)`"""
         D = tuple(reversed(D))  # x is last axis
         assert len(D) == self.dim
         assert all(0 <= d <= self.numderiv for d in D)
         factors = [
                 "VD{var}{k}[{nderiv}*{idx}{k}+{ofs}]".format(
-                    var = var,
+                    var = basisfun.name,
                     idx = idx,
                     k   = k,
                     ofs = D[k],
@@ -1239,17 +1246,23 @@ class IndexExpr(Expr):
         return '{x}[{i}]'.format(x=self.children[0].name, i=self.i)
 
 class PartialDerivExpr(Expr):
-    def __init__(self, var, D):
+    """A scalar expression which refers to the value of a basis function or one
+    of its partial derivatives."""
+    def __init__(self, basisfun, D):
         self.shape = ()
-        self.var = var
-        self.D = D
-        self.asmgen = None  # to be set to AsmGenerator
+        self.basisfun = basisfun
+        self.D = tuple(D)
         self.children = ()
 
     def gencode(self):
-        return self.asmgen.gen_pderiv(self.var, self.D)
+        return self.basisfun.asmgen.gen_pderiv(self.basisfun, self.D)
     def depends(self):
-        return set(('@' + self.var,))
+        return set(('@' + self.basisfun.name,))
+
+    def dx(self, k, times=1):
+        Dnew = list(self.D)
+        Dnew[k] += times
+        return PartialDerivExpr(self.basisfun, Dnew)
 
 def _indices_from_slice(sl, n):
     start = sl.start
@@ -1377,10 +1390,11 @@ def wave_st_vf(dim):
     Dt  = (dim-1) * (0,) + (1,)     # first time derivative
     Dtt = (dim-1) * (0,) + (2,)     # second time derivative
 
-    utt_vt = V.partial_deriv('u', Dtt) * V.partial_deriv('v', Dt)
+    utt_vt = V.partial_deriv(V.basis_funs[0], Dtt) * V.partial_deriv(V.basis_funs[1], Dt)
+    #utt_vt = V.u.dx(timedim, 2) * V.v.dx(timedim)
 
     # compute time derivative of gradient of v (assumes ST cylinder)
-    dtgv = V.let('dtgv', V.gradient('v', dims=spacedims, additional_derivs=Dt))
+    dtgv = V.let('dtgv', V.gradient(V.basis_funs[1], dims=spacedims, additional_derivs=Dt))
     dtgradv = V.let('dtgradv', matmul(V.JacInv.T[spacedims, spacedims], dtgv))
     gradu_dtgradv = inner(V.gradu[spacedims], dtgradv)
 

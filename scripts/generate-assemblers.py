@@ -653,6 +653,7 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
     def generate_precomp(self):
         vf = self.vform
 
+        # function header
         self.cython_pragmas()
         self.put('@staticmethod')
         self.put('cdef void precompute_fields(')
@@ -666,8 +667,10 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         self.dedent()
         self.put(') nogil:')
 
+        # start main loop
         self.start_loop_with_fields(vf.precomp_deps, vf.precomp)
 
+        # generate assignment statements
         for var in vf.precomp:
             self.gen_assign(var, var.expr)
             if var.is_scalar():

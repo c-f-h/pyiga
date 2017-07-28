@@ -1402,9 +1402,16 @@ class MatMatExpr(MatrixExpr):
             (self.x[i, k] * self.y[k, j] for k in range(self.x.shape[1])))
 
 def inner(x, y):
-    assert x.is_vector() and y.is_vector(), 'inner() requires vector expressions'
-    assert x.shape == y.shape, 'incompatible shapes'
-    return reduce(operator.add, (x[i] * y[i] for i in range(x.shape[0])))
+    if not x.is_vector() or x.is_matrix():
+        raise TypeError('inner() requires vector or matrix expressions')
+    if not x.shape == y.shape:
+        raise ValueError('incompatible shapes in inner product')
+    if x.is_vector():
+        return reduce(operator.add, (x[i] * y[i] for i in range(x.shape[0])))
+    else:   # matrix
+        return reduce(operator.add,
+                (x[i,j] * y[i,j] for i in range(x.shape[0])
+                                 for j in range(x.shape[1])))
 
 def matmul(a, b):
     if a.is_matrix() and b.is_vector():

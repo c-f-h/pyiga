@@ -102,8 +102,8 @@ class VForm:
             'v':     lambda self: self.basisval(self.basis_funs[1]),
             'gu':    lambda self: grad(self.u),
             'gv':    lambda self: grad(self.v),
-            'gradu': lambda self: matmul(self.JacInv.T[self.spacedims, self.spacedims], self.gu),
-            'gradv': lambda self: matmul(self.JacInv.T[self.spacedims, self.spacedims], self.gv),
+            'gradu': lambda self: dot(self.JacInv.T[self.spacedims, self.spacedims], self.gu),
+            'gradv': lambda self: dot(self.JacInv.T[self.spacedims, self.spacedims], self.gv),
         }
         self.cached_vars = {}
 
@@ -1083,7 +1083,7 @@ class MatrixExpr(Expr):
     def T(self):
         return TransposedMatrixExpr(self)
     def dot(self, x):
-        return matmul(self, x)
+        return dot(self, x)
 
 def named_expr(var, shape=(), symmetric=False):
     if shape is ():
@@ -1429,13 +1429,15 @@ def inner(x, y):
 def as_vector(x): return LiteralVectorExpr(x)
 def as_matrix(x): return LiteralMatrixExpr(x)
 
-def matmul(a, b):
-    if a.is_matrix() and b.is_vector():
+def dot(a, b):
+    if a.is_vector() and b.is_vector():
+        return inner(a, b)
+    elif a.is_matrix() and b.is_vector():
         return MatVecExpr(a, b)
     elif a.is_matrix() and b.is_matrix():
         return MatMatExpr(a, b)
     else:
-        raise TypeError('invalid types in matmul')
+        raise TypeError('invalid types in dot')
 
 
 ################################################################################
@@ -1450,7 +1452,7 @@ def mass_vf(dim):
 
 def stiffness_vf(dim):
     V = VForm(dim)
-    B = V.let('B', V.W * matmul(V.JacInv, V.JacInv.T), symmetric=True)
+    B = V.let('B', V.W * dot(V.JacInv, V.JacInv.T), symmetric=True)
     V.add(B.dot(V.gu).dot(V.gv))
     return V
 
@@ -1474,7 +1476,7 @@ def wave_st_vf(dim):
 
     utt_vt = V.u.dt(2) * V.v.dt()
     dtgv = V.let('dtgv', grad(V.v).dt()) # time derivative of gradient (parametric coordinates)
-    dtgradv = V.let('dtgradv', matmul(V.JacInv_x.T, dtgv))  # transform space gradient
+    dtgradv = V.let('dtgradv', dot(V.JacInv_x.T, dtgv))  # transform space gradient
     gradu_dtgradv = inner(V.gradu, dtgradv)
 
     V.add(V.W * (utt_vt + gradu_dtgradv))

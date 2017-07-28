@@ -1049,6 +1049,14 @@ class Expr:
         else:
             return self.shape[0]
 
+    # convenience accessors for child nodes
+    @property
+    def x(self): return self.children[0]
+    @property
+    def y(self): return self.children[1]
+    @property
+    def z(self): return self.children[2]
+
     def is_scalar(self):    return self.shape is ()
     def is_vector(self):    return len(self.shape) == 1
     def is_matrix(self):    return len(self.shape) == 2
@@ -1167,22 +1175,20 @@ class LiteralMatrixExpr(MatrixExpr):
 class MatrixEntryExpr(Expr):
     def __init__(self, mat, i, j):
         self.shape = ()
-        self.mat = mat
         self.i = i
         self.j = j
         self.children = (mat,)
     def gencode(self):
-        return '{name}[{k}]'.format(name=self.mat.var.name,
-                k=self.mat.to_seq(self.i, self.j))
+        return '{name}[{k}]'.format(name=self.x.var.name,
+                k=self.x.to_seq(self.i, self.j))
 
 class TransposedMatrixExpr(MatrixExpr):
     def __init__(self, mat):
         assert mat.is_matrix(), 'can only transpose matrices'
-        self.mat = mat
         self.shape = (mat.shape[1], mat.shape[0])
         self.children = (mat,)
     def __getitem__(self, ij):
-        result = self.mat[ij[1], ij[0]]
+        result = self.x[ij[1], ij[0]]
         return result.T if result.is_matrix() else result
 
 class BroadcastToVectorExpr(VectorExpr):
@@ -1190,14 +1196,14 @@ class BroadcastToVectorExpr(VectorExpr):
         self.shape = shape
         self.children = (expr,)
     def __getitem__(self, i):
-        return self.children[0]
+        return self.x
 
 class BroadcastToMatrixExpr(MatrixExpr):
     def __init__(self, expr, shape):
         self.shape = shape
         self.children = (expr,)
     def __getitem__(self, ij):
-        return self.children[0]
+        return self.x
 
 def OperExpr(oper, x, y):
     if x.is_scalar() and y.is_scalar():
@@ -1268,7 +1274,7 @@ class IndexExpr(Expr):
         self.children = (x,)
 
     def gencode(self):
-        return '{x}[{i}]'.format(x=self.children[0].var.name, i=self.i)
+        return '{x}[{i}]'.format(x=self.x.var.name, i=self.i)
 
 class PartialDerivExpr(Expr):
     """A scalar expression which refers to the value of a basis function or one
@@ -1363,30 +1369,26 @@ class SliceExpr(VectorExpr):
 
     def __getitem__(self, i):
         assert not isinstance(i, slice), 'slicing of slices not implemented'
-        return self.children[0][self.indices[i]]
+        return self.x[self.indices[i]]
 
 class MatVecExpr(VectorExpr):
     def __init__(self, A, x):
         assert A.is_matrix() and x.is_vector()
         assert A.shape[1] == x.shape[0], 'incompatible shapes'
         self.shape = (A.shape[0],)
-        self.A = A
-        self.x = x
         self.children = (A, x)
 
     def __getitem__(self, i):
         if i < 0: i += self.shape[0]
         assert 0 <= i < self.shape[0]
         return reduce(operator.add,
-            (self.A[i, j] * self.x[j] for j in range(self.x.shape[0])))
+            (self.x[i, j] * self.y[j] for j in range(self.y.shape[0])))
 
 class MatMatExpr(MatrixExpr):
     def __init__(self, A, B):
         assert A.is_matrix() and B.is_matrix()
         assert A.shape[1] == B.shape[0], 'incompatible shapes'
         self.shape = (A.shape[0], B.shape[1])
-        self.A = A
-        self.B = B
         self.children = (A, B)
 
     def __getitem__(self, ij):
@@ -1397,7 +1399,7 @@ class MatMatExpr(MatrixExpr):
         if j < 0: j += self.shape[1]
         assert 0 <= j < self.shape[1]
         return reduce(operator.add,
-            (self.A[i, k] * self.B[k, j] for k in range(self.A.shape[1])))
+            (self.x[i, k] * self.y[k, j] for k in range(self.x.shape[1])))
 
 def inner(x, y):
     assert x.is_vector() and y.is_vector(), 'inner() requires vector expressions'

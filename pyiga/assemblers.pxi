@@ -333,7 +333,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
 
                 v = (VDv0[1*i0+0] * VDv1[1*i1+0])
                 u = (VDu0[1*i0+0] * VDu1[1*i1+0])
-                result += ((W * u) * v)
+                result += ((u * v) * W)
         return result
 
     @cython.boundscheck(False)
@@ -1095,7 +1095,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
 
                     v = (VDv0[1*i0+0] * VDv1[1*i1+0] * VDv2[1*i2+0])
                     u = (VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0])
-                    result += ((W * u) * v)
+                    result += ((u * v) * W)
         return result
 
     @cython.boundscheck(False)

@@ -107,6 +107,9 @@ class VForm:
         }
         self.cached_vars = {}
 
+    def basisfuns(self):
+        return self.u, self.v
+
     def field_vars(self):
         return (var for var in self.vars.values() if var.is_field())
 
@@ -282,29 +285,30 @@ class VForm:
             if var.src or var in self.precomp:
                 var.local = False
 
-    def iterexpr(self, expr, deep=False, type=None):
-        """Iterate through all subexpressions of `expr` in depth-first order.
-
-        If `deep=True`, follow named variable references.
-        If `type` is given, only exprs which are instances of that type are yielded.
-        """
-        for c in expr.children:
-            yield from self.iterexpr(c, deep=deep, type=type)
-        if (deep
-                and expr.is_named_expr()
-                and expr.var.expr is not None):
-            yield from self.iterexpr(expr.var.expr, deep=deep, type=type)
-        else:
-            if type is None or isinstance(expr, type):
-                yield expr
-
     def all_exprs(self, type=None):
         """Deep, depth-first iteration of all expressions with dependencies.
 
         If `type` is given, only exprs which are instances of that type are yielded.
         """
         for expr in self.root_exprs():
-            yield from self.iterexpr(expr, deep=True, type=type)
+            yield from iterexpr(expr, deep=True, type=type)
+
+    def transform(self, fun, type=None):
+        def applyfun(e):
+            e2 = None
+            if type is None or isinstance(e, type):
+                e2 = fun(e)
+            return e2 if e2 is not None else e
+        newexprs = mapexpr(self.root_exprs(), applyfun, deep=True)
+        if self.vec:
+            self.exprs = tuple((t[0],e) for (t,e) in zip(self.exprs, newexprs))
+        else:
+            self.exprs = newexprs
+
+    def finalize(self):
+        """Performs standard transforms and dependency analysis."""
+        self.transform(lambda e: self.W, type=VolumeMeasureExpr)
+        self.dependency_analysis()
 
     def find_max_deriv(self):
         return max(max(e.D) for e in self.all_exprs(type=PartialDerivExpr))
@@ -686,7 +690,7 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
     # main code generation entry point
 
     def generate(self):
-        self.vform.dependency_analysis()
+        self.vform.finalize()
         self.numderiv = self.vform.find_max_deriv()
 
         self.env = {
@@ -1393,8 +1397,48 @@ class MatMatExpr(MatrixExpr):
         return reduce(operator.add,
             (self.x[i, k] * self.y[k, j] for k in range(self.x.shape[1])))
 
+class VolumeMeasureExpr(Expr):
+    def __init__(self):
+        self.shape = ()
+        self.children = ()
+
+# expression utility functions #################################################
+
+def iterexpr(expr, deep=False, type=None):
+    """Iterate through all subexpressions of `expr` in depth-first order.
+
+    If `deep=True`, follow named variable references.
+    If `type` is given, only exprs which are instances of that type are yielded.
+    """
+    for c in expr.children:
+        yield from iterexpr(c, deep=deep, type=type)
+    if (deep
+            and expr.is_named_expr()
+            and expr.var.expr is not None):
+        yield from iterexpr(expr.var.expr, deep=deep, type=type)
+    else:
+        if type is None or isinstance(expr, type):
+            yield expr
+
+def mapexpr(exprs, fun, deep=False):
+    result = []
+    for e in exprs:
+        if (deep
+                and e.is_named_expr()
+                and e.var.expr is not None):
+            var = e.var
+            var.expr.children = mapexpr(var.expr.children, fun, deep=deep)
+            var.expr = fun(var.expr)
+            result.append(e)
+        else:
+            e.children = mapexpr(e.children, fun, deep=deep)
+            result.append(fun(e))
+    return tuple(result)
+
 # expression manipulation functions ############################################
 # notation is as close to UFL as possible
+
+dx = VolumeMeasureExpr()
 
 def Dx(expr, k, times=1):
     if expr.is_named_expr():
@@ -1472,7 +1516,8 @@ def cross(x, y):
 
 def mass_vf(dim):
     V = VForm(dim)
-    V.add(V.W * V.u * V.v)
+    u, v = V.basisfuns()
+    V.add(u * v * dx)
     return V
 
 

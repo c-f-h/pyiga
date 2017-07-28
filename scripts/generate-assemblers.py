@@ -1263,6 +1263,17 @@ class VectorOperExpr(VectorExpr):
         func = _oper_to_func[self.oper]
         return reduce(func, (z[i] for z in self.children))
 
+class VectorCrossExpr(VectorExpr):
+    def __init__(self, x, y):
+        assert x.shape == y.shape == (3,), 'cross() requires 3D vectors'
+        self.shape = x.shape
+        self.children = (x,y)
+
+    def __getitem__(self, i):
+        if   i == 0:  return self.x[1]*self.y[2] - self.x[2]*self.y[1]
+        elif i == 1:  return self.x[2]*self.y[0] - self.x[0]*self.y[2]
+        elif i == 2:  return self.x[0]*self.y[1] - self.x[1]*self.y[0]
+
 class MatrixOperExpr(MatrixExpr):
     def __init__(self, oper, x, y):
         assert x.is_matrix() and y.is_matrix(), 'expected matrices'
@@ -1307,41 +1318,6 @@ class PartialDerivExpr(Expr):
         Dnew = list(self.D)
         Dnew[k] += times
         return PartialDerivExpr(self.basisfun, Dnew)
-
-def Dx(expr, k, times=1):
-    if expr.is_named_expr():
-        expr = expr.var.expr    # access underlying expression - mild hack
-    if expr.is_vector():
-        return LiteralVectorExpr(Dx(z, k, times) for z in expr)
-    elif expr.is_matrix():
-        raise NotImplementedError('derivative of matrix not implemented')
-    else:   # scalar
-        if not isinstance(expr, PartialDerivExpr):
-            raise TypeError('can only compute derivatives of basis functions')
-        return expr.dx(k, times)
-
-def Dt(expr, times=1):
-    if expr.is_named_expr():
-        expr = expr.var.expr    # access underlying expression - mild hack
-    if expr.is_vector():
-        return LiteralVectorExpr(Dt(z, times) for z in expr)
-    elif expr.is_matrix():
-        raise NotImplementedError('time derivative of matrix not implemented')
-    else:   # scalar
-        if not isinstance(expr, PartialDerivExpr):
-            raise TypeError('can only compute derivatives of basis functions')
-        if not expr.basisfun.vform.spacetime:
-            raise Exception('can only compute time derivatives in spacetime assemblers')
-        return expr.dx(expr.basisfun.vform.timedim, times)
-
-def grad(expr, dims=None):
-    if expr.is_named_expr():
-        expr = expr.var.expr    # access underlying expression - mild hack
-    if not isinstance(expr, PartialDerivExpr):
-        raise TypeError('can only compute gradient of basis function')
-    if dims is None:
-        dims = expr.basisfun.vform.spacedims
-    return LiteralVectorExpr(Dx(expr, k) for k in dims)
 
 
 def _indices_from_slice(sl, n):
@@ -1414,6 +1390,47 @@ class MatMatExpr(MatrixExpr):
         return reduce(operator.add,
             (self.x[i, k] * self.y[k, j] for k in range(self.x.shape[1])))
 
+# expression manipulation functions ############################################
+# notation is as close to UFL as possible
+
+def Dx(expr, k, times=1):
+    if expr.is_named_expr():
+        expr = expr.var.expr    # access underlying expression - mild hack
+    if expr.is_vector():
+        return LiteralVectorExpr(Dx(z, k, times) for z in expr)
+    elif expr.is_matrix():
+        raise NotImplementedError('derivative of matrix not implemented')
+    else:   # scalar
+        if not isinstance(expr, PartialDerivExpr):
+            raise TypeError('can only compute derivatives of basis functions')
+        return expr.dx(k, times)
+
+def Dt(expr, times=1):
+    if expr.is_named_expr():
+        expr = expr.var.expr    # access underlying expression - mild hack
+    if expr.is_vector():
+        return LiteralVectorExpr(Dt(z, times) for z in expr)
+    elif expr.is_matrix():
+        raise NotImplementedError('time derivative of matrix not implemented')
+    else:   # scalar
+        if not isinstance(expr, PartialDerivExpr):
+            raise TypeError('can only compute derivatives of basis functions')
+        if not expr.basisfun.vform.spacetime:
+            raise Exception('can only compute time derivatives in spacetime assemblers')
+        return expr.dx(expr.basisfun.vform.timedim, times)
+
+def grad(expr, dims=None):
+    if expr.is_named_expr():
+        expr = expr.var.expr    # access underlying expression - mild hack
+    if not isinstance(expr, PartialDerivExpr):
+        raise TypeError('can only compute gradient of basis function')
+    if dims is None:
+        dims = expr.basisfun.vform.spacedims
+    return LiteralVectorExpr(Dx(expr, k) for k in dims)
+
+def as_vector(x): return LiteralVectorExpr(x)
+def as_matrix(x): return LiteralMatrixExpr(x)
+
 def inner(x, y):
     if not x.is_vector() or x.is_matrix():
         raise TypeError('inner() requires vector or matrix expressions')
@@ -1426,9 +1443,6 @@ def inner(x, y):
                 (x[i,j] * y[i,j] for i in range(x.shape[0])
                                  for j in range(x.shape[1])))
 
-def as_vector(x): return LiteralVectorExpr(x)
-def as_matrix(x): return LiteralMatrixExpr(x)
-
 def dot(a, b):
     if a.is_vector() and b.is_vector():
         return inner(a, b)
@@ -1438,6 +1452,15 @@ def dot(a, b):
         return MatMatExpr(a, b)
     else:
         raise TypeError('invalid types in dot')
+
+def tr(A):
+    """Trace of a matrix."""
+    if not A.is_matrix() or A.shape[0] != A.shape[1]:
+        raise ValueError('can only compute trace of square matrices')
+    return reduce(operator.add, (A[i,i] for i in range(A.shape[0])))
+
+def cross(x, y):
+    return VectorCrossExpr(x, y)
 
 
 ################################################################################

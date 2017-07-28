@@ -1153,6 +1153,8 @@ class LiteralVectorExpr(VectorExpr):
         entries = tuple(entries)
         self.shape = (len(entries),)
         self.children = entries
+        if not all(isinstance(e, Expr) and e.is_scalar() for e in self.children):
+            raise ValueError('all vector entries should be scalar expressions')
 
     def __getitem__(self, i):
         return self.children[i]
@@ -1160,17 +1162,28 @@ class LiteralVectorExpr(VectorExpr):
 class LiteralMatrixExpr(MatrixExpr):
     """Matrix expression which is represented by a 2D array of individual expressions."""
     def __init__(self, entries):
-        self.entries = np.array(entries, dtype=object)
-        self.shape = self.entries.shape
-        self.children = tuple(self.entries.flat)
+        entries = np.array(entries, dtype=object)
+        self.shape = entries.shape
+        self.children = tuple(entries.flat)
+        if not all(isinstance(e, Expr) and e.is_scalar() for e in self.children):
+            raise ValueError('all matrix entries should be scalar expressions')
+
+    def at(self, i, j):
+        return self.children[i * self.shape[1] + j]
 
     def __getitem__(self, ij):
         i = _to_indices(ij[0], self.shape[0])
         j = _to_indices(ij[1], self.shape[1])
-        if np.isscalar(i) and np.isscalar(j):
-            return self.entries[i, j]
+        sca_i, sca_j = np.isscalar(i), np.isscalar(j)
+        if sca_i and sca_j:
+            return self.at(i, j)
+        elif sca_i and not sca_j:
+            return LiteralVectorExpr(self.at(i, jj) for jj in j)
+        elif not sca_i and sca_j:
+            return LiteralVectorExpr(self.at(ii, j) for ii in i)
         else:
-            return LiteralMatrixExpr(self.entries[np.ix_(i, j)])
+            return LiteralMatrixExpr([[self.at(ii, jj) for jj in j]
+                                                       for ii in i])
 
 class MatrixEntryExpr(Expr):
     def __init__(self, mat, i, j):
@@ -1412,6 +1425,9 @@ def inner(x, y):
         return reduce(operator.add,
                 (x[i,j] * y[i,j] for i in range(x.shape[0])
                                  for j in range(x.shape[1])))
+
+def as_vector(x): return LiteralVectorExpr(x)
+def as_matrix(x): return LiteralMatrixExpr(x)
 
 def matmul(a, b):
     if a.is_matrix() and b.is_vector():

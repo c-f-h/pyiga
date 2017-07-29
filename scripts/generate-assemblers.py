@@ -137,14 +137,13 @@ class VForm:
             return NamedMatrixExpr(var, shape, symmetric=symmetric)
 
     def add(self, expr):
-        assert not self.vec, 'add() is only for scalar assemblers; use add_at()'
-        assert expr.is_scalar(), 'require scalar expression'
+        if self.vec:
+            if not expr.shape == (self.vec,):
+                raise TypeError('vector assembler requires vector expression of proper length')
+        else:
+            if not expr.is_scalar():
+                raise TypeError('require scalar expression')
         self.exprs.append(expr)
-
-    def add_at(self, idx, expr):
-        assert self.vec, 'add_at() is only for vector assemblers; use add()'
-        assert expr.is_scalar(), 'require scalar expression'
-        self.exprs.append((idx, expr))
 
     def partial_deriv(self, basisfun, D):
         """Parametric partial derivative of `basisfun` of order `D=(Dx1, ..., Dxd)`"""
@@ -256,10 +255,7 @@ class VForm:
         return self.linearize_vars(precomp_vars)
 
     def root_exprs(self):
-        if self.vec:
-            return (expr for idx,expr in self.exprs)
-        else:
-            return self.exprs
+        return self.exprs
 
     def dependency_analysis(self):
         self.dep_graph = self.dependency_graph()
@@ -299,11 +295,7 @@ class VForm:
             if type is None or isinstance(e, type):
                 e2 = fun(e)
             return e2 if e2 is not None else e
-        newexprs = mapexpr(self.root_exprs(), applyfun, deep=True)
-        if self.vec:
-            self.exprs = tuple((t[0],e) for (t,e) in zip(self.exprs, newexprs))
-        else:
-            self.exprs = newexprs
+        self.exprs = mapexpr(self.root_exprs(), applyfun, deep=True)
 
     def finalize(self):
         """Performs standard transforms and dependency analysis."""
@@ -518,8 +510,9 @@ class AsmGenerator:
 
         # generate code for all expressions in the bilinear form
         if self.vec:
-            for idx, expr in self.vform.exprs:
-                self.put(('result[%d] += ' % idx) + expr.gencode())
+            for expr in self.vform.exprs:
+                for i, e_i in enumerate(expr):
+                    self.put(('result[%d] += ' % i) + e_i.gencode())
         else:
             for expr in self.vform.exprs:
                 self.put('result += ' + expr.gencode())
@@ -1556,9 +1549,9 @@ def wave_st_vf(dim):
 
 def divdiv_vf(dim):
     V = VForm(dim, vec=dim**2)
-    for i in range(dim):
-        for j in range(dim):
-            V.add_at(dim*i + j, V.W * V.gradu[j] * V.gradv[i])
+    V.add(as_vector(V.gradu[j] * V.gradv[i] * dx
+            for i in range(dim)
+            for j in range(dim)))
     return V
 
 

@@ -646,8 +646,8 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
 
 cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, ::1] W
     cdef double[:, :, :, ::1] JacInv
+    cdef double[:, ::1] W
 
     def __init__(self, kvs, geo):
         assert geo.dim == 2, "Geometry has wrong dimension"
@@ -661,8 +661,8 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)
         geo_weights = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
-        self.W = geo_weights
         self.JacInv = geo_jacinv
+        self.W = geo_weights
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -700,10 +700,10 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
                 gu[1] = (VDu0[2*i0+1] * VDu1[2*i1+0])
                 gradu[0] = ((JacInv[0] * gu[0]) + (JacInv[2] * gu[1]))
                 gradu[1] = ((JacInv[1] * gu[0]) + (JacInv[3] * gu[1]))
-                result[0] += ((W * gradu[0]) * gradv[0])
-                result[1] += ((W * gradu[1]) * gradv[0])
-                result[2] += ((W * gradu[0]) * gradv[1])
-                result[3] += ((W * gradu[1]) * gradv[1])
+                result[0] += ((gradu[0] * gradv[0]) * W)
+                result[1] += ((gradu[1] * gradv[0]) * W)
+                result[2] += ((gradu[0] * gradv[1]) * W)
+                result[3] += ((gradu[1] * gradv[1]) * W)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1433,8 +1433,8 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
 
 cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, :, ::1] W
     cdef double[:, :, :, :, ::1] JacInv
+    cdef double[:, :, ::1] W
 
     def __init__(self, kvs, geo):
         assert geo.dim == 3, "Geometry has wrong dimension"
@@ -1448,8 +1448,8 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)
         geo_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
-        self.W = geo_weights
         self.JacInv = geo_jacinv
+        self.W = geo_weights
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1494,15 +1494,15 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
                     gradu[0] = (((JacInv[0] * gu[0]) + (JacInv[3] * gu[1])) + (JacInv[6] * gu[2]))
                     gradu[1] = (((JacInv[1] * gu[0]) + (JacInv[4] * gu[1])) + (JacInv[7] * gu[2]))
                     gradu[2] = (((JacInv[2] * gu[0]) + (JacInv[5] * gu[1])) + (JacInv[8] * gu[2]))
-                    result[0] += ((W * gradu[0]) * gradv[0])
-                    result[1] += ((W * gradu[1]) * gradv[0])
-                    result[2] += ((W * gradu[2]) * gradv[0])
-                    result[3] += ((W * gradu[0]) * gradv[1])
-                    result[4] += ((W * gradu[1]) * gradv[1])
-                    result[5] += ((W * gradu[2]) * gradv[1])
-                    result[6] += ((W * gradu[0]) * gradv[2])
-                    result[7] += ((W * gradu[1]) * gradv[2])
-                    result[8] += ((W * gradu[2]) * gradv[2])
+                    result[0] += ((gradu[0] * gradv[0]) * W)
+                    result[1] += ((gradu[1] * gradv[0]) * W)
+                    result[2] += ((gradu[2] * gradv[0]) * W)
+                    result[3] += ((gradu[0] * gradv[1]) * W)
+                    result[4] += ((gradu[1] * gradv[1]) * W)
+                    result[5] += ((gradu[2] * gradv[1]) * W)
+                    result[6] += ((gradu[0] * gradv[2]) * W)
+                    result[7] += ((gradu[1] * gradv[2]) * W)
+                    result[8] += ((gradu[2] * gradv[2]) * W)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)

@@ -138,8 +138,10 @@ class VForm:
 
     def add(self, expr):
         if self.vec:
+            if expr.is_matrix():
+                expr = expr.ravel()
             if not expr.shape == (self.vec,):
-                raise TypeError('vector assembler requires vector expression of proper length')
+                raise TypeError('vector assembler requires vector or matrix expression of proper length')
         else:
             if not expr.is_scalar():
                 raise TypeError('require scalar expression')
@@ -1084,6 +1086,8 @@ class MatrixExpr(Expr):
         return TransposedMatrixExpr(self)
     def dot(self, x):
         return dot(self, x)
+    def ravel(self):
+        return as_vector(self[i,j] for i in range(self.shape[0]) for j in range(self.shape[1]))
 
 def named_expr(var, shape=(), symmetric=False):
     if shape is ():
@@ -1229,6 +1233,8 @@ def OperExpr(oper, x, y):
         return OperExpr(oper, BroadcastToVectorExpr(x, y.shape), y)
     elif x.is_scalar() and y.is_matrix():
         return OperExpr(oper, BroadcastToMatrixExpr(x, y.shape), y)
+    elif x.is_matrix() and y.is_scalar():
+        return OperExpr(oper, x, BroadcastToMatrixExpr(y, x.shape))
     else:
         raise TypeError('operation not implemented for shapes: {} {} {}'.format(oper, x.shape, y.shape))
 
@@ -1502,6 +1508,12 @@ def tr(A):
 def cross(x, y):
     return VectorCrossExpr(x, y)
 
+def outer(x, y):
+    if not (x.is_vector() and y.is_vector()):
+        raise TypeError('outer() requires two vectors')
+    A = [[x[i] * y[j] for j in range(len(y))] for i in range(len(x))]
+    return as_matrix(A)
+
 
 ################################################################################
 # concrete assembler generators
@@ -1549,9 +1561,7 @@ def wave_st_vf(dim):
 
 def divdiv_vf(dim):
     V = VForm(dim, vec=dim**2)
-    V.add(as_vector(V.gradu[j] * V.gradv[i] * dx
-            for i in range(dim)
-            for j in range(dim)))
+    V.add(outer(V.gradv, V.gradu) * dx)
     return V
 
 

@@ -1066,116 +1066,42 @@ class Expr:
         return reduce(operator.or_, (x.depends() for x in self.children), set())
 
     def is_named_expr(self):
-        return any(isinstance(self, T)
-                for T in (NamedScalarExpr, NamedVectorExpr, NamedMatrixExpr))
+        return False
 
     def dx(self, k, times=1):
         return Dx(self, k, times)
-
     def dt(self, times=1):
         return Dt(self, times)
-
-class VectorExpr(Expr):
-    def dot(self, x):
-        assert x.is_vector(), 'only dot(vec, vec) implemented'
-        return inner(self, x)
-
-class MatrixExpr(Expr):
-    @property
-    def T(self):
-        return TransposedMatrixExpr(self)
     def dot(self, x):
         return dot(self, x)
+    @property
+    def T(self):
+        if not self.is_matrix():
+            raise TypeError('can only transpose matrices')
+        return TransposedMatrixExpr(self)
     def ravel(self):
-        return as_vector(self[i,j] for i in range(self.shape[0]) for j in range(self.shape[1]))
+        if not self.is_matrix():
+            raise TypeError('can only ravel matrices')
+        return LiteralVectorExpr(self[i,j] for i in range(self.shape[0])
+                                           for j in range(self.shape[1]))
 
-def named_expr(var, shape=(), symmetric=False):
-    if shape is ():
-        return NamedScalarExpr(var)
-    elif len(shape) == 1:
-        return NamedVectorExpr(var, shape)
-    elif len(shape) == 2:
-        return NamedMatrixExpr(var, shape, symmetric=symmetric)
-    else:
-        assert False, 'invalid shape'
+    def __getitem__(self, I):
+        """Default __getitem__() implementations. Child classes need only implement at()."""
+        if self.is_scalar():
+            raise TypeError('cannot index scalar expression')
+        elif self.is_vector():
+            return self._default_vector_getitem(I)
+        else:  # matrix
+            return self._default_matrix_getitem(I)
 
-class NamedScalarExpr(Expr):
-    def __init__(self, var):
-        self.var = var
-        self.shape = ()
-        self.children = ()
-
-    def gencode(self):
-        return self.var.name
-    def depends(self):
-        return set((self.var.name,))
-
-class NamedVectorExpr(VectorExpr):
-    def __init__(self, var, shape=()):
-        self.var = var
-        assert len(shape) == 1
-        self.shape = shape
-        self.children = ()
-    def depends(self):
-        return set((self.var.name,))
-
-    def __getitem__(self, i):
-        if isinstance(i, slice) or isinstance(i, range):
-            return SliceExpr(self, i)
+    def _default_vector_getitem(self, i):
+        i = _to_indices(i, self.shape[0])
+        if np.isscalar(i):
+            return self.at(i)
         else:
-            return IndexExpr(self, i)
+            return LiteralVectorExpr(self.at(ii) for ii in i)
 
-class NamedMatrixExpr(MatrixExpr):
-    """Matrix expression which is represented by a matrix reference and shape."""
-    def __init__(self, var, shape, symmetric=False):
-        self.var = var
-        self.shape = tuple(shape)
-        assert len(self.shape) == 2
-        self.symmetric = symmetric
-        self.children = ()
-    def depends(self):
-        return set((self.var.name,))
-
-    def to_seq(self, i, j):
-        if self.symmetric and i > j:
-            i, j = j, i
-        return i * self.shape[0] + j
-
-    def __getitem__(self, ij):
-        i = _to_indices(ij[0], self.shape[0])
-        j = _to_indices(ij[1], self.shape[1])
-        if np.isscalar(i) and np.isscalar(j):
-            return MatrixEntryExpr(self, i, j)
-        else:
-            return LiteralMatrixExpr([
-                    [self[ii,jj] for jj in j]
-                    for ii in i])
-
-class LiteralVectorExpr(VectorExpr):
-    """Vector expression which is represented by a list of individual expressions."""
-    def __init__(self, entries):
-        entries = tuple(entries)
-        self.shape = (len(entries),)
-        self.children = entries
-        if not all(isinstance(e, Expr) and e.is_scalar() for e in self.children):
-            raise ValueError('all vector entries should be scalar expressions')
-
-    def __getitem__(self, i):
-        return self.children[i]
-
-class LiteralMatrixExpr(MatrixExpr):
-    """Matrix expression which is represented by a 2D array of individual expressions."""
-    def __init__(self, entries):
-        entries = np.array(entries, dtype=object)
-        self.shape = entries.shape
-        self.children = tuple(entries.flat)
-        if not all(isinstance(e, Expr) and e.is_scalar() for e in self.children):
-            raise ValueError('all matrix entries should be scalar expressions')
-
-    def at(self, i, j):
-        return self.children[i * self.shape[1] + j]
-
-    def __getitem__(self, ij):
+    def _default_matrix_getitem(self, ij):
         i = _to_indices(ij[0], self.shape[0])
         j = _to_indices(ij[1], self.shape[1])
         sca_i, sca_j = np.isscalar(i), np.isscalar(j)
@@ -1189,52 +1115,120 @@ class LiteralMatrixExpr(MatrixExpr):
             return LiteralMatrixExpr([[self.at(ii, jj) for jj in j]
                                                        for ii in i])
 
+def named_expr(var, shape=(), symmetric=False):
+    if shape is ():
+        return NamedScalarExpr(var)
+    elif len(shape) == 1:
+        return NamedVectorExpr(var, shape)
+    elif len(shape) == 2:
+        return NamedMatrixExpr(var, shape, symmetric=symmetric)
+    else:
+        assert False, 'invalid shape'
+
+class NamedExpr(Expr):
+    """Abstract base class for exprs which refer to named variables."""
+    def is_named_expr(self):
+        return True
+    def depends(self):
+        return set((self.var.name,))
+
+class NamedScalarExpr(NamedExpr):
+    def __init__(self, var):
+        self.var = var
+        self.shape = ()
+        self.children = ()
+
+    def gencode(self):
+        return self.var.name
+
+class NamedVectorExpr(NamedExpr):
+    def __init__(self, var, shape=()):
+        self.var = var
+        assert len(shape) == 1
+        self.shape = shape
+        self.children = ()
+
+    def at(self, i):
+        return IndexExpr(self, i)
+
+class NamedMatrixExpr(NamedExpr):
+    """Matrix expression which is represented by a matrix reference and shape."""
+    def __init__(self, var, shape, symmetric=False):
+        self.var = var
+        self.shape = tuple(shape)
+        assert len(self.shape) == 2
+        self.symmetric = symmetric
+        self.children = ()
+
+    def at(self, i, j):
+        return MatrixEntryExpr(self, i, j)
+
+class LiteralVectorExpr(Expr):
+    """Vector expression which is represented by a list of individual expressions."""
+    def __init__(self, entries):
+        entries = tuple(entries)
+        self.shape = (len(entries),)
+        self.children = entries
+        if not all(isinstance(e, Expr) and e.is_scalar() for e in self.children):
+            raise ValueError('all vector entries should be scalar expressions')
+
+    def at(self, i):
+        return self.children[i]
+
+class LiteralMatrixExpr(Expr):
+    """Matrix expression which is represented by a 2D array of individual expressions."""
+    def __init__(self, entries):
+        entries = np.array(entries, dtype=object)
+        self.shape = entries.shape
+        self.children = tuple(entries.flat)
+        if not all(isinstance(e, Expr) and e.is_scalar() for e in self.children):
+            raise ValueError('all matrix entries should be scalar expressions')
+
+    def at(self, i, j):
+        return self.children[i * self.shape[1] + j]
+
 class MatrixEntryExpr(Expr):
     def __init__(self, mat, i, j):
         self.shape = ()
         self.i = i
         self.j = j
         self.children = (mat,)
+
+    def to_seq(self, i, j):
+        if self.x.symmetric and i > j:
+            i, j = j, i
+        return i * self.x.shape[0] + j
+
     def gencode(self):
         return '{name}[{k}]'.format(name=self.x.var.name,
-                k=self.x.to_seq(self.i, self.j))
+                k=self.to_seq(self.i, self.j))
 
-class TransposedMatrixExpr(MatrixExpr):
+class TransposedMatrixExpr(Expr):
     def __init__(self, mat):
-        assert mat.is_matrix(), 'can only transpose matrices'
+        if not mat.is_matrix(): raise TypeError('can only transpose matrices')
         self.shape = (mat.shape[1], mat.shape[0])
         self.children = (mat,)
     def __getitem__(self, ij):
         result = self.x[ij[1], ij[0]]
         return result.T if result.is_matrix() else result
 
-class BroadcastToVectorExpr(VectorExpr):
+class BroadcastExpr(Expr):
+    """Simple broadcasting from scalars to arbitrary shapes."""
     def __init__(self, expr, shape):
         self.shape = shape
         self.children = (expr,)
-    def __getitem__(self, i):
-        return self.x
-
-class BroadcastToMatrixExpr(MatrixExpr):
-    def __init__(self, expr, shape):
-        self.shape = shape
-        self.children = (expr,)
-    def __getitem__(self, ij):
+    def at(self, *I):
         return self.x
 
 def OperExpr(oper, x, y):
     if x.is_scalar() and y.is_scalar():
         return ScalarOperExpr(oper, x, y)
-    elif x.is_vector() and y.is_vector():
-        return VectorOperExpr(oper, x, y)
-    elif x.is_matrix() and y.is_matrix():
-        return MatrixOperExpr(oper, x, y)
-    elif x.is_scalar() and y.is_vector():
-        return OperExpr(oper, BroadcastToVectorExpr(x, y.shape), y)
-    elif x.is_scalar() and y.is_matrix():
-        return OperExpr(oper, BroadcastToMatrixExpr(x, y.shape), y)
-    elif x.is_matrix() and y.is_scalar():
-        return OperExpr(oper, x, BroadcastToMatrixExpr(y, x.shape))
+    elif len(x.shape) == len(y.shape):      # vec.vec or mat.mat
+        return TensorOperExpr(oper, x, y)
+    elif x.is_scalar() and not y.is_scalar():
+        return OperExpr(oper, BroadcastExpr(x, y.shape), y)
+    elif not x.is_scalar() and y.is_scalar():
+        return OperExpr(oper, x, BroadcastExpr(y, x.shape))
     else:
         raise TypeError('operation not implemented for shapes: {} {} {}'.format(oper, x.shape, y.shape))
 
@@ -1257,40 +1251,28 @@ _oper_to_func = {
         '/': operator.truediv,
 }
 
-class VectorOperExpr(VectorExpr):
+class TensorOperExpr(Expr):
     def __init__(self, oper, x, y):
-        assert x.is_vector() and y.is_vector(), 'expected vectors'
         assert x.shape == y.shape, 'incompatible shapes'
         self.shape = x.shape
         self.oper = oper
         self.children = (x,y)
 
-    def __getitem__(self, i):
+    def at(self, *I):
         func = _oper_to_func[self.oper]
-        return reduce(func, (z[i] for z in self.children))
+        return reduce(func, (z[I] for z in self.children))
 
-class VectorCrossExpr(VectorExpr):
+class VectorCrossExpr(Expr):
     def __init__(self, x, y):
         assert x.shape == y.shape == (3,), 'cross() requires 3D vectors'
         self.shape = x.shape
         self.children = (x,y)
 
-    def __getitem__(self, i):
+    def at(self, i):
         if   i == 0:  return self.x[1]*self.y[2] - self.x[2]*self.y[1]
         elif i == 1:  return self.x[2]*self.y[0] - self.x[0]*self.y[2]
         elif i == 2:  return self.x[0]*self.y[1] - self.x[1]*self.y[0]
-
-class MatrixOperExpr(MatrixExpr):
-    def __init__(self, oper, x, y):
-        assert x.is_matrix() and y.is_matrix(), 'expected matrices'
-        assert x.shape == y.shape, 'incompatible shapes'
-        self.shape = x.shape
-        self.oper = oper
-        self.children = (x,y)
-
-    def __getitem__(self, ij):
-        func = _oper_to_func[self.oper]
-        return reduce(func, (z[ij] for z in self.children))
+        else:         raise IndexError('invalid index %s, should be 0, 1, or 2' % i)
 
 class IndexExpr(Expr):
     def __init__(self, x, i):
@@ -1299,7 +1281,7 @@ class IndexExpr(Expr):
         assert x.is_vector(), 'indexed expression is not a vector'
         i = int(i)
         if i < 0: i += x.shape[0]
-        assert 0 <= i < x.shape[0], 'index out of range'
+        if not 0 <= i < x.shape[0]: raise IndexError('index out of range')
         self.i = i
         self.children = (x,)
 
@@ -1350,49 +1332,25 @@ def _to_indices(x, n):
         return tuple(x)
 
 
-class SliceExpr(VectorExpr):
-    def __init__(self, x, sl):
-        assert x.is_vector(), 'expression is not a vector'
-        if isinstance(sl, slice):
-            self.indices = _indices_from_slice(sl, x.shape[0])
-        else:   # range?
-            self.indices = tuple(sl)
-        for i in self.indices:
-            assert 0 <= i < x.shape[0], 'slice index out of range'
-        self.shape = (len(self.indices),)
-        self.children = (x,)
-
-    def __getitem__(self, i):
-        assert not isinstance(i, slice), 'slicing of slices not implemented'
-        return self.x[self.indices[i]]
-
-class MatVecExpr(VectorExpr):
+class MatVecExpr(Expr):
     def __init__(self, A, x):
         assert A.is_matrix() and x.is_vector()
         assert A.shape[1] == x.shape[0], 'incompatible shapes'
         self.shape = (A.shape[0],)
         self.children = (A, x)
 
-    def __getitem__(self, i):
-        if i < 0: i += self.shape[0]
-        assert 0 <= i < self.shape[0]
+    def at(self, i):
         return reduce(operator.add,
             (self.x[i, j] * self.y[j] for j in range(self.y.shape[0])))
 
-class MatMatExpr(MatrixExpr):
+class MatMatExpr(Expr):
     def __init__(self, A, B):
         assert A.is_matrix() and B.is_matrix()
         assert A.shape[1] == B.shape[0], 'incompatible shapes'
         self.shape = (A.shape[0], B.shape[1])
         self.children = (A, B)
 
-    def __getitem__(self, ij):
-        assert len(ij) == 2
-        i, j = ij
-        if i < 0: i += self.shape[0]
-        assert 0 <= i < self.shape[0]
-        if j < 0: j += self.shape[1]
-        assert 0 <= j < self.shape[1]
+    def at(self, i, j):
         return reduce(operator.add,
             (self.x[i, k] * self.y[k, j] for k in range(self.x.shape[1])))
 

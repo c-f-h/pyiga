@@ -218,7 +218,10 @@ class VForm:
             self.declare_sourced_var('JacInv', shape=(self.dim,self.dim), src='geo_jacinv')
         return self.vars['JacInv'].as_expr
 
+    # expression analyis and transformations
+
     def dependency_graph(self):
+        """Compute a directed graph of the dependencies between all used variables."""
         G = networkx.DiGraph()
         for var in self.vars.values():
             G.add_node(var.name)
@@ -228,7 +231,7 @@ class VForm:
 
         # compute transitive dependencies of all used expressions
         expr_deps = set()
-        for expr in self.root_exprs():
+        for expr in self.exprs:
             for dep in expr.depends():
                 expr_deps.add(dep)
                 expr_deps |= networkx.ancestors(G, dep)
@@ -237,9 +240,7 @@ class VForm:
         return G.subgraph(sorted(expr_deps))
 
     def as_vars(self, vars):
-        def to_var(v):
-            return v if isinstance(v, AsmVar) else self.vars[v]
-        return [to_var(v) for v in vars]
+        return [v if isinstance(v, AsmVar) else self.vars[v] for v in vars]
 
     def transitive_deps(self, vars):
         """Return all vars on which the given vars depend directly or indirectly."""
@@ -269,9 +270,6 @@ class VForm:
         precomp_vars = {var for var in nodes if self.vars[var].expr}
         return self.linearize_vars(precomp_vars)
 
-    def root_exprs(self):
-        return self.exprs
-
     def dependency_analysis(self):
         self.dep_graph = self.dependency_graph()
         self.linear_deps = networkx.topological_sort(self.dep_graph)
@@ -286,7 +284,7 @@ class VForm:
 
         # compute linearized list of vars the kernel depends on
         kernel_deps = reduce(operator.or_,
-                (set(expr.depends()) for expr in self.root_exprs()), set())
+                (set(expr.depends()) for expr in self.exprs), set())
         kernel_deps = self.as_vars(kernel_deps - {'@u', '@v'})
         kernel_deps = self.transitive_deps(kernel_deps) + kernel_deps
         self.kernel_deps = self.linearize_vars(kernel_deps)
@@ -301,16 +299,19 @@ class VForm:
 
         If `type` is given, only exprs which are instances of that type are yielded.
         """
-        for expr in self.root_exprs():
+        for expr in self.exprs:
             yield from iterexpr(expr, deep=True, type=type)
 
     def transform(self, fun, type=None):
+        """Apply `fun` to all exprs (or all exprs of the given `type`). If `fun` returns
+        an expr, replace the old expr by this new one.
+        """
         def applyfun(e):
             e2 = None
             if type is None or isinstance(e, type):
                 e2 = fun(e)
             return e2 if e2 is not None else e
-        self.exprs = mapexpr(self.root_exprs(), applyfun, deep=True)
+        self.exprs = mapexpr(self.exprs, applyfun, deep=True)
 
     def replace_physical_derivs(self, e):
         if not e.physical:
@@ -341,8 +342,11 @@ class VForm:
 
     def finalize(self):
         """Performs standard transforms and dependency analysis."""
+        # replace "dx" by quadrature weight function
         self.transform(lambda e: self.W, type=VolumeMeasureExpr)
+        # replace physical derivs by proper expressions in terms of parametric derivs
         self.transform(self.replace_physical_derivs, type=PartialDerivExpr)
+        # perform dependency analysis for expressions and variables
         self.dependency_analysis()
 
     def find_max_deriv(self):

@@ -123,18 +123,14 @@ class VForm:
     def register_matrix_field(self, name, shape=None, symmetric=False, src=''):
         if shape is None: shape = (self.dim, self.dim)
         assert len(shape) == 2
-        self.vars[name] = AsmVar(name, src=src, shape=shape, local=False, symmetric=symmetric)
-        return NamedMatrixExpr(name, shape=shape, symmetric=symmetric)
+        var = AsmVar(name, src=src, shape=shape, local=False, symmetric=symmetric)
+        self.vars[name] = var
+        return NamedMatrixExpr(var)
 
     def declare_sourced_var(self, name, shape, src, symmetric=False):
         var = AsmVar(name, src=src, shape=shape, local=True, symmetric=symmetric)
         self.vars[name] = var
-        if shape is ():
-            return NamedScalarExpr(var)
-        elif len(shape) == 1:
-            return NamedVectorExpr(var, shape)
-        elif len(shape) == 2:
-            return NamedMatrixExpr(var, shape, symmetric=symmetric)
+        return named_expr(var)
 
     def add(self, expr):
         if self.vec:
@@ -170,7 +166,7 @@ class VForm:
     def let(self, varname, expr, symmetric=False):
         var = AsmVar(varname, expr, shape=None, local=True, symmetric=symmetric)
         self.vars[varname] = var
-        return named_expr(var, shape=expr.shape, symmetric=symmetric)
+        return named_expr(var)
 
     # automatically produce caching getters for predefined on-demand local variables
     def __getattr__(self, name):
@@ -1115,13 +1111,14 @@ class Expr:
             return LiteralMatrixExpr([[self.at(ii, jj) for jj in j]
                                                        for ii in i])
 
-def named_expr(var, shape=(), symmetric=False):
+def named_expr(var):
+    shape = var.shape
     if shape is ():
         return NamedScalarExpr(var)
     elif len(shape) == 1:
-        return NamedVectorExpr(var, shape)
+        return NamedVectorExpr(var)
     elif len(shape) == 2:
-        return NamedMatrixExpr(var, shape, symmetric=symmetric)
+        return NamedMatrixExpr(var)
     else:
         assert False, 'invalid shape'
 
@@ -1142,10 +1139,10 @@ class NamedScalarExpr(NamedExpr):
         return self.var.name
 
 class NamedVectorExpr(NamedExpr):
-    def __init__(self, var, shape=()):
+    def __init__(self, var):
         self.var = var
-        assert len(shape) == 1
-        self.shape = shape
+        self.shape = var.shape
+        assert len(self.shape) == 1
         self.children = ()
 
     def at(self, i):
@@ -1153,11 +1150,11 @@ class NamedVectorExpr(NamedExpr):
 
 class NamedMatrixExpr(NamedExpr):
     """Matrix expression which is represented by a matrix reference and shape."""
-    def __init__(self, var, shape, symmetric=False):
+    def __init__(self, var):
         self.var = var
-        self.shape = tuple(shape)
+        self.shape = tuple(var.shape)
         assert len(self.shape) == 2
-        self.symmetric = symmetric
+        self.symmetric = var.symmetric
         self.children = ()
 
     def at(self, i, j):

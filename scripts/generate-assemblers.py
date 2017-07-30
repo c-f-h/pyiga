@@ -98,23 +98,23 @@ class VForm:
         self.init_weights = False       # geo_weights = Gauss weights * abs(geo_det)
         # predefined local variables with their generators (created on demand)
         self.predefined_vars = {
-            'u':     lambda self: self.basisval(self.basis_funs[0]),
-            'v':     lambda self: self.basisval(self.basis_funs[1]),
-            'U':     lambda self: self.basisval(self.basis_funs[0], physical=True),
-            'V':     lambda self: self.basisval(self.basis_funs[1], physical=True),
-            'gu':    lambda self: grad(self.u),
-            'gv':    lambda self: grad(self.v),
-            'gradu': lambda self: dot(self.JacInv.T[self.spacedims, self.spacedims], self.gu),
-            'gradv': lambda self: dot(self.JacInv.T[self.spacedims, self.spacedims], self.gv),
+            'u':     lambda self: self.basisval(self.basis_funs[0], physical=True),
+            'v':     lambda self: self.basisval(self.basis_funs[1], physical=True),
+            'U':     lambda self: self.basisval(self.basis_funs[0]),
+            'V':     lambda self: self.basisval(self.basis_funs[1]),
+            'gu':    lambda self: grad(self.U), # parameter gradient
+            'gv':    lambda self: grad(self.V), # parameter gradient
+            'gradu': lambda self: grad(self.u), # physical gradient
+            'gradv': lambda self: grad(self.v), # physical gradient
         }
         self.cached_vars = {}
         self.cached_pderivs = {}
 
     def basisfuns(self, parametric=False):
         if parametric:
-            return self.u, self.v
-        else:
             return self.U, self.V
+        else:
+            return self.u, self.v
 
     def indices_to_D(self, indices):
         """Convert a list of derivative indices into a partial derivative tuple D."""
@@ -321,7 +321,7 @@ class VForm:
     def replace_physical_derivs(self, e):
         if not e.physical:
             return
-        if sum(e.D) == 0:
+        if sum(e.D) == 0:       # no derivatives?
             return e.make_parametric()
 
         if self.spacetime:
@@ -1533,7 +1533,7 @@ def outer(x, y):
 
 def mass_vf(dim):
     V = VForm(dim)
-    u, v = V.basisfuns(parametric=True)
+    u, v = V.basisfuns()
     V.add(u * v * dx)
     return V
 
@@ -1547,21 +1547,21 @@ def stiffness_vf(dim):
 ### slower:
 #def stiffness_vf(dim):
 #    V = VForm(dim)
-#    u, v = V.basisfuns(parametric=False)
+#    u, v = V.basisfuns()
 #    V.add(inner(grad(u), grad(v)) * dx)
 #    return V
 
 
 def heat_st_vf(dim):
     V = VForm(dim, spacetime=True)
-    u, v = V.basisfuns(parametric=False)
+    u, v = V.basisfuns()
     V.add((inner(grad(u),grad(v)) + u.dt()*v) * dx)
     return V
 
 
 def wave_st_vf(dim):
     V = VForm(dim, spacetime=True)
-    u, v = V.basisfuns(parametric=False)
+    u, v = V.basisfuns()
 
     utt_vt = u.dt(2) * v.dt()
     gradu_dtgradv = inner(grad(u), grad(v).dt())

@@ -1332,6 +1332,16 @@ class VectorCrossExpr(Expr):
         elif i == 2:  return self.x[0]*self.y[1] - self.x[1]*self.y[0]
         else:         raise IndexError('invalid index %s, should be 0, 1, or 2' % i)
 
+class OuterProdExpr(Expr):
+    def __init__(self, x, y):
+        if not (x.is_vector() and y.is_vector()):
+            raise TypeError('outer() requires two vectors')
+        self.shape = (len(x), len(y))
+        self.children = (x,y)
+
+    def at(self, i, j):
+        return self.x[i] * self.y[j]
+
 class PartialDerivExpr(Expr):
     """A scalar expression which refers to the value of a basis function or one
     of its partial derivatives."""
@@ -1517,10 +1527,7 @@ def cross(x, y):
     return VectorCrossExpr(x, y)
 
 def outer(x, y):
-    if not (x.is_vector() and y.is_vector()):
-        raise TypeError('outer() requires two vectors')
-    A = [[x[i] * y[j] for j in range(len(y))] for i in range(len(x))]
-    return as_matrix(A)
+    return OuterProdExpr(x, y)
 
 
 ################################################################################

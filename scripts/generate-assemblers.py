@@ -57,6 +57,7 @@ class AsmVar:
             self.shape = shape
         self.local = local
         self.symmetric = (len(self.shape) == 2 and symmetric)
+        self.as_expr = named_expr(self)
 
     def is_scalar(self):
         return self.shape is ()
@@ -107,7 +108,6 @@ class VForm:
             'gradu': lambda self: grad(self.u), # physical gradient
             'gradv': lambda self: grad(self.v), # physical gradient
         }
-        self.cached_vars = {}
         self.cached_pderivs = {}
 
     def basisfuns(self, parametric=False):
@@ -152,12 +152,12 @@ class VForm:
         assert len(shape) == 2
         var = AsmVar(name, src=src, shape=shape, local=False, symmetric=symmetric)
         self.vars[name] = var
-        return NamedMatrixExpr(var)
+        return var.as_expr
 
     def declare_sourced_var(self, name, shape, src, symmetric=False):
         var = AsmVar(name, src=src, shape=shape, local=True, symmetric=symmetric)
         self.vars[name] = var
-        return named_expr(var)
+        return var.as_expr
 
     def add(self, expr):
         if self.vec:
@@ -189,14 +189,15 @@ class VForm:
     def let(self, varname, expr, symmetric=False):
         var = AsmVar(varname, expr, shape=None, local=True, symmetric=symmetric)
         self.vars[varname] = var
-        return named_expr(var)
+        return var.as_expr
 
     # automatically produce caching getters for predefined on-demand local variables
     def __getattr__(self, name):
-        if name in self.predefined_vars:
-            if not name in self.cached_vars:
-                self.cached_vars[name] = self.let(name, self.predefined_vars[name](self))
-            return self.cached_vars[name]
+        if name in self.vars:
+            return self.vars[name].as_expr
+        elif name in self.predefined_vars:
+            self.let(name, self.predefined_vars[name](self))
+            return self.vars[name].as_expr
         else:
             msg = "'{0}' object has no attribute '{1}'"
             raise AttributeError(msg.format(type(self).__name__, name))
@@ -205,17 +206,17 @@ class VForm:
 
     @property
     def W(self):
-        if not 'W' in self.cached_vars:
+        if not 'W' in self.vars:
             self.init_weights = True
-            self.cached_vars['W'] = self.declare_sourced_var('W', shape=(), src='geo_weights')
-        return self.cached_vars['W']
+            self.declare_sourced_var('W', shape=(), src='geo_weights')
+        return self.vars['W'].as_expr
 
     @property
     def JacInv(self):
-        if not 'JacInv' in self.cached_vars:
+        if not 'JacInv' in self.vars:
             self.init_jacinv = True
-            self.cached_vars['JacInv'] = self.declare_sourced_var('JacInv', shape=(self.dim,self.dim), src='geo_jacinv')
-        return self.cached_vars['JacInv']
+            self.declare_sourced_var('JacInv', shape=(self.dim,self.dim), src='geo_jacinv')
+        return self.vars['JacInv'].as_expr
 
     @property
     def JacInv_x(self):

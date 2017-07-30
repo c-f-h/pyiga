@@ -560,8 +560,8 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
 
 cdef class WaveAssembler_ST2D(BaseAssembler2D):
     cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, :, :, ::1] JacInv
     cdef double[:, ::1] W
+    cdef double[:, :, :, ::1] JacInv
 
     def __init__(self, kvs, geo):
         assert geo.dim == 2, "Geometry has wrong dimension"
@@ -575,8 +575,8 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)
         geo_weights = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
-        self.JacInv = geo_jacinv
         self.W = geo_weights
+        self.JacInv = geo_jacinv
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -589,10 +589,10 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
             double* VDv0, double* VDv1,
         ) nogil:
         cdef double result = 0.0
-        cdef double dtgv[1]
-        cdef double dtgradv[1]
-        cdef double gu[1]
-        cdef double gradu[1]
+        cdef double _dv_01
+        cdef double _dv_11
+        cdef double _du_02
+        cdef double _du_10
 
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
@@ -606,11 +606,11 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
                 W = _W[i0, i1]
                 JacInv = &_JacInv[i0, i1, 0, 0]
 
-                dtgv[0] = (VDv0[3*i0+1] * VDv1[3*i1+1])
-                dtgradv[0] = (JacInv[0] * dtgv[0])
-                gu[0] = (VDu0[3*i0+0] * VDu1[3*i1+1])
-                gradu[0] = (JacInv[0] * gu[0])
-                result += (W * (((VDu0[3*i0+2] * VDu1[3*i1+0]) * (VDv0[3*i0+1] * VDv1[3*i1+0])) + (gradu[0] * dtgradv[0])))
+                _dv_01 = (VDv0[3*i0+1] * VDv1[3*i1+0])
+                _dv_11 = (VDv0[3*i0+1] * VDv1[3*i1+1])
+                _du_02 = (VDu0[3*i0+2] * VDu1[3*i1+0])
+                _du_10 = (VDu0[3*i0+0] * VDu1[3*i1+1])
+                result += (((_du_02 * _dv_01) + ((JacInv[0] * _du_10) * (JacInv[0] * _dv_11))) * W)
         return result
 
     @cython.boundscheck(False)
@@ -1338,8 +1338,8 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
 
 cdef class WaveAssembler_ST3D(BaseAssembler3D):
     cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, :, :, :, ::1] JacInv
     cdef double[:, :, ::1] W
+    cdef double[:, :, :, :, ::1] JacInv
 
     def __init__(self, kvs, geo):
         assert geo.dim == 3, "Geometry has wrong dimension"
@@ -1353,8 +1353,8 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det, geo_jacinv = det_and_inv(geo_jac)
         geo_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
-        self.JacInv = geo_jacinv
         self.W = geo_weights
+        self.JacInv = geo_jacinv
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1367,10 +1367,12 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
             double* VDv0, double* VDv1, double* VDv2,
         ) nogil:
         cdef double result = 0.0
-        cdef double dtgv[2]
-        cdef double dtgradv[2]
-        cdef double gu[2]
-        cdef double gradu[2]
+        cdef double _dv_001
+        cdef double _dv_101
+        cdef double _dv_011
+        cdef double _du_002
+        cdef double _du_100
+        cdef double _du_010
 
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
@@ -1387,15 +1389,13 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
                     W = _W[i0, i1, i2]
                     JacInv = &_JacInv[i0, i1, i2, 0, 0]
 
-                    dtgv[0] = (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+1])
-                    dtgv[1] = (VDv0[3*i0+1] * VDv1[3*i1+1] * VDv2[3*i2+0])
-                    dtgradv[0] = ((JacInv[0] * dtgv[0]) + (JacInv[3] * dtgv[1]))
-                    dtgradv[1] = ((JacInv[1] * dtgv[0]) + (JacInv[4] * dtgv[1]))
-                    gu[0] = (VDu0[3*i0+0] * VDu1[3*i1+0] * VDu2[3*i2+1])
-                    gu[1] = (VDu0[3*i0+0] * VDu1[3*i1+1] * VDu2[3*i2+0])
-                    gradu[0] = ((JacInv[0] * gu[0]) + (JacInv[3] * gu[1]))
-                    gradu[1] = ((JacInv[1] * gu[0]) + (JacInv[4] * gu[1]))
-                    result += (W * (((VDu0[3*i0+2] * VDu1[3*i1+0] * VDu2[3*i2+0]) * (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+0])) + ((gradu[0] * dtgradv[0]) + (gradu[1] * dtgradv[1]))))
+                    _dv_001 = (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+0])
+                    _dv_101 = (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+1])
+                    _dv_011 = (VDv0[3*i0+1] * VDv1[3*i1+1] * VDv2[3*i2+0])
+                    _du_002 = (VDu0[3*i0+2] * VDu1[3*i1+0] * VDu2[3*i2+0])
+                    _du_100 = (VDu0[3*i0+0] * VDu1[3*i1+0] * VDu2[3*i2+1])
+                    _du_010 = (VDu0[3*i0+0] * VDu1[3*i1+1] * VDu2[3*i2+0])
+                    result += (((_du_002 * _dv_001) + ((((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) * ((JacInv[0] * _dv_101) + (JacInv[3] * _dv_011))) + (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) * ((JacInv[1] * _dv_101) + (JacInv[4] * _dv_011))))) * W)
         return result
 
     @cython.boundscheck(False)

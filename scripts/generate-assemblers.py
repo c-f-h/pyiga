@@ -123,19 +123,19 @@ class VForm:
             D[i] += 1
         return tuple(D)
 
-    def get_pderiv(self, bfun, indices):
-        indices = tuple(indices)
-        key = (bfun.name, indices)
+    def get_pderiv(self, bfun, indices=None, D=None):
+        if D is None:
+            D = self.indices_to_D(indices)
+        key = (bfun.name, D)
         if not key in self.cached_pderivs:
-            name = '_d%s_%s' % (bfun.name, ''.join(str(k) for k in indices))
-            pd = PartialDerivExpr(bfun, indices, physical=False)
+            name = '_d%s_%s' % (bfun.name, ''.join(str(k) for k in D))
+            pd = PartialDerivExpr(bfun, D, physical=False)
             self.cached_pderivs[key] = self.let(name, pd)
         return self.cached_pderivs[key]
 
     def get_pderivs(self, bfun, order):
         assert order == 1, 'only first derivatives implemented'
-        return as_vector(self.get_pderiv(bfun, self.indices_to_D((i,)))
-                for i in range(self.dim))
+        return as_vector(self.get_pderiv(bfun, (i,)) for i in range(self.dim))
 
     def field_vars(self):
         return (var for var in self.vars.values() if var.is_field())
@@ -329,12 +329,26 @@ class VForm:
             if self.spacetime:
                 # assume space-time cylinder -- time derivatives are parametric
                 if k == self.timedim:
-                    return self.get_pderiv(e.basisfun, e.D)
+                    return self.get_pderiv(e.basisfun, (k,))
                 else:
                     return inner(self.JacInv[self.spacedims, k], self.get_pderivs(e.basisfun, 1)[self.spacedims])
             else:
                 return inner(self.JacInv[:, k], self.get_pderivs(e.basisfun, 1))
         else:
+            if self.spacetime:
+                # the following assumes a space-time cylinder -- can keep time derivatives parametric,
+                # only need to transform space derivatives
+                assert self.timedim == self.dim - 1 # to make sure the next line is correct
+                D_x = e.D[:-1] + (0,)   # HACK: should be D[spacedims]; assume time is last
+                if sum(D_x) == 0:
+                    return self.get_pderiv(e.basisfun, D=e.D)   # time derivatives are parametric
+                elif sum(D_x) == 1:
+                    k = D_x.index(1)
+                    dts = e.D[-1] * (self.timedim,)
+                    spacegrad = as_vector(self.get_pderiv(e.basisfun, (i,) + dts)
+                                          for i in self.spacedims)
+                    return inner(self.JacInv[self.spacedims, k], spacegrad)
+
             assert False, 'higher order physical derivatives not implemented'
 
     def finalize(self):
@@ -1553,14 +1567,11 @@ def heat_st_vf(dim):
 
 def wave_st_vf(dim):
     V = VForm(dim, spacetime=True)
-    u, v = V.basisfuns(parametric=True)
+    u, v = V.basisfuns(parametric=False)
 
     utt_vt = u.dt(2) * v.dt()
-    dtgv = V.let('dtgv', grad(v).dt()) # time derivative of gradient (parametric coordinates)
-    dtgradv = V.let('dtgradv', dot(V.JacInv_x.T, dtgv))  # transform space gradient
-    gradu_dtgradv = inner(V.gradu, dtgradv)
-
-    V.add(V.W * (utt_vt + gradu_dtgradv))
+    gradu_dtgradv = inner(grad(u), grad(v).dt())
+    V.add((utt_vt + gradu_dtgradv) * dx)
     return V
 
 

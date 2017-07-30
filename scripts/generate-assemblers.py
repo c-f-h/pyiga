@@ -321,35 +321,29 @@ class VForm:
     def replace_physical_derivs(self, e):
         if not e.physical:
             return
-        order = sum(e.D)
-        if order == 0:
+        if sum(e.D) == 0:
             return e.make_parametric()
-        elif order == 1:
-            k = e.D.index(1)    # get index of derivative direction
-            if self.spacetime:
-                # assume space-time cylinder -- time derivatives are parametric
-                if k == self.timedim:
-                    return self.get_pderiv(e.basisfun, (k,))
-                else:
-                    return inner(self.JacInv[self.spacedims, k], self.get_pderivs(e.basisfun, 1)[self.spacedims])
-            else:
-                return inner(self.JacInv[:, k], self.get_pderivs(e.basisfun, 1))
-        else:
-            if self.spacetime:
-                # the following assumes a space-time cylinder -- can keep time derivatives parametric,
-                # only need to transform space derivatives
-                assert self.timedim == self.dim - 1 # to make sure the next line is correct
-                D_x = e.D[:-1] + (0,)   # HACK: should be D[spacedims]; assume time is last
-                if sum(D_x) == 0:
-                    return self.get_pderiv(e.basisfun, D=e.D)   # time derivatives are parametric
-                elif sum(D_x) == 1:
-                    k = D_x.index(1)
-                    dts = e.D[-1] * (self.timedim,)
-                    spacegrad = as_vector(self.get_pderiv(e.basisfun, (i,) + dts)
-                                          for i in self.spacedims)
-                    return inner(self.JacInv[self.spacedims, k], spacegrad)
 
-            assert False, 'higher order physical derivatives not implemented'
+        if self.spacetime:
+            # the following assumes a space-time cylinder -- can keep time derivatives parametric,
+            # only need to transform space derivatives
+            assert self.timedim == self.dim - 1 # to make sure the next line is correct
+            D_x = e.D[:-1] + (0,)   # HACK: should be D[spacedims]; assume time is last
+            if sum(D_x) == 0:
+                return self.get_pderiv(e.basisfun, D=e.D)   # time derivatives are parametric
+            elif sum(D_x) == 1:
+                k = D_x.index(1)
+                dts = e.D[-1] * (self.timedim,)
+                spacegrad = as_vector(self.get_pderiv(e.basisfun, (i,) + dts)
+                                      for i in self.spacedims)
+                return inner(self.JacInv[self.spacedims, k], spacegrad)
+        else:
+            order = sum(e.D)
+            if order == 1:
+                k = e.D.index(1)    # get index of derivative direction
+                return inner(self.JacInv[:, k], self.get_pderivs(e.basisfun, 1))
+
+        assert False, 'higher order physical derivatives not implemented'
 
     def finalize(self):
         """Performs standard transforms and dependency analysis."""

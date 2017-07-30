@@ -1195,7 +1195,7 @@ class NamedVectorExpr(NamedExpr):
         self.children = ()
 
     def at(self, i):
-        return IndexExpr(self, i)
+        return VectorEntryExpr(self, i)
 
 class NamedMatrixExpr(NamedExpr):
     """Matrix expression which is represented by a matrix reference and shape."""
@@ -1233,8 +1233,20 @@ class LiteralMatrixExpr(Expr):
     def at(self, i, j):
         return self.children[i * self.shape[1] + j]
 
+class VectorEntryExpr(Expr):
+    def __init__(self, x, i):
+        assert isinstance(x, NamedVectorExpr)   # can only index named vectors
+        self.shape = ()
+        assert x.is_vector(), 'indexed expression is not a vector'
+        self.i = int(i)
+        self.children = (x,)
+
+    def gencode(self):
+        return '{x}[{i}]'.format(x=self.x.var.name, i=self.i)
+
 class MatrixEntryExpr(Expr):
     def __init__(self, mat, i, j):
+        assert isinstance(mat, NamedMatrixExpr)
         self.shape = ()
         self.i = i
         self.j = j
@@ -1319,20 +1331,6 @@ class VectorCrossExpr(Expr):
         elif i == 1:  return self.x[2]*self.y[0] - self.x[0]*self.y[2]
         elif i == 2:  return self.x[0]*self.y[1] - self.x[1]*self.y[0]
         else:         raise IndexError('invalid index %s, should be 0, 1, or 2' % i)
-
-class IndexExpr(Expr):
-    def __init__(self, x, i):
-        assert isinstance(x, NamedVectorExpr)   # can only index named vectors
-        self.shape = ()
-        assert x.is_vector(), 'indexed expression is not a vector'
-        i = int(i)
-        if i < 0: i += x.shape[0]
-        if not 0 <= i < x.shape[0]: raise IndexError('index out of range')
-        self.i = i
-        self.children = (x,)
-
-    def gencode(self):
-        return '{x}[{i}]'.format(x=self.x.var.name, i=self.i)
 
 class PartialDerivExpr(Expr):
     """A scalar expression which refers to the value of a basis function or one

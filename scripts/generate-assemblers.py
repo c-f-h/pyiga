@@ -218,13 +218,6 @@ class VForm:
             self.declare_sourced_var('JacInv', shape=(self.dim,self.dim), src='geo_jacinv')
         return self.vars['JacInv'].as_expr
 
-    @property
-    def JacInv_x(self):
-        "Inverse Jacobian only for the space dimensions. Assumes space-time cylinder."""
-        if not self.spacetime:
-            raise TypeError('JacInv_x only defined for spacetime assemblers')
-        return self.JacInv[self.spacedims, self.spacedims]
-
     def dependency_graph(self):
         G = networkx.DiGraph()
         for var in self.vars.values():

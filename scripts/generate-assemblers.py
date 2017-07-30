@@ -100,15 +100,42 @@ class VForm:
         self.predefined_vars = {
             'u':     lambda self: self.basisval(self.basis_funs[0]),
             'v':     lambda self: self.basisval(self.basis_funs[1]),
+            'U':     lambda self: self.basisval(self.basis_funs[0], physical=True),
+            'V':     lambda self: self.basisval(self.basis_funs[1], physical=True),
             'gu':    lambda self: grad(self.u),
             'gv':    lambda self: grad(self.v),
             'gradu': lambda self: dot(self.JacInv.T[self.spacedims, self.spacedims], self.gu),
             'gradv': lambda self: dot(self.JacInv.T[self.spacedims, self.spacedims], self.gv),
         }
         self.cached_vars = {}
+        self.cached_pderivs = {}
 
-    def basisfuns(self):
-        return self.u, self.v
+    def basisfuns(self, parametric=False):
+        if parametric:
+            return self.u, self.v
+        else:
+            return self.U, self.V
+
+    def indices_to_D(self, indices):
+        """Convert a list of derivative indices into a partial derivative tuple D."""
+        D = self.dim * [0]
+        for i in indices:
+            D[i] += 1
+        return tuple(D)
+
+    def get_pderiv(self, bfun, indices):
+        indices = tuple(indices)
+        key = (bfun.name, indices)
+        if not key in self.cached_pderivs:
+            name = '_d%s_%s' % (bfun.name, ''.join(str(k) for k in indices))
+            pd = PartialDerivExpr(bfun, indices, physical=False)
+            self.cached_pderivs[key] = self.let(name, pd)
+        return self.cached_pderivs[key]
+
+    def get_pderivs(self, bfun, order):
+        assert order == 1, 'only first derivatives implemented'
+        return as_vector(self.get_pderiv(bfun, self.indices_to_D((i,)))
+                for i in range(self.dim))
 
     def field_vars(self):
         return (var for var in self.vars.values() if var.is_field())
@@ -143,12 +170,8 @@ class VForm:
                 raise TypeError('require scalar expression')
         self.exprs.append(expr)
 
-    def partial_deriv(self, basisfun, D):
-        """Parametric partial derivative of `basisfun` of order `D=(Dx1, ..., Dxd)`"""
-        return PartialDerivExpr(basisfun, D)
-
-    def basisval(self, basisfun):
-        return self.partial_deriv(basisfun, self.dim * (0,))
+    def basisval(self, basisfun, physical=False):
+        return PartialDerivExpr(basisfun, self.dim * (0,), physical=physical)
 
     def gradient(self, basisfun, dims=None, additional_derivs=None):
         if dims is None:
@@ -160,7 +183,7 @@ class VForm:
         for k in dims:
             D = list(additional_derivs)
             D[k] += 1
-            entries.append(self.partial_deriv(basisfun, D))
+            entries.append(PartialDerivExpr(basisfun, D))
         return LiteralVectorExpr(entries)
 
     def let(self, varname, expr, symmetric=False):
@@ -295,9 +318,29 @@ class VForm:
             return e2 if e2 is not None else e
         self.exprs = mapexpr(self.root_exprs(), applyfun, deep=True)
 
+    def replace_physical_derivs(self, e):
+        if not e.physical:
+            return
+        order = sum(e.D)
+        if order == 0:
+            return e.make_parametric()
+        elif order == 1:
+            k = e.D.index(1)    # get index of derivative direction
+            if self.spacetime:
+                # assume space-time cylinder -- time derivatives are parametric
+                if k == self.timedim:
+                    return self.get_pderiv(e.basisfun, e.D)
+                else:
+                    return inner(self.JacInv[self.spacedims, k], self.get_pderivs(e.basisfun, 1)[self.spacedims])
+            else:
+                return inner(self.JacInv[:, k], self.get_pderivs(e.basisfun, 1))
+        else:
+            assert False, 'higher order physical derivatives not implemented'
+
     def finalize(self):
         """Performs standard transforms and dependency analysis."""
         self.transform(lambda e: self.W, type=VolumeMeasureExpr)
+        self.transform(self.replace_physical_derivs, type=PartialDerivExpr)
         self.dependency_analysis()
 
     def find_max_deriv(self):
@@ -1288,21 +1331,27 @@ class IndexExpr(Expr):
 class PartialDerivExpr(Expr):
     """A scalar expression which refers to the value of a basis function or one
     of its partial derivatives."""
-    def __init__(self, basisfun, D):
+    def __init__(self, basisfun, D, physical=False):
         self.shape = ()
         self.basisfun = basisfun
         self.D = tuple(D)
         self.children = ()
+        self.physical = bool(physical)
 
     def gencode(self):
+        assert not self.physical, 'cannot generate code for physical derivative'
         return self.basisfun.asmgen.gen_pderiv(self.basisfun, self.D)
     def depends(self):
         return set(('@' + self.basisfun.name,))
 
+    def make_parametric(self):
+        if not self.physical: raise ValueError('derivative is already parametric')
+        return PartialDerivExpr(self.basisfun, self.D, physical=False)
+
     def dx(self, k, times=1):
         Dnew = list(self.D)
         Dnew[k] += times
-        return PartialDerivExpr(self.basisfun, Dnew)
+        return PartialDerivExpr(self.basisfun, Dnew, physical=self.physical)
 
 
 def _indices_from_slice(sl, n):
@@ -1476,7 +1525,7 @@ def outer(x, y):
 
 def mass_vf(dim):
     V = VForm(dim)
-    u, v = V.basisfuns()
+    u, v = V.basisfuns(parametric=True)
     V.add(u * v * dx)
     return V
 
@@ -1487,26 +1536,27 @@ def stiffness_vf(dim):
     V.add(B.dot(V.gu).dot(V.gv))
     return V
 
-## slower:
+### slower:
 #def stiffness_vf(dim):
 #    V = VForm(dim)
-#    V.add(V.W * inner(V.gradu, V.gradv))
+#    u, v = V.basisfuns(parametric=False)
+#    V.add(inner(grad(u), grad(v)) * dx)
 #    return V
 
 
 def heat_st_vf(dim):
     V = VForm(dim, spacetime=True)
-    ut_v = V.u.dt() * V.v
-    gradgrad = inner(V.gradu, V.gradv)
-    V.add(V.W * (gradgrad + ut_v))
+    u, v = V.basisfuns(parametric=False)
+    V.add((inner(grad(u),grad(v)) + u.dt()*v) * dx)
     return V
 
 
 def wave_st_vf(dim):
     V = VForm(dim, spacetime=True)
+    u, v = V.basisfuns(parametric=True)
 
-    utt_vt = V.u.dt(2) * V.v.dt()
-    dtgv = V.let('dtgv', grad(V.v).dt()) # time derivative of gradient (parametric coordinates)
+    utt_vt = u.dt(2) * v.dt()
+    dtgv = V.let('dtgv', grad(v).dt()) # time derivative of gradient (parametric coordinates)
     dtgradv = V.let('dtgradv', dot(V.JacInv_x.T, dtgv))  # transform space gradient
     gradu_dtgradv = inner(V.gradu, dtgradv)
 

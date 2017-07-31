@@ -57,7 +57,7 @@ class AsmVar:
             self.shape = shape
         self.local = local
         self.symmetric = (len(self.shape) == 2 and symmetric)
-        self.as_expr = named_expr(self)
+        self.as_expr = make_var_expr(self)
 
     def is_scalar(self):
         return self.shape is ()
@@ -1110,7 +1110,7 @@ class Expr:
     def depends(self):
         return reduce(operator.or_, (x.depends() for x in self.children), set())
 
-    def is_named_expr(self):
+    def is_var_expr(self):
         return False
 
     def dx(self, k, times=1):
@@ -1160,25 +1160,26 @@ class Expr:
             return LiteralMatrixExpr([[self.at(ii, jj) for jj in j]
                                                        for ii in i])
 
-def named_expr(var):
+def make_var_expr(var):
+    """Create an expression of the proper shape which refers to the variable `var`."""
     shape = var.shape
     if shape is ():
-        return NamedScalarExpr(var)
+        return ScalarVarExpr(var)
     elif len(shape) == 1:
-        return NamedVectorExpr(var)
+        return VectorVarExpr(var)
     elif len(shape) == 2:
-        return NamedMatrixExpr(var)
+        return MatrixVarExpr(var)
     else:
         assert False, 'invalid shape'
 
-class NamedExpr(Expr):
+class VarExpr(Expr):
     """Abstract base class for exprs which refer to named variables."""
-    def is_named_expr(self):
+    def is_var_expr(self):
         return True
     def depends(self):
         return set((self.var.name,))
 
-class NamedScalarExpr(NamedExpr):
+class ScalarVarExpr(VarExpr):
     def __init__(self, var):
         self.var = var
         self.shape = ()
@@ -1187,7 +1188,7 @@ class NamedScalarExpr(NamedExpr):
     def gencode(self):
         return self.var.name
 
-class NamedVectorExpr(NamedExpr):
+class VectorVarExpr(VarExpr):
     def __init__(self, var):
         self.var = var
         self.shape = var.shape
@@ -1197,7 +1198,7 @@ class NamedVectorExpr(NamedExpr):
     def at(self, i):
         return VectorEntryExpr(self, i)
 
-class NamedMatrixExpr(NamedExpr):
+class MatrixVarExpr(VarExpr):
     """Matrix expression which is represented by a matrix reference and shape."""
     def __init__(self, var):
         self.var = var
@@ -1235,7 +1236,7 @@ class LiteralMatrixExpr(Expr):
 
 class VectorEntryExpr(Expr):
     def __init__(self, x, i):
-        assert isinstance(x, NamedVectorExpr)   # can only index named vectors
+        assert isinstance(x, VectorVarExpr)   # can only index named vectors
         self.shape = ()
         assert x.is_vector(), 'indexed expression is not a vector'
         self.i = int(i)
@@ -1246,7 +1247,7 @@ class VectorEntryExpr(Expr):
 
 class MatrixEntryExpr(Expr):
     def __init__(self, mat, i, j):
-        assert isinstance(mat, NamedMatrixExpr)
+        assert isinstance(mat, MatrixVarExpr)
         self.shape = ()
         self.i = i
         self.j = j
@@ -1424,13 +1425,13 @@ class VolumeMeasureExpr(Expr):
 def iterexpr(expr, deep=False, type=None):
     """Iterate through all subexpressions of `expr` in depth-first order.
 
-    If `deep=True`, follow named variable references.
+    If `deep=True`, follow variable references.
     If `type` is given, only exprs which are instances of that type are yielded.
     """
     for c in expr.children:
         yield from iterexpr(c, deep=deep, type=type)
     if (deep
-            and expr.is_named_expr()
+            and expr.is_var_expr()
             and expr.var.expr is not None):
         yield from iterexpr(expr.var.expr, deep=deep, type=type)
     else:
@@ -1441,7 +1442,7 @@ def mapexpr(exprs, fun, deep=False):
     result = []
     for e in exprs:
         if (deep
-                and e.is_named_expr()
+                and e.is_var_expr()
                 and e.var.expr is not None):
             var = e.var
             var.expr.children = mapexpr(var.expr.children, fun, deep=deep)
@@ -1458,7 +1459,7 @@ def mapexpr(exprs, fun, deep=False):
 dx = VolumeMeasureExpr()
 
 def Dx(expr, k, times=1):
-    if expr.is_named_expr():
+    if expr.is_var_expr():
         expr = expr.var.expr    # access underlying expression - mild hack
     if expr.is_vector():
         return LiteralVectorExpr(Dx(z, k, times) for z in expr)
@@ -1470,7 +1471,7 @@ def Dx(expr, k, times=1):
         return expr.dx(k, times)
 
 def Dt(expr, times=1):
-    if expr.is_named_expr():
+    if expr.is_var_expr():
         expr = expr.var.expr    # access underlying expression - mild hack
     if expr.is_vector():
         return LiteralVectorExpr(Dt(z, times) for z in expr)
@@ -1484,7 +1485,7 @@ def Dt(expr, times=1):
         return expr.dx(expr.basisfun.vform.timedim, times)
 
 def grad(expr, dims=None):
-    if expr.is_named_expr():
+    if expr.is_var_expr():
         expr = expr.var.expr    # access underlying expression - mild hack
     if not isinstance(expr, PartialDerivExpr):
         raise TypeError('can only compute gradient of basis function')
@@ -1540,7 +1541,7 @@ def tree_print(expr, indent=''):
     elif isinstance(expr, MatrixEntryExpr):
         s = '%s[%i,%i]' % (expr.x.var.name, expr.i, expr.j)
         stop = True
-    elif expr.is_named_expr():
+    elif expr.is_var_expr():
         s = expr.var.name
     elif isinstance(expr, VolumeMeasureExpr):
         s = 'dx'

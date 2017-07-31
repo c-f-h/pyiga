@@ -1434,9 +1434,8 @@ def iterexpr(expr, deep=False, type=None):
             and expr.is_var_expr()
             and expr.var.expr is not None):
         yield from iterexpr(expr.var.expr, deep=deep, type=type)
-    else:
-        if type is None or isinstance(expr, type):
-            yield expr
+    if type is None or isinstance(expr, type):
+        yield expr
 
 def mapexpr(exprs, fun, deep=False):
     result = []

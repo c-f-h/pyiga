@@ -1530,6 +1530,33 @@ def outer(x, y):
     return OuterProdExpr(x, y)
 
 
+def tree_print(expr, indent=''):
+    stop = False
+    if hasattr(expr, 'oper'):
+        s = '(%s)' % expr.oper
+    elif isinstance(expr, VectorEntryExpr):
+        s = '%s[%i]' % (expr.x.var.name, expr.i)
+        stop = True
+    elif isinstance(expr, MatrixEntryExpr):
+        s = '%s[%i,%i]' % (expr.x.var.name, expr.i, expr.j)
+        stop = True
+    elif expr.is_named_expr():
+        s = expr.var.name
+    elif isinstance(expr, VolumeMeasureExpr):
+        s = 'dx'
+    elif isinstance(expr, PartialDerivExpr):
+        s = '%s_%s (%s)' % (
+                expr.basisfun.name,
+                ''.join(str(k) for k in expr.D),
+                'phys' if expr.physical else 'para')
+    else:
+        s = type(expr).__name__
+
+    print(indent + s)
+    if not stop:
+        for c in expr.children:
+            tree_print(c, indent + '  ')
+
 ################################################################################
 # concrete assembler generators
 ################################################################################

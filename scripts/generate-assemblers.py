@@ -1,6 +1,6 @@
 import os.path
 from jinja2 import Template
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from functools import reduce
 import operator
 import numpy as np
@@ -340,6 +340,44 @@ class VForm:
 
         assert False, 'higher order physical derivatives not implemented'
 
+    def compute_recursive(self, func):
+        values = {}
+        for e in self.all_exprs():
+            child_values = tuple(values[c] for c in e.children)
+            values[e] = func(e, child_values)
+        return values
+
+    def extract_common_expressions(self):
+        tmpidx = [0]
+        def tmpname():
+            tmpidx[0] += 1
+            return '_tmp%i' % tmpidx[0]
+
+        while True:
+            # compute expression hashes and complexity
+            hashes = self.compute_recursive(lambda e, child_hashes: e.hash(child_hashes))
+            complexity = self.compute_recursive(lambda e, cc: e.base_complexity + sum(cc))
+
+            # put exprs into bins according to their hashes
+            hash_to_exprs = defaultdict(list)
+            for e, h in hashes.items():
+                hash_to_exprs[h].append(e)
+
+            # find all nontrivial exprs which are used more than once
+            cse = [es[0] for es in hash_to_exprs.values()
+                    if len(es) > 1 and complexity[es[0]] > 0]
+            if not cse:
+                break
+
+            # find the most complex among all common subexprs
+            biggest_cse = max(cse, key=complexity.get)
+            h = hashes[biggest_cse]
+
+            # extract it into a new variable
+            var = self.let(tmpname(), biggest_cse)
+            self.transform(lambda e: var if hashes[e] == h else None)
+        return tmpidx[0] > 0    # did we do anything?
+
     def finalize(self):
         """Performs standard transforms and dependency analysis."""
         # replace "dx" by quadrature weight function
@@ -348,6 +386,9 @@ class VForm:
         self.transform(self.replace_physical_derivs, type=PartialDerivExpr)
         # perform dependency analysis for expressions and variables
         self.dependency_analysis()
+        # find common subexpressions and extract them into named variables
+        if self.extract_common_expressions():
+            self.dependency_analysis()  # repeat analysis if needed
 
     def find_max_deriv(self):
         return max(max(e.D) for e in self.all_exprs(type=PartialDerivExpr))
@@ -1160,6 +1201,14 @@ class Expr:
             return LiteralMatrixExpr([[self.at(ii, jj) for jj in j]
                                                        for ii in i])
 
+    def hash_key(self):
+        return ()
+
+    def hash(self, child_hashes):
+        return hash((type(self), self.shape) + self.hash_key() + child_hashes)
+
+    base_complexity = 1
+
 def make_var_expr(var):
     """Create an expression of the proper shape which refers to the variable `var`."""
     shape = var.shape
@@ -1176,8 +1225,13 @@ class VarExpr(Expr):
     """Abstract base class for exprs which refer to named variables."""
     def is_var_expr(self):
         return True
+    def __str__(self):
+        return self.var.name
     def depends(self):
         return set((self.var.name,))
+    def hash_key(self):
+        return (self.var.name,)
+    base_complexity = 0
 
 class ScalarVarExpr(VarExpr):
     def __init__(self, var):
@@ -1242,6 +1296,14 @@ class VectorEntryExpr(Expr):
         self.i = int(i)
         self.children = (x,)
 
+    base_complexity = 0
+
+    def __str__(self):
+        return '%s[%i]' % (self.x.var.name, self.i)
+
+    def hash_key(self):
+        return (self.i,)
+
     def gencode(self):
         return '{x}[{i}]'.format(x=self.x.var.name, i=self.i)
 
@@ -1253,10 +1315,18 @@ class MatrixEntryExpr(Expr):
         self.j = j
         self.children = (mat,)
 
+    base_complexity = 0
+
+    def __str__(self):
+        return '%s[%i,%i]' % (self.x.var.name, self.i, self.j)
+
     def to_seq(self, i, j):
         if self.x.symmetric and i > j:
             i, j = j, i
         return i * self.x.shape[0] + j
+
+    def hash_key(self):
+        return (self.i, self.j)
 
     def gencode(self):
         return '{name}[{k}]'.format(name=self.x.var.name,
@@ -1299,6 +1369,12 @@ class ScalarOperExpr(Expr):
         self.oper = oper
         self.children = (x,y)
 
+    def __str__(self):
+        return '%s(%s)' % (self.oper, ', '.join(str(c) for c in self.children))
+
+    def hash_key(self):
+        return (self.oper,)
+
     def gencode(self):
         sep = ' ' + self.oper + ' '
         return '(' + sep.join(x.gencode() for x in self.children) + ')'
@@ -1317,9 +1393,15 @@ class TensorOperExpr(Expr):
         self.oper = oper
         self.children = (x,y)
 
+    def __str__(self):
+        return '%s(%s)' % (self.oper, ', '.join(str(c) for c in self.children))
+
     def at(self, *I):
         func = _oper_to_func[self.oper]
         return reduce(func, (z[I] for z in self.children))
+
+    def hash_key(self):
+        return (self.oper,)
 
 class VectorCrossExpr(Expr):
     def __init__(self, x, y):
@@ -1352,6 +1434,15 @@ class PartialDerivExpr(Expr):
         self.D = tuple(D)
         self.children = ()
         self.physical = bool(physical)
+
+    def __str__(self):
+        return '%s_%s (%s)' % (
+                self.basisfun.name,
+                ''.join(str(k) for k in self.D),
+                'phys' if self.physical else 'para')
+
+    def hash_key(self):
+        return (self.basisfun, self.D, self.physical)
 
     def gencode(self):
         assert not self.physical, 'cannot generate code for physical derivative'
@@ -1419,6 +1510,8 @@ class VolumeMeasureExpr(Expr):
     def __init__(self):
         self.shape = ()
         self.children = ()
+    def __str__(self):
+        return 'dx'
 
 # expression utility functions #################################################
 
@@ -1534,21 +1627,11 @@ def tree_print(expr, indent=''):
     stop = False
     if hasattr(expr, 'oper'):
         s = '(%s)' % expr.oper
-    elif isinstance(expr, VectorEntryExpr):
-        s = '%s[%i]' % (expr.x.var.name, expr.i)
+    elif isinstance(expr, VectorEntryExpr) or isinstance(expr, MatrixEntryExpr):
+        s = str(expr)
         stop = True
-    elif isinstance(expr, MatrixEntryExpr):
-        s = '%s[%i,%i]' % (expr.x.var.name, expr.i, expr.j)
-        stop = True
-    elif expr.is_var_expr():
-        s = expr.var.name
-    elif isinstance(expr, VolumeMeasureExpr):
-        s = 'dx'
-    elif isinstance(expr, PartialDerivExpr):
-        s = '%s_%s (%s)' % (
-                expr.basisfun.name,
-                ''.join(str(k) for k in expr.D),
-                'phys' if expr.physical else 'para')
+    elif expr.is_var_expr() or isinstance(expr, VolumeMeasureExpr) or isinstance(expr, PartialDerivExpr):
+        s = str(expr)
     else:
         s = type(expr).__name__
 
@@ -1601,7 +1684,8 @@ def wave_st_vf(dim):
 
 def divdiv_vf(dim):
     V = VForm(dim, vec=dim**2)
-    V.add(outer(V.gradv, V.gradu) * dx)
+    u, v = V.basisfuns()
+    V.add(outer(grad(v), grad(u)) * dx)
     return V
 
 

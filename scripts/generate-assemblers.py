@@ -1538,6 +1538,10 @@ def iterexprs(exprs, deep=False, type=None):
         yield from recurse(e)
 
 def mapexprs(exprs, fun, deep=False):
+    """Replace each expr `e` in a list of expr trees by `fun(e)`, depth first.
+
+    If `deep=True`, follow variable references.
+    """
     seen = set()    # remember the nodes whose children we've transformed already
 
     def recurse_children(e):

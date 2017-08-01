@@ -299,8 +299,7 @@ class VForm:
 
         If `type` is given, only exprs which are instances of that type are yielded.
         """
-        for expr in self.exprs:
-            yield from iterexpr(expr, deep=True, type=type)
+        return iterexprs(self.exprs, deep=True, type=type)
 
     def transform(self, fun, type=None):
         """Apply `fun` to all exprs (or all exprs of the given `type`). If `fun` returns
@@ -311,7 +310,7 @@ class VForm:
             if type is None or isinstance(e, type):
                 e2 = fun(e)
             return e2 if e2 is not None else e
-        self.exprs = mapexpr(self.exprs, applyfun, deep=True)
+        self.exprs = mapexprs(self.exprs, applyfun, deep=True)
 
     def replace_physical_derivs(self, e):
         if not e.physical:
@@ -1515,35 +1514,51 @@ class VolumeMeasureExpr(Expr):
 
 # expression utility functions #################################################
 
-def iterexpr(expr, deep=False, type=None):
-    """Iterate through all subexpressions of `expr` in depth-first order.
+def iterexprs(exprs, deep=False, type=None):
+    """Iterate through all subexpressions of the list of expressions `exprs` in depth-first order.
 
     If `deep=True`, follow variable references.
     If `type` is given, only exprs which are instances of that type are yielded.
     """
-    for c in expr.children:
-        yield from iterexpr(c, deep=deep, type=type)
-    if (deep
-            and expr.is_var_expr()
-            and expr.var.expr is not None):
-        yield from iterexpr(expr.var.expr, deep=deep, type=type)
-    if type is None or isinstance(expr, type):
-        yield expr
-
-def mapexpr(exprs, fun, deep=False):
-    result = []
-    for e in exprs:
-        if (deep
-                and e.is_var_expr()
-                and e.var.expr is not None):
-            var = e.var
-            var.expr.children = mapexpr(var.expr.children, fun, deep=deep)
-            var.expr = fun(var.expr)
-            result.append(e)
+    seen = set()    # remember which nodes we've visited already
+    def recurse(e):
+        if e in seen:
+            return
         else:
-            e.children = mapexpr(e.children, fun, deep=deep)
-            result.append(fun(e))
-    return tuple(result)
+            seen.add(e)
+
+        for c in e.children:
+            yield from recurse(c)
+        if (deep and e.is_var_expr()
+                 and e.var.expr is not None):
+            yield from recurse(e.var.expr)
+        if type is None or isinstance(e, type):
+            yield e
+    for e in exprs:
+        yield from recurse(e)
+
+def mapexprs(exprs, fun, deep=False):
+    seen = set()    # remember the nodes whose children we've transformed already
+
+    def recurse_children(e):
+        if e not in seen:
+            e.children = recurse(e.children)
+            seen.add(e)
+
+    def recurse(es):
+        result = []
+        for e in es:
+            if (deep and e.is_var_expr()
+                     and e.var.expr is not None):
+                var = e.var
+                recurse_children(var.expr)
+                var.expr = fun(var.expr)
+                result.append(e)
+            else:
+                recurse_children(e)
+                result.append(fun(e))
+        return tuple(result)
+    return recurse(exprs)
 
 # expression manipulation functions ############################################
 # notation is as close to UFL as possible

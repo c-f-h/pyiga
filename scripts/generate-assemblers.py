@@ -1623,7 +1623,7 @@ def outer(x, y):
     return OuterProdExpr(x, y)
 
 
-def tree_print(expr, indent=''):
+def tree_print(expr, data=None, indent=''):
     stop = False
     if hasattr(expr, 'oper'):
         s = '(%s)' % expr.oper
@@ -1635,10 +1635,13 @@ def tree_print(expr, indent=''):
     else:
         s = type(expr).__name__
 
-    print(indent + s)
+    if data is None:
+        print(indent + s)
+    else:
+        print(indent + s + ' (%s)' % data[expr])
     if not stop:
         for c in expr.children:
-            tree_print(c, indent + '  ')
+            tree_print(c, data, indent + '  ')
 
 ################################################################################
 # concrete assembler generators

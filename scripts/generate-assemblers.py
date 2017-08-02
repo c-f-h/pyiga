@@ -382,11 +382,10 @@ class VForm:
         self.transform(lambda e: self.W, type=VolumeMeasureExpr)
         # replace physical derivs by proper expressions in terms of parametric derivs
         self.transform(self.replace_physical_derivs, type=PartialDerivExpr)
+        # find common subexpressions and extract them into named variables
+        self.extract_common_expressions()
         # perform dependency analysis for expressions and variables
         self.dependency_analysis()
-        # find common subexpressions and extract them into named variables
-        if self.extract_common_expressions():
-            self.dependency_analysis()  # repeat analysis if needed
 
     def find_max_deriv(self):
         return max(max(e.D) for e in self.all_exprs(type=PartialDerivExpr))

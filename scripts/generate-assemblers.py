@@ -268,7 +268,7 @@ class VForm:
 
         # compute linearized list of vars the kernel depends on
         kernel_deps = reduce(operator.or_,
-                (set(expr.depends()) for expr in self.exprs), set())
+                (expr.depends() for expr in self.exprs), set())
         kernel_deps |= self.transitive_deps(dep_graph, kernel_deps)
         self.kernel_deps = self.linearize_vars(kernel_deps - {'@u', '@v'})
 

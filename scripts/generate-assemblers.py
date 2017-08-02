@@ -105,8 +105,6 @@ class VForm:
             'V':     lambda self: self.basisval(self.basis_funs[1]),
             'gu':    lambda self: grad(self.U), # parameter gradient
             'gv':    lambda self: grad(self.V), # parameter gradient
-            'gradu': lambda self: grad(self.u), # physical gradient
-            'gradv': lambda self: grad(self.v), # physical gradient
         }
 
     def basisfuns(self, parametric=False):

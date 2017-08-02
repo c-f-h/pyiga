@@ -223,21 +223,14 @@ class VForm:
     def dependency_graph(self):
         """Compute a directed graph of the dependencies between all used variables."""
         G = networkx.DiGraph()
-        for var in self.vars.values():
+
+        for e in self.all_exprs(type=VarExpr):
+            var = e.var
             G.add_node(var.name)
             if var.expr:
                 for dep in var.expr.depends():
                     G.add_edge(dep, var.name)
-
-        # compute transitive dependencies of all used expressions
-        expr_deps = set()
-        for expr in self.exprs:
-            for dep in expr.depends():
-                expr_deps.add(dep)
-                expr_deps |= networkx.ancestors(G, dep)
-
-        # keep only those vars which are actually used (sorted for code stability)
-        return G.subgraph(sorted(expr_deps))
+        return G
 
     def as_vars(self, vars):
         return [v if isinstance(v, AsmVar) else self.vars[v] for v in vars]

@@ -1118,6 +1118,9 @@ class Expr:
     def __div__(self, other):     return OperExpr('/', self, other)
     def __truediv__(self, other): return OperExpr('/', self, other)
 
+    def __pos__(self):  return self
+    def __neg__(self):  return NegExpr(self)
+
     def __bool__(self):  return True
     __nonzero__ = __bool__  # Python 2 compatibility
 
@@ -1339,8 +1342,26 @@ class BroadcastExpr(Expr):
     def at(self, *I):
         return self.x
 
+class NegExpr(Expr):
+    def __init__(self, expr):
+        if not expr.is_scalar(): raise TypeError('can only negate scalars')
+        self.shape = ()
+        self.children = (expr,)
+
+    def __str__(self):
+        return '-%s' % str(self.x)
+
+    def gencode(self):
+        return '-' + self.x.gencode()
+
+    base_complexity = 0 # don't bother extracting subexpressions which are simple negation
+
 def OperExpr(oper, x, y):
-    if x.is_scalar() and y.is_scalar():
+    if oper == '+' and isinstance(y, NegExpr):
+        return OperExpr('-', x, y.x)
+    elif oper == '-' and isinstance(y, NegExpr):
+        return OperExpr('+', x, y.x)
+    elif x.is_scalar() and y.is_scalar():
         return ScalarOperExpr(oper, x, y)
     elif len(x.shape) == len(y.shape):      # vec.vec or mat.mat
         return TensorOperExpr(oper, x, y)
@@ -1625,6 +1646,26 @@ def tr(A):
     if not A.is_matrix() or A.shape[0] != A.shape[1]:
         raise ValueError('can only compute trace of square matrices')
     return reduce(operator.add, (A[i,i] for i in range(A.shape[0])))
+
+def minor(A, i, j):
+    m, n = A.shape
+    B = [[A[ii,jj] for jj in range(n) if jj != j]
+            for ii in range(m) if ii != i]
+    return det(as_matrix(B))
+
+def det(A):
+    """Determinant of a matrix."""
+    if not A.is_matrix() or A.shape[0] != A.shape[1]:
+        raise ValueError('can only compute trace of square matrices')
+    n = A.shape[0]
+    if n == 1:
+        return A[0,0]
+    else:
+        def pm(k, a):
+            if k % 2: return -a
+            else:     return a
+        return reduce(operator.add,
+                (pm(j, A[0,j] * minor(A, 0, j)) for j in range(n)))
 
 def cross(x, y):
     return VectorCrossExpr(x, y)

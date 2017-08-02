@@ -223,6 +223,8 @@ class VForm:
     def dependency_graph(self):
         """Compute a directed graph of the dependencies between all used variables."""
         G = networkx.DiGraph()
+        # make sure virtual basis function nodes are always in the graph
+        G.add_nodes_from(('@u', '@v'))
 
         for e in self.all_exprs(type=VarExpr):
             var = e.var

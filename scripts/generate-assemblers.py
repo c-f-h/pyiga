@@ -135,24 +135,26 @@ class VForm:
     def field_vars(self):
         return (var for var in self.vars.values() if var.is_field())
 
+    def set_var(self, name, var):
+        if name in self.vars:
+            raise KeyError('variable %s already declared' % name)
+        self.vars[name] = var
+        return var
+
     def register_scalar_field(self, name, src=''):
-        self.vars[name] = AsmVar(name, src=src, shape=(), local=False)
+        self.set_var(name, AsmVar(name, src=src, shape=(), local=False))
 
     def register_vector_field(self, name, size=None, src=''):
         if size is None: size = self.dim
-        self.vars[name] = AsmVar(name, src=src, shape=(size,), local=False)
+        self.set_var(name, AsmVar(name, src=src, shape=(size,), local=False))
 
     def register_matrix_field(self, name, shape=None, symmetric=False, src=''):
         if shape is None: shape = (self.dim, self.dim)
         assert len(shape) == 2
-        var = AsmVar(name, src=src, shape=shape, local=False, symmetric=symmetric)
-        self.vars[name] = var
-        return var.as_expr
+        return self.set_var(name, AsmVar(name, src=src, shape=shape, local=False, symmetric=symmetric)).as_expr
 
     def declare_sourced_var(self, name, shape, src, symmetric=False):
-        var = AsmVar(name, src=src, shape=shape, local=True, symmetric=symmetric)
-        self.vars[name] = var
-        return var.as_expr
+        return self.set_var(name, AsmVar(name, src=src, shape=shape, local=True, symmetric=symmetric)).as_expr
 
     def add(self, expr):
         if self.vec:

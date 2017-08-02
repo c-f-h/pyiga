@@ -501,7 +501,7 @@ class AsmGenerator:
         elif var.is_matrix():
             self.putf('{name} = &_{name}[{I}, 0, 0]', name=var.name, I=I)
 
-    def start_loop_with_fields(self, fields_in, fields_out=[]):
+    def start_loop_with_fields(self, fields_in, fields_out=[], local_vars=[]):
         fields = fields_in + fields_out
 
         # get input size from an arbitrary field variable
@@ -510,7 +510,10 @@ class AsmGenerator:
                     'n%d' % k,
                     '_{var}.shape[{k}]'.format(k=k, var=fields[0].name)
             )
-        self.put('')
+
+        # temp storage for local variables
+        for var in local_vars:
+            self.declare_var(var)
 
         # temp storage for field variables
         for var in fields:
@@ -520,6 +523,8 @@ class AsmGenerator:
         for k in range(self.dim):
             self.declare_index('i%d' % k)
 
+        # start the for loop
+        self.put('')
         for k in range(self.dim):
             self.code.for_loop('i%d' % k, 'n%d' % k)
 
@@ -531,6 +536,10 @@ class AsmGenerator:
             # these have no values yet, only get a reference
             self.load_field_var(var, I, ref_only=True)
         self.put('')
+
+        # generate code for computing local variables
+        for var in local_vars:
+            self.gen_assign(var, var.expr)
 
     def generate_kernel(self):
         # function definition
@@ -558,21 +567,13 @@ class AsmGenerator:
         if not self.vec:    # for vector assemblers, result is passed as a pointer
             self.declare_scalar('result', '0.0')
 
-        # temp storage for local variables
-        for var in local_vars:
-            self.declare_var(var)
-
         self.declare_custom_variables()
 
         self.put('')
 
         ############################################################
         # main loop over all Gauss points
-        self.start_loop_with_fields(field_params)
-
-        # generate code for computing local variables
-        for var in local_vars:
-            self.gen_assign(var, var.expr)
+        self.start_loop_with_fields(field_params, local_vars=local_vars)
 
         # if needed, generate custom code for the bilinear form a(u,v)
         self.generate_biform_custom()
@@ -733,16 +734,8 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         self.dedent()
         self.put(') nogil:')
 
-        # temp storage for local variables
-        for var in vf.precomp_locals:
-            self.declare_var(var)
-
         # start main loop
-        self.start_loop_with_fields(vf.precomp_deps, vf.precomp)
-
-        # generate code for computing local variables
-        for var in vf.precomp_locals:
-            self.gen_assign(var, var.expr)
+        self.start_loop_with_fields(vf.precomp_deps, fields_out=vf.precomp, local_vars=vf.precomp_locals)
 
         # generate assignment statements
         I = self.dimrep('i{}')  # current grid index

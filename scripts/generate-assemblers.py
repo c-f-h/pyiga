@@ -234,9 +234,7 @@ class VForm:
 
     def transitive_deps(self, dep_graph, vars):
         """Return all vars on which the given vars depend directly or indirectly, in linearized order."""
-        return reduce(operator.or_,
-                (networkx.ancestors(dep_graph, var) for var in vars),
-                set())
+        return set().union(*(networkx.ancestors(dep_graph, var) for var in vars))
 
     def linearize_vars(self, vars):
         """Returns an admissible order for computing the given vars, i.e., which
@@ -267,8 +265,7 @@ class VForm:
             dep_graph.remove_edges_from(dep_graph.in_edges([var]))
 
         # compute linearized list of vars the kernel depends on
-        kernel_deps = reduce(operator.or_,
-                (expr.depends() for expr in self.exprs), set())
+        kernel_deps = set().union(*(expr.depends() for expr in self.exprs))
         kernel_deps |= self.transitive_deps(dep_graph, kernel_deps)
         self.kernel_deps = self.linearize_vars(kernel_deps - {'@u', '@v'})
 
@@ -1142,7 +1139,7 @@ class Expr:
     def is_vector(self):    return len(self.shape) == 1
     def is_matrix(self):    return len(self.shape) == 2
     def depends(self):
-        return reduce(operator.or_, (x.depends() for x in self.children), set())
+        return set().union(*(x.depends() for x in self.children))
 
     def is_var_expr(self):
         return False

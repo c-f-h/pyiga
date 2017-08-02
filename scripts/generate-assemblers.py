@@ -226,28 +226,22 @@ class VForm:
 
         for e in self.all_exprs(type=VarExpr):
             var = e.var
-            G.add_node(var.name)
+            G.add_node(var)
             if var.expr:
                 for dep in var.expr.depends():
-                    G.add_edge(dep, var.name)
+                    G.add_edge(dep, var)
         return G
-
-    def as_vars(self, vars):
-        return [v if isinstance(v, AsmVar) else self.vars[v] for v in vars]
 
     def transitive_deps(self, dep_graph, vars):
         """Return all vars on which the given vars depend directly or indirectly, in linearized order."""
-        vars = self.as_vars(vars)
-        deps = reduce(operator.or_,
-                (networkx.ancestors(dep_graph, var.name) for var in vars),
+        return reduce(operator.or_,
+                (networkx.ancestors(dep_graph, var) for var in vars),
                 set())
-        return self.linearize_vars(deps - {'@u', '@v'})
 
     def linearize_vars(self, vars):
         """Returns an admissible order for computing the given vars, i.e., which
         respects the dependency relation."""
-        names = [v.name for v in self.as_vars(vars)]
-        return [self.vars[vn] for vn in self.linear_deps if vn in names]
+        return [var for var in self.linear_deps if var in vars]
 
     def vars_without_dep_on(self, dep_graph, exclude):
         """Return a linearized list of all expr vars which do not depend on the given vars."""
@@ -257,7 +251,7 @@ class VForm:
             nodes.discard(var)
             nodes -= networkx.descendants(dep_graph, var)
         # whatever remains and has an expr is a pure field variable and can be precomputed
-        precomp_vars = {var for var in nodes if self.vars[var].expr}
+        precomp_vars = {var for var in nodes if var.expr}
         return self.linearize_vars(precomp_vars)
 
     def dependency_analysis(self):
@@ -266,18 +260,17 @@ class VForm:
 
         # determine precomputable vars (no dependency on basis functions)
         self.precomp = self.vars_without_dep_on(dep_graph, ('@u', '@v'))
-        self.precomp_deps = self.transitive_deps(dep_graph, self.precomp)
+        self.precomp_deps = self.linearize_vars(self.transitive_deps(dep_graph, self.precomp))
         for var in self.precomp:
             # remove all dependencies since it's now precomputed
             # this ensures kernel_deps will not depend on dependencies of precomputed vars
-            dep_graph.remove_edges_from(dep_graph.in_edges([var.name]))
+            dep_graph.remove_edges_from(dep_graph.in_edges([var]))
 
         # compute linearized list of vars the kernel depends on
         kernel_deps = reduce(operator.or_,
                 (set(expr.depends()) for expr in self.exprs), set())
-        kernel_deps = self.as_vars(kernel_deps - {'@u', '@v'})
-        kernel_deps = self.transitive_deps(dep_graph, kernel_deps) + kernel_deps
-        self.kernel_deps = self.linearize_vars(kernel_deps)
+        kernel_deps |= self.transitive_deps(dep_graph, kernel_deps)
+        self.kernel_deps = self.linearize_vars(kernel_deps - {'@u', '@v'})
 
         # promote precomputed/manually sourced dependencies to field variables
         for var in self.kernel_deps:
@@ -1216,7 +1209,7 @@ class VarExpr(Expr):
     def __str__(self):
         return self.var.name
     def depends(self):
-        return set((self.var.name,))
+        return set((self.var,))
     def hash_key(self):
         return (self.var.name,)
     base_complexity = 0

@@ -250,18 +250,18 @@ class VForm:
         for var in exclude:
             nodes.discard(var)
             nodes -= networkx.descendants(dep_graph, var)
-        # whatever remains and has an expr is a pure field variable and can be precomputed
-        precomp_vars = {var for var in nodes if var.expr}
-        return self.linearize_vars(precomp_vars)
+        return self.linearize_vars(nodes)
 
     def dependency_analysis(self):
         dep_graph = self.dependency_graph()
         self.linear_deps = networkx.topological_sort(dep_graph)
 
         # determine precomputable vars (no dependency on basis functions)
-        self.precomp = self.vars_without_dep_on(dep_graph, ('@u', '@v'))
-        self.precomp_deps = self.linearize_vars(self.transitive_deps(dep_graph, self.precomp))
-        for var in self.precomp:
+        precomputable = self.vars_without_dep_on(dep_graph, ('@u', '@v'))
+        self.precomp = [v for v in precomputable if v.expr]
+        self.precomp_deps = [v for v in precomputable if v.src]
+
+        for var in precomputable:
             # remove all dependencies since it's now precomputed
             # this ensures kernel_deps will not depend on dependencies of precomputed vars
             dep_graph.remove_edges_from(dep_graph.in_edges([var]))
@@ -276,6 +276,10 @@ class VForm:
         for var in self.kernel_deps:
             if var.src or var in self.precomp:
                 var.local = False
+
+        # separate precomp into locals (not used in kernel, only during precompute) and true dependencies
+        self.precomp_locals = [v for v in self.precomp if v.local]
+        self.precomp        = [v for v in self.precomp if not v.local]
 
     def all_exprs(self, type=None):
         """Deep, depth-first iteration of all expressions with dependencies.
@@ -733,8 +737,16 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         self.dedent()
         self.put(') nogil:')
 
+        # temp storage for local variables
+        for var in vf.precomp_locals:
+            self.declare_var(var)
+
         # start main loop
         self.start_loop_with_fields(vf.precomp_deps, vf.precomp)
+
+        # generate code for computing local variables
+        for var in vf.precomp_locals:
+            self.gen_assign(var, var.expr)
 
         # generate assignment statements
         for var in vf.precomp:

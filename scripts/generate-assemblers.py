@@ -236,14 +236,12 @@ class VForm:
         return [v if isinstance(v, AsmVar) else self.vars[v] for v in vars]
 
     def transitive_deps(self, dep_graph, vars):
-        """Return all vars on which the given vars depend directly or indirectly."""
+        """Return all vars on which the given vars depend directly or indirectly, in linearized order."""
         vars = self.as_vars(vars)
         deps = reduce(operator.or_,
                 (networkx.ancestors(dep_graph, var.name) for var in vars),
                 set())
-        deps -= {'@u', '@v'}    # remove virtual nodes
-        # return in sorted order to increase code stability
-        return [self.vars[name] for name in sorted(deps)]
+        return self.linearize_vars(deps - {'@u', '@v'})
 
     def linearize_vars(self, vars):
         """Returns an admissible order for computing the given vars, i.e., which

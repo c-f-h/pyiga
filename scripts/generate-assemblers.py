@@ -745,6 +745,7 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
             self.gen_assign(var, var.expr)
 
         # generate assignment statements
+        I = self.dimrep('i{}')  # current grid index
         for var in vf.precomp:
             self.gen_assign(var, var.expr)
             if var.is_scalar():

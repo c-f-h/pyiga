@@ -108,7 +108,6 @@ class VForm:
             'gradu': lambda self: grad(self.u), # physical gradient
             'gradv': lambda self: grad(self.v), # physical gradient
         }
-        self.cached_pderivs = {}
 
     def basisfuns(self, parametric=False):
         if parametric:
@@ -126,12 +125,10 @@ class VForm:
     def get_pderiv(self, bfun, indices=None, D=None):
         if D is None:
             D = self.indices_to_D(indices)
-        key = (bfun.name, D)
-        if not key in self.cached_pderivs:
-            name = '_d%s_%s' % (bfun.name, ''.join(str(k) for k in D))
-            pd = PartialDerivExpr(bfun, D, physical=False)
-            self.cached_pderivs[key] = self.let(name, pd)
-        return self.cached_pderivs[key]
+        name = '_d%s_%s' % (bfun.name, ''.join(str(k) for k in D))
+        if not name in self.vars:
+            self.let(name, PartialDerivExpr(bfun, D, physical=False))
+        return self.vars[name].as_expr
 
     def get_pderivs(self, bfun, order):
         assert order == 1, 'only first derivatives implemented'

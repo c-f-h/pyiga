@@ -505,10 +505,10 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
             double* VDv0, double* VDv1,
         ) nogil:
         cdef double result = 0.0
-        cdef double v
         cdef double _dv_10
-        cdef double _du_01
+        cdef double v
         cdef double _du_10
+        cdef double _du_01
 
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
@@ -522,10 +522,10 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
                 W = _W[i0, i1]
                 JacInv = &_JacInv[i0, i1, 0, 0]
 
-                v = (VDv0[2*i0+0] * VDv1[2*i1+0])
                 _dv_10 = (VDv0[2*i0+0] * VDv1[2*i1+1])
-                _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
+                v = (VDv0[2*i0+0] * VDv1[2*i1+0])
                 _du_10 = (VDu0[2*i0+0] * VDu1[2*i1+1])
+                _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
                 result += ((((JacInv[0] * _du_10) * (JacInv[0] * _dv_10)) + (_du_01 * v)) * W)
         return result
 
@@ -589,10 +589,10 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
             double* VDv0, double* VDv1,
         ) nogil:
         cdef double result = 0.0
-        cdef double _dv_11
         cdef double _dv_01
-        cdef double _du_10
+        cdef double _dv_11
         cdef double _du_02
+        cdef double _du_10
 
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
@@ -606,10 +606,10 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
                 W = _W[i0, i1]
                 JacInv = &_JacInv[i0, i1, 0, 0]
 
-                _dv_11 = (VDv0[3*i0+1] * VDv1[3*i1+1])
                 _dv_01 = (VDv0[3*i0+1] * VDv1[3*i1+0])
-                _du_10 = (VDu0[3*i0+0] * VDu1[3*i1+1])
+                _dv_11 = (VDv0[3*i0+1] * VDv1[3*i1+1])
                 _du_02 = (VDu0[3*i0+2] * VDu1[3*i1+0])
+                _du_10 = (VDu0[3*i0+0] * VDu1[3*i1+1])
                 result += (((_du_02 * _dv_01) + ((JacInv[0] * _du_10) * (JacInv[0] * _dv_11))) * W)
         return result
 
@@ -673,14 +673,14 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
             double* VDv0, double* VDv1,
             double result[]
         ) nogil:
-        cdef double _du_01
-        cdef double _du_10
-        cdef double _dv_01
         cdef double _dv_10
+        cdef double _dv_01
         cdef double _tmp1
+        cdef double _tmp4
+        cdef double _du_10
+        cdef double _du_01
         cdef double _tmp2
         cdef double _tmp3
-        cdef double _tmp4
 
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
@@ -694,14 +694,14 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
                 W = _W[i0, i1]
                 JacInv = &_JacInv[i0, i1, 0, 0]
 
-                _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
-                _du_10 = (VDu0[2*i0+0] * VDu1[2*i1+1])
-                _dv_01 = (VDv0[2*i0+1] * VDv1[2*i1+0])
                 _dv_10 = (VDv0[2*i0+0] * VDv1[2*i1+1])
+                _dv_01 = (VDv0[2*i0+1] * VDv1[2*i1+0])
                 _tmp1 = ((JacInv[0] * _dv_10) + (JacInv[2] * _dv_01))
+                _tmp4 = ((JacInv[1] * _dv_10) + (JacInv[3] * _dv_01))
+                _du_10 = (VDu0[2*i0+0] * VDu1[2*i1+1])
+                _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
                 _tmp2 = ((JacInv[0] * _du_10) + (JacInv[2] * _du_01))
                 _tmp3 = ((JacInv[1] * _du_10) + (JacInv[3] * _du_01))
-                _tmp4 = ((JacInv[1] * _dv_10) + (JacInv[3] * _dv_01))
                 result[0] += ((_tmp1 * _tmp2) * W)
                 result[1] += ((_tmp1 * _tmp3) * W)
                 result[2] += ((_tmp4 * _tmp2) * W)
@@ -1280,12 +1280,12 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
             double* VDv0, double* VDv1, double* VDv2,
         ) nogil:
         cdef double result = 0.0
+        cdef double _dv_100
         cdef double _dv_010
         cdef double v
-        cdef double _dv_100
+        cdef double _du_100
         cdef double _du_010
         cdef double _du_001
-        cdef double _du_100
 
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
@@ -1302,12 +1302,12 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
                     W = _W[i0, i1, i2]
                     JacInv = &_JacInv[i0, i1, i2, 0, 0]
 
+                    _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
                     _dv_010 = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
                     v = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+0])
-                    _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
+                    _du_100 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
                     _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
                     _du_001 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
-                    _du_100 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
                     result += ((((((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) * ((JacInv[0] * _dv_100) + (JacInv[3] * _dv_010))) + (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) * ((JacInv[1] * _dv_100) + (JacInv[4] * _dv_010)))) + (_du_001 * v)) * W)
         return result
 
@@ -1371,12 +1371,12 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
             double* VDv0, double* VDv1, double* VDv2,
         ) nogil:
         cdef double result = 0.0
+        cdef double _dv_001
         cdef double _dv_101
         cdef double _dv_011
-        cdef double _dv_001
+        cdef double _du_002
         cdef double _du_100
         cdef double _du_010
-        cdef double _du_002
 
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
@@ -1393,12 +1393,12 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
                     W = _W[i0, i1, i2]
                     JacInv = &_JacInv[i0, i1, i2, 0, 0]
 
+                    _dv_001 = (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+0])
                     _dv_101 = (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+1])
                     _dv_011 = (VDv0[3*i0+1] * VDv1[3*i1+1] * VDv2[3*i2+0])
-                    _dv_001 = (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+0])
+                    _du_002 = (VDu0[3*i0+2] * VDu1[3*i1+0] * VDu2[3*i2+0])
                     _du_100 = (VDu0[3*i0+0] * VDu1[3*i1+0] * VDu2[3*i2+1])
                     _du_010 = (VDu0[3*i0+0] * VDu1[3*i1+1] * VDu2[3*i2+0])
-                    _du_002 = (VDu0[3*i0+2] * VDu1[3*i1+0] * VDu2[3*i2+0])
                     result += (((_du_002 * _dv_001) + ((((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) * ((JacInv[0] * _dv_101) + (JacInv[3] * _dv_011))) + (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) * ((JacInv[1] * _dv_101) + (JacInv[4] * _dv_011))))) * W)
         return result
 
@@ -1462,18 +1462,18 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
             double* VDv0, double* VDv1, double* VDv2,
             double result[]
         ) nogil:
-        cdef double _du_010
-        cdef double _du_001
-        cdef double _du_100
+        cdef double _dv_100
         cdef double _dv_010
         cdef double _dv_001
-        cdef double _dv_100
         cdef double _tmp1
+        cdef double _tmp5
+        cdef double _tmp6
+        cdef double _du_100
+        cdef double _du_010
+        cdef double _du_001
         cdef double _tmp2
         cdef double _tmp3
         cdef double _tmp4
-        cdef double _tmp5
-        cdef double _tmp6
 
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
@@ -1490,18 +1490,18 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
                     W = _W[i0, i1, i2]
                     JacInv = &_JacInv[i0, i1, i2, 0, 0]
 
-                    _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
-                    _du_001 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
-                    _du_100 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
+                    _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
                     _dv_010 = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
                     _dv_001 = (VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0])
-                    _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
                     _tmp1 = (((JacInv[0] * _dv_100) + (JacInv[3] * _dv_010)) + (JacInv[6] * _dv_001))
+                    _tmp5 = (((JacInv[1] * _dv_100) + (JacInv[4] * _dv_010)) + (JacInv[7] * _dv_001))
+                    _tmp6 = (((JacInv[2] * _dv_100) + (JacInv[5] * _dv_010)) + (JacInv[8] * _dv_001))
+                    _du_100 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
+                    _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
+                    _du_001 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
                     _tmp2 = (((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) + (JacInv[6] * _du_001))
                     _tmp3 = (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) + (JacInv[7] * _du_001))
                     _tmp4 = (((JacInv[2] * _du_100) + (JacInv[5] * _du_010)) + (JacInv[8] * _du_001))
-                    _tmp5 = (((JacInv[1] * _dv_100) + (JacInv[4] * _dv_010)) + (JacInv[7] * _dv_001))
-                    _tmp6 = (((JacInv[2] * _dv_100) + (JacInv[5] * _dv_010)) + (JacInv[8] * _dv_001))
                     result[0] += ((_tmp1 * _tmp2) * W)
                     result[1] += ((_tmp1 * _tmp3) * W)
                     result[2] += ((_tmp1 * _tmp4) * W)

@@ -367,49 +367,6 @@ cdef double[:,:,:,:,::1] inverses_3x3(double[:,:,:,:,::1] X):
     return Y
 
 
-@cython.boundscheck(False)
-@cython.wraparound(False)
-@cython.initializedcheck(False)
-cpdef double[:,:,:,::1] matmatT_2x2(double[:,:,:,::1] B):
-    """Compute B * B^T for each matrix in the input."""
-    cdef double[:,:,:,::1] X = np.zeros_like(B, order='C')
-    cdef size_t n0 = B.shape[0]
-    cdef size_t n1 = B.shape[1]
-    for i0 in range(n0):
-        for i1 in range(n1):
-            for j in range(2):
-                for k in range(2):
-                    for l in range(2):
-                        X[i0,i1, j,l] += B[i0,i1, j,k] * B[i0,i1, l,k]
-    return X
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-@cython.initializedcheck(False)
-cpdef double[:,:,:,:,::1] matmatT_3x3(double[:,:,:,:,::1] B):
-    """Compute B * B^T for each matrix in the input."""
-    cdef double[:,:,:,:,::1] X = np.zeros_like(B, order='C')
-    cdef size_t n0 = B.shape[0]
-    cdef size_t n1 = B.shape[1]
-    cdef size_t n2 = B.shape[2]
-    for i0 in range(n0):
-        for i1 in range(n1):
-            for i2 in range(n2):
-                for j in range(3):
-                    for k in range(3):
-                        for l in range(3):
-                            X[i0,i1,i2, j,l] += B[i0,i1,i2, j,k] * B[i0,i1,i2, l,k]
-    return X
-
-def matmatT(B):
-    if len(B.shape) == 4 and B.shape[-2:] == (2,2):
-        return matmatT_2x2(B)
-    elif len(B.shape) == 5 and B.shape[-2:] == (3,3):
-        return matmatT_3x3(B)
-    else:
-        assert False, 'matmatT not implemented for shape %s' % B.shape
-
-
 #### Parallelization
 
 def chunk_tasks(tasks, num_chunks):

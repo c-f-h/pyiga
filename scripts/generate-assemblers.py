@@ -277,12 +277,13 @@ class VForm:
         self.precomp_locals = [v for v in self.precomp if v.local]
         self.precomp        = [v for v in self.precomp if not v.local]
 
-    def all_exprs(self, type=None):
+    def all_exprs(self, type=None, once=True):
         """Deep, depth-first iteration of all expressions with dependencies.
 
         If `type` is given, only exprs which are instances of that type are yielded.
+        If `once=True` (default), each expr is visited only once.
         """
-        return iterexprs(self.exprs, deep=True, type=type)
+        return iterexprs(self.exprs, deep=True, type=type, once=once)
 
     def transform(self, fun, type=None):
         """Apply `fun` to all exprs (or all exprs of the given `type`). If `fun` returns
@@ -1530,18 +1531,20 @@ class VolumeMeasureExpr(Expr):
 
 # expression utility functions #################################################
 
-def iterexprs(exprs, deep=False, type=None):
+def iterexprs(exprs, deep=False, type=None, once=True):
     """Iterate through all subexpressions of the list of expressions `exprs` in depth-first order.
 
     If `deep=True`, follow variable references.
     If `type` is given, only exprs which are instances of that type are yielded.
+    If `once=True` (default), each expr is visited only once.
     """
     seen = set()    # remember which nodes we've visited already
     def recurse(e):
-        if e in seen:
-            return
-        else:
-            seen.add(e)
+        if once:
+            if e in seen:
+                return
+            else:
+                seen.add(e)
 
         for c in e.children:
             yield from recurse(c)

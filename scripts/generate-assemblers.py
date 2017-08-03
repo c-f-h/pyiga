@@ -1657,19 +1657,33 @@ def minor(A, i, j):
             for ii in range(m) if ii != i]
     return det(as_matrix(B))
 
+def _pm(k, a):
+    if k % 2: return -a
+    else:     return a
+
 def det(A):
     """Determinant of a matrix."""
     if not A.is_matrix() or A.shape[0] != A.shape[1]:
-        raise ValueError('can only compute trace of square matrices')
+        raise ValueError('can only compute determinant of square matrices')
     n = A.shape[0]
-    if n == 1:
+    if n == 0:
+        return ConstExpr(1)
+    elif n == 1:
         return A[0,0]
     else:
-        def pm(k, a):
-            if k % 2: return -a
-            else:     return a
         return reduce(operator.add,
-                (pm(j, A[0,j] * minor(A, 0, j)) for j in range(n)))
+                (_pm(j, A[0,j] * minor(A, 0, j)) for j in range(n)))
+
+def inv(A):
+    """Inverse of a matrix.."""
+    if not A.is_matrix() or A.shape[0] != A.shape[1]:
+        raise ValueError('can only compute inverse of square matrices')
+    n = A.shape[0]
+    invdet = ConstExpr(1) / det(A)
+    cofacs = as_matrix(
+            [[ _pm(i+j, minor(A, i, j)) for i in range(n)]
+                for j in range(n)])
+    return invdet * cofacs
 
 def cross(x, y):
     return VectorCrossExpr(x, y)

@@ -1207,6 +1207,17 @@ def make_var_expr(var):
     else:
         assert False, 'invalid shape'
 
+class ConstExpr(Expr):
+    def __init__(self, value):
+        self.shape = ()
+        self.value = float(value)
+        self.children = ()
+    def __str__(self):
+        return str(self.value)
+    def gencode(self):
+        return repr(self.value)
+    base_complexity = 0
+
 class VarExpr(Expr):
     """Abstract base class for exprs which refer to named variables."""
     def is_var_expr(self):
@@ -1674,7 +1685,7 @@ def tree_print(expr, data=None, indent=''):
     elif isinstance(expr, VectorEntryExpr) or isinstance(expr, MatrixEntryExpr):
         s = str(expr)
         stop = True
-    elif expr.is_var_expr() or isinstance(expr, VolumeMeasureExpr) or isinstance(expr, PartialDerivExpr):
+    elif expr.is_var_expr() or isinstance(expr, VolumeMeasureExpr) or isinstance(expr, PartialDerivExpr) or isinstance(expr, ConstExpr):
         s = str(expr)
     else:
         s = type(expr).__name__

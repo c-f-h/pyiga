@@ -296,6 +296,11 @@ class VForm:
             return e2 if e2 is not None else e
         self.exprs = mapexprs(self.exprs, applyfun, deep=True)
 
+    def collect(self, type=None, filter=None):
+        for e in self.all_exprs(type=type):
+            if filter is None or filter(e):
+                yield e
+
     def replace_physical_derivs(self, e):
         if not e.physical:
             return
@@ -341,14 +346,22 @@ class VForm:
             hashes = self.compute_recursive(lambda e, child_hashes: e.hash(child_hashes))
             complexity = self.compute_recursive(lambda e, cc: e.base_complexity + sum(cc))
 
-            # put exprs into bins according to their hashes
-            hash_to_exprs = defaultdict(list)
-            for e, h in hashes.items():
-                hash_to_exprs[h].append(e)
+            # roots of expression trees for used variables and kernel expressions
+            all_root_exprs = [e.var.expr for e in self.collect(type=VarExpr, filter=lambda e: e.var.expr)] + list(self.exprs)
+
+            # Count occurrences of exprs according to their hashes.
+            # Each var is visited once because of deep=False.
+            # Subexpressions are counted according to their occurence due to once=False.
+            expr_count = defaultdict(int)
+            hash_to_exprs = {}
+            for e in iterexprs(all_root_exprs, deep=False, once=False):
+                h = hashes[e]
+                expr_count[h] += 1
+                hash_to_exprs[h] = e
 
             # find all nontrivial exprs which are used more than once
-            cse = [es[0] for es in hash_to_exprs.values()
-                    if len(es) > 1 and complexity[es[0]] > 0]
+            cse = [e for (h,e) in hash_to_exprs.items()
+                    if expr_count[h] > 1 and complexity[e] > 0]
             if not cse:
                 break
 
@@ -361,12 +374,28 @@ class VForm:
             self.transform(lambda e: var if hashes[e] == h else None)
         return tmpidx[0] > 0    # did we do anything?
 
+    def expand_mat_vec(self):
+        """Convert all matrix and vector expressions into literal expressions, i.e.,
+        into elementwise scalar expressions."""
+        def expand(e):
+            if e.is_var_expr():
+                return
+            if e.is_vector() and not isinstance(e, LiteralVectorExpr):
+                return LiteralVectorExpr(e)
+            if e.is_matrix() and not isinstance(e, LiteralMatrixExpr):
+                return LiteralMatrixExpr(
+                        [[e[i,j] for j in range(e.shape[1])]
+                            for i in range(e.shape[0])])
+        self.transform(expand)
+
     def finalize(self):
         """Performs standard transforms and dependency analysis."""
         # replace "dx" by quadrature weight function
         self.transform(lambda e: self.W, type=VolumeMeasureExpr)
         # replace physical derivs by proper expressions in terms of parametric derivs
         self.transform(self.replace_physical_derivs, type=PartialDerivExpr)
+        # convert all expressions to scalar form
+        self.expand_mat_vec()
         # find common subexpressions and extract them into named variables
         self.extract_common_expressions()
         # perform dependency analysis for expressions and variables
@@ -1239,6 +1268,7 @@ class ScalarVarExpr(VarExpr):
 
     def gencode(self):
         return self.var.name
+    base_complexity = 0
 
 class VectorVarExpr(VarExpr):
     def __init__(self, var):
@@ -1249,6 +1279,7 @@ class VectorVarExpr(VarExpr):
 
     def at(self, i):
         return VectorEntryExpr(self, i)
+    base_complexity = 0
 
 class MatrixVarExpr(VarExpr):
     """Matrix expression which is represented by a matrix reference and shape."""
@@ -1261,6 +1292,7 @@ class MatrixVarExpr(VarExpr):
 
     def at(self, i, j):
         return MatrixEntryExpr(self, i, j)
+    base_complexity = 0
 
 class LiteralVectorExpr(Expr):
     """Vector expression which is represented by a list of individual expressions."""
@@ -1270,9 +1302,11 @@ class LiteralVectorExpr(Expr):
         self.children = entries
         if not all(isinstance(e, Expr) and e.is_scalar() for e in self.children):
             raise ValueError('all vector entries should be scalar expressions')
-
+    def __str__(self):
+        return '(' + ', '.join(str(c) for c in self.children) + ')'
     def at(self, i):
         return self.children[i]
+    base_complexity = 0
 
 class LiteralMatrixExpr(Expr):
     """Matrix expression which is represented by a 2D array of individual expressions."""
@@ -1282,9 +1316,9 @@ class LiteralMatrixExpr(Expr):
         self.children = tuple(entries.flat)
         if not all(isinstance(e, Expr) and e.is_scalar() for e in self.children):
             raise ValueError('all matrix entries should be scalar expressions')
-
     def at(self, i, j):
         return self.children[i * self.shape[1] + j]
+    base_complexity = 0
 
 class VectorEntryExpr(Expr):
     def __init__(self, x, i):
@@ -1335,6 +1369,8 @@ class TransposedMatrixExpr(Expr):
         if not mat.is_matrix(): raise TypeError('can only transpose matrices')
         self.shape = (mat.shape[1], mat.shape[0])
         self.children = (mat,)
+    def __str__(self):
+        return 'transpose(%s)' % self.x
     def __getitem__(self, ij):
         result = self.x[ij[1], ij[0]]
         return result.T if result.is_matrix() else result
@@ -1344,6 +1380,8 @@ class BroadcastExpr(Expr):
     def __init__(self, expr, shape):
         self.shape = shape
         self.children = (expr,)
+    def __str__(self):
+        return str(self.x)
     def at(self, *I):
         return self.x
 
@@ -1517,7 +1555,8 @@ class MatMatExpr(Expr):
         assert A.shape[1] == B.shape[0], 'incompatible shapes'
         self.shape = (A.shape[0], B.shape[1])
         self.children = (A, B)
-
+    def __str__(self):
+        return 'dot(%s, %s)' % (self.x, self.y)
     def at(self, i, j):
         return reduce(operator.add,
             (self.x[i, k] * self.y[k, j] for k in range(self.x.shape[1])))

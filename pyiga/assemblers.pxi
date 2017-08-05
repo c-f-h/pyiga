@@ -304,9 +304,40 @@ cdef class MassAssembler2D(BaseAssembler2D):
         self.C = compute_values_derivs(kvs, gaussgrid, derivs=0)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
-        geo_det = determinants(geo_jac)
-        geo_weights = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
-        self.W = geo_weights
+        gauss_weights = gaussweights[0][:,None] * gaussweights[1][None,:]
+        self.W = np.empty(N + ())
+        MassAssembler2D.precompute_fields(
+                geo_jac,
+                gauss_weights,
+                self.W,
+        )
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    @staticmethod
+    cdef void precompute_fields(
+            # input
+            double[:, :, :, ::1] _Jac,
+            double[:, ::1] _GaussWeight,
+            # output
+            double[:, ::1] _W,
+        ) nogil:
+        cdef size_t n0 = _Jac.shape[0]
+        cdef size_t n1 = _Jac.shape[1]
+        cdef double* Jac
+        cdef double GaussWeight
+        cdef double W
+        cdef size_t i0
+        cdef size_t i1
+
+        for i0 in range(n0):
+            for i1 in range(n1):
+                Jac = &_Jac[i0, i1, 0, 0]
+                GaussWeight = _GaussWeight[i0, i1]
+
+                W = (GaussWeight * fabs(((Jac[0] * Jac[3]) - (Jac[1] * Jac[2]))))
+                _W[i0, i1] = W
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -378,12 +409,11 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         self.C = compute_values_derivs(kvs, gaussgrid, derivs=1)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
-        geo_det, geo_jacinv = det_and_inv(geo_jac)
-        geo_weights = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
+        gauss_weights = gaussweights[0][:,None] * gaussweights[1][None,:]
         self.B = np.empty(N + (2, 2))
         StiffnessAssembler2D.precompute_fields(
-                geo_jacinv,
-                geo_weights,
+                geo_jac,
+                gauss_weights,
                 self.B,
         )
 
@@ -393,25 +423,36 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
     @staticmethod
     cdef void precompute_fields(
             # input
-            double[:, :, :, ::1] _JacInv,
-            double[:, ::1] _W,
+            double[:, :, :, ::1] _Jac,
+            double[:, ::1] _GaussWeight,
             # output
             double[:, :, :, ::1] _B,
         ) nogil:
-        cdef size_t n0 = _JacInv.shape[0]
-        cdef size_t n1 = _JacInv.shape[1]
-        cdef double* JacInv
+        cdef size_t n0 = _Jac.shape[0]
+        cdef size_t n1 = _Jac.shape[1]
+        cdef double _tmp2
+        cdef double _tmp1
+        cdef double JacInv[4]
         cdef double W
+        cdef double* Jac
+        cdef double GaussWeight
         cdef double* B
         cdef size_t i0
         cdef size_t i1
 
         for i0 in range(n0):
             for i1 in range(n1):
-                JacInv = &_JacInv[i0, i1, 0, 0]
-                W = _W[i0, i1]
+                Jac = &_Jac[i0, i1, 0, 0]
+                GaussWeight = _GaussWeight[i0, i1]
                 B = &_B[i0, i1, 0, 0]
 
+                _tmp2 = ((Jac[0] * Jac[3]) - (Jac[1] * Jac[2]))
+                _tmp1 = (1.0 / _tmp2)
+                JacInv[0] = (_tmp1 * Jac[3])
+                JacInv[1] = (_tmp1 * -Jac[1])
+                JacInv[2] = (_tmp1 * -Jac[2])
+                JacInv[3] = (_tmp1 * Jac[0])
+                W = (GaussWeight * fabs(_tmp2))
                 B[0] = (W * ((JacInv[0] * JacInv[0]) + (JacInv[1] * JacInv[1])))
                 B[1] = (W * ((JacInv[0] * JacInv[2]) + (JacInv[1] * JacInv[3])))
                 B[3] = (W * ((JacInv[2] * JacInv[2]) + (JacInv[3] * JacInv[3])))
@@ -489,10 +530,53 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         self.C = compute_values_derivs(kvs, gaussgrid, derivs=1)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
-        geo_det, geo_jacinv = det_and_inv(geo_jac)
-        geo_weights = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
-        self.W = geo_weights
-        self.JacInv = geo_jacinv
+        gauss_weights = gaussweights[0][:,None] * gaussweights[1][None,:]
+        self.W = np.empty(N + ())
+        self.JacInv = np.empty(N + (2, 2))
+        HeatAssembler_ST2D.precompute_fields(
+                gauss_weights,
+                geo_jac,
+                self.W,
+                self.JacInv,
+        )
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    @staticmethod
+    cdef void precompute_fields(
+            # input
+            double[:, ::1] _GaussWeight,
+            double[:, :, :, ::1] _Jac,
+            # output
+            double[:, ::1] _W,
+            double[:, :, :, ::1] _JacInv,
+        ) nogil:
+        cdef size_t n0 = _GaussWeight.shape[0]
+        cdef size_t n1 = _GaussWeight.shape[1]
+        cdef double _tmp2
+        cdef double _tmp1
+        cdef double GaussWeight
+        cdef double* Jac
+        cdef double W
+        cdef double* JacInv
+        cdef size_t i0
+        cdef size_t i1
+
+        for i0 in range(n0):
+            for i1 in range(n1):
+                GaussWeight = _GaussWeight[i0, i1]
+                Jac = &_Jac[i0, i1, 0, 0]
+                JacInv = &_JacInv[i0, i1, 0, 0]
+
+                _tmp2 = ((Jac[0] * Jac[3]) - (Jac[1] * Jac[2]))
+                _tmp1 = (1.0 / _tmp2)
+                W = (GaussWeight * fabs(_tmp2))
+                _W[i0, i1] = W
+                JacInv[0] = (_tmp1 * Jac[3])
+                JacInv[1] = (_tmp1 * -Jac[1])
+                JacInv[2] = (_tmp1 * -Jac[2])
+                JacInv[3] = (_tmp1 * Jac[0])
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -573,10 +657,53 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         self.C = compute_values_derivs(kvs, gaussgrid, derivs=2)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
-        geo_det, geo_jacinv = det_and_inv(geo_jac)
-        geo_weights = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
-        self.W = geo_weights
-        self.JacInv = geo_jacinv
+        gauss_weights = gaussweights[0][:,None] * gaussweights[1][None,:]
+        self.W = np.empty(N + ())
+        self.JacInv = np.empty(N + (2, 2))
+        WaveAssembler_ST2D.precompute_fields(
+                gauss_weights,
+                geo_jac,
+                self.W,
+                self.JacInv,
+        )
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    @staticmethod
+    cdef void precompute_fields(
+            # input
+            double[:, ::1] _GaussWeight,
+            double[:, :, :, ::1] _Jac,
+            # output
+            double[:, ::1] _W,
+            double[:, :, :, ::1] _JacInv,
+        ) nogil:
+        cdef size_t n0 = _GaussWeight.shape[0]
+        cdef size_t n1 = _GaussWeight.shape[1]
+        cdef double _tmp2
+        cdef double _tmp1
+        cdef double GaussWeight
+        cdef double* Jac
+        cdef double W
+        cdef double* JacInv
+        cdef size_t i0
+        cdef size_t i1
+
+        for i0 in range(n0):
+            for i1 in range(n1):
+                GaussWeight = _GaussWeight[i0, i1]
+                Jac = &_Jac[i0, i1, 0, 0]
+                JacInv = &_JacInv[i0, i1, 0, 0]
+
+                _tmp2 = ((Jac[0] * Jac[3]) - (Jac[1] * Jac[2]))
+                _tmp1 = (1.0 / _tmp2)
+                W = (GaussWeight * fabs(_tmp2))
+                _W[i0, i1] = W
+                JacInv[0] = (_tmp1 * Jac[3])
+                JacInv[1] = (_tmp1 * -Jac[1])
+                JacInv[2] = (_tmp1 * -Jac[2])
+                JacInv[3] = (_tmp1 * Jac[0])
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -657,10 +784,53 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         self.C = compute_values_derivs(kvs, gaussgrid, derivs=1)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
-        geo_det, geo_jacinv = det_and_inv(geo_jac)
-        geo_weights = gaussweights[0][:,None] * gaussweights[1][None,:] * np.abs(geo_det)
-        self.W = geo_weights
-        self.JacInv = geo_jacinv
+        gauss_weights = gaussweights[0][:,None] * gaussweights[1][None,:]
+        self.W = np.empty(N + ())
+        self.JacInv = np.empty(N + (2, 2))
+        DivDivAssembler2D.precompute_fields(
+                gauss_weights,
+                geo_jac,
+                self.W,
+                self.JacInv,
+        )
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    @staticmethod
+    cdef void precompute_fields(
+            # input
+            double[:, ::1] _GaussWeight,
+            double[:, :, :, ::1] _Jac,
+            # output
+            double[:, ::1] _W,
+            double[:, :, :, ::1] _JacInv,
+        ) nogil:
+        cdef size_t n0 = _GaussWeight.shape[0]
+        cdef size_t n1 = _GaussWeight.shape[1]
+        cdef double _tmp2
+        cdef double _tmp1
+        cdef double GaussWeight
+        cdef double* Jac
+        cdef double W
+        cdef double* JacInv
+        cdef size_t i0
+        cdef size_t i1
+
+        for i0 in range(n0):
+            for i1 in range(n1):
+                GaussWeight = _GaussWeight[i0, i1]
+                Jac = &_Jac[i0, i1, 0, 0]
+                JacInv = &_JacInv[i0, i1, 0, 0]
+
+                _tmp2 = ((Jac[0] * Jac[3]) - (Jac[1] * Jac[2]))
+                _tmp1 = (1.0 / _tmp2)
+                W = (GaussWeight * fabs(_tmp2))
+                _W[i0, i1] = W
+                JacInv[0] = (_tmp1 * Jac[3])
+                JacInv[1] = (_tmp1 * -Jac[1])
+                JacInv[2] = (_tmp1 * -Jac[2])
+                JacInv[3] = (_tmp1 * Jac[0])
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -678,12 +848,12 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         cdef size_t n1 = _W.shape[1]
         cdef double _dv_10
         cdef double _dv_01
-        cdef double _tmp1
-        cdef double _tmp4
+        cdef double _tmp3
+        cdef double _tmp6
         cdef double _du_10
         cdef double _du_01
-        cdef double _tmp2
-        cdef double _tmp3
+        cdef double _tmp4
+        cdef double _tmp5
         cdef double W
         cdef double* JacInv
         cdef size_t i0
@@ -696,16 +866,16 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
 
                 _dv_10 = (VDv0[2*i0+0] * VDv1[2*i1+1])
                 _dv_01 = (VDv0[2*i0+1] * VDv1[2*i1+0])
-                _tmp1 = ((JacInv[0] * _dv_10) + (JacInv[2] * _dv_01))
-                _tmp4 = ((JacInv[1] * _dv_10) + (JacInv[3] * _dv_01))
+                _tmp3 = ((JacInv[0] * _dv_10) + (JacInv[2] * _dv_01))
+                _tmp6 = ((JacInv[1] * _dv_10) + (JacInv[3] * _dv_01))
                 _du_10 = (VDu0[2*i0+0] * VDu1[2*i1+1])
                 _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
-                _tmp2 = ((JacInv[0] * _du_10) + (JacInv[2] * _du_01))
-                _tmp3 = ((JacInv[1] * _du_10) + (JacInv[3] * _du_01))
-                result[0] += ((_tmp1 * _tmp2) * W)
-                result[1] += ((_tmp1 * _tmp3) * W)
-                result[2] += ((_tmp4 * _tmp2) * W)
-                result[3] += ((_tmp4 * _tmp3) * W)
+                _tmp4 = ((JacInv[0] * _du_10) + (JacInv[2] * _du_01))
+                _tmp5 = ((JacInv[1] * _du_10) + (JacInv[3] * _du_01))
+                result[0] += ((_tmp3 * _tmp4) * W)
+                result[1] += ((_tmp3 * _tmp5) * W)
+                result[2] += ((_tmp6 * _tmp4) * W)
+                result[3] += ((_tmp6 * _tmp5) * W)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1065,9 +1235,43 @@ cdef class MassAssembler3D(BaseAssembler3D):
         self.C = compute_values_derivs(kvs, gaussgrid, derivs=0)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
-        geo_det = determinants(geo_jac)
-        geo_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
-        self.W = geo_weights
+        gauss_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:]
+        self.W = np.empty(N + ())
+        MassAssembler3D.precompute_fields(
+                geo_jac,
+                gauss_weights,
+                self.W,
+        )
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    @staticmethod
+    cdef void precompute_fields(
+            # input
+            double[:, :, :, :, ::1] _Jac,
+            double[:, :, ::1] _GaussWeight,
+            # output
+            double[:, :, ::1] _W,
+        ) nogil:
+        cdef size_t n0 = _Jac.shape[0]
+        cdef size_t n1 = _Jac.shape[1]
+        cdef size_t n2 = _Jac.shape[2]
+        cdef double* Jac
+        cdef double GaussWeight
+        cdef double W
+        cdef size_t i0
+        cdef size_t i1
+        cdef size_t i2
+
+        for i0 in range(n0):
+            for i1 in range(n1):
+                for i2 in range(n2):
+                    Jac = &_Jac[i0, i1, i2, 0, 0]
+                    GaussWeight = _GaussWeight[i0, i1, i2]
+
+                    W = (GaussWeight * fabs((((Jac[0] * ((Jac[4] * Jac[8]) - (Jac[5] * Jac[7]))) - (Jac[1] * ((Jac[3] * Jac[8]) - (Jac[5] * Jac[6])))) + (Jac[2] * ((Jac[3] * Jac[7]) - (Jac[4] * Jac[6]))))))
+                    _W[i0, i1, i2] = W
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1142,12 +1346,11 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         self.C = compute_values_derivs(kvs, gaussgrid, derivs=1)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
-        geo_det, geo_jacinv = det_and_inv(geo_jac)
-        geo_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
+        gauss_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:]
         self.B = np.empty(N + (3, 3))
         StiffnessAssembler3D.precompute_fields(
-                geo_jacinv,
-                geo_weights,
+                geo_jac,
+                gauss_weights,
                 self.B,
         )
 
@@ -1157,16 +1360,23 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
     @staticmethod
     cdef void precompute_fields(
             # input
-            double[:, :, :, :, ::1] _JacInv,
-            double[:, :, ::1] _W,
+            double[:, :, :, :, ::1] _Jac,
+            double[:, :, ::1] _GaussWeight,
             # output
             double[:, :, :, :, ::1] _B,
         ) nogil:
-        cdef size_t n0 = _JacInv.shape[0]
-        cdef size_t n1 = _JacInv.shape[1]
-        cdef size_t n2 = _JacInv.shape[2]
-        cdef double* JacInv
+        cdef size_t n0 = _Jac.shape[0]
+        cdef size_t n1 = _Jac.shape[1]
+        cdef size_t n2 = _Jac.shape[2]
+        cdef double _tmp3
+        cdef double _tmp4
+        cdef double _tmp5
+        cdef double _tmp2
+        cdef double _tmp1
+        cdef double JacInv[9]
         cdef double W
+        cdef double* Jac
+        cdef double GaussWeight
         cdef double* B
         cdef size_t i0
         cdef size_t i1
@@ -1175,10 +1385,25 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    JacInv = &_JacInv[i0, i1, i2, 0, 0]
-                    W = _W[i0, i1, i2]
+                    Jac = &_Jac[i0, i1, i2, 0, 0]
+                    GaussWeight = _GaussWeight[i0, i1, i2]
                     B = &_B[i0, i1, i2, 0, 0]
 
+                    _tmp3 = ((Jac[4] * Jac[8]) - (Jac[5] * Jac[7]))
+                    _tmp4 = ((Jac[3] * Jac[8]) - (Jac[5] * Jac[6]))
+                    _tmp5 = ((Jac[3] * Jac[7]) - (Jac[4] * Jac[6]))
+                    _tmp2 = (((Jac[0] * _tmp3) - (Jac[1] * _tmp4)) + (Jac[2] * _tmp5))
+                    _tmp1 = (1.0 / _tmp2)
+                    JacInv[0] = (_tmp1 * _tmp3)
+                    JacInv[1] = (_tmp1 * -((Jac[1] * Jac[8]) - (Jac[2] * Jac[7])))
+                    JacInv[2] = (_tmp1 * ((Jac[1] * Jac[5]) - (Jac[2] * Jac[4])))
+                    JacInv[3] = (_tmp1 * -_tmp4)
+                    JacInv[4] = (_tmp1 * ((Jac[0] * Jac[8]) - (Jac[2] * Jac[6])))
+                    JacInv[5] = (_tmp1 * -((Jac[0] * Jac[5]) - (Jac[2] * Jac[3])))
+                    JacInv[6] = (_tmp1 * _tmp5)
+                    JacInv[7] = (_tmp1 * -((Jac[0] * Jac[7]) - (Jac[1] * Jac[6])))
+                    JacInv[8] = (_tmp1 * ((Jac[0] * Jac[4]) - (Jac[1] * Jac[3])))
+                    W = (GaussWeight * fabs(_tmp2))
                     B[0] = (W * (((JacInv[0] * JacInv[0]) + (JacInv[1] * JacInv[1])) + (JacInv[2] * JacInv[2])))
                     B[1] = (W * (((JacInv[0] * JacInv[3]) + (JacInv[1] * JacInv[4])) + (JacInv[2] * JacInv[5])))
                     B[2] = (W * (((JacInv[0] * JacInv[6]) + (JacInv[1] * JacInv[7])) + (JacInv[2] * JacInv[8])))
@@ -1264,10 +1489,67 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         self.C = compute_values_derivs(kvs, gaussgrid, derivs=1)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
-        geo_det, geo_jacinv = det_and_inv(geo_jac)
-        geo_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
-        self.W = geo_weights
-        self.JacInv = geo_jacinv
+        gauss_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:]
+        self.W = np.empty(N + ())
+        self.JacInv = np.empty(N + (3, 3))
+        HeatAssembler_ST3D.precompute_fields(
+                gauss_weights,
+                geo_jac,
+                self.W,
+                self.JacInv,
+        )
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    @staticmethod
+    cdef void precompute_fields(
+            # input
+            double[:, :, ::1] _GaussWeight,
+            double[:, :, :, :, ::1] _Jac,
+            # output
+            double[:, :, ::1] _W,
+            double[:, :, :, :, ::1] _JacInv,
+        ) nogil:
+        cdef size_t n0 = _GaussWeight.shape[0]
+        cdef size_t n1 = _GaussWeight.shape[1]
+        cdef size_t n2 = _GaussWeight.shape[2]
+        cdef double _tmp3
+        cdef double _tmp4
+        cdef double _tmp5
+        cdef double _tmp2
+        cdef double _tmp1
+        cdef double GaussWeight
+        cdef double* Jac
+        cdef double W
+        cdef double* JacInv
+        cdef size_t i0
+        cdef size_t i1
+        cdef size_t i2
+
+        for i0 in range(n0):
+            for i1 in range(n1):
+                for i2 in range(n2):
+                    GaussWeight = _GaussWeight[i0, i1, i2]
+                    Jac = &_Jac[i0, i1, i2, 0, 0]
+                    JacInv = &_JacInv[i0, i1, i2, 0, 0]
+
+                    _tmp3 = ((Jac[4] * Jac[8]) - (Jac[5] * Jac[7]))
+                    _tmp4 = ((Jac[3] * Jac[8]) - (Jac[5] * Jac[6]))
+                    _tmp5 = ((Jac[3] * Jac[7]) - (Jac[4] * Jac[6]))
+                    _tmp2 = (((Jac[0] * _tmp3) - (Jac[1] * _tmp4)) + (Jac[2] * _tmp5))
+                    _tmp1 = (1.0 / _tmp2)
+                    W = (GaussWeight * fabs(_tmp2))
+                    _W[i0, i1, i2] = W
+                    JacInv[0] = (_tmp1 * _tmp3)
+                    JacInv[1] = (_tmp1 * -((Jac[1] * Jac[8]) - (Jac[2] * Jac[7])))
+                    JacInv[2] = (_tmp1 * ((Jac[1] * Jac[5]) - (Jac[2] * Jac[4])))
+                    JacInv[3] = (_tmp1 * -_tmp4)
+                    JacInv[4] = (_tmp1 * ((Jac[0] * Jac[8]) - (Jac[2] * Jac[6])))
+                    JacInv[5] = (_tmp1 * -((Jac[0] * Jac[5]) - (Jac[2] * Jac[3])))
+                    JacInv[6] = (_tmp1 * _tmp5)
+                    JacInv[7] = (_tmp1 * -((Jac[0] * Jac[7]) - (Jac[1] * Jac[6])))
+                    JacInv[8] = (_tmp1 * ((Jac[0] * Jac[4]) - (Jac[1] * Jac[3])))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1355,10 +1637,67 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         self.C = compute_values_derivs(kvs, gaussgrid, derivs=2)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
-        geo_det, geo_jacinv = det_and_inv(geo_jac)
-        geo_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
-        self.W = geo_weights
-        self.JacInv = geo_jacinv
+        gauss_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:]
+        self.W = np.empty(N + ())
+        self.JacInv = np.empty(N + (3, 3))
+        WaveAssembler_ST3D.precompute_fields(
+                gauss_weights,
+                geo_jac,
+                self.W,
+                self.JacInv,
+        )
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    @staticmethod
+    cdef void precompute_fields(
+            # input
+            double[:, :, ::1] _GaussWeight,
+            double[:, :, :, :, ::1] _Jac,
+            # output
+            double[:, :, ::1] _W,
+            double[:, :, :, :, ::1] _JacInv,
+        ) nogil:
+        cdef size_t n0 = _GaussWeight.shape[0]
+        cdef size_t n1 = _GaussWeight.shape[1]
+        cdef size_t n2 = _GaussWeight.shape[2]
+        cdef double _tmp3
+        cdef double _tmp4
+        cdef double _tmp5
+        cdef double _tmp2
+        cdef double _tmp1
+        cdef double GaussWeight
+        cdef double* Jac
+        cdef double W
+        cdef double* JacInv
+        cdef size_t i0
+        cdef size_t i1
+        cdef size_t i2
+
+        for i0 in range(n0):
+            for i1 in range(n1):
+                for i2 in range(n2):
+                    GaussWeight = _GaussWeight[i0, i1, i2]
+                    Jac = &_Jac[i0, i1, i2, 0, 0]
+                    JacInv = &_JacInv[i0, i1, i2, 0, 0]
+
+                    _tmp3 = ((Jac[4] * Jac[8]) - (Jac[5] * Jac[7]))
+                    _tmp4 = ((Jac[3] * Jac[8]) - (Jac[5] * Jac[6]))
+                    _tmp5 = ((Jac[3] * Jac[7]) - (Jac[4] * Jac[6]))
+                    _tmp2 = (((Jac[0] * _tmp3) - (Jac[1] * _tmp4)) + (Jac[2] * _tmp5))
+                    _tmp1 = (1.0 / _tmp2)
+                    W = (GaussWeight * fabs(_tmp2))
+                    _W[i0, i1, i2] = W
+                    JacInv[0] = (_tmp1 * _tmp3)
+                    JacInv[1] = (_tmp1 * -((Jac[1] * Jac[8]) - (Jac[2] * Jac[7])))
+                    JacInv[2] = (_tmp1 * ((Jac[1] * Jac[5]) - (Jac[2] * Jac[4])))
+                    JacInv[3] = (_tmp1 * -_tmp4)
+                    JacInv[4] = (_tmp1 * ((Jac[0] * Jac[8]) - (Jac[2] * Jac[6])))
+                    JacInv[5] = (_tmp1 * -((Jac[0] * Jac[5]) - (Jac[2] * Jac[3])))
+                    JacInv[6] = (_tmp1 * _tmp5)
+                    JacInv[7] = (_tmp1 * -((Jac[0] * Jac[7]) - (Jac[1] * Jac[6])))
+                    JacInv[8] = (_tmp1 * ((Jac[0] * Jac[4]) - (Jac[1] * Jac[3])))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1446,10 +1785,67 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         self.C = compute_values_derivs(kvs, gaussgrid, derivs=1)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
-        geo_det, geo_jacinv = det_and_inv(geo_jac)
-        geo_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:] * np.abs(geo_det)
-        self.W = geo_weights
-        self.JacInv = geo_jacinv
+        gauss_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:]
+        self.W = np.empty(N + ())
+        self.JacInv = np.empty(N + (3, 3))
+        DivDivAssembler3D.precompute_fields(
+                gauss_weights,
+                geo_jac,
+                self.W,
+                self.JacInv,
+        )
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.initializedcheck(False)
+    @staticmethod
+    cdef void precompute_fields(
+            # input
+            double[:, :, ::1] _GaussWeight,
+            double[:, :, :, :, ::1] _Jac,
+            # output
+            double[:, :, ::1] _W,
+            double[:, :, :, :, ::1] _JacInv,
+        ) nogil:
+        cdef size_t n0 = _GaussWeight.shape[0]
+        cdef size_t n1 = _GaussWeight.shape[1]
+        cdef size_t n2 = _GaussWeight.shape[2]
+        cdef double _tmp9
+        cdef double _tmp10
+        cdef double _tmp11
+        cdef double _tmp2
+        cdef double _tmp1
+        cdef double GaussWeight
+        cdef double* Jac
+        cdef double W
+        cdef double* JacInv
+        cdef size_t i0
+        cdef size_t i1
+        cdef size_t i2
+
+        for i0 in range(n0):
+            for i1 in range(n1):
+                for i2 in range(n2):
+                    GaussWeight = _GaussWeight[i0, i1, i2]
+                    Jac = &_Jac[i0, i1, i2, 0, 0]
+                    JacInv = &_JacInv[i0, i1, i2, 0, 0]
+
+                    _tmp9 = ((Jac[4] * Jac[8]) - (Jac[5] * Jac[7]))
+                    _tmp10 = ((Jac[3] * Jac[8]) - (Jac[5] * Jac[6]))
+                    _tmp11 = ((Jac[3] * Jac[7]) - (Jac[4] * Jac[6]))
+                    _tmp2 = (((Jac[0] * _tmp9) - (Jac[1] * _tmp10)) + (Jac[2] * _tmp11))
+                    _tmp1 = (1.0 / _tmp2)
+                    W = (GaussWeight * fabs(_tmp2))
+                    _W[i0, i1, i2] = W
+                    JacInv[0] = (_tmp1 * _tmp9)
+                    JacInv[1] = (_tmp1 * -((Jac[1] * Jac[8]) - (Jac[2] * Jac[7])))
+                    JacInv[2] = (_tmp1 * ((Jac[1] * Jac[5]) - (Jac[2] * Jac[4])))
+                    JacInv[3] = (_tmp1 * -_tmp10)
+                    JacInv[4] = (_tmp1 * ((Jac[0] * Jac[8]) - (Jac[2] * Jac[6])))
+                    JacInv[5] = (_tmp1 * -((Jac[0] * Jac[5]) - (Jac[2] * Jac[3])))
+                    JacInv[6] = (_tmp1 * _tmp11)
+                    JacInv[7] = (_tmp1 * -((Jac[0] * Jac[7]) - (Jac[1] * Jac[6])))
+                    JacInv[8] = (_tmp1 * ((Jac[0] * Jac[4]) - (Jac[1] * Jac[3])))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1469,15 +1865,15 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         cdef double _dv_100
         cdef double _dv_010
         cdef double _dv_001
-        cdef double _tmp1
-        cdef double _tmp5
-        cdef double _tmp6
+        cdef double _tmp3
+        cdef double _tmp7
+        cdef double _tmp8
         cdef double _du_100
         cdef double _du_010
         cdef double _du_001
-        cdef double _tmp2
-        cdef double _tmp3
         cdef double _tmp4
+        cdef double _tmp5
+        cdef double _tmp6
         cdef double W
         cdef double* JacInv
         cdef size_t i0
@@ -1493,24 +1889,24 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
                     _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
                     _dv_010 = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
                     _dv_001 = (VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0])
-                    _tmp1 = (((JacInv[0] * _dv_100) + (JacInv[3] * _dv_010)) + (JacInv[6] * _dv_001))
-                    _tmp5 = (((JacInv[1] * _dv_100) + (JacInv[4] * _dv_010)) + (JacInv[7] * _dv_001))
-                    _tmp6 = (((JacInv[2] * _dv_100) + (JacInv[5] * _dv_010)) + (JacInv[8] * _dv_001))
+                    _tmp3 = (((JacInv[0] * _dv_100) + (JacInv[3] * _dv_010)) + (JacInv[6] * _dv_001))
+                    _tmp7 = (((JacInv[1] * _dv_100) + (JacInv[4] * _dv_010)) + (JacInv[7] * _dv_001))
+                    _tmp8 = (((JacInv[2] * _dv_100) + (JacInv[5] * _dv_010)) + (JacInv[8] * _dv_001))
                     _du_100 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
                     _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
                     _du_001 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
-                    _tmp2 = (((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) + (JacInv[6] * _du_001))
-                    _tmp3 = (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) + (JacInv[7] * _du_001))
-                    _tmp4 = (((JacInv[2] * _du_100) + (JacInv[5] * _du_010)) + (JacInv[8] * _du_001))
-                    result[0] += ((_tmp1 * _tmp2) * W)
-                    result[1] += ((_tmp1 * _tmp3) * W)
-                    result[2] += ((_tmp1 * _tmp4) * W)
-                    result[3] += ((_tmp5 * _tmp2) * W)
-                    result[4] += ((_tmp5 * _tmp3) * W)
-                    result[5] += ((_tmp5 * _tmp4) * W)
-                    result[6] += ((_tmp6 * _tmp2) * W)
-                    result[7] += ((_tmp6 * _tmp3) * W)
-                    result[8] += ((_tmp6 * _tmp4) * W)
+                    _tmp4 = (((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) + (JacInv[6] * _du_001))
+                    _tmp5 = (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) + (JacInv[7] * _du_001))
+                    _tmp6 = (((JacInv[2] * _du_100) + (JacInv[5] * _du_010)) + (JacInv[8] * _du_001))
+                    result[0] += ((_tmp3 * _tmp4) * W)
+                    result[1] += ((_tmp3 * _tmp5) * W)
+                    result[2] += ((_tmp3 * _tmp6) * W)
+                    result[3] += ((_tmp7 * _tmp4) * W)
+                    result[4] += ((_tmp7 * _tmp5) * W)
+                    result[5] += ((_tmp7 * _tmp6) * W)
+                    result[6] += ((_tmp8 * _tmp4) * W)
+                    result[7] += ((_tmp8 * _tmp5) * W)
+                    result[8] += ((_tmp8 * _tmp6) * W)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)

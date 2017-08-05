@@ -5,6 +5,7 @@
 
 cimport cython
 from cython.parallel import prange
+from libc.math cimport fabs
 from libcpp.vector cimport vector
 
 import numpy as np

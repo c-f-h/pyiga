@@ -98,8 +98,6 @@ class VForm:
             'v':     lambda self: self.basisval(self.basis_funs[1], physical=True),
             'U':     lambda self: self.basisval(self.basis_funs[0]),
             'V':     lambda self: self.basisval(self.basis_funs[1]),
-            'gu':    lambda self: grad(self.U), # parameter gradient
-            'gv':    lambda self: grad(self.V), # parameter gradient
             'JacInv': lambda self: inv(self.Jac),
             'W':     lambda self: self.GaussWeight * abs(det(self.Jac)),
         }
@@ -1761,8 +1759,9 @@ def mass_vf(dim):
 
 def stiffness_vf(dim):
     V = VForm(dim)
+    u, v = V.basisfuns(parametric=True)
     B = V.let('B', V.W * dot(V.JacInv, V.JacInv.T), symmetric=True)
-    V.add(B.dot(V.gu).dot(V.gv))
+    V.add(B.dot(grad(u)).dot(grad(v)))
     return V
 
 ### slower:

@@ -94,19 +94,12 @@ class VForm:
         self.basis_funs = (BasisFun('u', self), BasisFun('v', self))
         # predefined local variables with their generators (created on demand)
         self.predefined_vars = {
-            'u':     lambda self: self.basisval(self.basis_funs[0], physical=True),
-            'v':     lambda self: self.basisval(self.basis_funs[1], physical=True),
-            'U':     lambda self: self.basisval(self.basis_funs[0]),
-            'V':     lambda self: self.basisval(self.basis_funs[1]),
             'JacInv': lambda self: inv(self.Jac),
-            'W':     lambda self: self.GaussWeight * abs(det(self.Jac)),
+            'W':      lambda self: self.GaussWeight * abs(det(self.Jac)),
         }
 
     def basisfuns(self, parametric=False):
-        if parametric:
-            return self.U, self.V
-        else:
-            return self.u, self.v
+        return tuple(self.basisval(bf, physical=not parametric) for bf in self.basis_funs)
 
     def indices_to_D(self, indices):
         """Convert a list of derivative indices into a partial derivative tuple D."""

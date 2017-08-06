@@ -352,8 +352,6 @@ cdef class MassAssembler2D(BaseAssembler2D):
 
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
-        cdef double v
-        cdef double u
         cdef double W
         cdef size_t i0
         cdef size_t i1
@@ -362,9 +360,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
             for i1 in range(n1):
                 W = _W[i0, i1]
 
-                v = (VDv0[1*i0+0] * VDv1[1*i1+0])
-                u = (VDu0[1*i0+0] * VDu1[1*i1+0])
-                result += ((u * v) * W)
+                result += (((VDu0[1*i0+0] * VDu1[1*i1+0]) * (VDv0[1*i0+0] * VDv1[1*i1+0])) * W)
         return result
 
     @cython.boundscheck(False)
@@ -591,7 +587,6 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
         cdef double _dv_10
-        cdef double v
         cdef double _du_10
         cdef double _du_01
         cdef double W
@@ -605,10 +600,9 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
                 JacInv = &_JacInv[i0, i1, 0, 0]
 
                 _dv_10 = (VDv0[2*i0+0] * VDv1[2*i1+1])
-                v = (VDv0[2*i0+0] * VDv1[2*i1+0])
                 _du_10 = (VDu0[2*i0+0] * VDu1[2*i1+1])
                 _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
-                result += ((((JacInv[0] * _du_10) * (JacInv[0] * _dv_10)) + (_du_01 * v)) * W)
+                result += ((((JacInv[0] * _du_10) * (JacInv[0] * _dv_10)) + (_du_01 * (VDv0[2*i0+0] * VDv1[2*i1+0]))) * W)
         return result
 
     @cython.boundscheck(False)
@@ -1285,8 +1279,6 @@ cdef class MassAssembler3D(BaseAssembler3D):
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
         cdef size_t n2 = _W.shape[2]
-        cdef double v
-        cdef double u
         cdef double W
         cdef size_t i0
         cdef size_t i1
@@ -1297,9 +1289,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
                 for i2 in range(n2):
                     W = _W[i0, i1, i2]
 
-                    v = (VDv0[1*i0+0] * VDv1[1*i1+0] * VDv2[1*i2+0])
-                    u = (VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0])
-                    result += ((u * v) * W)
+                    result += (((VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0]) * (VDv0[1*i0+0] * VDv1[1*i1+0] * VDv2[1*i2+0])) * W)
         return result
 
     @cython.boundscheck(False)
@@ -1564,7 +1554,6 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         cdef size_t n2 = _W.shape[2]
         cdef double _dv_100
         cdef double _dv_010
-        cdef double v
         cdef double _du_100
         cdef double _du_010
         cdef double _du_001
@@ -1582,11 +1571,10 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
 
                     _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
                     _dv_010 = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
-                    v = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+0])
                     _du_100 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
                     _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
                     _du_001 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
-                    result += ((((((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) * ((JacInv[0] * _dv_100) + (JacInv[3] * _dv_010))) + (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) * ((JacInv[1] * _dv_100) + (JacInv[4] * _dv_010)))) + (_du_001 * v)) * W)
+                    result += ((((((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) * ((JacInv[0] * _dv_100) + (JacInv[3] * _dv_010))) + (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) * ((JacInv[1] * _dv_100) + (JacInv[4] * _dv_010)))) + (_du_001 * (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+0]))) * W)
         return result
 
     @cython.boundscheck(False)

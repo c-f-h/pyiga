@@ -1792,7 +1792,7 @@ def divdiv_vf(dim):
 # Assembler generation script, main entry point
 ################################################################################
 
-def generate(dim):
+def generate_generic(dim):
     DIM = dim
 
     def dimrepeat(s, sep=', ', upper=DIM):
@@ -1811,21 +1811,21 @@ def generate(dim):
     indices = ['ii[%d]' % k for k in range(DIM)]
     ndofs   = ['self.ndofs[%d]' % k for k in range(DIM)]
 
+    return tmpl_generic.render(locals())
+
+def generate(dim):
     code = PyCode()
 
     def gen(vf, classname):
         AsmGenerator(vf, classname, code).generate()
 
-    gen(mass_vf(DIM), 'MassAssembler')
-    gen(stiffness_vf(DIM), 'StiffnessAssembler')
-    gen(heat_st_vf(DIM), 'HeatAssembler_ST')
-    gen(wave_st_vf(DIM), 'WaveAssembler_ST')
-    gen(divdiv_vf(DIM), 'DivDivAssembler')
+    gen(mass_vf(dim), 'MassAssembler')
+    gen(stiffness_vf(dim), 'StiffnessAssembler')
+    gen(heat_st_vf(dim), 'HeatAssembler_ST')
+    gen(wave_st_vf(dim), 'WaveAssembler_ST')
+    gen(divdiv_vf(dim), 'DivDivAssembler')
 
-    s = tmpl_generic.render(locals())
-    s += '\n\n'
-    s += code.result()
-    return s
+    return generate_generic(dim) + '\n\n' + code.result()
 
 if __name__ == '__main__':
     path = os.path.join(os.path.dirname(__file__), "..", "pyiga", "assemblers.pxi")

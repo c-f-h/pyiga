@@ -710,11 +710,10 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
             # call precompute function
             self.putf('{classname}{dim}D.precompute_fields(', classname=self.classname)
             self.indent(2)
-            for var in vf.precomp_deps + vf.precomp:
-                if var.src:
-                    self.put(var.src + ',')
-                else:
-                    self.put('self.' + var.name + ',')
+            for var in vf.precomp_deps: # input fields
+                self.put(var.src + ',')
+            for var in vf.precomp:      # output fields
+                self.put('self.' + var.name + ',')
             self.dedent(2)
             self.put(')')
 

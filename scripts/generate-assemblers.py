@@ -1833,7 +1833,7 @@ def det(A):
                 (_pm(j, A[0,j] * minor(A, 0, j)) for j in range(n)))
 
 def inv(A):
-    """Inverse of a matrix.."""
+    """Inverse of a matrix."""
     if not A.is_matrix() or A.shape[0] != A.shape[1]:
         raise ValueError('can only compute inverse of square matrices')
     n = A.shape[0]

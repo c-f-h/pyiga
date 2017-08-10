@@ -1260,7 +1260,7 @@ class Expr:
 
     def __deepcopy__(self, memo):
         new = copy.copy(self)
-        new.children = copy.deepcopy(self.children)
+        new.children = copy.deepcopy(self.children, memo)
         return new
 
     base_complexity = 1

@@ -1215,6 +1215,7 @@ class Expr:
         return Dt(self, times)
     def dot(self, x):
         return dot(self, x)
+    __matmul__ = dot        # allow @ operator in Python 3.5+
     @property
     def T(self):
         if not self.is_matrix():

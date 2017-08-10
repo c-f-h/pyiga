@@ -5,6 +5,7 @@ from functools import reduce
 import operator
 import numpy as np
 import networkx
+import copy
 
 class PyCode:
     def __init__(self):
@@ -72,9 +73,11 @@ class AsmVar:
         return not self.local
 
 class BasisFun:
-    def __init__(self, name, vform):
+    def __init__(self, name, vform, vec=None, component=None):
         self.name = name
         self.vform = vform
+        self.vec = vec
+        self.component = component  # for vector-valued basis functions
         self.asmgen = None  # to be set to AsmGenerator for code generation
 
 class VForm:
@@ -91,7 +94,12 @@ class VForm:
 
         self.vars = OrderedDict()
         self.exprs = []         # expressions to be added to the result
-        self.basis_funs = (BasisFun('u', self), BasisFun('v', self))
+
+        if vec:
+            self.basis_funs = (BasisFun('u', self, vec=dim), BasisFun('v', self, vec=dim))
+        else:
+            self.basis_funs = (BasisFun('u', self), BasisFun('v', self))
+
         # predefined local variables with their generators (created on demand)
         self.predefined_vars = {
             'JacInv': lambda self: inv(self.Jac),
@@ -99,7 +107,18 @@ class VForm:
         }
 
     def basisfuns(self, parametric=False):
-        return tuple(self.basisval(bf, physical=not parametric) for bf in self.basis_funs)
+        def make_bfun_expr(bf):
+            if bf.vec is not None:
+                # return a vector which contains the components of the bfun
+                return LiteralVectorExpr(
+                    self.basisval(
+                        BasisFun(bf.name, self, component=k),
+                        physical=not parametric)
+                    for k in self.spacedims)
+            else:
+                return self.basisval(bf, physical=not parametric)
+
+        return tuple(make_bfun_expr(bf) for bf in self.basis_funs)
 
     def indices_to_D(self, indices):
         """Convert a list of derivative indices into a partial derivative tuple D."""
@@ -146,6 +165,8 @@ class VForm:
 
     def add(self, expr):
         if self.vec:
+            if expr.is_scalar():
+                expr = self.substitute_vec_components(expr)
             if expr.is_matrix():
                 expr = expr.ravel()
             if not expr.shape == (self.vec,):
@@ -154,6 +175,43 @@ class VForm:
             if not expr.is_scalar():
                 raise TypeError('require scalar expression')
         self.exprs.append(expr)
+
+    def replace_vector_bfuns(self, expr, name, comp):
+        bfun = expr.basisfun
+        if bfun.name == name and bfun.component is not None:
+            if bfun.component == comp:
+                basic_bfun = [bf for bf in self.basis_funs if bf.name==name][0]
+                return PartialDerivExpr(basic_bfun, expr.D, physical=expr.physical)
+            else:
+                return ConstExpr(0)
+
+    def substitute_vec_components(self, expr):
+        """Given a single scalar expression in terms of vector basis functions,
+        return a matrix of scalar expressions where each basis function has
+        been substituted by (u,0,..,0), ..., (0,...,0,u) successively (u being
+        the underlying scalar basis function).
+        """
+        assert self.vec
+        assert expr.is_scalar()
+
+        # for each output component, replace one component of the basis functions
+        # by the corresponding scalar basis function and all others by 0
+        result = []
+        bfu, bfv = self.basis_funs
+        for i in range(bfv.vec):
+            row = []
+            for j in range(bfu.vec):
+                exprij = copy.deepcopy(expr)    # transform_expr is destructive, so copy the original
+                exprij = transform_expr(exprij,
+                    lambda e: self.replace_vector_bfuns(e, bfv.name, i),
+                    type=PartialDerivExpr)
+                exprij = transform_expr(exprij,
+                    lambda e: self.replace_vector_bfuns(e, bfu.name, j),
+                    type=PartialDerivExpr)
+                row.append(exprij)
+
+            result.append(row)
+        return as_matrix(result)
 
     def basisval(self, basisfun, physical=False):
         return PartialDerivExpr(basisfun, self.dim * (0,), physical=physical)
@@ -275,12 +333,7 @@ class VForm:
         """Apply `fun` to all exprs (or all exprs of the given `type`). If `fun` returns
         an expr, replace the old expr by this new one.
         """
-        def applyfun(e):
-            e2 = None
-            if type is None or isinstance(e, type):
-                e2 = fun(e)
-            return e2 if e2 is not None else e
-        self.exprs = mapexprs(self.exprs, applyfun, deep=True)
+        self.exprs = transform_exprs(self.exprs, fun, type=type, deep=True)
 
     def collect(self, type=None, filter=None):
         for e in self.all_exprs(type=type):
@@ -382,6 +435,8 @@ class VForm:
         self.transform(self.replace_physical_derivs, type=PartialDerivExpr)
         # convert all expressions to scalar form
         self.expand_mat_vec()
+        # fold constants, eliminate zeros
+        self.transform(lambda e: e.fold_constants())
         # find common subexpressions and extract them into named variables
         self.extract_common_expressions()
         # perform dependency analysis for expressions and variables
@@ -1197,6 +1252,17 @@ class Expr:
     def hash(self, child_hashes):
         return hash((type(self), self.shape) + self.hash_key() + child_hashes)
 
+    def is_zero(self):
+        return False
+
+    def fold_constants(self):
+        return self
+
+    def __deepcopy__(self, memo):
+        new = copy.copy(self)
+        new.children = copy.deepcopy(self.children)
+        return new
+
     base_complexity = 1
 
 def make_var_expr(var):
@@ -1218,6 +1284,8 @@ class ConstExpr(Expr):
         self.children = ()
     def __str__(self):
         return str(self.value)
+    def is_zero(self):
+        return abs(self.value) < 1e-15
     def gencode(self):
         return repr(self.value)
     base_complexity = 0
@@ -1413,6 +1481,23 @@ class ScalarOperExpr(Expr):
     def hash_key(self):
         return (self.oper,)
 
+    def fold_constants(self):
+        # if only constants, compute the resulting value
+        if all(isinstance(c, ConstExpr) for c in self.children):
+            func = _oper_to_func[self.oper]
+            return ConstExpr(reduce(func, (c.value for c in self.children)))
+
+        # else, check for zeros
+        if self.oper == '+':
+            if self.x.is_zero():
+                return self.y
+            if self.y.is_zero():
+                return self.x
+        elif self.oper == '*':
+            if any(c.is_zero() for c in self.children):
+                return ConstExpr(0)
+        return self
+
     def gencode(self):
         sep = ' ' + self.oper + ' '
         return '(' + sep.join(x.gencode() for x in self.children) + ')'
@@ -1474,10 +1559,13 @@ class PartialDerivExpr(Expr):
         self.physical = bool(physical)
 
     def __str__(self):
-        return '%s_%s (%s)' % (
-                self.basisfun.name,
-                ''.join(str(k) for k in self.D),
-                'phys' if self.physical else 'para')
+        s = self.basisfun.name
+        if self.basisfun.component is not None:
+            s += '[%d]' % self.basisfun.component
+        if sum(self.D) != 0:
+            s += '_' + ''.join(str(k) for k in self.D)
+            s += '(phys)' if self.physical else '(para)'
+        return s
 
     def hash_key(self):
         return (self.basisfun, self.D, self.physical)
@@ -1606,6 +1694,21 @@ def mapexprs(exprs, fun, deep=False):
         return tuple(result)
     return recurse(exprs)
 
+def make_applyfun(fun, type):
+    def applyfun(e):
+        e2 = None
+        if type is None or isinstance(e, type):
+            e2 = fun(e)
+        return e2 if e2 is not None else e
+    return applyfun
+
+def transform_exprs(exprs, fun, type=None, deep=False):
+    fun = make_applyfun(fun, type)
+    return mapexprs(exprs, fun, deep=deep)
+
+def transform_expr(expr, fun, type=None, deep=False):
+    return transform_exprs((expr,), fun, type=type, deep=deep)[0]
+
 # expression manipulation functions ############################################
 # notation is as close to UFL as possible
 
@@ -1640,11 +1743,18 @@ def Dt(expr, times=1):
 def grad(expr, dims=None):
     if expr.is_var_expr():
         expr = expr.var.expr    # access underlying expression - mild hack
+    if expr.is_vector():
+        return as_matrix([grad(z, dims=dims) for z in expr])  # compute Jacobian of vector expression
     if not isinstance(expr, PartialDerivExpr):
         raise TypeError('can only compute gradient of basis function')
     if dims is None:
         dims = expr.basisfun.vform.spacedims
     return LiteralVectorExpr(Dx(expr, k) for k in dims)
+
+def div(expr):
+    if not expr.is_vector():
+        raise TypeError('can only compute divergence of vector expression')
+    return tr(grad(expr))
 
 def as_vector(x): return LiteralVectorExpr(x)
 def as_matrix(x): return LiteralMatrixExpr(x)
@@ -1784,7 +1894,7 @@ def wave_st_vf(dim):
 def divdiv_vf(dim):
     V = VForm(dim, vec=dim**2)
     u, v = V.basisfuns()
-    V.add(outer(grad(v), grad(u)) * dx)
+    V.add(div(u) * div(v) * dx)
     return V
 
 

@@ -840,11 +840,11 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         cdef size_t n1 = _W.shape[1]
         cdef double _dv_10
         cdef double _dv_01
-        cdef double _tmp3
+        cdef double _tmp4
         cdef double _tmp6
         cdef double _du_10
         cdef double _du_01
-        cdef double _tmp4
+        cdef double _tmp3
         cdef double _tmp5
         cdef double W
         cdef double* JacInv
@@ -858,16 +858,16 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
 
                 _dv_10 = (VDv0[2*i0+0] * VDv1[2*i1+1])
                 _dv_01 = (VDv0[2*i0+1] * VDv1[2*i1+0])
-                _tmp3 = ((JacInv[0] * _dv_10) + (JacInv[2] * _dv_01))
+                _tmp4 = ((JacInv[0] * _dv_10) + (JacInv[2] * _dv_01))
                 _tmp6 = ((JacInv[1] * _dv_10) + (JacInv[3] * _dv_01))
                 _du_10 = (VDu0[2*i0+0] * VDu1[2*i1+1])
                 _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
-                _tmp4 = ((JacInv[0] * _du_10) + (JacInv[2] * _du_01))
+                _tmp3 = ((JacInv[0] * _du_10) + (JacInv[2] * _du_01))
                 _tmp5 = ((JacInv[1] * _du_10) + (JacInv[3] * _du_01))
                 result[0] += ((_tmp3 * _tmp4) * W)
-                result[1] += ((_tmp3 * _tmp5) * W)
-                result[2] += ((_tmp6 * _tmp4) * W)
-                result[3] += ((_tmp6 * _tmp5) * W)
+                result[1] += ((_tmp5 * _tmp4) * W)
+                result[2] += ((_tmp3 * _tmp6) * W)
+                result[3] += ((_tmp5 * _tmp6) * W)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1849,13 +1849,13 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         cdef double _dv_100
         cdef double _dv_010
         cdef double _dv_001
-        cdef double _tmp3
+        cdef double _tmp4
         cdef double _tmp7
         cdef double _tmp8
         cdef double _du_100
         cdef double _du_010
         cdef double _du_001
-        cdef double _tmp4
+        cdef double _tmp3
         cdef double _tmp5
         cdef double _tmp6
         cdef double W
@@ -1873,24 +1873,24 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
                     _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
                     _dv_010 = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
                     _dv_001 = (VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0])
-                    _tmp3 = (((JacInv[0] * _dv_100) + (JacInv[3] * _dv_010)) + (JacInv[6] * _dv_001))
+                    _tmp4 = (((JacInv[0] * _dv_100) + (JacInv[3] * _dv_010)) + (JacInv[6] * _dv_001))
                     _tmp7 = (((JacInv[1] * _dv_100) + (JacInv[4] * _dv_010)) + (JacInv[7] * _dv_001))
                     _tmp8 = (((JacInv[2] * _dv_100) + (JacInv[5] * _dv_010)) + (JacInv[8] * _dv_001))
                     _du_100 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
                     _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
                     _du_001 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
-                    _tmp4 = (((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) + (JacInv[6] * _du_001))
+                    _tmp3 = (((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) + (JacInv[6] * _du_001))
                     _tmp5 = (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) + (JacInv[7] * _du_001))
                     _tmp6 = (((JacInv[2] * _du_100) + (JacInv[5] * _du_010)) + (JacInv[8] * _du_001))
                     result[0] += ((_tmp3 * _tmp4) * W)
-                    result[1] += ((_tmp3 * _tmp5) * W)
-                    result[2] += ((_tmp3 * _tmp6) * W)
-                    result[3] += ((_tmp7 * _tmp4) * W)
-                    result[4] += ((_tmp7 * _tmp5) * W)
-                    result[5] += ((_tmp7 * _tmp6) * W)
-                    result[6] += ((_tmp8 * _tmp4) * W)
-                    result[7] += ((_tmp8 * _tmp5) * W)
-                    result[8] += ((_tmp8 * _tmp6) * W)
+                    result[1] += ((_tmp5 * _tmp4) * W)
+                    result[2] += ((_tmp6 * _tmp4) * W)
+                    result[3] += ((_tmp3 * _tmp7) * W)
+                    result[4] += ((_tmp5 * _tmp7) * W)
+                    result[5] += ((_tmp6 * _tmp7) * W)
+                    result[6] += ((_tmp3 * _tmp8) * W)
+                    result[7] += ((_tmp5 * _tmp8) * W)
+                    result[8] += ((_tmp6 * _tmp8) * W)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)

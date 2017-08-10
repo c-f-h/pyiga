@@ -1262,8 +1262,11 @@ class Expr:
     def hash(self, child_hashes):
         return hash((type(self), self.shape) + self.hash_key() + child_hashes)
 
-    def is_zero(self):
+    def is_constant(self, val):
         return False
+
+    def is_zero(self):
+        return self.is_constant(0)
 
     def fold_constants(self):
         return self
@@ -1294,8 +1297,8 @@ class ConstExpr(Expr):
         self.children = ()
     def __str__(self):
         return str(self.value)
-    def is_zero(self):
-        return abs(self.value) < 1e-15
+    def is_constant(self, val):
+        return abs(self.value - val) < 1e-15
     def gencode(self):
         return repr(self.value)
     base_complexity = 0
@@ -1466,11 +1469,7 @@ def OperExpr(oper, x, y):
     x = as_expr(x)
     y = as_expr(y)
 
-    if oper == '+' and isinstance(y, NegExpr):
-        return OperExpr('-', x, y.x)
-    elif oper == '-' and isinstance(y, NegExpr):
-        return OperExpr('+', x, y.x)
-    elif x.is_scalar() and y.is_scalar():
+    if x.is_scalar() and y.is_scalar():
         return ScalarOperExpr(oper, x, y)
     elif len(x.shape) == len(y.shape):      # vec.vec or mat.mat
         return TensorOperExpr(oper, x, y)
@@ -1501,15 +1500,41 @@ class ScalarOperExpr(Expr):
             func = _oper_to_func[self.oper]
             return ConstExpr(reduce(func, (c.value for c in self.children)))
 
-        # else, check for zeros
+        # else, check for zeros and negations
         if self.oper == '+':
-            if self.x.is_zero():
+            if self.x.is_zero():            # 0 + y  -->  y
                 return self.y
-            if self.y.is_zero():
+            if self.y.is_zero():            # x + 0  -->  x
                 return self.x
+            if isinstance(self.y, NegExpr): # x + (-y)  -->  x - y
+                return OperExpr('-', self.x, self.y.x)
+        elif self.oper == '-':
+            if self.x.is_zero():            # 0 - y  -->  -y
+                return -self.y
+            if self.y.is_zero():            # x - 0  -->  x
+                return self.x
+            if isinstance(self.y, NegExpr): # x - (-y)  -->  x + y
+                return OperExpr('+', self.x, self.y.x)
         elif self.oper == '*':
             if any(c.is_zero() for c in self.children):
                 return ConstExpr(0)
+            if self.x.is_constant(1):       # 1 * y  -->  y
+                return self.y
+            if self.x.is_constant(-1):      # -1 * y -->  -y
+                return -self.y
+            if self.y.is_constant(1):       # x * 1  -->  x
+                return self.x
+            if self.y.is_constant(-1):      # x * -1  -->  -x
+                return -self.x
+        elif self.oper == '/':
+            if self.x.is_zero():            # 0 / y  -->  0
+                return ConstExpr(0)
+            if self.y.is_constant(1):       # x / 1  -->  x
+                return self.x
+            if self.y.is_constant(-1):      # x / -1  -->  -x
+                return -self.x
+            if self.y.is_zero():            # x / 0  -->  ERROR
+                raise ZeroDivisionError('division by zero in expr %s' % self)
         return self
 
     def gencode(self):
@@ -1815,10 +1840,6 @@ def minor(A, i, j):
             for ii in range(m) if ii != i]
     return det(as_matrix(B))
 
-def _pm(k, a):
-    if k % 2: return -a
-    else:     return a
-
 def det(A):
     """Determinant of a matrix."""
     if not A.is_matrix() or A.shape[0] != A.shape[1]:
@@ -1830,7 +1851,8 @@ def det(A):
         return A[0,0]
     else:
         return reduce(operator.add,
-                (_pm(j, A[0,j] * minor(A, 0, j)) for j in range(n)))
+                ((-1)**j * (A[0,j] * minor(A, 0, j))
+                    for j in range(n)))
 
 def inv(A):
     """Inverse of a matrix."""
@@ -1839,7 +1861,8 @@ def inv(A):
     n = A.shape[0]
     invdet = ConstExpr(1) / det(A)
     cofacs = as_matrix(
-            [[ _pm(i+j, minor(A, i, j)) for i in range(n)]
+            [[ (-1)**(i+j) * minor(A, i, j)
+                for i in range(n)]
                 for j in range(n)])
     return invdet * cofacs
 

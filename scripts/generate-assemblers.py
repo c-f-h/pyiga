@@ -6,6 +6,7 @@ import operator
 import numpy as np
 import networkx
 import copy
+import numbers
 
 class PyCode:
     def __init__(self):
@@ -1163,11 +1164,20 @@ cdef void _asm_core_vec_{{DIM}}d_kernel(
 ################################################################################
 
 class Expr:
-    def __add__(self, other): return OperExpr('+', self, other)
-    def __sub__(self, other): return OperExpr('-', self, other)
-    def __mul__(self, other): return OperExpr('*', self, other)
-    def __div__(self, other):     return OperExpr('/', self, other)
-    def __truediv__(self, other): return OperExpr('/', self, other)
+    def __add__(self, other):  return OperExpr('+', self, other)
+    def __radd__(self, other): return OperExpr('+', other, self)
+
+    def __sub__(self, other):  return OperExpr('-', self, other)
+    def __rsub__(self, other): return OperExpr('-', other, self)
+
+    def __mul__(self, other):  return OperExpr('*', self, other)
+    def __rmul__(self, other): return OperExpr('*', other, self)
+
+    def __div__(self, other):  return OperExpr('/', self, other)
+    def __rdiv__(self, other): return OperExpr('/', other, self)
+
+    __truediv__ = __div__
+    __rtruediv__ = __rdiv__
 
     def __pos__(self):  return self
     def __neg__(self):  return NegExpr(self)
@@ -1339,11 +1349,11 @@ class MatrixVarExpr(VarExpr):
 class LiteralVectorExpr(Expr):
     """Vector expression which is represented by a list of individual expressions."""
     def __init__(self, entries):
-        entries = tuple(entries)
+        entries = tuple(as_expr(e) for e in entries)
         self.shape = (len(entries),)
         self.children = entries
-        if not all(isinstance(e, Expr) and e.is_scalar() for e in self.children):
-            raise ValueError('all vector entries should be scalar expressions')
+        if not all(e.is_scalar() for e in self.children):
+            raise ValueError('all vector entries should be scalars')
     def __str__(self):
         return '(' + ', '.join(str(c) for c in self.children) + ')'
     def at(self, i):
@@ -1355,9 +1365,9 @@ class LiteralMatrixExpr(Expr):
     def __init__(self, entries):
         entries = np.array(entries, dtype=object)
         self.shape = entries.shape
-        self.children = tuple(entries.flat)
-        if not all(isinstance(e, Expr) and e.is_scalar() for e in self.children):
-            raise ValueError('all matrix entries should be scalar expressions')
+        self.children = tuple(as_expr(e) for e in entries.flat)
+        if not all(e.is_scalar() for e in self.children):
+            raise ValueError('all matrix entries should be scalars')
     def at(self, i, j):
         return self.children[i * self.shape[1] + j]
     base_complexity = 0
@@ -1452,6 +1462,10 @@ class AbsExpr(Expr):
         return 'fabs(%s)' % self.x.gencode()
 
 def OperExpr(oper, x, y):
+    # coerce arguments to Expr, in case they are number literals
+    x = as_expr(x)
+    y = as_expr(y)
+
     if oper == '+' and isinstance(y, NegExpr):
         return OperExpr('-', x, y.x)
     elif oper == '-' and isinstance(y, NegExpr):
@@ -1755,6 +1769,14 @@ def div(expr):
     if not expr.is_vector():
         raise TypeError('can only compute divergence of vector expression')
     return tr(grad(expr))
+
+def as_expr(x):
+    if isinstance(x, Expr):
+        return x
+    elif isinstance(x, numbers.Real):
+        return ConstExpr(x)
+    else:
+        raise TypeError('cannot coerce %s to expression' % x)
 
 def as_vector(x): return LiteralVectorExpr(x)
 def as_matrix(x): return LiteralMatrixExpr(x)

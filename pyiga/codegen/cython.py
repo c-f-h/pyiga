@@ -280,9 +280,6 @@ class AsmGenerator:
         g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
         g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-        values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
-        values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
-
 """.format(
             dim=self.dim,
             funcdecl=funcdecl,
@@ -291,6 +288,12 @@ class AsmGenerator:
         for line in src.splitlines():
             self.put(line)
         self.indent()
+
+        for k in range(self.dim):
+            self.putf('values_i[{k}] = &self.C{k}[ i[{k}], g_sta[{k}], 0 ]', k=k)
+            self.putf('values_j[{k}] = &self.C{k}[ j[{k}], g_sta[{k}], 0 ]', k=k)
+        self.put('')
+
 
     def generate_assemble_impl(self):
         self.gen_assemble_impl_header()
@@ -331,10 +334,12 @@ class AsmGenerator:
 self.base_init(kvs)
 
 gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
-N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
-
-self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines():
+N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
             self.putf(line)
+        self.put('')
+
+        for k in range(self.dim):
+            self.putf('self.C{k} = compute_values_derivs(kvs[{k}], gaussgrid[{k}], derivs={maxderiv})', k=k)
         self.put('')
 
         # compute Jacobian
@@ -415,7 +420,10 @@ self.C = compute_values_derivs(kvs, gaussgrid, derivs={maxderiv})""".splitlines(
         self.indent()
 
         # declare instance variables
-        self.put('cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative')
+        self.put('# 1D basis values. Indices: basis function, mesh point, derivative')
+        for k in range(self.dim):
+            self.putf('cdef double[:, :, ::1] C{k}', k=k)
+
         # declare field variables
         for var in self.vform.field_vars():
             self.putf('cdef double[{X}:1] {name}',

@@ -25,7 +25,9 @@ from pyiga.assemble_tools_cy cimport (
 from pyiga.assemble_tools_cy import compute_values_derivs
 
 cdef class MassAssembler2D(BaseAssembler2D):
-    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
+    # 1D basis values. Indices: basis function, mesh point, derivative
+    cdef double[:, :, ::1] C0
+    cdef double[:, :, ::1] C1
     cdef double[:, ::1] W
 
     def __init__(self, kvs, geo):
@@ -35,7 +37,8 @@ cdef class MassAssembler2D(BaseAssembler2D):
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.C = compute_values_derivs(kvs, gaussgrid, derivs=0)
+        self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=0)
+        self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=0)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         gauss_weights = gaussweights[0][:,None] * gaussweights[1][None,:]
@@ -116,8 +119,10 @@ cdef class MassAssembler2D(BaseAssembler2D):
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
-            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
+        values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
+        values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
+        values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
+        values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
 
         return MassAssembler2D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
@@ -126,7 +131,9 @@ cdef class MassAssembler2D(BaseAssembler2D):
         )
 
 cdef class StiffnessAssembler2D(BaseAssembler2D):
-    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
+    # 1D basis values. Indices: basis function, mesh point, derivative
+    cdef double[:, :, ::1] C0
+    cdef double[:, :, ::1] C1
     cdef double[:, :, :, ::1] B
 
     def __init__(self, kvs, geo):
@@ -136,7 +143,8 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.C = compute_values_derivs(kvs, gaussgrid, derivs=1)
+        self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
+        self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         gauss_weights = gaussweights[0][:,None] * gaussweights[1][None,:]
@@ -234,8 +242,10 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
-            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
+        values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
+        values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
+        values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
+        values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
 
         return StiffnessAssembler2D.combine(
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
@@ -244,7 +254,9 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         )
 
 cdef class HeatAssembler_ST2D(BaseAssembler2D):
-    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
+    # 1D basis values. Indices: basis function, mesh point, derivative
+    cdef double[:, :, ::1] C0
+    cdef double[:, :, ::1] C1
     cdef double[:, ::1] W
     cdef double[:, :, :, ::1] JacInv
 
@@ -255,7 +267,8 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.C = compute_values_derivs(kvs, gaussgrid, derivs=1)
+        self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
+        self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         gauss_weights = gaussweights[0][:,None] * gaussweights[1][None,:]
@@ -358,8 +371,10 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
-            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
+        values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
+        values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
+        values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
+        values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
 
         return HeatAssembler_ST2D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
@@ -369,7 +384,9 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         )
 
 cdef class WaveAssembler_ST2D(BaseAssembler2D):
-    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
+    # 1D basis values. Indices: basis function, mesh point, derivative
+    cdef double[:, :, ::1] C0
+    cdef double[:, :, ::1] C1
     cdef double[:, ::1] W
     cdef double[:, :, :, ::1] JacInv
 
@@ -380,7 +397,8 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.C = compute_values_derivs(kvs, gaussgrid, derivs=2)
+        self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=2)
+        self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=2)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         gauss_weights = gaussweights[0][:,None] * gaussweights[1][None,:]
@@ -485,8 +503,10 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
-            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
+        values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
+        values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
+        values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
+        values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
 
         return WaveAssembler_ST2D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
@@ -496,7 +516,9 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         )
 
 cdef class DivDivAssembler2D(BaseVectorAssembler2D):
-    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
+    # 1D basis values. Indices: basis function, mesh point, derivative
+    cdef double[:, :, ::1] C0
+    cdef double[:, :, ::1] C1
     cdef double[:, ::1] W
     cdef double[:, :, :, ::1] JacInv
 
@@ -507,7 +529,8 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.C = compute_values_derivs(kvs, gaussgrid, derivs=1)
+        self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
+        self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         gauss_weights = gaussweights[0][:,None] * gaussweights[1][None,:]
@@ -622,8 +645,10 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
-            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
+        values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
+        values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
+        values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
+        values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
 
         DivDivAssembler2D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
@@ -633,7 +658,10 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
                 result
         )
 cdef class MassAssembler3D(BaseAssembler3D):
-    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
+    # 1D basis values. Indices: basis function, mesh point, derivative
+    cdef double[:, :, ::1] C0
+    cdef double[:, :, ::1] C1
+    cdef double[:, :, ::1] C2
     cdef double[:, :, ::1] W
 
     def __init__(self, kvs, geo):
@@ -643,7 +671,9 @@ cdef class MassAssembler3D(BaseAssembler3D):
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.C = compute_values_derivs(kvs, gaussgrid, derivs=0)
+        self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=0)
+        self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=0)
+        self.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=0)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         gauss_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:]
@@ -730,8 +760,12 @@ cdef class MassAssembler3D(BaseAssembler3D):
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
-            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
+        values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
+        values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
+        values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
+        values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
+        values_i[2] = &self.C2[ i[2], g_sta[2], 0 ]
+        values_j[2] = &self.C2[ j[2], g_sta[2], 0 ]
 
         return MassAssembler3D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
@@ -740,7 +774,10 @@ cdef class MassAssembler3D(BaseAssembler3D):
         )
 
 cdef class StiffnessAssembler3D(BaseAssembler3D):
-    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
+    # 1D basis values. Indices: basis function, mesh point, derivative
+    cdef double[:, :, ::1] C0
+    cdef double[:, :, ::1] C1
+    cdef double[:, :, ::1] C2
     cdef double[:, :, :, :, ::1] B
 
     def __init__(self, kvs, geo):
@@ -750,7 +787,9 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.C = compute_values_derivs(kvs, gaussgrid, derivs=1)
+        self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
+        self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
+        self.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=1)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         gauss_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:]
@@ -870,8 +909,12 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
-            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
+        values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
+        values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
+        values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
+        values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
+        values_i[2] = &self.C2[ i[2], g_sta[2], 0 ]
+        values_j[2] = &self.C2[ j[2], g_sta[2], 0 ]
 
         return StiffnessAssembler3D.combine(
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
@@ -880,7 +923,10 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         )
 
 cdef class HeatAssembler_ST3D(BaseAssembler3D):
-    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
+    # 1D basis values. Indices: basis function, mesh point, derivative
+    cdef double[:, :, ::1] C0
+    cdef double[:, :, ::1] C1
+    cdef double[:, :, ::1] C2
     cdef double[:, :, ::1] W
     cdef double[:, :, :, :, ::1] JacInv
 
@@ -891,7 +937,9 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.C = compute_values_derivs(kvs, gaussgrid, derivs=1)
+        self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
+        self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
+        self.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=1)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         gauss_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:]
@@ -1015,8 +1063,12 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
-            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
+        values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
+        values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
+        values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
+        values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
+        values_i[2] = &self.C2[ i[2], g_sta[2], 0 ]
+        values_j[2] = &self.C2[ j[2], g_sta[2], 0 ]
 
         return HeatAssembler_ST3D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
@@ -1026,7 +1078,10 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         )
 
 cdef class WaveAssembler_ST3D(BaseAssembler3D):
-    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
+    # 1D basis values. Indices: basis function, mesh point, derivative
+    cdef double[:, :, ::1] C0
+    cdef double[:, :, ::1] C1
+    cdef double[:, :, ::1] C2
     cdef double[:, :, ::1] W
     cdef double[:, :, :, :, ::1] JacInv
 
@@ -1037,7 +1092,9 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.C = compute_values_derivs(kvs, gaussgrid, derivs=2)
+        self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=2)
+        self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=2)
+        self.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=2)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         gauss_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:]
@@ -1163,8 +1220,12 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
-            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
+        values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
+        values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
+        values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
+        values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
+        values_i[2] = &self.C2[ i[2], g_sta[2], 0 ]
+        values_j[2] = &self.C2[ j[2], g_sta[2], 0 ]
 
         return WaveAssembler_ST3D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
@@ -1174,7 +1235,10 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         )
 
 cdef class DivDivAssembler3D(BaseVectorAssembler3D):
-    cdef vector[double[:, :, ::1]] C       # 1D basis values. Indices: basis function, mesh point, derivative
+    # 1D basis values. Indices: basis function, mesh point, derivative
+    cdef double[:, :, ::1] C0
+    cdef double[:, :, ::1] C1
+    cdef double[:, :, ::1] C2
     cdef double[:, :, ::1] W
     cdef double[:, :, :, :, ::1] JacInv
 
@@ -1185,7 +1249,9 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.C = compute_values_derivs(kvs, gaussgrid, derivs=1)
+        self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
+        self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
+        self.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=1)
 
         geo_jac = geo.grid_jacobian(gaussgrid)
         gauss_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:]
@@ -1330,8 +1396,12 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
             g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
             g_end[k] = self.nqp * intv.b    # end of Gauss nodes
 
-            values_i[k] = &self.C[k][ i[k], g_sta[k], 0 ]
-            values_j[k] = &self.C[k][ j[k], g_sta[k], 0 ]
+        values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
+        values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
+        values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
+        values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
+        values_i[2] = &self.C2[ i[2], g_sta[2], 0 ]
+        values_j[2] = &self.C2[ j[2], g_sta[2], 0 ]
 
         DivDivAssembler3D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],

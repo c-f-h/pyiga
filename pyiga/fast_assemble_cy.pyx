@@ -1,6 +1,7 @@
 cimport cython
 from libcpp.vector cimport vector
 from cython cimport view    # avoid compiler crash
+from cpython cimport pycapsule
 
 import numpy as np
 cimport numpy as np
@@ -94,33 +95,19 @@ cdef object fast_assemble_3d_wrapper(MatrixEntryFn entry_func, void * data, kvs,
 
 
 ################################################################################
-# Wrappers for particular assemblers
+# Generic wrapper for arbitrary dimension
 ################################################################################
 
-from .assemble_tools_cy cimport _entry_func_2d, _entry_func_3d
-from .assemblers cimport (
-    MassAssembler2D, MassAssembler3D,
-    StiffnessAssembler2D, StiffnessAssembler3D,
-)
+def fast_assemble(asm, kvs, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
+    capsule = asm.entry_func_ptr()
+    cdef MatrixEntryFn entryfunc = <MatrixEntryFn>(pycapsule.PyCapsule_GetPointer(capsule, "entryfunc"))
 
-def fast_mass_2d(kvs, geo, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
-    cdef MassAssembler2D asm = MassAssembler2D(kvs, geo)
-    return fast_assemble_2d_wrapper(_entry_func_2d, <void*>asm, kvs,
-            tol, maxiter, skipcount, tolcount, verbose)
-
-def fast_stiffness_2d(kvs, geo, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
-    cdef StiffnessAssembler2D asm = StiffnessAssembler2D(kvs, geo)
-    return fast_assemble_2d_wrapper(_entry_func_2d, <void*>asm, kvs,
-            tol, maxiter, skipcount, tolcount, verbose)
-
-
-def fast_mass_3d(kvs, geo, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
-    cdef MassAssembler3D asm = MassAssembler3D(kvs, geo)
-    return fast_assemble_3d_wrapper(_entry_func_3d, <void*>asm, kvs,
-            tol, maxiter, skipcount, tolcount, verbose)
-
-def fast_stiffness_3d(kvs, geo, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
-    cdef StiffnessAssembler3D asm = StiffnessAssembler3D(kvs, geo)
-    return fast_assemble_3d_wrapper(_entry_func_3d, <void*>asm, kvs,
-            tol, maxiter, skipcount, tolcount, verbose)
-
+    dim = len(kvs)
+    if dim == 2:
+        return fast_assemble_2d_wrapper(entryfunc, <void*>asm, kvs,
+                tol, maxiter, skipcount, tolcount, verbose)
+    elif dim == 3:
+        return fast_assemble_3d_wrapper(entryfunc, <void*>asm, kvs,
+                tol, maxiter, skipcount, tolcount, verbose)
+    else:
+        raise NotImplementedError('fast assemblers only implemented for 2D and 3D')

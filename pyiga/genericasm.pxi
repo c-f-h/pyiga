@@ -91,6 +91,9 @@ cdef class BaseAssembler2D:
             list(results)   # wait for threads to finish
         return result
 
+    def entry_func_ptr(self):
+        return pycapsule.PyCapsule_New(<void*>_entry_func_2d, "entryfunc", NULL)
+
 cpdef void _asm_chunk_2d(BaseAssembler2D asm, size_t[:,::1] idxchunk, double[::1] out):
     with nogil:
         asm.multi_assemble_chunk(idxchunk, out)
@@ -381,6 +384,9 @@ cdef class BaseAssembler3D:
                         chunk_tasks(result, num_threads))
             list(results)   # wait for threads to finish
         return result
+
+    def entry_func_ptr(self):
+        return pycapsule.PyCapsule_New(<void*>_entry_func_3d, "entryfunc", NULL)
 
 cpdef void _asm_chunk_3d(BaseAssembler3D asm, size_t[:,::1] idxchunk, double[::1] out):
     with nogil:

@@ -563,11 +563,12 @@ def mass_fast(kvs, geo=None, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, ve
     if dim == 1:
         assert False, "Geometry map not supported for 1D assembling"
     elif dim == 2:
-        return fast_assemble_cy.fast_mass_2d(kvs, geo, tol, maxiter, skipcount, tolcount, verbose)
+        asm = assemblers.MassAssembler2D(kvs, geo)
     elif dim == 3:
-        return fast_assemble_cy.fast_mass_3d(kvs, geo, tol, maxiter, skipcount, tolcount, verbose)
+        asm = assemblers.MassAssembler3D(kvs, geo)
     else:
         assert False, "Dimensions higher than 3 are currently not implemented."
+    return fast_assemble_cy.fast_assemble(asm, kvs, tol, maxiter, skipcount, tolcount, verbose)
 
 def stiffness_fast(kvs, geo=None, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
     """Assemble a stiffness matrix for the given tensor product B-spline basis
@@ -582,9 +583,10 @@ def stiffness_fast(kvs, geo=None, tol=1e-10, maxiter=100, skipcount=3, tolcount=
     if dim == 1:
         assert False, "Geometry map not supported for 1D assembling"
     elif dim == 2:
-        return fast_assemble_cy.fast_stiffness_2d(kvs, geo, tol, maxiter, skipcount, tolcount, verbose)
+        asm = assemblers.StiffnessAssembler2D(kvs, geo)
     elif dim == 3:
-        return fast_assemble_cy.fast_stiffness_3d(kvs, geo, tol, maxiter, skipcount, tolcount, verbose)
+        asm = assemblers.StiffnessAssembler3D(kvs, geo)
     else:
         assert False, "Dimensions higher than 3 are currently not implemented."
+    return fast_assemble_cy.fast_assemble(asm, kvs, tol, maxiter, skipcount, tolcount, verbose)
 

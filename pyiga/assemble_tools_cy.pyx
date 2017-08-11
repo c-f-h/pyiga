@@ -6,6 +6,7 @@
 cimport cython
 from cython.parallel import prange
 from libcpp.vector cimport vector
+from cpython cimport pycapsule
 
 import numpy as np
 cimport numpy as np

@@ -573,7 +573,6 @@ class ScalarVarExpr(VarExpr):
 
     def gencode(self):
         return self.var.name
-    base_complexity = 0
 
 class VectorVarExpr(VarExpr):
     def __init__(self, var):
@@ -584,7 +583,6 @@ class VectorVarExpr(VarExpr):
 
     def at(self, i):
         return VectorEntryExpr(self, i)
-    base_complexity = 0
 
 class MatrixVarExpr(VarExpr):
     """Matrix expression which is represented by a matrix reference and shape."""
@@ -597,7 +595,6 @@ class MatrixVarExpr(VarExpr):
 
     def at(self, i, j):
         return MatrixEntryExpr(self, i, j)
-    base_complexity = 0
 
 class LiteralVectorExpr(Expr):
     """Vector expression which is represented by a list of individual expressions."""

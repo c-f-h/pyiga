@@ -92,3 +92,35 @@ cdef object fast_assemble_3d_wrapper(MatrixEntryFn entry_func, void * data, kvs,
                  <size_t[:ne]> entries_j.data())),
             shape=(N,N)).tocsr()
 
+
+################################################################################
+# Wrappers for particular assemblers
+################################################################################
+
+from .assemble_tools_cy cimport _entry_func_2d, _entry_func_3d
+from .assemblers cimport (
+    MassAssembler2D, MassAssembler3D,
+    StiffnessAssembler2D, StiffnessAssembler3D,
+)
+
+def fast_mass_2d(kvs, geo, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
+    cdef MassAssembler2D asm = MassAssembler2D(kvs, geo)
+    return fast_assemble_2d_wrapper(_entry_func_2d, <void*>asm, kvs,
+            tol, maxiter, skipcount, tolcount, verbose)
+
+def fast_stiffness_2d(kvs, geo, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
+    cdef StiffnessAssembler2D asm = StiffnessAssembler2D(kvs, geo)
+    return fast_assemble_2d_wrapper(_entry_func_2d, <void*>asm, kvs,
+            tol, maxiter, skipcount, tolcount, verbose)
+
+
+def fast_mass_3d(kvs, geo, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
+    cdef MassAssembler3D asm = MassAssembler3D(kvs, geo)
+    return fast_assemble_3d_wrapper(_entry_func_3d, <void*>asm, kvs,
+            tol, maxiter, skipcount, tolcount, verbose)
+
+def fast_stiffness_3d(kvs, geo, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
+    cdef StiffnessAssembler3D asm = StiffnessAssembler3D(kvs, geo)
+    return fast_assemble_3d_wrapper(_entry_func_3d, <void*>asm, kvs,
+            tol, maxiter, skipcount, tolcount, verbose)
+

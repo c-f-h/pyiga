@@ -3,6 +3,9 @@ from setuptools.extension import Extension
 from Cython.Build import cythonize
 import numpy
 
+import Cython.Compiler.Options
+Cython.Compiler.Options.cimport_from_pyx = True
+
 USE_OPENMP = True
 
 c_args = ['-O3', '-march=native', '-ffast-math']
@@ -36,6 +39,13 @@ extensions = [
         extra_compile_args=c_args + c_args_openmp,
         extra_link_args=l_args_openmp,
         #define_macros=[('CYTHON_TRACE', '1')]
+    ),
+    Extension("pyiga.assemblers",
+             ["pyiga/assemblers.pyx"],
+        include_dirs = [numpy.get_include()],
+        language='c++',
+        extra_compile_args=c_args + c_args_openmp,
+        extra_link_args=l_args_openmp,
     ),
     Extension("pyiga.fast_assemble_cy",
              ["pyiga/fastasm.cc",

@@ -75,6 +75,8 @@ import itertools
 
 from . import bspline
 from . import assemble_tools
+from . import assemblers
+from . import fast_assemble_cy
 from . import tensor
 from . import operators
 from . import utils
@@ -224,7 +226,7 @@ def bsp_mass_2d(knotvecs, geo=None):
         return scipy.sparse.kron(M1, M2, format='csr')
     else:
         return assemble_tools.assemble(
-                assemble_tools.MassAssembler2D(knotvecs, geo),
+                assemblers.MassAssembler2D(knotvecs, geo),
                 symmetric=True)
 
 def bsp_stiffness_2d(knotvecs, geo=None):
@@ -237,7 +239,7 @@ def bsp_stiffness_2d(knotvecs, geo=None):
         return scipy.sparse.kron(K1, M2, format='csr') + scipy.sparse.kron(M1, K2, format='csr')
     else:
         return assemble_tools.assemble(
-                assemble_tools.StiffnessAssembler2D(knotvecs, geo),
+                assemblers.StiffnessAssembler2D(knotvecs, geo),
                 symmetric=True)
 
 def bsp_mass_3d(knotvecs, geo=None):
@@ -248,7 +250,7 @@ def bsp_mass_3d(knotvecs, geo=None):
         return k(M[0], k(M[1], M[2]))
     else:
         return assemble_tools.assemble(
-                assemble_tools.MassAssembler3D(knotvecs, geo),
+                assemblers.MassAssembler3D(knotvecs, geo),
                 symmetric=True)
 
 def bsp_stiffness_3d(knotvecs, geo=None):
@@ -261,7 +263,7 @@ def bsp_stiffness_3d(knotvecs, geo=None):
         return k(MK[0][1], M12) + k(MK[0][0], K12)
     else:
         return assemble_tools.assemble(
-                assemble_tools.StiffnessAssembler3D(knotvecs, geo),
+                assemblers.StiffnessAssembler3D(knotvecs, geo),
                 symmetric=True)
 
 ################################################################################
@@ -541,9 +543,9 @@ def divdiv(kvs, geo=None, layout='packed', format='csr'):
     if geo is None:
         geo = geometry.unit_cube(dim=dim)   # TODO: fast assembling for div-div?
     if dim == 2:
-        asm = assemble_tools.DivDivAssembler2D(kvs, geo)
+        asm = assemblers.DivDivAssembler2D(kvs, geo)
     elif dim == 3:
-        asm = assemble_tools.DivDivAssembler3D(kvs, geo)
+        asm = assemblers.DivDivAssembler3D(kvs, geo)
     else:
         assert False, 'dimension %d not implemented' % dim
     return assemble_tools.generic_vector_asm(kvs, asm, symmetric=True, layout=layout, format=format)
@@ -561,9 +563,9 @@ def mass_fast(kvs, geo=None, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, ve
     if dim == 1:
         assert False, "Geometry map not supported for 1D assembling"
     elif dim == 2:
-        return assemble_tools.fast_mass_2d(kvs, geo, tol, maxiter, skipcount, tolcount, verbose)
+        return fast_assemble_cy.fast_mass_2d(kvs, geo, tol, maxiter, skipcount, tolcount, verbose)
     elif dim == 3:
-        return assemble_tools.fast_mass_3d(kvs, geo, tol, maxiter, skipcount, tolcount, verbose)
+        return fast_assemble_cy.fast_mass_3d(kvs, geo, tol, maxiter, skipcount, tolcount, verbose)
     else:
         assert False, "Dimensions higher than 3 are currently not implemented."
 
@@ -580,9 +582,9 @@ def stiffness_fast(kvs, geo=None, tol=1e-10, maxiter=100, skipcount=3, tolcount=
     if dim == 1:
         assert False, "Geometry map not supported for 1D assembling"
     elif dim == 2:
-        return assemble_tools.fast_stiffness_2d(kvs, geo, tol, maxiter, skipcount, tolcount, verbose)
+        return fast_assemble_cy.fast_stiffness_2d(kvs, geo, tol, maxiter, skipcount, tolcount, verbose)
     elif dim == 3:
-        return assemble_tools.fast_stiffness_3d(kvs, geo, tol, maxiter, skipcount, tolcount, verbose)
+        return fast_assemble_cy.fast_stiffness_3d(kvs, geo, tol, maxiter, skipcount, tolcount, verbose)
     else:
         assert False, "Dimensions higher than 3 are currently not implemented."
 

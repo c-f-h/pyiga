@@ -462,7 +462,6 @@ cdef class BaseAssembler{{DIM}}D:
     {%- for k in range(DIM) %}
     cdef ssize_t[:,::1] meshsupp{{k}}
     {%- endfor %}
-    cdef list _asm_pool     # list of shared clones for multithreading
 
     cdef void base_init(self, kvs):
         assert len(kvs) == {{DIM}}, "Assembler requires two knot vectors"
@@ -472,17 +471,6 @@ cdef class BaseAssembler{{DIM}}D:
         {%- for k in range(DIM) %}
         self.meshsupp{{k}} = kvs[{{k}}].mesh_support_idx_all()
         {%- endfor %}
-        self._asm_pool = []
-
-    cdef _share_base(self, BaseAssembler{{DIM}}D asm):
-        asm.nqp = self.nqp
-        asm.ndofs[:] = self.ndofs[:]
-        {%- for k in range(DIM) %}
-        asm.meshsupp{{k}} = self.meshsupp{{k}}
-        {%- endfor %}
-
-    cdef BaseAssembler{{DIM}}D shared_clone(self):
-        return self     # by default assume thread safety
 
     cdef inline size_t to_seq(self, size_t[{{DIM}}] ii) nogil:
         # by convention, the order of indices is (y,x)
@@ -539,12 +527,14 @@ cdef class BaseAssembler{{DIM}}D:
             self.multi_assemble_chunk(idx_arr, result)
         else:
             thread_pool = get_thread_pool()
-            if not self._asm_pool:
-                self._asm_pool = [self] + [self.shared_clone()
-                        for i in range(1, thread_pool._max_workers)]
 
-            results = thread_pool.map(_asm_chunk_{{DIM}}d,
-                        self._asm_pool,
+            def asm_chunk(idxchunk, out):
+                cdef size_t[:, ::1] idxchunk_ = idxchunk
+                cdef double[::1] out_ = out
+                with nogil:
+                    self.multi_assemble_chunk(idxchunk_, out_)
+
+            results = thread_pool.map(asm_chunk,
                         chunk_tasks(idx_arr, num_threads),
                         chunk_tasks(result, num_threads))
             list(results)   # wait for threads to finish
@@ -662,9 +652,6 @@ cdef class BaseVectorAssembler{{DIM}}D:
         {%- for k in range(DIM) %}
         self.meshsupp{{k}} = kvs[{{k}}].mesh_support_idx_all()
         {%- endfor %}
-
-    cdef BaseAssembler{{DIM}}D shared_clone(self):
-        return self     # by default assume thread safety
 
     cdef inline size_t to_seq(self, size_t[{{DIM + 1}}] ii) nogil:
         return {{ to_seq(indices + [ 'ii[%d]' % DIM ], ndofs + [ DIM|string ]) }}

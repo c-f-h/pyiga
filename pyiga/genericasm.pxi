@@ -10,7 +10,6 @@ cdef class BaseAssembler2D:
     cdef int[2] p
     cdef ssize_t[:,::1] meshsupp0
     cdef ssize_t[:,::1] meshsupp1
-    cdef list _asm_pool     # list of shared clones for multithreading
 
     cdef void base_init(self, kvs):
         assert len(kvs) == 2, "Assembler requires two knot vectors"
@@ -19,16 +18,6 @@ cdef class BaseAssembler2D:
         self.p[:]     = [kv.p for kv in kvs]
         self.meshsupp0 = kvs[0].mesh_support_idx_all()
         self.meshsupp1 = kvs[1].mesh_support_idx_all()
-        self._asm_pool = []
-
-    cdef _share_base(self, BaseAssembler2D asm):
-        asm.nqp = self.nqp
-        asm.ndofs[:] = self.ndofs[:]
-        asm.meshsupp0 = self.meshsupp0
-        asm.meshsupp1 = self.meshsupp1
-
-    cdef BaseAssembler2D shared_clone(self):
-        return self     # by default assume thread safety
 
     cdef inline size_t to_seq(self, size_t[2] ii) nogil:
         # by convention, the order of indices is (y,x)
@@ -83,12 +72,14 @@ cdef class BaseAssembler2D:
             self.multi_assemble_chunk(idx_arr, result)
         else:
             thread_pool = get_thread_pool()
-            if not self._asm_pool:
-                self._asm_pool = [self] + [self.shared_clone()
-                        for i in range(1, thread_pool._max_workers)]
 
-            results = thread_pool.map(_asm_chunk_2d,
-                        self._asm_pool,
+            def asm_chunk(idxchunk, out):
+                cdef size_t[:, ::1] idxchunk_ = idxchunk
+                cdef double[::1] out_ = out
+                with nogil:
+                    self.multi_assemble_chunk(idxchunk_, out_)
+
+            results = thread_pool.map(asm_chunk,
                         chunk_tasks(idx_arr, num_threads),
                         chunk_tasks(result, num_threads))
             list(results)   # wait for threads to finish
@@ -204,9 +195,6 @@ cdef class BaseVectorAssembler2D:
         self.meshsupp0 = kvs[0].mesh_support_idx_all()
         self.meshsupp1 = kvs[1].mesh_support_idx_all()
 
-    cdef BaseAssembler2D shared_clone(self):
-        return self     # by default assume thread safety
-
     cdef inline size_t to_seq(self, size_t[3] ii) nogil:
         return ((ii[0]) * self.ndofs[1] + ii[1]) * 2 + ii[2]
 
@@ -308,7 +296,6 @@ cdef class BaseAssembler3D:
     cdef ssize_t[:,::1] meshsupp0
     cdef ssize_t[:,::1] meshsupp1
     cdef ssize_t[:,::1] meshsupp2
-    cdef list _asm_pool     # list of shared clones for multithreading
 
     cdef void base_init(self, kvs):
         assert len(kvs) == 3, "Assembler requires two knot vectors"
@@ -318,17 +305,6 @@ cdef class BaseAssembler3D:
         self.meshsupp0 = kvs[0].mesh_support_idx_all()
         self.meshsupp1 = kvs[1].mesh_support_idx_all()
         self.meshsupp2 = kvs[2].mesh_support_idx_all()
-        self._asm_pool = []
-
-    cdef _share_base(self, BaseAssembler3D asm):
-        asm.nqp = self.nqp
-        asm.ndofs[:] = self.ndofs[:]
-        asm.meshsupp0 = self.meshsupp0
-        asm.meshsupp1 = self.meshsupp1
-        asm.meshsupp2 = self.meshsupp2
-
-    cdef BaseAssembler3D shared_clone(self):
-        return self     # by default assume thread safety
 
     cdef inline size_t to_seq(self, size_t[3] ii) nogil:
         # by convention, the order of indices is (y,x)
@@ -385,12 +361,14 @@ cdef class BaseAssembler3D:
             self.multi_assemble_chunk(idx_arr, result)
         else:
             thread_pool = get_thread_pool()
-            if not self._asm_pool:
-                self._asm_pool = [self] + [self.shared_clone()
-                        for i in range(1, thread_pool._max_workers)]
 
-            results = thread_pool.map(_asm_chunk_3d,
-                        self._asm_pool,
+            def asm_chunk(idxchunk, out):
+                cdef size_t[:, ::1] idxchunk_ = idxchunk
+                cdef double[::1] out_ = out
+                with nogil:
+                    self.multi_assemble_chunk(idxchunk_, out_)
+
+            results = thread_pool.map(asm_chunk,
                         chunk_tasks(idx_arr, num_threads),
                         chunk_tasks(result, num_threads))
             list(results)   # wait for threads to finish
@@ -517,9 +495,6 @@ cdef class BaseVectorAssembler3D:
         self.meshsupp0 = kvs[0].mesh_support_idx_all()
         self.meshsupp1 = kvs[1].mesh_support_idx_all()
         self.meshsupp2 = kvs[2].mesh_support_idx_all()
-
-    cdef BaseAssembler3D shared_clone(self):
-        return self     # by default assume thread safety
 
     cdef inline size_t to_seq(self, size_t[4] ii) nogil:
         return (((ii[0]) * self.ndofs[1] + ii[1]) * self.ndofs[2] + ii[2]) * 3 + ii[3]

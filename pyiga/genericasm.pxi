@@ -88,10 +88,6 @@ cdef class BaseAssembler2D:
     def entry_func_ptr(self):
         return pycapsule.PyCapsule_New(<void*>_entry_func_2d, "entryfunc", NULL)
 
-cpdef void _asm_chunk_2d(BaseAssembler2D asm, size_t[:,::1] idxchunk, double[::1] out):
-    with nogil:
-        asm.multi_assemble_chunk(idxchunk, out)
-
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -376,10 +372,6 @@ cdef class BaseAssembler3D:
 
     def entry_func_ptr(self):
         return pycapsule.PyCapsule_New(<void*>_entry_func_3d, "entryfunc", NULL)
-
-cpdef void _asm_chunk_3d(BaseAssembler3D asm, size_t[:,::1] idxchunk, double[::1] out):
-    with nogil:
-        asm.multi_assemble_chunk(idxchunk, out)
 
 
 @cython.boundscheck(False)

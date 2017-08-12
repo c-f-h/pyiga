@@ -543,10 +543,6 @@ cdef class BaseAssembler{{DIM}}D:
     def entry_func_ptr(self):
         return pycapsule.PyCapsule_New(<void*>_entry_func_{{DIM}}d, "entryfunc", NULL)
 
-cpdef void _asm_chunk_{{DIM}}d(BaseAssembler{{DIM}}D asm, size_t[:,::1] idxchunk, double[::1] out):
-    with nogil:
-        asm.multi_assemble_chunk(idxchunk, out)
-
 
 @cython.boundscheck(False)
 @cython.wraparound(False)

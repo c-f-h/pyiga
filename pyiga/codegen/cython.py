@@ -264,32 +264,23 @@ class AsmGenerator:
         zeroret = '' if self.vec else '0.0'  # for vector assemblers, result[] is 0-initialized
 
         self.cython_pragmas()
-        src = r"""{funcdecl}
-    cdef int k
-    cdef IntInterval intv
-    cdef size_t g_sta[{dim}]
-    cdef size_t g_end[{dim}]
-    cdef (double*) values_i[{dim}]
-    cdef (double*) values_j[{dim}]
-
-    for k in range({dim}):
-        intv = intersect_intervals(make_intv(self.meshsupp[k][i[k],0], self.meshsupp[k][i[k],1]),
-                                   make_intv(self.meshsupp[k][j[k],0], self.meshsupp[k][j[k],1]))
-        if intv.a >= intv.b:
-            return {zeroret}      # no intersection of support
-        g_sta[k] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[k] = self.nqp * intv.b    # end of Gauss nodes
-
-""".format(
-            dim=self.dim,
-            funcdecl=funcdecl,
-            zeroret=zeroret
-        )
-        for line in src.splitlines():
-            self.put(line)
+        self.putf(funcdecl)
         self.indent()
+        self.putf('cdef int k')
+        self.putf('cdef IntInterval intv')
+        self.putf('cdef size_t g_sta[{dim}]')
+        self.putf('cdef size_t g_end[{dim}]')
+        self.putf('cdef (double*) values_i[{dim}]')
+        self.putf('cdef (double*) values_j[{dim}]')
 
         for k in range(self.dim):
+            self.putf(
+        """intv = intersect_intervals(make_intv(self.meshsupp{k}[i[{k}],0], self.meshsupp{k}[i[{k}],1]),
+                                      make_intv(self.meshsupp{k}[j[{k}],0], self.meshsupp{k}[j[{k}],1]))""", k=k)
+            self.put('if intv.a >= intv.b: return ' + zeroret + '  # no intersection of support')
+            self.putf('g_sta[{k}] = self.nqp * intv.a    # start of Gauss nodes', k=k)
+            self.putf('g_end[{k}] = self.nqp * intv.b    # end of Gauss nodes', k=k)
+
             self.putf('values_i[{k}] = &self.C{k}[ i[{k}], g_sta[{k}], 0 ]', k=k)
             self.putf('values_j[{k}] = &self.C{k}[ j[{k}], g_sta[{k}], 0 ]', k=k)
         self.put('')
@@ -468,7 +459,9 @@ cdef class BaseAssembler{{DIM}}D:
     cdef int nqp
     cdef size_t[{{DIM}}] ndofs
     cdef int[{{DIM}}] p
-    cdef vector[ssize_t[:,::1]] meshsupp
+    {%- for k in range(DIM) %}
+    cdef ssize_t[:,::1] meshsupp{{k}}
+    {%- endfor %}
     cdef list _asm_pool     # list of shared clones for multithreading
 
     cdef void base_init(self, kvs):
@@ -476,13 +469,17 @@ cdef class BaseAssembler{{DIM}}D:
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
         self.p[:]     = [kv.p for kv in kvs]
-        self.meshsupp = [kvs[k].mesh_support_idx_all() for k in range({{DIM}})]
+        {%- for k in range(DIM) %}
+        self.meshsupp{{k}} = kvs[{{k}}].mesh_support_idx_all()
+        {%- endfor %}
         self._asm_pool = []
 
     cdef _share_base(self, BaseAssembler{{DIM}}D asm):
         asm.nqp = self.nqp
         asm.ndofs[:] = self.ndofs[:]
-        asm.meshsupp = self.meshsupp
+        {%- for k in range(DIM) %}
+        asm.meshsupp{{k}} = self.meshsupp{{k}}
+        {%- endfor %}
 
     cdef BaseAssembler{{DIM}}D shared_clone(self):
         return self     # by default assume thread safety
@@ -654,13 +651,17 @@ cdef double _entry_func_{{DIM}}d(size_t i, size_t j, void * data):
 cdef class BaseVectorAssembler{{DIM}}D:
     cdef int nqp
     cdef size_t[{{DIM}}] ndofs
-    cdef vector[ssize_t[:,::1]] meshsupp
+    {%- for k in range(DIM) %}
+    cdef ssize_t[:,::1] meshsupp{{k}}
+    {%- endfor %}
 
     cdef void base_init(self, kvs):
         assert len(kvs) == {{DIM}}, "Assembler requires two knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
-        self.meshsupp = [kvs[k].mesh_support_idx_all() for k in range({{DIM}})]
+        {%- for k in range(DIM) %}
+        self.meshsupp{{k}} = kvs[{{k}}].mesh_support_idx_all()
+        {%- endfor %}
 
     cdef BaseAssembler{{DIM}}D shared_clone(self):
         return self     # by default assume thread safety
@@ -796,7 +797,6 @@ def preamble():
 
 cimport cython
 from libc.math cimport fabs
-from libcpp.vector cimport vector
 
 import numpy as np
 cimport numpy as np

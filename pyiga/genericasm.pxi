@@ -8,7 +8,8 @@ cdef class BaseAssembler2D:
     cdef int nqp
     cdef size_t[2] ndofs
     cdef int[2] p
-    cdef vector[ssize_t[:,::1]] meshsupp
+    cdef ssize_t[:,::1] meshsupp0
+    cdef ssize_t[:,::1] meshsupp1
     cdef list _asm_pool     # list of shared clones for multithreading
 
     cdef void base_init(self, kvs):
@@ -16,13 +17,15 @@ cdef class BaseAssembler2D:
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
         self.p[:]     = [kv.p for kv in kvs]
-        self.meshsupp = [kvs[k].mesh_support_idx_all() for k in range(2)]
+        self.meshsupp0 = kvs[0].mesh_support_idx_all()
+        self.meshsupp1 = kvs[1].mesh_support_idx_all()
         self._asm_pool = []
 
     cdef _share_base(self, BaseAssembler2D asm):
         asm.nqp = self.nqp
         asm.ndofs[:] = self.ndofs[:]
-        asm.meshsupp = self.meshsupp
+        asm.meshsupp0 = self.meshsupp0
+        asm.meshsupp1 = self.meshsupp1
 
     cdef BaseAssembler2D shared_clone(self):
         return self     # by default assume thread safety
@@ -191,13 +194,15 @@ cdef double _entry_func_2d(size_t i, size_t j, void * data):
 cdef class BaseVectorAssembler2D:
     cdef int nqp
     cdef size_t[2] ndofs
-    cdef vector[ssize_t[:,::1]] meshsupp
+    cdef ssize_t[:,::1] meshsupp0
+    cdef ssize_t[:,::1] meshsupp1
 
     cdef void base_init(self, kvs):
         assert len(kvs) == 2, "Assembler requires two knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
-        self.meshsupp = [kvs[k].mesh_support_idx_all() for k in range(2)]
+        self.meshsupp0 = kvs[0].mesh_support_idx_all()
+        self.meshsupp1 = kvs[1].mesh_support_idx_all()
 
     cdef BaseAssembler2D shared_clone(self):
         return self     # by default assume thread safety
@@ -300,7 +305,9 @@ cdef class BaseAssembler3D:
     cdef int nqp
     cdef size_t[3] ndofs
     cdef int[3] p
-    cdef vector[ssize_t[:,::1]] meshsupp
+    cdef ssize_t[:,::1] meshsupp0
+    cdef ssize_t[:,::1] meshsupp1
+    cdef ssize_t[:,::1] meshsupp2
     cdef list _asm_pool     # list of shared clones for multithreading
 
     cdef void base_init(self, kvs):
@@ -308,13 +315,17 @@ cdef class BaseAssembler3D:
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
         self.p[:]     = [kv.p for kv in kvs]
-        self.meshsupp = [kvs[k].mesh_support_idx_all() for k in range(3)]
+        self.meshsupp0 = kvs[0].mesh_support_idx_all()
+        self.meshsupp1 = kvs[1].mesh_support_idx_all()
+        self.meshsupp2 = kvs[2].mesh_support_idx_all()
         self._asm_pool = []
 
     cdef _share_base(self, BaseAssembler3D asm):
         asm.nqp = self.nqp
         asm.ndofs[:] = self.ndofs[:]
-        asm.meshsupp = self.meshsupp
+        asm.meshsupp0 = self.meshsupp0
+        asm.meshsupp1 = self.meshsupp1
+        asm.meshsupp2 = self.meshsupp2
 
     cdef BaseAssembler3D shared_clone(self):
         return self     # by default assume thread safety
@@ -495,13 +506,17 @@ cdef double _entry_func_3d(size_t i, size_t j, void * data):
 cdef class BaseVectorAssembler3D:
     cdef int nqp
     cdef size_t[3] ndofs
-    cdef vector[ssize_t[:,::1]] meshsupp
+    cdef ssize_t[:,::1] meshsupp0
+    cdef ssize_t[:,::1] meshsupp1
+    cdef ssize_t[:,::1] meshsupp2
 
     cdef void base_init(self, kvs):
         assert len(kvs) == 3, "Assembler requires two knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
-        self.meshsupp = [kvs[k].mesh_support_idx_all() for k in range(3)]
+        self.meshsupp0 = kvs[0].mesh_support_idx_all()
+        self.meshsupp1 = kvs[1].mesh_support_idx_all()
+        self.meshsupp2 = kvs[2].mesh_support_idx_all()
 
     cdef BaseAssembler3D shared_clone(self):
         return self     # by default assume thread safety

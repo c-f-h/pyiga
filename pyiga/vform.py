@@ -570,7 +570,6 @@ class ScalarVarExpr(VarExpr):
         self.var = var
         self.shape = ()
         self.children = ()
-
     def gencode(self):
         return self.var.name
 
@@ -580,7 +579,6 @@ class VectorVarExpr(VarExpr):
         self.shape = var.shape
         assert len(self.shape) == 1
         self.children = ()
-
     def at(self, i):
         return VectorEntryExpr(self, i)
 
@@ -592,7 +590,6 @@ class MatrixVarExpr(VarExpr):
         assert len(self.shape) == 2
         self.symmetric = var.symmetric
         self.children = ()
-
     def at(self, i, j):
         return MatrixEntryExpr(self, i, j)
 
@@ -629,17 +626,13 @@ class VectorEntryExpr(Expr):
         assert x.is_vector(), 'indexed expression is not a vector'
         self.i = int(i)
         self.children = (x,)
-
-    base_complexity = 0
-
     def __str__(self):
         return '%s[%i]' % (self.x.var.name, self.i)
-
     def hash_key(self):
         return (self.i,)
-
     def gencode(self):
         return '{x}[{i}]'.format(x=self.x.var.name, i=self.i)
+    base_complexity = 0
 
 class MatrixEntryExpr(Expr):
     def __init__(self, mat, i, j):
@@ -648,23 +641,18 @@ class MatrixEntryExpr(Expr):
         self.i = i
         self.j = j
         self.children = (mat,)
-
-    base_complexity = 0
-
     def __str__(self):
         return '%s[%i,%i]' % (self.x.var.name, self.i, self.j)
-
     def to_seq(self, i, j):
         if self.x.symmetric and i > j:
             i, j = j, i
         return i * self.x.shape[0] + j
-
     def hash_key(self):
         return (self.i, self.j)
-
     def gencode(self):
         return '{name}[{k}]'.format(name=self.x.var.name,
                 k=self.to_seq(self.i, self.j))
+    base_complexity = 0
 
 class TransposedMatrixExpr(Expr):
     def __init__(self, mat):
@@ -673,9 +661,8 @@ class TransposedMatrixExpr(Expr):
         self.children = (mat,)
     def __str__(self):
         return 'transpose(%s)' % self.x
-    def __getitem__(self, ij):
-        result = self.x[ij[1], ij[0]]
-        return result.T if result.is_matrix() else result
+    def at(self, i, j):
+        return self.x[j, i]
 
 class BroadcastExpr(Expr):
     """Simple broadcasting from scalars to arbitrary shapes."""
@@ -692,13 +679,10 @@ class NegExpr(Expr):
         if not expr.is_scalar(): raise TypeError('can only negate scalars')
         self.shape = ()
         self.children = (expr,)
-
     def __str__(self):
         return '-%s' % str(self.x)
-
     def gencode(self):
         return '-' + self.x.gencode()
-
     base_complexity = 0 # don't bother extracting subexpressions which are simple negation
 
 class AbsExpr(Expr):
@@ -830,7 +814,6 @@ class OuterProdExpr(Expr):
             raise TypeError('outer() requires two vectors')
         self.shape = (len(x), len(y))
         self.children = (x,y)
-
     def at(self, i, j):
         return self.x[i] * self.y[j]
 
@@ -899,10 +882,12 @@ def _to_indices(x, n):
 class MatVecExpr(Expr):
     def __init__(self, A, x):
         assert A.is_matrix() and x.is_vector()
-        assert A.shape[1] == x.shape[0], 'incompatible shapes'
+        if not A.shape[1] == x.shape[0]:
+            raise ValueError('incompatible shapes: %s, %s' % (A.shape, x.shape))
         self.shape = (A.shape[0],)
         self.children = (A, x)
-
+    def __str__(self):
+        return 'dot(%s, %s)' % (self.x, self.y)
     def at(self, i):
         return reduce(operator.add,
             (self.x[i, j] * self.y[j] for j in range(self.y.shape[0])))
@@ -910,7 +895,8 @@ class MatVecExpr(Expr):
 class MatMatExpr(Expr):
     def __init__(self, A, B):
         assert A.is_matrix() and B.is_matrix()
-        assert A.shape[1] == B.shape[0], 'incompatible shapes'
+        if not A.shape[1] == B.shape[0]:
+            raise ValueError('incompatible shapes: %s, %s' % (A.shape, B.shape))
         self.shape = (A.shape[0], B.shape[1])
         self.children = (A, B)
     def __str__(self):
@@ -994,6 +980,26 @@ def transform_exprs(exprs, fun, type=None, deep=False):
 
 def transform_expr(expr, fun, type=None, deep=False):
     return transform_exprs((expr,), fun, type=type, deep=deep)[0]
+
+def tree_print(expr, data=None, indent=''):
+    stop = False
+    if hasattr(expr, 'oper'):
+        s = '(%s)' % expr.oper
+    elif isinstance(expr, VectorEntryExpr) or isinstance(expr, MatrixEntryExpr):
+        s = str(expr)
+        stop = True
+    elif expr.is_var_expr() or isinstance(expr, VolumeMeasureExpr) or isinstance(expr, PartialDerivExpr) or isinstance(expr, ConstExpr):
+        s = str(expr)
+    else:
+        s = type(expr).__name__
+
+    if data is None:
+        print(indent + s)
+    else:
+        print(indent + s + ' (%s)' % data[expr])
+    if not stop:
+        for c in expr.children:
+            tree_print(c, data, indent + '  ')
 
 # expression manipulation functions ############################################
 # notation is as close to UFL as possible
@@ -1119,27 +1125,6 @@ def cross(x, y):
 def outer(x, y):
     return OuterProdExpr(x, y)
 
-
-def tree_print(expr, data=None, indent=''):
-    stop = False
-    if hasattr(expr, 'oper'):
-        s = '(%s)' % expr.oper
-    elif isinstance(expr, VectorEntryExpr) or isinstance(expr, MatrixEntryExpr):
-        s = str(expr)
-        stop = True
-    elif expr.is_var_expr() or isinstance(expr, VolumeMeasureExpr) or isinstance(expr, PartialDerivExpr) or isinstance(expr, ConstExpr):
-        s = str(expr)
-    else:
-        s = type(expr).__name__
-
-    if data is None:
-        print(indent + s)
-    else:
-        print(indent + s + ' (%s)' % data[expr])
-    if not stop:
-        for c in expr.children:
-            tree_print(c, data, indent + '  ')
-
 ################################################################################
 # concrete variational forms
 ################################################################################
@@ -1149,7 +1134,6 @@ def mass_vf(dim):
     u, v = V.basisfuns()
     V.add(u * v * dx)
     return V
-
 
 def stiffness_vf(dim):
     V = VForm(dim)
@@ -1165,28 +1149,23 @@ def stiffness_vf(dim):
 #    V.add(inner(grad(u), grad(v)) * dx)
 #    return V
 
-
 def heat_st_vf(dim):
     V = VForm(dim, spacetime=True)
     u, v = V.basisfuns()
     V.add((inner(grad(u),grad(v)) + u.dt()*v) * dx)
     return V
 
-
 def wave_st_vf(dim):
     V = VForm(dim, spacetime=True)
     u, v = V.basisfuns()
-
     utt_vt = u.dt(2) * v.dt()
     gradu_dtgradv = inner(grad(u), grad(v).dt())
     V.add((utt_vt + gradu_dtgradv) * dx)
     return V
-
 
 def divdiv_vf(dim):
     V = VForm(dim, vec=dim**2)
     u, v = V.basisfuns()
     V.add(div(u) * div(v) * dx)
     return V
-
 

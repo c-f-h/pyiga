@@ -12,8 +12,6 @@ pyiga |travis| |appveyor|
 * Automatic generation of efficient matrix assembling code from a high-level, FEniCS_-like description of the bilinear form. See the bottom of `vform.py <pyiga/vform.py>`_ for some built-in examples.
 * Fast assembling by a black-box low-rank assembling algorithm described in `this technical report <http://www.numa.uni-linz.ac.at/publications/List/2017/2017-02.pdf>`_.
 
-.. _FEniCS: https://fenicsproject.org/
-
 For a simple example which shows how to solve a Poisson equation with ``pyiga`` and plot
 the solution, have a look at the notebook
 `solve-poisson.ipynb <notebooks/solve-poisson.ipynb>`_.
@@ -30,6 +28,8 @@ well tested. Python 3 is recommended.
 Before installing, make
 sure you have recent versions of **Numpy**, **Scipy** and **Cython** installed
 and that your environment can compile Python extension modules.
+If you do not have such an environment set up yet, the easiest way to get it
+is by installing Anaconda_ (this can be done without administrator privileges).
 
 Clone this repository and execute ::
 
@@ -69,9 +69,11 @@ After successful installation, you should be able to load the package. A simple 
     K = assemble.stiffness((kv,kv), geo=geo)    # assemble a stiffness matrix for the 2D tensor product
                                                 # B-spline basis over the given geometry
 
-There is an (incomplete) `API reference`_. Beyond that, look at the code,
+There is an `API reference`_. Beyond that, look at the code,
 the unit tests, and the `IPython notebooks`_ to learn more.
 
 
 .. _IPython notebooks: ./notebooks
 .. _API reference: http://pyiga.readthedocs.io/en/latest/
+.. _FEniCS: https://fenicsproject.org/
+.. _Anaconda: https://www.continuum.io/downloads

@@ -38,7 +38,6 @@ extensions = [
         language='c++',
         extra_compile_args=c_args + c_args_openmp,
         extra_link_args=l_args_openmp,
-        #define_macros=[('CYTHON_TRACE', '1')]
     ),
     Extension("pyiga.assemblers",
              ["pyiga/assemblers.pyx"],
@@ -61,15 +60,18 @@ setup(
     name = 'pyiga',
     version = '0.0.0',
     description = 'A Python research toolbox for Isogeometric Analysis',
+    long_description = 'pyiga is a Python research toolbox for Isogeometric Analysis.\n\nPlease visit the project homepage on Github to learn more.',
     author = 'Clemens Hofreither',
     author_email = 'chofreither@numa.uni-linz.ac.at',
     url = 'https://github.com/c-f-h/pyiga',
 
     classifiers=[
+        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Science/Research',
         'Topic :: Scientific/Engineering :: Mathematics',
+        'Topic :: Scientific/Engineering :: Physics',
         'License :: Free For Educational Use',
     ],
     packages = ['pyiga'],

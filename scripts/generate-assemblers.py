@@ -9,11 +9,12 @@ def generate(dim):
     def gen(vf, classname):
         backend.AsmGenerator(vf, classname, code).generate()
 
-    gen(vform.mass_vf(dim), 'MassAssembler')
-    gen(vform.stiffness_vf(dim), 'StiffnessAssembler')
-    gen(vform.heat_st_vf(dim), 'HeatAssembler_ST')
-    gen(vform.wave_st_vf(dim), 'WaveAssembler_ST')
-    gen(vform.divdiv_vf(dim), 'DivDivAssembler')
+    nD = str(dim) + 'D'
+    gen(vform.mass_vf(dim), 'MassAssembler'+nD)
+    gen(vform.stiffness_vf(dim), 'StiffnessAssembler'+nD)
+    gen(vform.heat_st_vf(dim), 'HeatAssembler_ST'+nD)
+    gen(vform.wave_st_vf(dim), 'WaveAssembler_ST'+nD)
+    gen(vform.divdiv_vf(dim), 'DivDivAssembler'+nD)
 
     return code.result()
 

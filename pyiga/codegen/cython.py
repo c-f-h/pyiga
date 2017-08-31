@@ -291,9 +291,9 @@ class AsmGenerator:
 
         # generate call to assembler kernel
         if self.vec:
-            self.putf('{classname}{dim}D.combine(', classname=self.classname)
+            self.putf('{classname}.combine(', classname=self.classname)
         else:
-            self.putf('return {classname}{dim}D.combine(', classname=self.classname)
+            self.putf('return {classname}.combine(', classname=self.classname)
         self.indent(2)
 
         # generate field variable arguments
@@ -348,7 +348,7 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
 
         if vf.precomp:
             # call precompute function
-            self.putf('{classname}{dim}D.precompute_fields(', classname=self.classname)
+            self.putf('{classname}.precompute_fields(', classname=self.classname)
             self.indent(2)
             for var in vf.precomp_deps: # input fields
                 self.put(var.src + ',')
@@ -406,7 +406,7 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
         }
 
         baseclass = 'BaseVectorAssembler' if self.vec else 'BaseAssembler'
-        self.putf('cdef class {classname}{dim}D({base}{dim}D):',
+        self.putf('cdef class {classname}({base}{dim}D):',
                 classname=self.classname, base=baseclass)
         self.indent()
 

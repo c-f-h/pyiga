@@ -3,6 +3,8 @@
 A Python research toolbox for Isogeometric Analysis.
 """
 
+__version__ = '0.1.0'
+
 _max_threads = None
 
 def get_max_threads():

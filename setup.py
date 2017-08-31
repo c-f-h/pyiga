@@ -58,7 +58,7 @@ extensions = [
 
 setup(
     name = 'pyiga',
-    version = '0.0.0',
+    version = '0.1.0',
     description = 'A Python research toolbox for Isogeometric Analysis',
     long_description = 'pyiga is a Python research toolbox for Isogeometric Analysis.\n\nPlease visit the project homepage on Github to learn more.',
     author = 'Clemens Hofreither',

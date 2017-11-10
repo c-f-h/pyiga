@@ -181,7 +181,9 @@ cdef IntInterval find_joint_support_functions(ssize_t[:,::1] meshsupp, long i) n
 def compute_values_derivs(kv, grid, derivs):
     colloc = bspline.collocation_derivs(kv, grid, derivs=derivs)
     colloc = tuple(X.T.A for X in colloc)
-    return np.stack(colloc, axis=-1)
+    # The assemblers expect the resulting array to be in C-order.  Depending on
+    # numpy version, stack() does not guarantee that, so enforce contiguity.
+    return np.ascontiguousarray(np.stack(colloc, axis=-1))
 
 
 #### determinants and inverses

@@ -3,15 +3,47 @@ import numpy as np
 import numpy.linalg
 from .operators import make_solver
 
+## Smoothers
+
+def OperatorSmoother(A, S):
+    """A smoother which applies an arbitrary operator `S` to the residual
+    and uses the result as an update, i.e.,
+
+    .. math::
+        u \leftarrow S(f - Au).
+    """
+    def apply(u, f):
+        u += S.dot(f - A.dot(u))
+    return apply
+
+def GaussSeidelSmoother(A, iterations=1, sweep='forward'):
+    """Gauss-Seidel smoother.
+
+    By default, `iterations` is 1. The direction to be used is specified by
+    `sweep` and may be either 'forward', 'backward', or 'symmetric'."""
+    from .relaxation import gauss_seidel
+    def apply(u, f):
+        gauss_seidel(A, u, f, iterations=iterations, sweep=sweep)
+    return apply
+
+def SequentialSmoother(smoothers):
+    """Smoother which applies several smoothers in sequence."""
+    def apply(u, f):
+        for S in smoothers:
+            S(u, f)
+    return apply
+
+
+## Multigrid
 
 def twogrid(A, f, P, smoother, u0=None, tol=1e-8, smooth_steps=2, maxiter=1000):
-    """Generic two-grid method with arbitrary operator smoother.
+    """Generic two-grid method with arbitrary smoother.
 
     Args:
         A: stiffness matrix on fine grid
         f: right-hand side
         P: prolongation matrix from coarse to fine grid
-        smoother: linear operator to use in smoothing iteration
+        smoother: a function with arguments `(u,f)` which applies one smoothing iteration in-place to `u`
         u0: starting value; 0 if not given
         tol: desired reduction relative to initial residual
         smooth_steps: number of smoothing steps
@@ -27,13 +59,9 @@ def twogrid(A, f, P, smoother, u0=None, tol=1e-8, smooth_steps=2, maxiter=1000):
     res0 = np.linalg.norm(f - A.dot(u))
     numiter = 0
 
-    def apply_smoother(u):
-        r = f - A.dot(u)
-        u += smoother.dot(r)
-
     while True:
         for _ in range(smooth_steps):
-            apply_smoother(u)
+            smoother(u, f)
 
         # coarse-grid correction
         r = f - A.dot(u)

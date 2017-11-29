@@ -10,7 +10,7 @@ def OperatorSmoother(A, S):
     and uses the result as an update, i.e.,
 
     .. math::
-        u \leftarrow S(f - Au).
+        u \leftarrow u + S(f - Au).
     """
     def apply(u, f):
         u += S.dot(f - A.dot(u))

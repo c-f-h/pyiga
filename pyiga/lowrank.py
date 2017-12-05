@@ -229,6 +229,9 @@ def aca_lr(A, tol=1e-10, maxiter=100):
     return crosses
 
 def aca_3d(A, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
+    if not isinstance(A, TensorGenerator):
+        A = TensorGenerator.from_array(A)  # assume it's an array
+
     X = np.zeros(A.shape)
     I = list(m//2 for m in A.shape)  # starting index
     def randomize():

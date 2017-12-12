@@ -1,6 +1,7 @@
 from pyiga.tensor import *
 
 from numpy.random import rand
+from scipy.sparse.linalg import aslinearoperator
 
 def test_modek_tprod():
     X = rand(3,3,3)
@@ -11,6 +12,9 @@ def test_modek_tprod():
             for k in range(3):
                 Y[i,j,k] = np.dot(A[i,:], X[:,j,k])
     assert np.allclose(Y, modek_tprod(A, 0, X))
+    # test modek_tprod with LinearOperator
+    assert np.allclose(modek_tprod(A, 1, X),
+            modek_tprod(aslinearoperator(A), 1, X))
 
 def test_tuckerprod():
     U = [rand(10,n) for n in range(3,6)]

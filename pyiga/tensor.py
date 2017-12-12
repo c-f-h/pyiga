@@ -34,13 +34,16 @@ def _modek_tensordot_sparse(B, X, k):
     nk = X.shape[k]
     assert nk == B.shape[1]
 
+    # bring the k-th axis to the front
     Xk = np.rollaxis(X, k, 0)
     shp = Xk.shape
 
+    # matricize and apply operator B
     Xk = Xk.reshape((nk, -1))
     Yk = B.dot(Xk)
     if Yk.shape[0] != nk:   # size changed?
         shp = (Yk.shape[0],) + shp[1:]
+    # reshape back, new axis is in first position
     return np.reshape(Yk, shp)
 
 
@@ -85,18 +88,25 @@ def matricize(X, k):
     return np.reshape(np.swapaxes(X, 0,k), (nk,-1), order='C')
 
 def modek_tprod(B, k, X):
-    """Compute the mode-`k` tensor product of the ndarray `X` with the matrix `B`.
+    """Compute the mode-`k` tensor product of the ndarray `X` with the matrix
+    or operator `B`.
 
     Args:
-        B (ndarray): a 2D array of size `m x nk`.
+        B (ndarray): a 2D array of size `m x nk`, a sparse matrix of that
+            size, or a `LinearOperator`
         k (int): the mode along which to multiply `X`
         X (ndarray): tensor with ``X.shape[k] == nk``
 
     Returns:
         ndarray: the mode-`k` tensor product of size `(n1, ... nk-1, m, nk+1, ..., nN)`
     """
-    Y = np.tensordot(X, B, axes=((k,1)))
-    return np.rollaxis(Y, -1, k) # put last (new) axis back into k-th position
+    if isinstance(B, np.ndarray):
+        Y = np.tensordot(X, B, axes=((k,1)))
+        return np.rollaxis(Y, -1, k) # put last (new) axis back into k-th position
+    else:
+        Y = _modek_tensordot_sparse(B, X, k)
+        return np.moveaxis(Y, 0, k) # put first (new) axis back into k-th position
+
 
 def tucker_prod(Uk, X):
     """Convert the Tucker tensor `(Uk,X)` to a full tensor (`ndarray`) by multiplying

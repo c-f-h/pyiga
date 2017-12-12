@@ -92,8 +92,7 @@ def modek_tprod(B, k, X):
     or operator `B`.
 
     Args:
-        B (ndarray): a 2D array of size `m x nk`, a sparse matrix of that
-            size, or a `LinearOperator`
+        B: an `ndarray`, sparse matrix, or `LinearOperator` of size `m x nk`
         k (int): the mode along which to multiply `X`
         X (ndarray): tensor with ``X.shape[k] == nk``
 

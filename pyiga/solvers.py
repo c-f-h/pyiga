@@ -1,7 +1,46 @@
 """Linear solvers."""
 import numpy as np
 import numpy.linalg
-from .operators import make_solver
+import scipy.linalg
+from .operators import make_solver, KroneckerOperator, DiagonalOperator
+
+from functools import reduce
+
+
+def _asdense(X):
+    try:
+        return X.A
+    except:
+        return X
+
+
+def fastdiag_solver(KM):
+    """The fast diagonalization solver as described in [Sangalli, Tani 2016].
+
+    Args:
+        KM: a sequence of length `d` (dimension of the problem) containing pairs
+            of symmetric matrices `(K_i, M_i)`
+
+    Returns:
+        A `LinearOperator` which realizes the inverse of the generalized Laplacian
+        matrix described by the input matrices.
+    """
+    dim = len(KM)
+    n = tuple(K.shape[0] for (K,_) in KM)
+    EV = [scipy.linalg.eigh(_asdense(K), _asdense(M)) for (K,M) in KM]
+
+    diags = []
+    for d in range(dim):
+        D = [np.ones(n[j]) for j in range(dim)]
+        D[d] = EV[d][0]  # eigenvalues
+        diags.append(reduce(np.kron, D))
+    diag = sum(diags)
+
+    l_op = KroneckerOperator(*tuple(U   for (_,U) in EV))
+    r_op = KroneckerOperator(*tuple(U.T for (_,U) in EV))
+
+    return l_op * DiagonalOperator(1.0 / diag) * r_op
+
 
 ## Smoothers
 

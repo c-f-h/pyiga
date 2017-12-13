@@ -4,6 +4,16 @@ from numpy.random import rand
 def _random_banded(n, bw):
     return scipy.sparse.spdiags(rand(2*bw+1, n), np.arange(-bw,bw+1), n, n)
 
+def test_mlbanded_1d():
+    bs = (20,)
+    bw = (3,)
+    A = _random_banded(bs[0], bw[0]).A
+    X = MLBandedMatrix(bs, bw, matrix=A)
+    A2 = X.asmatrix()
+    assert np.allclose(A, A2.A)
+    x = rand(A.shape[1])
+    assert np.allclose(A.dot(x), X.dot(x))
+
 def test_mlbanded_2d():
     bs = (9, 12)
     bw = (2, 3)

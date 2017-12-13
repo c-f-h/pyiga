@@ -78,7 +78,11 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
     def asmatrix(self, format='csr'):
         """Return a sparse matrix representation in the given format."""
         assert self._data is not None, 'matrix has no data'
-        if self.L == 2:
+        if self.L == 1:
+            return scipy.sparse.coo_matrix(
+                    (self._data, (self.bidx[0][:,0], self.bidx[0][:,1])),
+                    shape=self.shape).asformat(format)
+        elif self.L == 2:
             A = inflate_2d_bidx(self._data, self.bidx[0], self.bidx[1],
                 self.bs[0], self.bs[0], self.bs[1], self.bs[1])
         elif self.L == 3:
@@ -111,7 +115,10 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
         If `lower_tri` is ``True``, return only the indices for the
         lower triangular part.
         """
-        if self.L == 2:
+        if self.L == 1:
+            assert not lower_tri, 'Lower triangular part not implemented in 1D'
+            IJ = self.bidx[0].T.copy()
+        elif self.L == 2:
             IJ = ml_nonzero_2d(self.bidx, self._total_bs, lower_tri=lower_tri)
         elif self.L == 3:
             IJ = ml_nonzero_3d(self.bidx, self._total_bs, lower_tri=lower_tri)

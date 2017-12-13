@@ -625,7 +625,7 @@ cdef generic_assemble_{{DIM}}d_parallel(BaseAssembler{{DIM}}D asm, symmetric=Fal
     )
     X = generic_assemble_core_{{DIM}}d(asm, mlb.bidx, symmetric=symmetric)
     mlb.data = X
-    return mlb.asmatrix()
+    return mlb
 
 
 # helper function for fast low-rank assembler

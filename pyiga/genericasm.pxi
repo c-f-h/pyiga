@@ -169,7 +169,7 @@ cdef generic_assemble_2d_parallel(BaseAssembler2D asm, symmetric=False):
     )
     X = generic_assemble_core_2d(asm, mlb.bidx, symmetric=symmetric)
     mlb.data = X
-    return mlb.asmatrix()
+    return mlb
 
 
 # helper function for fast low-rank assembler
@@ -464,7 +464,7 @@ cdef generic_assemble_3d_parallel(BaseAssembler3D asm, symmetric=False):
     )
     X = generic_assemble_core_3d(asm, mlb.bidx, symmetric=symmetric)
     mlb.data = X
-    return mlb.asmatrix()
+    return mlb
 
 
 # helper function for fast low-rank assembler

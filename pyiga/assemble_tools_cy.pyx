@@ -389,13 +389,17 @@ include "genericasm.pxi"
 # Driver routines for assemblers
 ################################################################################
 
-def assemble(asm, symmetric=False):
+def assemble(asm, symmetric=False, format='csr'):
     if isinstance(asm, BaseAssembler2D):
-        return generic_assemble_2d_parallel(asm, symmetric=symmetric)
+        X = generic_assemble_2d_parallel(asm, symmetric=symmetric)
     elif isinstance(asm, BaseAssembler3D):
-        return generic_assemble_3d_parallel(asm, symmetric=symmetric)
+        X = generic_assemble_3d_parallel(asm, symmetric=symmetric)
     else:
         assert False, 'Unknown assembler type'
+    if format == 'mlb':
+        return X
+    else:
+        return X.asmatrix(format)
 
 def generic_vector_asm(kvs, asm, symmetric, format, layout):
     assert layout in ('packed', 'blocked')

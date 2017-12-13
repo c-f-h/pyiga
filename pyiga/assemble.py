@@ -218,53 +218,53 @@ def bsp_stiffness_1d_asym(knotvec1, knotvec2, quadgrid=None):
 # 2D/3D assembling routines (rely on Cython module)
 ################################################################################
 
-def bsp_mass_2d(knotvecs, geo=None):
+def bsp_mass_2d(knotvecs, geo=None, format='csr'):
     if geo is None:
         (kv1, kv2) = knotvecs
         M1 = bsp_mass_1d(kv1)
         M2 = bsp_mass_1d(kv2)
-        return scipy.sparse.kron(M1, M2, format='csr')
+        return scipy.sparse.kron(M1, M2, format=format)
     else:
         return assemble_tools.assemble(
                 assemblers.MassAssembler2D(knotvecs, geo),
-                symmetric=True)
+                symmetric=True, format=format)
 
-def bsp_stiffness_2d(knotvecs, geo=None):
+def bsp_stiffness_2d(knotvecs, geo=None, format='csr'):
     if geo is None:
         (kv1, kv2) = knotvecs
         M1 = bsp_mass_1d(kv1)
         M2 = bsp_mass_1d(kv2)
         K1 = bsp_stiffness_1d(kv1)
         K2 = bsp_stiffness_1d(kv2)
-        return scipy.sparse.kron(K1, M2, format='csr') + scipy.sparse.kron(M1, K2, format='csr')
+        return scipy.sparse.kron(K1, M2, format=format) + scipy.sparse.kron(M1, K2, format=format)
     else:
         return assemble_tools.assemble(
                 assemblers.StiffnessAssembler2D(knotvecs, geo),
-                symmetric=True)
+                symmetric=True, format=format)
 
-def bsp_mass_3d(knotvecs, geo=None):
+def bsp_mass_3d(knotvecs, geo=None, format='csr'):
     if geo is None:
         M = [bsp_mass_1d(kv) for kv in knotvecs]
         def k(A,B):
-            return scipy.sparse.kron(A, B, format='csr')
+            return scipy.sparse.kron(A, B, format=format)
         return k(M[0], k(M[1], M[2]))
     else:
         return assemble_tools.assemble(
                 assemblers.MassAssembler3D(knotvecs, geo),
-                symmetric=True)
+                symmetric=True, format=format)
 
-def bsp_stiffness_3d(knotvecs, geo=None):
+def bsp_stiffness_3d(knotvecs, geo=None, format='csr'):
     if geo is None:
         MK = [(bsp_mass_1d(kv), bsp_stiffness_1d(kv)) for kv in knotvecs]
         def k(A,B):
-            return scipy.sparse.kron(A, B, format='csr')
+            return scipy.sparse.kron(A, B, format=format)
         M12 = k(MK[1][0], MK[2][0])
         K12 = k(MK[1][1], MK[2][0]) + k(MK[1][0], MK[2][1])
         return k(MK[0][1], M12) + k(MK[0][0], K12)
     else:
         return assemble_tools.assemble(
                 assemblers.StiffnessAssembler3D(knotvecs, geo),
-                symmetric=True)
+                symmetric=True, format=format)
 
 ################################################################################
 # Assembling right-hand sides
@@ -504,7 +504,7 @@ def _detect_dim(kvs):
     else:
         return len(kvs)
 
-def mass(kvs, geo=None):
+def mass(kvs, geo=None, format='csr'):
     """Assemble a mass matrix for the given basis (B-spline basis
     or tensor product B-spline basis) with an optional geometry transform.
     """
@@ -515,13 +515,13 @@ def mass(kvs, geo=None):
         assert geo is None, "Geometry map not supported for 1D assembling"
         return bsp_mass_1d(kvs)
     elif dim == 2:
-        return bsp_mass_2d(kvs, geo)
+        return bsp_mass_2d(kvs, geo, format)
     elif dim == 3:
-        return bsp_mass_3d(kvs, geo)
+        return bsp_mass_3d(kvs, geo, format)
     else:
         assert False, "Dimensions higher than 3 are currently not implemented."
 
-def stiffness(kvs, geo=None):
+def stiffness(kvs, geo=None, format='csr'):
     """Assemble a stiffness matrix for the given basis (B-spline basis
     or tensor product B-spline basis) with an optional geometry transform.
     """
@@ -532,9 +532,9 @@ def stiffness(kvs, geo=None):
         assert geo is None, "Geometry map not supported for 1D assembling"
         return bsp_stiffness_1d(kvs)
     elif dim == 2:
-        return bsp_stiffness_2d(kvs, geo)
+        return bsp_stiffness_2d(kvs, geo, format)
     elif dim == 3:
-        return bsp_stiffness_3d(kvs, geo)
+        return bsp_stiffness_3d(kvs, geo, format)
     else:
         assert False, "Dimensions higher than 3 are currently not implemented."
 

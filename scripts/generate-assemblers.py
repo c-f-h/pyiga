@@ -26,9 +26,10 @@ if __name__ == '__main__':
             f.write(backend.generate_generic(dim=2))
             f.write(backend.generate_generic(dim=3))
 
-    path = os.path.join(os.path.dirname(__file__), "..", "pyiga", "assemblers.pyx")
-    with open(path, 'w') as f:
-        f.write(backend.preamble())
-        f.write(generate(dim=2))
-        f.write(generate(dim=3))
+    if not '--generic-only' in argv[1:]:
+        path = os.path.join(os.path.dirname(__file__), "..", "pyiga", "assemblers.pyx")
+        with open(path, 'w') as f:
+            f.write(backend.preamble())
+            f.write(generate(dim=2))
+            f.write(generate(dim=3))
 

@@ -17,6 +17,10 @@ def test_null():
     Z = np.zeros((7,3))
     _test_oper(NullOperator(Z.shape), Z)
 
+def test_identity():
+    I = np.eye(7)
+    _test_oper(IdentityOperator(7), I)
+
 def test_diagonal():
     diag = rand(10)
     diag_op = DiagonalOperator(diag)

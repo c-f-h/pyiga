@@ -21,7 +21,19 @@ class NullOperator(scipy.sparse.linalg.LinearOperator):
         return np.zeros(self.shape[0], dtype=self.dtype)
     def _matmat(self, x):
         return np.zeros((self.shape[0], x.shape[1]), dtype=self.dtype)
+    def _transpose(self):
+        return NullOperator((self.shape[1], self.shape[0]), dtype=self.dtype)
 
+class IdentityOperator(scipy.sparse.linalg.LinearOperator):
+    """Identity operator of size `n`."""
+    def __init__(self, n, dtype=np.float64):
+        scipy.sparse.linalg.LinearOperator.__init__(self, shape=(n,n), dtype=dtype)
+    def _matvec(self, x):
+        return x
+    def _matmat(self, x):
+        return x
+    def _transpose(self):
+        return self
 
 class DiagonalOperator(scipy.sparse.linalg.LinearOperator):
     """A :class:`LinearOperator` which acts like a diagonal matrix with the given diagonal."""

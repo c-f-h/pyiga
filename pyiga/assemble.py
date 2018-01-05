@@ -480,6 +480,7 @@ class RestrictedLinearSystem:
         mask = np.ones(A.shape[0], dtype=bool)
         mask[list(indices)] = False
 
+        # TODO/BUG: this may require the indices to be in increasing order?
         self.R_free = I[mask]
         self.R_elim = I[np.logical_not(mask)]
         self.values = values

@@ -4,6 +4,8 @@ import scipy.sparse.linalg
 
 def _broadcast_to_grid(X, grid_shape):
     num_dims = len(grid_shape)
+    # input might be a single scalar; make sure it's an array
+    X = np.asanyarray(X)
     # if the field X is not scalar, we need include the extra dimensions
     target_shape = grid_shape + X.shape[num_dims:]
     if X.shape != target_shape:

@@ -291,17 +291,7 @@ def unit_square(num_intervals=1):
     Returns:
         :class:`BSplinePatch` 2D geometry
     """
-    kv = bspline.make_knots(1, 0.0, 1.0, num_intervals)
-    #coeffs = np.array([
-    #    [[ 0., 0.],
-    #     [ 1., 0.]],
-    #    [[ 0., 1.],
-    #     [ 1., 1.]]
-    #])
-    x = np.linspace(0.0, 1.0, num_intervals+1)
-    X,Y = np.meshgrid(x,x)
-    coeffs = np.stack((X,Y), axis=-1)
-    return BSplinePatch((kv,kv), coeffs)
+    return unit_cube(dim=2, num_intervals=num_intervals)
 
 def perturbed_square(num_intervals=5, noise=0.02):
     """Randomly perturbed unit square.
@@ -365,20 +355,18 @@ def quarter_annulus(r1=1.0, r2=2.0):
 # Examples of 3D geometries
 ################################################################################
 
-def unit_cube(dim=3):
-    """The `dim`-dimensional unit cube.
+def unit_cube(dim=3, num_intervals=1):
+    """The `dim`-dimensional unit cube with `num_intervals` intervals
+    per coordinate direction.
 
     Returns:
         :class:`BSplinePatch` geometry
     """
-    coeffs = np.empty((2**dim, dim))
-
-    for i in range(dim):
-        coeffs[:,i] = (np.arange(2**dim) // (2**i)) % 2
-    coeffs.shape = dim*(2,) + (dim,)
-
-    kv = bspline.make_knots(1, 0.0, 1.0, 1)
-    return BSplinePatch(dim*(kv,), coeffs)
+    kv = bspline.make_knots(1, 0.0, 1.0, num_intervals)
+    x = np.linspace(0.0, 1.0, num_intervals+1)
+    XYZ = np.meshgrid(*(dim * (x,)), indexing='ij')
+    coeffs = np.stack(reversed(XYZ), axis=-1)   # make X correspond to 1st axis
+    return BSplinePatch(dim * (kv,), coeffs)
 
 def twisted_box():
     """A 3D volume that resembles a box with its right face twisted

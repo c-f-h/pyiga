@@ -133,6 +133,12 @@ class BSplineFunc:
         del kvs[axis]
         return BSplineFunc(kvs, coeffs)
 
+    @property
+    def support(self):
+        """Return a sequence of pairs `(lower,upper)`, one per source dimension,
+        which describe the extent of the support in the parameter space."""
+        return tuple(kv.support() for kv in self.kvs)
+
 
 class BSplinePatch(BSplineFunc):
     """Represents a `d`-dimensional tensor product B-spline patch.

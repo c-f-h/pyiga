@@ -98,7 +98,7 @@ class BSplineFunc:
             For scalar functions, the output is a vector of length `sdim` (the gradient)
             per grid point.
         """
-        assert np.shape(gridaxes)[0] == self.sdim
+        assert len(gridaxes) == self.sdim, "Input has wrong dimension"
         colloc = [bspline.collocation_derivs(self.kvs[i], gridaxes[i], derivs=1) for i in range(self.sdim)]
         colloc = [(C.A, Cd.A) for (C,Cd) in colloc]
 
@@ -267,7 +267,15 @@ class NurbsFunc:
         vals = apply_tprod(colloc, self.coeffs)
         return vals[..., :-1] / vals[..., -1:]       # divide by weight function
 
-    # TODO: implement grid_jacobian for NURBS
+    def grid_jacobian(self, gridaxes):
+        bsp = BSplineFunc(self.kvs, self.coeffs)
+        val = bsp.grid_eval(gridaxes)
+        V = val[..., :-1, None]
+        W = val[..., -1:, None]
+        jac = bsp.grid_jacobian(gridaxes)   # shape(grid) x (dim+1) x sdim
+        Vjac = jac[..., :-1, :]
+        Wjac = jac[..., -1:, :]
+        return (Vjac * W - V * Wjac) / (W**2)   # use quotient rule for (V/W)'
 
 
 class PhysicalGradientFunc:

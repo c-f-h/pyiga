@@ -276,9 +276,9 @@ def inner_products(kvs, f, f_physical=False, geo=None):
     (i.e., the load vector).
 
     Args:
-        kvs (seq): a list of :class:`pyiga.bspline.KnotVector`,
+        kvs (seq): a sequence of :class:`pyiga.bspline.KnotVector`,
             representing a tensor product basis
-        f: a function or :class:`pyiga.geometry.BSplinePatch` object
+        f: a function or :class:`pyiga.geometry.BSplineFunc` object
         f_physical (bool): whether `f` is given in physical coordinates.
             If `True`, `geo` must be passed as well.
         geo: a :class:`pyiga.geometry.BSplinePatch` which describes
@@ -494,6 +494,51 @@ class RestrictedLinearSystem:
         system.
         """
         return self.R_free.T.dot(u) + self.R_elim.T.dot(self.values)
+
+################################################################################
+# Integration
+################################################################################
+
+def integrate(kvs, f, f_physical=False, geo=None):
+    """Compute the integral of the function `f` over the geometry
+    `geo` or a simple tensor product domain.
+
+    Args:
+        kvs (seq): a sequence of :class:`pyiga.bspline.KnotVector`;
+            determines the parameter domain and the quadrature rule
+        f: a function or :class:`pyiga.geometry.BSplineFunc` object
+        f_physical (bool): whether `f` is given in physical coordinates.
+            If `True`, `geo` must be passed as well.
+        geo: a :class:`pyiga.geometry.BSplinePatch` which describes
+            the integration domain; if not given, the integral is
+            computed in the parameter domain
+
+    Returns:
+        float: the integral of `f` over the specified domain
+    """
+    if isinstance(kvs, bspline.KnotVector):
+        kvs = (kvs,)
+    # compute quadrature rules
+    nqp = max(kv.p for kv in kvs) + 1
+    gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], nqp)
+
+    # evaluate function f on grid or transformed grid
+    if f_physical:
+        assert geo is not None, 'integrate in physical domain requires geometry'
+        fvals = utils.grid_eval_transformed(f, gaussgrid, geo)
+    else:
+        fvals = utils.grid_eval(f, gaussgrid)
+
+    # multiply function values with quadrature weights
+    fvals = tensor.apply_tprod(
+              [operators.DiagonalOperator(gw) for gw in gaussweights], fvals)
+    # if geometry was specified, multiply by abs(det(jac))
+    if geo is not None:
+        geo_jac = geo.grid_jacobian(gaussgrid)
+        geo_det = np.abs(assemble_tools.determinants(geo_jac))
+        fvals *= geo_det
+    # sum over all coordinate axes (leave vector components intact, if any)
+    return fvals.sum(axis=tuple(range(len(kvs))))
 
 ################################################################################
 # Convenience functions

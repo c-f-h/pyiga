@@ -205,3 +205,22 @@ def test_inner_products():
     assert inp.shape == tuple(kv.numdofs for kv in kvs)
     inp2 = inner_products(kvs, f, geo=geometry.unit_cube())
     assert np.allclose(inp, inp2)
+
+################################################################################
+# Test integrals
+################################################################################
+
+def test_integrate():
+    def one(*X): return 1.0
+
+    geo = geometry.unit_square()
+    assert abs(1.0 - integrate(geo.kvs, one)) < 1e-8
+    assert abs(1.0 - integrate(geo.kvs, one, f_physical=True, geo=geo)) < 1e-8
+
+    geo = geometry.unit_cube()
+    assert abs(1.0 - integrate(geo.kvs, one)) < 1e-8
+    assert abs(1.0 - integrate(geo.kvs, one, f_physical=True, geo=geo)) < 1e-8
+
+    kvs = 2 * (bspline.make_knots(3, 0.0, 1.0, 10),)
+    geo = geometry.quarter_annulus()
+    assert abs(3*np.pi/4 - integrate(kvs, one, geo=geo)) < 1e-8

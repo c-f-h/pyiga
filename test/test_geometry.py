@@ -105,6 +105,13 @@ def test_nurbs():
     vals = nurbs.grid_eval(grid)
     assert abs(r - np.linalg.norm(vals, axis=-1)).max() < 1e-12
 
+def test_nurbs_boundary():
+    geo = quarter_annulus()
+    assert geos_roughly_equal(geo.boundary(1, 0),
+                              circular_arc(np.pi/2, 1.0))
+    assert geos_roughly_equal(geo.boundary(1, 1),
+                              circular_arc(np.pi/2, 2.0))
+
 def test_circular_arc():
     alpha = 2./3.*np.pi
     geo = circular_arc(alpha, r=2)

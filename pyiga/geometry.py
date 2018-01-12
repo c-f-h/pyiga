@@ -205,6 +205,8 @@ class NurbsFunc:
         weights (ndarray): coefficients for weight function in the same format
             as `coeffs`. If `weights=None` is passed, the weights are assumed to
             be given as the last vector component of `coeffs` instead.
+        premultiplied (bool): pass `True` if the coefficients are already
+            premultiplied by the weights.
 
     Attributes:
         kvs (seq): the knot vectors representing the tensor product basis
@@ -216,7 +218,7 @@ class NurbsFunc:
     The evaluation functions have the same prototypes and behavior as those in
     :class:`BSplineFunc`.
     """
-    def __init__(self, kvs, coeffs, weights):
+    def __init__(self, kvs, coeffs, weights, premultiplied=False):
         if isinstance(kvs, bspline.KnotVector):
             kvs = (kvs,)
         self.kvs = tuple(kvs)
@@ -250,7 +252,8 @@ class NurbsFunc:
                 self.coeffs = np.concatenate((self.coeffs, weights[..., None]), axis=-1)
 
         # pre-multiply coefficients by weights
-        self.coeffs[..., :-1] *= self.coeffs[..., -1:]
+        if not premultiplied:
+            self.coeffs[..., :-1] *= self.coeffs[..., -1:]
 
     def eval(self, *x):
         coords = tuple(np.asarray([t]) for t in reversed(x))
@@ -277,6 +280,25 @@ class NurbsFunc:
         Wjac = jac[..., -1:, :]
         return (Vjac * W - V * Wjac) / (W**2)   # use quotient rule for (V/W)'
 
+    def boundary(self, axis, side):
+        """Return one side of the boundary as a :class:`NurbsFunc`.
+
+        Args:
+            axis (int): the index of the axis along which to take the boundary.
+            side (int): 0 for the "lower" or 1 for the "upper" boundary along
+                the given axis
+
+        Returns:
+            :class:`NurbsFunc`: representation of the boundary side;
+            has `sdim` reduced by 1 and the same `dim` as this function
+        """
+        assert 0 <= axis < self.sdim, 'Invalid axis'
+        slices = self.sdim * [slice(None)]
+        slices[axis] = (0 if side==0 else -1)
+        coeffs = self.coeffs[slices]
+        kvs = list(self.kvs)
+        del kvs[axis]
+        return NurbsFunc(kvs, coeffs, weights=None, premultiplied=True)
 
 class PhysicalGradientFunc:
     """A class for function objects which evaluate physical (transformed) gradients of

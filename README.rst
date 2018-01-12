@@ -65,9 +65,9 @@ After successful installation, you should be able to load the package. A simple 
     from pyiga import bspline, geometry, assemble
 
     kv = bspline.make_knots(3, 0.0, 1.0, 50)    # knot vector over (0,1) with degree 3 and 50 knot spans
-    geo = geometry.bspline_quarter_annulus()    # a B-spline approximation of a quarter annulus
+    geo = geometry.quarter_annulus()            # a NURBS representation of a quarter annulus
     K = assemble.stiffness((kv,kv), geo=geo)    # assemble a stiffness matrix for the 2D tensor product
-                                                # B-spline basis over the given geometry
+                                                # B-spline basis over the quarter annulus
 
 There is an `API reference`_. Beyond that, look at the code,
 the unit tests, and the `IPython notebooks`_ to learn more.

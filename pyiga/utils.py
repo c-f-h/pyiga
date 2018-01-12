@@ -28,6 +28,7 @@ def _ensure_grid_shape(values, grid):
     return _broadcast_to_grid(values, grid_shape)
 
 def grid_eval(f, grid):
+    """Evaluate function `f` over the tensor grid `grid`."""
     if hasattr(f, 'grid_eval'):
         return f.grid_eval(grid)
     else:

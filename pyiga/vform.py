@@ -57,18 +57,13 @@ class VForm:
         self.vars = OrderedDict()
         self.exprs = []         # expressions to be added to the result
 
-        if vec:
-            self.basis_funs = (BasisFun('u', self, numcomp=dim), BasisFun('v', self, numcomp=dim))
-        else:
-            self.basis_funs = (BasisFun('u', self), BasisFun('v', self))
-
         # predefined local variables with their generators (created on demand)
         self.predefined_vars = {
             'JacInv': lambda self: inv(self.Jac),
             'W':      lambda self: self.GaussWeight * abs(det(self.Jac)),
         }
 
-    def basisfuns(self, parametric=False):
+    def basisfuns(self, parametric=False, components=(None,None)):
         def make_bfun_expr(bf):
             if bf.numcomp is not None:
                 # return a vector which contains the components of the bfun
@@ -79,6 +74,12 @@ class VForm:
                     for k in self.spacedims)
             else:
                 return self.basisval(bf, physical=not parametric)
+
+        names = ('u', 'v')
+        self.basis_funs = tuple(
+                BasisFun(name, self, numcomp=nc)
+                for (name,nc) in zip(names, components)
+        )
 
         return tuple(make_bfun_expr(bf) for bf in self.basis_funs)
 
@@ -155,11 +156,14 @@ class VForm:
         """
         assert self.vec
         assert expr.is_scalar()
+        assert len(self.basis_funs) == 2, 'Only implemented for bilinear forms'
 
         # for each output component, replace one component of the basis functions
         # by the corresponding scalar basis function and all others by 0
         result = []
         bfu, bfv = self.basis_funs
+        assert self.vec == bfu.numcomp * bfv.numcomp, 'Incorrect output size'
+
         for i in range(bfv.numcomp):
             row = []
             for j in range(bfu.numcomp):
@@ -1165,7 +1169,7 @@ def wave_st_vf(dim):
 
 def divdiv_vf(dim):
     V = VForm(dim, vec=dim**2)
-    u, v = V.basisfuns()
+    u, v = V.basisfuns(components=(dim,dim))
     V.add(div(u) * div(v) * dx)
     return V
 

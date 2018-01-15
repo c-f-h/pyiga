@@ -35,10 +35,10 @@ class AsmVar:
         return not self.local
 
 class BasisFun:
-    def __init__(self, name, vform, vec=None, component=None):
+    def __init__(self, name, vform, numcomp=None, component=None):
         self.name = name
         self.vform = vform
-        self.vec = vec
+        self.numcomp = numcomp  # number of components; None means scalar
         self.component = component  # for vector-valued basis functions
         self.asmgen = None  # to be set to AsmGenerator for code generation
 
@@ -58,7 +58,7 @@ class VForm:
         self.exprs = []         # expressions to be added to the result
 
         if vec:
-            self.basis_funs = (BasisFun('u', self, vec=dim), BasisFun('v', self, vec=dim))
+            self.basis_funs = (BasisFun('u', self, numcomp=dim), BasisFun('v', self, numcomp=dim))
         else:
             self.basis_funs = (BasisFun('u', self), BasisFun('v', self))
 
@@ -70,7 +70,7 @@ class VForm:
 
     def basisfuns(self, parametric=False):
         def make_bfun_expr(bf):
-            if bf.vec is not None:
+            if bf.numcomp is not None:
                 # return a vector which contains the components of the bfun
                 return LiteralVectorExpr(
                     self.basisval(
@@ -160,9 +160,9 @@ class VForm:
         # by the corresponding scalar basis function and all others by 0
         result = []
         bfu, bfv = self.basis_funs
-        for i in range(bfv.vec):
+        for i in range(bfv.numcomp):
             row = []
-            for j in range(bfu.vec):
+            for j in range(bfu.numcomp):
                 exprij = copy.deepcopy(expr)    # transform_expr is destructive, so copy the original
                 exprij = transform_expr(exprij,
                     lambda e: self.replace_vector_bfuns(e, bfv.name, i),

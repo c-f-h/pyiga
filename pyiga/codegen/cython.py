@@ -464,7 +464,7 @@ cdef class BaseAssembler{{DIM}}D:
     {%- endfor %}
 
     cdef void base_init(self, kvs):
-        assert len(kvs) == {{DIM}}, "Assembler requires two knot vectors"
+        assert len(kvs) == {{DIM}}, "Assembler requires {{DIM}} knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
         self.p[:]     = [kv.p for kv in kvs]
@@ -642,7 +642,7 @@ cdef class BaseVectorAssembler{{DIM}}D:
     {%- endfor %}
 
     cdef void base_init(self, kvs):
-        assert len(kvs) == {{DIM}}, "Assembler requires two knot vectors"
+        assert len(kvs) == {{DIM}}, "Assembler requires {{DIM}} knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
         {%- for k in range(DIM) %}

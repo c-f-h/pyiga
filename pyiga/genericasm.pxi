@@ -12,7 +12,7 @@ cdef class BaseAssembler2D:
     cdef ssize_t[:,::1] meshsupp1
 
     cdef void base_init(self, kvs):
-        assert len(kvs) == 2, "Assembler requires two knot vectors"
+        assert len(kvs) == 2, "Assembler requires 2 knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
         self.p[:]     = [kv.p for kv in kvs]
@@ -185,7 +185,7 @@ cdef class BaseVectorAssembler2D:
     cdef ssize_t[:,::1] meshsupp1
 
     cdef void base_init(self, kvs):
-        assert len(kvs) == 2, "Assembler requires two knot vectors"
+        assert len(kvs) == 2, "Assembler requires 2 knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
         self.meshsupp0 = kvs[0].mesh_support_idx_all()
@@ -294,7 +294,7 @@ cdef class BaseAssembler3D:
     cdef ssize_t[:,::1] meshsupp2
 
     cdef void base_init(self, kvs):
-        assert len(kvs) == 3, "Assembler requires two knot vectors"
+        assert len(kvs) == 3, "Assembler requires 3 knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
         self.p[:]     = [kv.p for kv in kvs]
@@ -481,7 +481,7 @@ cdef class BaseVectorAssembler3D:
     cdef ssize_t[:,::1] meshsupp2
 
     cdef void base_init(self, kvs):
-        assert len(kvs) == 3, "Assembler requires two knot vectors"
+        assert len(kvs) == 3, "Assembler requires 3 knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
         self.meshsupp0 = kvs[0].mesh_support_idx_all()

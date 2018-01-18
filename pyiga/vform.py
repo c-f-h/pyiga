@@ -71,11 +71,12 @@ class VForm:
         def make_bfun_expr(bf):
             if bf.numcomp is not None:
                 # return a vector which contains the components of the bfun
-                return LiteralVectorExpr(
+                vv = LiteralVectorExpr(
                     self.basisval(
                         BasisFun(bf.name, self, component=k),
                         physical=not parametric)
-                    for k in self.spacedims)
+                    for k in range(bf.numcomp))
+                return vv[0] if len(vv) == 1 else vv    # TODO: unify with scalar case?
             else:
                 return self.basisval(bf, physical=not parametric)
 

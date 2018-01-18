@@ -85,6 +85,8 @@ setup(
     install_requires = [
         'numpy>=1.11',
         'scipy',
+        'appdirs',
+        'networkx',
         'future;python_version<"3.0"',
         'futures;python_version<"3.0"'   # backport of concurrent.futures to Py2
     ],

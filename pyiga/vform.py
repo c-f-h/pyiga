@@ -6,6 +6,10 @@ import networkx
 import copy
 import numbers
 
+
+def set_union(sets):
+    return reduce(operator.or_, sets, set())
+
 class AsmVar:
     def __init__(self, name, src, shape, local, symmetric=False):
         self.name = name
@@ -248,7 +252,7 @@ class VForm:
 
     def transitive_deps(self, dep_graph, vars):
         """Return all vars on which the given vars depend directly or indirectly, in linearized order."""
-        return set().union(*(networkx.ancestors(dep_graph, var) for var in vars))
+        return set_union(networkx.ancestors(dep_graph, var) for var in vars)
 
     def linearize_vars(self, vars):
         """Returns an admissible order for computing the given vars, i.e., which
@@ -266,7 +270,7 @@ class VForm:
 
     def dependency_analysis(self):
         dep_graph = self.dependency_graph()
-        self.linear_deps = networkx.topological_sort(dep_graph)
+        self.linear_deps = list(networkx.topological_sort(dep_graph))
 
         # determine precomputable vars (no dependency on basis functions)
         precomputable = self.vars_without_dep_on(dep_graph, ('@u', '@v'))
@@ -276,10 +280,10 @@ class VForm:
         for var in precomputable:
             # remove all dependencies since it's now precomputed
             # this ensures kernel_deps will not depend on dependencies of precomputed vars
-            dep_graph.remove_edges_from(dep_graph.in_edges([var]))
+            dep_graph.remove_edges_from(list(dep_graph.in_edges([var])))
 
         # compute linearized list of vars the kernel depends on
-        kernel_deps = set().union(*(expr.depends() for expr in self.exprs))
+        kernel_deps = set_union(expr.depends() for expr in self.exprs)
         kernel_deps |= self.transitive_deps(dep_graph, kernel_deps)
         self.kernel_deps = self.linearize_vars(kernel_deps - {'@u', '@v'})
 
@@ -462,7 +466,7 @@ class Expr:
     def is_vector(self):    return len(self.shape) == 1
     def is_matrix(self):    return len(self.shape) == 2
     def depends(self):
-        return set().union(*(x.depends() for x in self.children))
+        return set_union(x.depends() for x in self.children)
 
     def is_var_expr(self):
         return False

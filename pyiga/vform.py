@@ -1069,7 +1069,7 @@ def as_vector(x): return LiteralVectorExpr(x)
 def as_matrix(x): return LiteralMatrixExpr(x)
 
 def inner(x, y):
-    if not x.is_vector() or x.is_matrix():
+    if not (x.is_vector() or x.is_matrix()):
         raise TypeError('inner() requires vector or matrix expressions')
     if not x.shape == y.shape:
         raise ValueError('incompatible shapes in inner product')

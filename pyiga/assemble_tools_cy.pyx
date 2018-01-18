@@ -406,7 +406,9 @@ def generic_vector_asm(kvs, asm, symmetric, format, layout):
     dim = len(kvs)
     bs = tuple(kv.numdofs for kv in kvs)
     bw = tuple(kv.p for kv in kvs)
-    mlb = MLBandedMatrix(bs + (dim,), bw + (dim,))
+    nc = asm.num_components()
+    assert nc[0] == nc[1], 'Only implemented for square matrices'
+    mlb = MLBandedMatrix(bs + (nc[0],), bw + (max(nc),))
     if dim == 2:
         X = generic_assemble_core_vec_2d(asm, mlb.bidx[:dim], symmetric)
     elif dim == 3:

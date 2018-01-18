@@ -83,6 +83,11 @@ class VForm:
 
         return tuple(make_bfun_expr(bf) for bf in self.basis_funs)
 
+    def num_components(self):
+        """Return number of vector components for each basis function space."""
+        assert self.vec
+        return tuple(bf.numcomp for bf in self.basis_funs)
+
     def indices_to_D(self, indices):
         """Convert a list of derivative indices into a partial derivative tuple D."""
         D = self.dim * [0]

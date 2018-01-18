@@ -30,8 +30,8 @@ cdef class MassAssembler2D(BaseAssembler2D):
     cdef double[:, ::1] W
 
     def __init__(self, kvs, geo):
-        assert geo.dim == 2, "Geometry has wrong dimension"
         self.base_init(kvs)
+        assert geo.dim == 2, "Geometry has wrong dimension"
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
@@ -137,8 +137,8 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
     cdef double[:, :, :, ::1] B
 
     def __init__(self, kvs, geo):
-        assert geo.dim == 2, "Geometry has wrong dimension"
         self.base_init(kvs)
+        assert geo.dim == 2, "Geometry has wrong dimension"
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
@@ -262,8 +262,8 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
     cdef double[:, :, :, ::1] JacInv
 
     def __init__(self, kvs, geo):
-        assert geo.dim == 2, "Geometry has wrong dimension"
         self.base_init(kvs)
+        assert geo.dim == 2, "Geometry has wrong dimension"
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
@@ -393,8 +393,8 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
     cdef double[:, :, :, ::1] JacInv
 
     def __init__(self, kvs, geo):
-        assert geo.dim == 2, "Geometry has wrong dimension"
         self.base_init(kvs)
+        assert geo.dim == 2, "Geometry has wrong dimension"
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
@@ -526,8 +526,8 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     cdef double[:, :, :, ::1] JacInv
 
     def __init__(self, kvs, geo):
+        self.base_init(kvs, (2, 2,))
         assert geo.dim == 2, "Geometry has wrong dimension"
-        self.base_init(kvs)
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
@@ -669,8 +669,8 @@ cdef class MassAssembler3D(BaseAssembler3D):
     cdef double[:, :, ::1] W
 
     def __init__(self, kvs, geo):
-        assert geo.dim == 3, "Geometry has wrong dimension"
         self.base_init(kvs)
+        assert geo.dim == 3, "Geometry has wrong dimension"
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
@@ -791,8 +791,8 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
     cdef double[:, :, :, :, ::1] B
 
     def __init__(self, kvs, geo):
-        assert geo.dim == 3, "Geometry has wrong dimension"
         self.base_init(kvs)
+        assert geo.dim == 3, "Geometry has wrong dimension"
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
@@ -947,8 +947,8 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
     cdef double[:, :, :, :, ::1] JacInv
 
     def __init__(self, kvs, geo):
-        assert geo.dim == 3, "Geometry has wrong dimension"
         self.base_init(kvs)
+        assert geo.dim == 3, "Geometry has wrong dimension"
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
@@ -1108,8 +1108,8 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
     cdef double[:, :, :, :, ::1] JacInv
 
     def __init__(self, kvs, geo):
-        assert geo.dim == 3, "Geometry has wrong dimension"
         self.base_init(kvs)
+        assert geo.dim == 3, "Geometry has wrong dimension"
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
@@ -1271,8 +1271,8 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     cdef double[:, :, :, :, ::1] JacInv
 
     def __init__(self, kvs, geo):
+        self.base_init(kvs, (3, 3,))
         assert geo.dim == 3, "Geometry has wrong dimension"
-        self.base_init(kvs)
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions

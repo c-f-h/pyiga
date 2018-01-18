@@ -320,9 +320,15 @@ class AsmGenerator:
 
         self.put('def __init__(self, kvs, geo):')
         self.indent()
+
+        if self.vec:
+            numcomp = '(' + ', '.join(str(nc) for nc in vf.num_components()) + ',)'
+            self.putf('self.base_init(kvs, {nc})', nc=numcomp)
+        else:
+            self.putf('self.base_init(kvs)')
+
         for line in \
 """assert geo.dim == {dim}, "Geometry has wrong dimension"
-self.base_init(kvs)
 
 gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
 N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
@@ -640,24 +646,30 @@ cdef class BaseVectorAssembler{{DIM}}D:
     {%- for k in range(DIM) %}
     cdef ssize_t[:,::1] meshsupp{{k}}
     {%- endfor %}
+    cdef size_t[2] numcomp  # number of vector components for trial and test functions
 
-    cdef void base_init(self, kvs):
+    cdef void base_init(self, kvs, numcomp):
         assert len(kvs) == {{DIM}}, "Assembler requires {{DIM}} knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
         {%- for k in range(DIM) %}
         self.meshsupp{{k}} = kvs[{{k}}].mesh_support_idx_all()
         {%- endfor %}
+        self.numcomp[:] = numcomp
+        assert self.numcomp[0] == self.numcomp[1], 'Only square matrices currently implemented'
+
+    def num_components(self):
+        return self.numcomp[0], self.numcomp[1]
 
     cdef inline size_t to_seq(self, size_t[{{DIM + 1}}] ii) nogil:
-        return {{ to_seq(indices + [ 'ii[%d]' % DIM ], ndofs + [ DIM|string ]) }}
+        return {{ to_seq(indices + ['ii[%d]' % DIM], ndofs + ['self.numcomp[0]']) }}
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.cdivision(True)
     cdef inline void from_seq(self, size_t i, size_t[{{DIM + 1}}] out) nogil:
-        out[{{DIM}}] = i % {{DIM}}
-        i /= {{DIM}}
+        out[{{DIM}}] = i % self.numcomp[0]
+        i /= self.numcomp[0]
         {%- for k in range(1, DIM)|reverse %}
         out[{{k}}] = i % self.ndofs[{{k}}]
         i /= self.ndofs[{{k}}]
@@ -674,6 +686,7 @@ cdef object generic_assemble_core_vec_{{DIM}}d(BaseVectorAssembler{{DIM}}D asm, 
     cdef unsigned[:, ::1] {{ dimrepeat('bidx{}') }}
     cdef long {{ dimrepeat('mu{}') }}, {{ dimrepeat('MU{}') }}
     cdef double[{{ dimrepeat(':') }}, ::1] entries
+    cdef size_t[2] numcomp
 
     {{ dimrepeat('bidx{}') }} = bidx
     {{ dimrepeat('MU{}') }} = {{ dimrepeat('bidx{}.shape[0]') }}
@@ -686,7 +699,9 @@ cdef object generic_assemble_core_vec_{{DIM}}d(BaseVectorAssembler{{DIM}}D asm, 
     else:
         {{ dimrepeat('transp{}', sep=' = ') }} = None
 
-    entries = np.zeros(({{ dimrepeat('MU{}') }}, {{DIM * DIM}}))
+    numcomp[:] = asm.num_components()
+    assert numcomp[0] == numcomp[1], 'only square matrices currently implemented'
+    entries = np.zeros(({{ dimrepeat('MU{}') }}, numcomp[0]*numcomp[1]))
 
     cdef int num_threads = pyiga.get_max_threads()
 
@@ -694,6 +709,7 @@ cdef object generic_assemble_core_vec_{{DIM}}d(BaseVectorAssembler{{DIM}}D asm, 
         _asm_core_vec_{{DIM}}d_kernel(asm, symmetric,
             {{ dimrepeat('bidx{}') }},
             {{ dimrepeat('transp{}') }},
+            numcomp,
             entries,
             mu0)
     return entries
@@ -706,6 +722,7 @@ cdef void _asm_core_vec_{{DIM}}d_kernel(
     bint symmetric,
     {{ dimrepeat('unsigned[:, ::1] bidx{}') }},
     {{ dimrepeat('size_t[::1] transp{}') }},
+    size_t[2] numcomp,
     double[{{ dimrepeat(':') }}, ::1] entries,
     long _mu0
 ) nogil:
@@ -738,9 +755,9 @@ cdef void _asm_core_vec_{{DIM}}d_kernel(
 
 {{ indent(DIM) }}if symmetric:
 {{ indent(DIM) }}    if {{ dimrepeat('diag{} != 0', sep=' or ') }}:     # are we off the diagonal?
-{{ indent(DIM) }}        for row in range({{DIM}}):
-{{ indent(DIM) }}            for col in range({{DIM}}):
-{{ indent(DIM) }}                entries[{{ dimrepeat('transp{0}[mu{0}]') }}, col*{{DIM}} + row] = entries[{{ dimrepeat('mu{}') }}, row*{{DIM}} + col]
+{{ indent(DIM) }}        for row in range(numcomp[1]):
+{{ indent(DIM) }}            for col in range(numcomp[0]):
+{{ indent(DIM) }}                entries[{{ dimrepeat('transp{0}[mu{0}]') }}, col*numcomp[0] + row] = entries[{{ dimrepeat('mu{}') }}, row*numcomp[0] + col]
 
 ''')
 

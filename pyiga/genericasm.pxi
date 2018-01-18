@@ -183,23 +183,29 @@ cdef class BaseVectorAssembler2D:
     cdef size_t[2] ndofs
     cdef ssize_t[:,::1] meshsupp0
     cdef ssize_t[:,::1] meshsupp1
+    cdef size_t[2] numcomp  # number of vector components for trial and test functions
 
-    cdef void base_init(self, kvs):
+    cdef void base_init(self, kvs, numcomp):
         assert len(kvs) == 2, "Assembler requires 2 knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
         self.meshsupp0 = kvs[0].mesh_support_idx_all()
         self.meshsupp1 = kvs[1].mesh_support_idx_all()
+        self.numcomp[:] = numcomp
+        assert self.numcomp[0] == self.numcomp[1], 'Only square matrices currently implemented'
+
+    def num_components(self):
+        return self.numcomp[0], self.numcomp[1]
 
     cdef inline size_t to_seq(self, size_t[3] ii) nogil:
-        return ((ii[0]) * self.ndofs[1] + ii[1]) * 2 + ii[2]
+        return ((ii[0]) * self.ndofs[1] + ii[1]) * self.numcomp[0] + ii[2]
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.cdivision(True)
     cdef inline void from_seq(self, size_t i, size_t[3] out) nogil:
-        out[2] = i % 2
-        i /= 2
+        out[2] = i % self.numcomp[0]
+        i /= self.numcomp[0]
         out[1] = i % self.ndofs[1]
         i /= self.ndofs[1]
         out[0] = i
@@ -214,6 +220,7 @@ cdef object generic_assemble_core_vec_2d(BaseVectorAssembler2D asm, bidx, bint s
     cdef unsigned[:, ::1] bidx0, bidx1
     cdef long mu0, mu1, MU0, MU1
     cdef double[:, :, ::1] entries
+    cdef size_t[2] numcomp
 
     bidx0, bidx1 = bidx
     MU0, MU1 = bidx0.shape[0], bidx1.shape[0]
@@ -225,7 +232,9 @@ cdef object generic_assemble_core_vec_2d(BaseVectorAssembler2D asm, bidx, bint s
     else:
         transp0 = transp1 = None
 
-    entries = np.zeros((MU0, MU1, 4))
+    numcomp[:] = asm.num_components()
+    assert numcomp[0] == numcomp[1], 'only square matrices currently implemented'
+    entries = np.zeros((MU0, MU1, numcomp[0]*numcomp[1]))
 
     cdef int num_threads = pyiga.get_max_threads()
 
@@ -233,6 +242,7 @@ cdef object generic_assemble_core_vec_2d(BaseVectorAssembler2D asm, bidx, bint s
         _asm_core_vec_2d_kernel(asm, symmetric,
             bidx0, bidx1,
             transp0, transp1,
+            numcomp,
             entries,
             mu0)
     return entries
@@ -245,6 +255,7 @@ cdef void _asm_core_vec_2d_kernel(
     bint symmetric,
     unsigned[:, ::1] bidx0, unsigned[:, ::1] bidx1,
     size_t[::1] transp0, size_t[::1] transp1,
+    size_t[2] numcomp,
     double[:, :, ::1] entries,
     long _mu0
 ) nogil:
@@ -277,9 +288,9 @@ cdef void _asm_core_vec_2d_kernel(
 
         if symmetric:
             if diag0 != 0 or diag1 != 0:     # are we off the diagonal?
-                for row in range(2):
-                    for col in range(2):
-                        entries[transp0[mu0], transp1[mu1], col*2 + row] = entries[mu0, mu1, row*2 + col]
+                for row in range(numcomp[1]):
+                    for col in range(numcomp[0]):
+                        entries[transp0[mu0], transp1[mu1], col*numcomp[0] + row] = entries[mu0, mu1, row*numcomp[0] + col]
 
 ################################################################################
 # 3D Assemblers
@@ -479,24 +490,30 @@ cdef class BaseVectorAssembler3D:
     cdef ssize_t[:,::1] meshsupp0
     cdef ssize_t[:,::1] meshsupp1
     cdef ssize_t[:,::1] meshsupp2
+    cdef size_t[2] numcomp  # number of vector components for trial and test functions
 
-    cdef void base_init(self, kvs):
+    cdef void base_init(self, kvs, numcomp):
         assert len(kvs) == 3, "Assembler requires 3 knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.ndofs[:] = [kv.numdofs for kv in kvs]
         self.meshsupp0 = kvs[0].mesh_support_idx_all()
         self.meshsupp1 = kvs[1].mesh_support_idx_all()
         self.meshsupp2 = kvs[2].mesh_support_idx_all()
+        self.numcomp[:] = numcomp
+        assert self.numcomp[0] == self.numcomp[1], 'Only square matrices currently implemented'
+
+    def num_components(self):
+        return self.numcomp[0], self.numcomp[1]
 
     cdef inline size_t to_seq(self, size_t[4] ii) nogil:
-        return (((ii[0]) * self.ndofs[1] + ii[1]) * self.ndofs[2] + ii[2]) * 3 + ii[3]
+        return (((ii[0]) * self.ndofs[1] + ii[1]) * self.ndofs[2] + ii[2]) * self.numcomp[0] + ii[3]
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.cdivision(True)
     cdef inline void from_seq(self, size_t i, size_t[4] out) nogil:
-        out[3] = i % 3
-        i /= 3
+        out[3] = i % self.numcomp[0]
+        i /= self.numcomp[0]
         out[2] = i % self.ndofs[2]
         i /= self.ndofs[2]
         out[1] = i % self.ndofs[1]
@@ -513,6 +530,7 @@ cdef object generic_assemble_core_vec_3d(BaseVectorAssembler3D asm, bidx, bint s
     cdef unsigned[:, ::1] bidx0, bidx1, bidx2
     cdef long mu0, mu1, mu2, MU0, MU1, MU2
     cdef double[:, :, :, ::1] entries
+    cdef size_t[2] numcomp
 
     bidx0, bidx1, bidx2 = bidx
     MU0, MU1, MU2 = bidx0.shape[0], bidx1.shape[0], bidx2.shape[0]
@@ -525,7 +543,9 @@ cdef object generic_assemble_core_vec_3d(BaseVectorAssembler3D asm, bidx, bint s
     else:
         transp0 = transp1 = transp2 = None
 
-    entries = np.zeros((MU0, MU1, MU2, 9))
+    numcomp[:] = asm.num_components()
+    assert numcomp[0] == numcomp[1], 'only square matrices currently implemented'
+    entries = np.zeros((MU0, MU1, MU2, numcomp[0]*numcomp[1]))
 
     cdef int num_threads = pyiga.get_max_threads()
 
@@ -533,6 +553,7 @@ cdef object generic_assemble_core_vec_3d(BaseVectorAssembler3D asm, bidx, bint s
         _asm_core_vec_3d_kernel(asm, symmetric,
             bidx0, bidx1, bidx2,
             transp0, transp1, transp2,
+            numcomp,
             entries,
             mu0)
     return entries
@@ -545,6 +566,7 @@ cdef void _asm_core_vec_3d_kernel(
     bint symmetric,
     unsigned[:, ::1] bidx0, unsigned[:, ::1] bidx1, unsigned[:, ::1] bidx2,
     size_t[::1] transp0, size_t[::1] transp1, size_t[::1] transp2,
+    size_t[2] numcomp,
     double[:, :, :, ::1] entries,
     long _mu0
 ) nogil:
@@ -586,6 +608,6 @@ cdef void _asm_core_vec_3d_kernel(
 
             if symmetric:
                 if diag0 != 0 or diag1 != 0 or diag2 != 0:     # are we off the diagonal?
-                    for row in range(3):
-                        for col in range(3):
-                            entries[transp0[mu0], transp1[mu1], transp2[mu2], col*3 + row] = entries[mu0, mu1, mu2, row*3 + col]
+                    for row in range(numcomp[1]):
+                        for col in range(numcomp[0]):
+                            entries[transp0[mu0], transp1[mu1], transp2[mu2], col*numcomp[0] + row] = entries[mu0, mu1, mu2, row*numcomp[0] + col]

@@ -216,8 +216,10 @@ class AsmGenerator:
         for var in field_params:
             self.putf('{type} _{name},', type=self.field_type(var), name=var.name)
 
-        self.put(self.dimrep('double* VDu{}') + ',')
-        self.put(self.dimrep('double* VDv{}') + ',')
+        # arrays for basis function values/derivatives
+        for bfun in self.vform.basis_funs:
+            self.put(self.dimrep('double* VD%s{}' % bfun.name) + ',')
+
         if self.vec:    # for vector assemblers, result is passed as a pointer
             self.put('double result[]')
         self.dedent()

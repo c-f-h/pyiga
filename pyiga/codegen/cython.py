@@ -277,8 +277,8 @@ class AsmGenerator:
 
         for k in range(self.dim):
             self.putf(
-        """intv = intersect_intervals(make_intv(self.meshsupp{k}[i[{k}],0], self.meshsupp{k}[i[{k}],1]),
-                                      make_intv(self.meshsupp{k}[j[{k}],0], self.meshsupp{k}[j[{k}],1]))""", k=k)
+        """intv = intersect_intervals(make_intv(self.S0.meshsupp{k}[i[{k}],0], self.S0.meshsupp{k}[i[{k}],1]),
+                                      make_intv(self.S0.meshsupp{k}[j[{k}],0], self.S0.meshsupp{k}[j[{k}],1]))""", k=k)
             self.put('if intv.a >= intv.b: return ' + zeroret + '  # no intersection of support')
             self.putf('g_sta[{k}] = self.nqp * intv.a    # start of Gauss nodes', k=k)
             self.putf('g_end[{k}] = self.nqp * intv.b    # end of Gauss nodes', k=k)
@@ -463,21 +463,24 @@ tmpl_generic = Template(r'''
 # {{DIM}}D Assemblers
 ################################################################################
 
+cdef struct SpaceInfo{{DIM}}:
+    size_t[{{DIM}}] ndofs
+    int[{{DIM}}] p
+    {%- for k in range(DIM) %}
+    ssize_t[:,::1] meshsupp{{k}}
+    {%- endfor %}
+
 cdef class BaseAssembler{{DIM}}D:
     cdef int nqp
-    cdef size_t[{{DIM}}] ndofs
-    cdef int[{{DIM}}] p
-    {%- for k in range(DIM) %}
-    cdef ssize_t[:,::1] meshsupp{{k}}
-    {%- endfor %}
+    cdef SpaceInfo{{DIM}} S0
 
     cdef void base_init(self, kvs):
         assert len(kvs) == {{DIM}}, "Assembler requires {{DIM}} knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
-        self.ndofs[:] = [kv.numdofs for kv in kvs]
-        self.p[:]     = [kv.p for kv in kvs]
+        self.S0.ndofs[:] = [kv.numdofs for kv in kvs]
+        self.S0.p[:]     = [kv.p for kv in kvs]
         {%- for k in range(DIM) %}
-        self.meshsupp{{k}} = kvs[{{k}}].mesh_support_idx_all()
+        self.S0.meshsupp{{k}} = kvs[{{k}}].mesh_support_idx_all()
         {%- endfor %}
 
     cdef inline size_t to_seq(self, size_t[{{DIM}}] ii) nogil:
@@ -490,8 +493,8 @@ cdef class BaseAssembler{{DIM}}D:
     cpdef double assemble(self, size_t i, size_t j):
         cdef size_t[{{DIM}}] I, J
         with nogil:
-            from_seq{{DIM}}(i, self.ndofs, I)
-            from_seq{{DIM}}(j, self.ndofs, J)
+            from_seq{{DIM}}(i, self.S0.ndofs, I)
+            from_seq{{DIM}}(j, self.S0.ndofs, J)
             return self.assemble_impl(I, J)
 
     @cython.boundscheck(False)
@@ -501,8 +504,8 @@ cdef class BaseAssembler{{DIM}}D:
         cdef size_t k
 
         for k in range(idx_arr.shape[0]):
-            from_seq{{DIM}}(idx_arr[k,0], self.ndofs, I)
-            from_seq{{DIM}}(idx_arr[k,1], self.ndofs, J)
+            from_seq{{DIM}}(idx_arr[k,0], self.S0.ndofs, I)
+            from_seq{{DIM}}(idx_arr[k,1], self.S0.ndofs, J)
             out[k] = self.assemble_impl(I, J)
 
     def multi_assemble(self, indices):
@@ -618,7 +621,7 @@ cdef void _asm_core_{{DIM}}d_kernel(
 
 cdef generic_assemble_{{DIM}}d_parallel(BaseAssembler{{DIM}}D asm, symmetric=False):
     mlb = MLBandedMatrix(
-        tuple(asm.ndofs),
+        tuple(asm.S0.ndofs),
         tuple(asm.p)
     )
     X = generic_assemble_core_{{DIM}}d(asm, mlb.bidx, symmetric=symmetric)
@@ -634,18 +637,15 @@ cdef double _entry_func_{{DIM}}d(size_t i, size_t j, void * data):
 
 cdef class BaseVectorAssembler{{DIM}}D:
     cdef int nqp
-    cdef size_t[{{DIM}}] ndofs
-    {%- for k in range(DIM) %}
-    cdef ssize_t[:,::1] meshsupp{{k}}
-    {%- endfor %}
+    cdef SpaceInfo{{DIM}} S0
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
 
     cdef void base_init(self, kvs, numcomp):
         assert len(kvs) == {{DIM}}, "Assembler requires {{DIM}} knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
-        self.ndofs[:] = [kv.numdofs for kv in kvs]
+        self.S0.ndofs[:] = [kv.numdofs for kv in kvs]
         {%- for k in range(DIM) %}
-        self.meshsupp{{k}} = kvs[{{k}}].mesh_support_idx_all()
+        self.S0.meshsupp{{k}} = kvs[{{k}}].mesh_support_idx_all()
         {%- endfor %}
         self.numcomp[:] = numcomp
         assert self.numcomp[0] == self.numcomp[1], 'Only square matrices currently implemented'
@@ -663,8 +663,8 @@ cdef class BaseVectorAssembler{{DIM}}D:
         out[{{DIM}}] = i % self.numcomp[0]
         i /= self.numcomp[0]
         {%- for k in range(1, DIM)|reverse %}
-        out[{{k}}] = i % self.ndofs[{{k}}]
-        i /= self.ndofs[{{k}}]
+        out[{{k}}] = i % self.S0.ndofs[{{k}}]
+        i /= self.S0.ndofs[{{k}}]
         {%- endfor %}
         out[0] = i
 
@@ -771,7 +771,7 @@ def generate_generic(dim):
 
     # helper variables for to_seq
     indices = ['ii[%d]' % k for k in range(DIM)]
-    ndofs   = ['self.ndofs[%d]' % k for k in range(DIM)]
+    ndofs   = ['self.S0.ndofs[%d]' % k for k in range(DIM)]
 
     return tmpl_generic.render(locals())
 

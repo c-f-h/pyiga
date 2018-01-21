@@ -4,24 +4,27 @@
 # 2D Assemblers
 ################################################################################
 
+cdef struct SpaceInfo2:
+    size_t[2] ndofs
+    int[2] p
+    ssize_t[:,::1] meshsupp0
+    ssize_t[:,::1] meshsupp1
+
 cdef class BaseAssembler2D:
     cdef int nqp
-    cdef size_t[2] ndofs
-    cdef int[2] p
-    cdef ssize_t[:,::1] meshsupp0
-    cdef ssize_t[:,::1] meshsupp1
+    cdef SpaceInfo2 S0
 
     cdef void base_init(self, kvs):
         assert len(kvs) == 2, "Assembler requires 2 knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
-        self.ndofs[:] = [kv.numdofs for kv in kvs]
-        self.p[:]     = [kv.p for kv in kvs]
-        self.meshsupp0 = kvs[0].mesh_support_idx_all()
-        self.meshsupp1 = kvs[1].mesh_support_idx_all()
+        self.S0.ndofs[:] = [kv.numdofs for kv in kvs]
+        self.S0.p[:]     = [kv.p for kv in kvs]
+        self.S0.meshsupp0 = kvs[0].mesh_support_idx_all()
+        self.S0.meshsupp1 = kvs[1].mesh_support_idx_all()
 
     cdef inline size_t to_seq(self, size_t[2] ii) nogil:
         # by convention, the order of indices is (y,x)
-        return (ii[0]) * self.ndofs[1] + ii[1]
+        return (ii[0]) * self.S0.ndofs[1] + ii[1]
 
     cdef double assemble_impl(self, size_t[2] i, size_t[2] j) nogil:
         return -9999.99  # Not implemented
@@ -29,8 +32,8 @@ cdef class BaseAssembler2D:
     cpdef double assemble(self, size_t i, size_t j):
         cdef size_t[2] I, J
         with nogil:
-            from_seq2(i, self.ndofs, I)
-            from_seq2(j, self.ndofs, J)
+            from_seq2(i, self.S0.ndofs, I)
+            from_seq2(j, self.S0.ndofs, J)
             return self.assemble_impl(I, J)
 
     @cython.boundscheck(False)
@@ -40,8 +43,8 @@ cdef class BaseAssembler2D:
         cdef size_t k
 
         for k in range(idx_arr.shape[0]):
-            from_seq2(idx_arr[k,0], self.ndofs, I)
-            from_seq2(idx_arr[k,1], self.ndofs, J)
+            from_seq2(idx_arr[k,0], self.S0.ndofs, I)
+            from_seq2(idx_arr[k,1], self.S0.ndofs, J)
             out[k] = self.assemble_impl(I, J)
 
     def multi_assemble(self, indices):
@@ -156,7 +159,7 @@ cdef void _asm_core_2d_kernel(
 
 cdef generic_assemble_2d_parallel(BaseAssembler2D asm, symmetric=False):
     mlb = MLBandedMatrix(
-        tuple(asm.ndofs),
+        tuple(asm.S0.ndofs),
         tuple(asm.p)
     )
     X = generic_assemble_core_2d(asm, mlb.bidx, symmetric=symmetric)
@@ -172,17 +175,15 @@ cdef double _entry_func_2d(size_t i, size_t j, void * data):
 
 cdef class BaseVectorAssembler2D:
     cdef int nqp
-    cdef size_t[2] ndofs
-    cdef ssize_t[:,::1] meshsupp0
-    cdef ssize_t[:,::1] meshsupp1
+    cdef SpaceInfo2 S0
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
 
     cdef void base_init(self, kvs, numcomp):
         assert len(kvs) == 2, "Assembler requires 2 knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
-        self.ndofs[:] = [kv.numdofs for kv in kvs]
-        self.meshsupp0 = kvs[0].mesh_support_idx_all()
-        self.meshsupp1 = kvs[1].mesh_support_idx_all()
+        self.S0.ndofs[:] = [kv.numdofs for kv in kvs]
+        self.S0.meshsupp0 = kvs[0].mesh_support_idx_all()
+        self.S0.meshsupp1 = kvs[1].mesh_support_idx_all()
         self.numcomp[:] = numcomp
         assert self.numcomp[0] == self.numcomp[1], 'Only square matrices currently implemented'
 
@@ -190,7 +191,7 @@ cdef class BaseVectorAssembler2D:
         return self.numcomp[0], self.numcomp[1]
 
     cdef inline size_t to_seq(self, size_t[3] ii) nogil:
-        return ((ii[0]) * self.ndofs[1] + ii[1]) * self.numcomp[0] + ii[2]
+        return ((ii[0]) * self.S0.ndofs[1] + ii[1]) * self.numcomp[0] + ii[2]
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -198,8 +199,8 @@ cdef class BaseVectorAssembler2D:
     cdef inline void from_seq(self, size_t i, size_t[3] out) nogil:
         out[2] = i % self.numcomp[0]
         i /= self.numcomp[0]
-        out[1] = i % self.ndofs[1]
-        i /= self.ndofs[1]
+        out[1] = i % self.S0.ndofs[1]
+        i /= self.S0.ndofs[1]
         out[0] = i
 
     cdef void assemble_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
@@ -288,26 +289,29 @@ cdef void _asm_core_vec_2d_kernel(
 # 3D Assemblers
 ################################################################################
 
+cdef struct SpaceInfo3:
+    size_t[3] ndofs
+    int[3] p
+    ssize_t[:,::1] meshsupp0
+    ssize_t[:,::1] meshsupp1
+    ssize_t[:,::1] meshsupp2
+
 cdef class BaseAssembler3D:
     cdef int nqp
-    cdef size_t[3] ndofs
-    cdef int[3] p
-    cdef ssize_t[:,::1] meshsupp0
-    cdef ssize_t[:,::1] meshsupp1
-    cdef ssize_t[:,::1] meshsupp2
+    cdef SpaceInfo3 S0
 
     cdef void base_init(self, kvs):
         assert len(kvs) == 3, "Assembler requires 3 knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
-        self.ndofs[:] = [kv.numdofs for kv in kvs]
-        self.p[:]     = [kv.p for kv in kvs]
-        self.meshsupp0 = kvs[0].mesh_support_idx_all()
-        self.meshsupp1 = kvs[1].mesh_support_idx_all()
-        self.meshsupp2 = kvs[2].mesh_support_idx_all()
+        self.S0.ndofs[:] = [kv.numdofs for kv in kvs]
+        self.S0.p[:]     = [kv.p for kv in kvs]
+        self.S0.meshsupp0 = kvs[0].mesh_support_idx_all()
+        self.S0.meshsupp1 = kvs[1].mesh_support_idx_all()
+        self.S0.meshsupp2 = kvs[2].mesh_support_idx_all()
 
     cdef inline size_t to_seq(self, size_t[3] ii) nogil:
         # by convention, the order of indices is (y,x)
-        return ((ii[0]) * self.ndofs[1] + ii[1]) * self.ndofs[2] + ii[2]
+        return ((ii[0]) * self.S0.ndofs[1] + ii[1]) * self.S0.ndofs[2] + ii[2]
 
     cdef double assemble_impl(self, size_t[3] i, size_t[3] j) nogil:
         return -9999.99  # Not implemented
@@ -315,8 +319,8 @@ cdef class BaseAssembler3D:
     cpdef double assemble(self, size_t i, size_t j):
         cdef size_t[3] I, J
         with nogil:
-            from_seq3(i, self.ndofs, I)
-            from_seq3(j, self.ndofs, J)
+            from_seq3(i, self.S0.ndofs, I)
+            from_seq3(j, self.S0.ndofs, J)
             return self.assemble_impl(I, J)
 
     @cython.boundscheck(False)
@@ -326,8 +330,8 @@ cdef class BaseAssembler3D:
         cdef size_t k
 
         for k in range(idx_arr.shape[0]):
-            from_seq3(idx_arr[k,0], self.ndofs, I)
-            from_seq3(idx_arr[k,1], self.ndofs, J)
+            from_seq3(idx_arr[k,0], self.S0.ndofs, I)
+            from_seq3(idx_arr[k,1], self.S0.ndofs, J)
             out[k] = self.assemble_impl(I, J)
 
     def multi_assemble(self, indices):
@@ -452,7 +456,7 @@ cdef void _asm_core_3d_kernel(
 
 cdef generic_assemble_3d_parallel(BaseAssembler3D asm, symmetric=False):
     mlb = MLBandedMatrix(
-        tuple(asm.ndofs),
+        tuple(asm.S0.ndofs),
         tuple(asm.p)
     )
     X = generic_assemble_core_3d(asm, mlb.bidx, symmetric=symmetric)
@@ -468,19 +472,16 @@ cdef double _entry_func_3d(size_t i, size_t j, void * data):
 
 cdef class BaseVectorAssembler3D:
     cdef int nqp
-    cdef size_t[3] ndofs
-    cdef ssize_t[:,::1] meshsupp0
-    cdef ssize_t[:,::1] meshsupp1
-    cdef ssize_t[:,::1] meshsupp2
+    cdef SpaceInfo3 S0
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
 
     cdef void base_init(self, kvs, numcomp):
         assert len(kvs) == 3, "Assembler requires 3 knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
-        self.ndofs[:] = [kv.numdofs for kv in kvs]
-        self.meshsupp0 = kvs[0].mesh_support_idx_all()
-        self.meshsupp1 = kvs[1].mesh_support_idx_all()
-        self.meshsupp2 = kvs[2].mesh_support_idx_all()
+        self.S0.ndofs[:] = [kv.numdofs for kv in kvs]
+        self.S0.meshsupp0 = kvs[0].mesh_support_idx_all()
+        self.S0.meshsupp1 = kvs[1].mesh_support_idx_all()
+        self.S0.meshsupp2 = kvs[2].mesh_support_idx_all()
         self.numcomp[:] = numcomp
         assert self.numcomp[0] == self.numcomp[1], 'Only square matrices currently implemented'
 
@@ -488,7 +489,7 @@ cdef class BaseVectorAssembler3D:
         return self.numcomp[0], self.numcomp[1]
 
     cdef inline size_t to_seq(self, size_t[4] ii) nogil:
-        return (((ii[0]) * self.ndofs[1] + ii[1]) * self.ndofs[2] + ii[2]) * self.numcomp[0] + ii[3]
+        return (((ii[0]) * self.S0.ndofs[1] + ii[1]) * self.S0.ndofs[2] + ii[2]) * self.numcomp[0] + ii[3]
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -496,10 +497,10 @@ cdef class BaseVectorAssembler3D:
     cdef inline void from_seq(self, size_t i, size_t[4] out) nogil:
         out[3] = i % self.numcomp[0]
         i /= self.numcomp[0]
-        out[2] = i % self.ndofs[2]
-        i /= self.ndofs[2]
-        out[1] = i % self.ndofs[1]
-        i /= self.ndofs[1]
+        out[2] = i % self.S0.ndofs[2]
+        i /= self.S0.ndofs[2]
+        out[1] = i % self.S0.ndofs[1]
+        i /= self.S0.ndofs[1]
         out[0] = i
 
     cdef void assemble_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:

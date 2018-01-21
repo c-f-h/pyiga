@@ -622,7 +622,7 @@ cdef void _asm_core_{{DIM}}d_kernel(
 cdef generic_assemble_{{DIM}}d_parallel(BaseAssembler{{DIM}}D asm, symmetric=False):
     mlb = MLBandedMatrix(
         tuple(asm.S0.ndofs),
-        tuple(asm.p)
+        tuple(asm.S0.p)
     )
     X = generic_assemble_core_{{DIM}}d(asm, mlb.bidx, symmetric=symmetric)
     mlb.data = X

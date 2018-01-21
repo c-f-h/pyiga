@@ -160,7 +160,7 @@ cdef void _asm_core_2d_kernel(
 cdef generic_assemble_2d_parallel(BaseAssembler2D asm, symmetric=False):
     mlb = MLBandedMatrix(
         tuple(asm.S0.ndofs),
-        tuple(asm.p)
+        tuple(asm.S0.p)
     )
     X = generic_assemble_core_2d(asm, mlb.bidx, symmetric=symmetric)
     mlb.data = X
@@ -457,7 +457,7 @@ cdef void _asm_core_3d_kernel(
 cdef generic_assemble_3d_parallel(BaseAssembler3D asm, symmetric=False):
     mlb = MLBandedMatrix(
         tuple(asm.S0.ndofs),
-        tuple(asm.p)
+        tuple(asm.S0.p)
     )
     X = generic_assemble_core_3d(asm, mlb.bidx, symmetric=symmetric)
     mlb.data = X

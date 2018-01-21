@@ -465,7 +465,6 @@ tmpl_generic = Template(r'''
 
 cdef struct SpaceInfo{{DIM}}:
     size_t[{{DIM}}] ndofs
-    int[{{DIM}}] p
     {%- for k in range(DIM) %}
     ssize_t[:,::1] meshsupp{{k}}
     {%- endfor %}
@@ -478,7 +477,6 @@ cdef class BaseAssembler{{DIM}}D:
         assert len(kvs) == {{DIM}}, "Assembler requires {{DIM}} knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.S0.ndofs[:] = [kv.numdofs for kv in kvs]
-        self.S0.p[:]     = [kv.p for kv in kvs]
         {%- for k in range(DIM) %}
         self.S0.meshsupp{{k}} = kvs[{{k}}].mesh_support_idx_all()
         {%- endfor %}

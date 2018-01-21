@@ -6,6 +6,7 @@
 
 cdef struct SpaceInfo2:
     size_t[2] ndofs
+    int[2] p
     ssize_t[:,::1] meshsupp0
     ssize_t[:,::1] meshsupp1
 
@@ -17,6 +18,7 @@ cdef class BaseAssembler2D:
         assert len(kvs) == 2, "Assembler requires 2 knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.S0.ndofs[:] = [kv.numdofs for kv in kvs]
+        self.S0.p[:]     = [kv.p for kv in kvs]
         self.S0.meshsupp0 = kvs[0].mesh_support_idx_all()
         self.S0.meshsupp1 = kvs[1].mesh_support_idx_all()
 
@@ -289,6 +291,7 @@ cdef void _asm_core_vec_2d_kernel(
 
 cdef struct SpaceInfo3:
     size_t[3] ndofs
+    int[3] p
     ssize_t[:,::1] meshsupp0
     ssize_t[:,::1] meshsupp1
     ssize_t[:,::1] meshsupp2
@@ -301,6 +304,7 @@ cdef class BaseAssembler3D:
         assert len(kvs) == 3, "Assembler requires 3 knot vectors"
         self.nqp = max([kv.p for kv in kvs]) + 1
         self.S0.ndofs[:] = [kv.numdofs for kv in kvs]
+        self.S0.p[:]     = [kv.p for kv in kvs]
         self.S0.meshsupp0 = kvs[0].mesh_support_idx_all()
         self.S0.meshsupp1 = kvs[1].mesh_support_idx_all()
         self.S0.meshsupp2 = kvs[2].mesh_support_idx_all()

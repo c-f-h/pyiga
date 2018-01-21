@@ -23,6 +23,11 @@ import itertools
 # Public utility functions
 ################################################################################
 
+cdef inline void from_seq2(size_t i, size_t[2] ndofs, size_t[2] out) nogil:
+    out[1] = i % ndofs[1]
+    i /= ndofs[1]
+    out[0] = i
+
 cdef inline void from_seq3(size_t i, size_t[3] ndofs, size_t[3] out) nogil:
     out[2] = i % ndofs[2]
     i /= ndofs[2]

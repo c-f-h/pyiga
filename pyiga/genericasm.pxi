@@ -23,22 +23,14 @@ cdef class BaseAssembler2D:
         # by convention, the order of indices is (y,x)
         return (ii[0]) * self.ndofs[1] + ii[1]
 
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef inline void from_seq(self, size_t i, size_t[2] out) nogil:
-        out[1] = i % self.ndofs[1]
-        i /= self.ndofs[1]
-        out[0] = i
-
     cdef double assemble_impl(self, size_t[2] i, size_t[2] j) nogil:
         return -9999.99  # Not implemented
 
     cpdef double assemble(self, size_t i, size_t j):
         cdef size_t[2] I, J
         with nogil:
-            self.from_seq(i, I)
-            self.from_seq(j, J)
+            from_seq2(i, self.ndofs, I)
+            from_seq2(j, self.ndofs, J)
             return self.assemble_impl(I, J)
 
     @cython.boundscheck(False)
@@ -48,8 +40,8 @@ cdef class BaseAssembler2D:
         cdef size_t k
 
         for k in range(idx_arr.shape[0]):
-            self.from_seq(idx_arr[k,0], I)
-            self.from_seq(idx_arr[k,1], J)
+            from_seq2(idx_arr[k,0], self.ndofs, I)
+            from_seq2(idx_arr[k,1], self.ndofs, J)
             out[k] = self.assemble_impl(I, J)
 
     def multi_assemble(self, indices):
@@ -317,24 +309,14 @@ cdef class BaseAssembler3D:
         # by convention, the order of indices is (y,x)
         return ((ii[0]) * self.ndofs[1] + ii[1]) * self.ndofs[2] + ii[2]
 
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef inline void from_seq(self, size_t i, size_t[3] out) nogil:
-        out[2] = i % self.ndofs[2]
-        i /= self.ndofs[2]
-        out[1] = i % self.ndofs[1]
-        i /= self.ndofs[1]
-        out[0] = i
-
     cdef double assemble_impl(self, size_t[3] i, size_t[3] j) nogil:
         return -9999.99  # Not implemented
 
     cpdef double assemble(self, size_t i, size_t j):
         cdef size_t[3] I, J
         with nogil:
-            self.from_seq(i, I)
-            self.from_seq(j, J)
+            from_seq3(i, self.ndofs, I)
+            from_seq3(j, self.ndofs, J)
             return self.assemble_impl(I, J)
 
     @cython.boundscheck(False)
@@ -344,8 +326,8 @@ cdef class BaseAssembler3D:
         cdef size_t k
 
         for k in range(idx_arr.shape[0]):
-            self.from_seq(idx_arr[k,0], I)
-            self.from_seq(idx_arr[k,1], J)
+            from_seq3(idx_arr[k,0], self.ndofs, I)
+            from_seq3(idx_arr[k,1], self.ndofs, J)
             out[k] = self.assemble_impl(I, J)
 
     def multi_assemble(self, indices):

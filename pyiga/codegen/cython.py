@@ -484,24 +484,14 @@ cdef class BaseAssembler{{DIM}}D:
         # by convention, the order of indices is (y,x)
         return {{ to_seq(indices, ndofs) }}
 
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef inline void from_seq(self, size_t i, size_t[{{DIM}}] out) nogil:
-        {%- for k in range(1, DIM)|reverse %}
-        out[{{k}}] = i % self.ndofs[{{k}}]
-        i /= self.ndofs[{{k}}]
-        {%- endfor %}
-        out[0] = i
-
     cdef double assemble_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
         return -9999.99  # Not implemented
 
     cpdef double assemble(self, size_t i, size_t j):
         cdef size_t[{{DIM}}] I, J
         with nogil:
-            self.from_seq(i, I)
-            self.from_seq(j, J)
+            from_seq{{DIM}}(i, self.ndofs, I)
+            from_seq{{DIM}}(j, self.ndofs, J)
             return self.assemble_impl(I, J)
 
     @cython.boundscheck(False)
@@ -511,8 +501,8 @@ cdef class BaseAssembler{{DIM}}D:
         cdef size_t k
 
         for k in range(idx_arr.shape[0]):
-            self.from_seq(idx_arr[k,0], I)
-            self.from_seq(idx_arr[k,1], J)
+            from_seq{{DIM}}(idx_arr[k,0], self.ndofs, I)
+            from_seq{{DIM}}(idx_arr[k,1], self.ndofs, J)
             out[k] = self.assemble_impl(I, J)
 
     def multi_assemble(self, indices):

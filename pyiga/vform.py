@@ -121,17 +121,8 @@ class VForm:
         self.vars[name] = var
         return var
 
-    def register_scalar_field(self, name, src=''):
-        self.set_var(name, AsmVar(name, src=src, shape=(), local=False))
-
-    def register_vector_field(self, name, size=None, src=''):
-        if size is None: size = self.dim
-        self.set_var(name, AsmVar(name, src=src, shape=(size,), local=False))
-
-    def register_matrix_field(self, name, shape=None, symmetric=False, src=''):
-        if shape is None: shape = (self.dim, self.dim)
-        assert len(shape) == 2
-        return self.set_var(name, AsmVar(name, src=src, shape=shape, local=False, symmetric=symmetric)).as_expr
+    def let(self, name, expr, symmetric=False):
+        return self.set_var(name, AsmVar(name, expr, shape=None, local=True, symmetric=symmetric)).as_expr
 
     def declare_sourced_var(self, name, shape, src, symmetric=False):
         return self.set_var(name, AsmVar(name, src=src, shape=shape, local=True, symmetric=symmetric)).as_expr
@@ -204,11 +195,6 @@ class VForm:
             D[k] += 1
             entries.append(PartialDerivExpr(basisfun, D))
         return LiteralVectorExpr(entries)
-
-    def let(self, varname, expr, symmetric=False):
-        var = AsmVar(varname, expr, shape=None, local=True, symmetric=symmetric)
-        self.vars[varname] = var
-        return var.as_expr
 
     # automatically produce caching getters for predefined on-demand local variables
     def __getattr__(self, name):

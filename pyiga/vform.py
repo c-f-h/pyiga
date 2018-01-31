@@ -26,6 +26,9 @@ class AsmVar:
         self.symmetric = (len(self.shape) == 2 and symmetric)
         self.as_expr = make_var_expr(self)
 
+    def __str__(self):
+        return self.name
+
     def is_scalar(self):
         return self.shape is ()
     def is_vector(self):

@@ -153,6 +153,10 @@ class AsmGenerator:
             else:
                 self.declare_scalar(var.name)
 
+    def declare_params(self, params):
+        for var in params:
+            self.putf('{type} _{name},', type=self.field_type(var), name=var.name)
+
     def load_field_var(self, var, I, ref_only=False):
         if var.is_scalar():
             if not ref_only: self.putf('{name} = _{name}[{I}]', name=var.name, I=I)
@@ -213,8 +217,7 @@ class AsmGenerator:
         local_vars   = [var for var in self.vform.kernel_deps if var.is_local()]
 
         # parameters
-        for var in field_params:
-            self.putf('{type} _{name},', type=self.field_type(var), name=var.name)
+        self.declare_params(field_params)
 
         # arrays for basis function values/derivatives
         for bfun in self.vform.basis_funs:
@@ -377,11 +380,9 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
         self.put('cdef void precompute_fields(')
         self.indent(2)
         self.put('# input')
-        for var in vf.precomp_deps:
-            self.putf('{type} _{name},', type=self.field_type(var), name=var.name)
+        self.declare_params(vf.precomp_deps)
         self.put('# output')
-        for var in vf.precomp:
-            self.putf('{type} _{name},', type=self.field_type(var), name=var.name)
+        self.declare_params(vf.precomp)
         self.dedent()
         self.put(') nogil:')
 

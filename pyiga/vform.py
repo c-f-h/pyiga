@@ -217,6 +217,12 @@ class VForm:
         return self.vars['GaussWeight'].as_expr
 
     @property
+    def Geo(self):
+        if not 'Geo' in self.vars:
+            self.declare_sourced_var('Geo', shape=(self.dim,), src='@Geo')
+        return self.vars['Geo'].as_expr
+
+    @property
     def Jac(self):
         if not 'Jac' in self.vars:
             self.declare_sourced_var('Jac', shape=(self.dim,self.dim), src='@GeoJac')

@@ -329,6 +329,8 @@ class AsmGenerator:
     def replace_predefined_var(self, s):
         if s == '@GaussWeight':
             return '%s' % self.tensorprod('gaussweights')
+        elif s == '@Geo':
+            return 'geo.grid_eval(gaussgrid)'
         elif s == '@GeoJac':
             return 'geo.grid_jacobian(gaussgrid)'
         else:

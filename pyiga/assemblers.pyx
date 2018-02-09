@@ -39,12 +39,16 @@ cdef class MassAssembler2D(BaseAssembler2D):
         self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=0)
         self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=0)
 
+        cdef double[:, :, :, ::1] Jac
+        cdef double[:, ::1] GaussWeight
         geo_jac = geo.grid_jacobian(gaussgrid)
         gauss_weights = gaussweights[0][:,None] * gaussweights[1][None,:]
+        Jac = geo_jac
+        GaussWeight = gauss_weights
         self.W = np.empty(N + ())
         MassAssembler2D.precompute_fields(
-                geo_jac,
-                gauss_weights,
+                Jac,
+                GaussWeight,
                 self.W,
         )
 
@@ -146,12 +150,16 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
         self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
 
+        cdef double[:, :, :, ::1] Jac
+        cdef double[:, ::1] GaussWeight
         geo_jac = geo.grid_jacobian(gaussgrid)
         gauss_weights = gaussweights[0][:,None] * gaussweights[1][None,:]
+        Jac = geo_jac
+        GaussWeight = gauss_weights
         self.B = np.empty(N + (2, 2))
         StiffnessAssembler2D.precompute_fields(
-                geo_jac,
-                gauss_weights,
+                Jac,
+                GaussWeight,
                 self.B,
         )
 
@@ -271,13 +279,17 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
         self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
 
+        cdef double[:, ::1] GaussWeight
+        cdef double[:, :, :, ::1] Jac
         geo_jac = geo.grid_jacobian(gaussgrid)
         gauss_weights = gaussweights[0][:,None] * gaussweights[1][None,:]
+        GaussWeight = gauss_weights
+        Jac = geo_jac
         self.W = np.empty(N + ())
         self.JacInv = np.empty(N + (2, 2))
         HeatAssembler_ST2D.precompute_fields(
-                gauss_weights,
-                geo_jac,
+                GaussWeight,
+                Jac,
                 self.W,
                 self.JacInv,
         )
@@ -402,13 +414,17 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=2)
         self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=2)
 
+        cdef double[:, ::1] GaussWeight
+        cdef double[:, :, :, ::1] Jac
         geo_jac = geo.grid_jacobian(gaussgrid)
         gauss_weights = gaussweights[0][:,None] * gaussweights[1][None,:]
+        GaussWeight = gauss_weights
+        Jac = geo_jac
         self.W = np.empty(N + ())
         self.JacInv = np.empty(N + (2, 2))
         WaveAssembler_ST2D.precompute_fields(
-                gauss_weights,
-                geo_jac,
+                GaussWeight,
+                Jac,
                 self.W,
                 self.JacInv,
         )
@@ -535,13 +551,17 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
         self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
 
+        cdef double[:, ::1] GaussWeight
+        cdef double[:, :, :, ::1] Jac
         geo_jac = geo.grid_jacobian(gaussgrid)
         gauss_weights = gaussweights[0][:,None] * gaussweights[1][None,:]
+        GaussWeight = gauss_weights
+        Jac = geo_jac
         self.W = np.empty(N + ())
         self.JacInv = np.empty(N + (2, 2))
         DivDivAssembler2D.precompute_fields(
-                gauss_weights,
-                geo_jac,
+                GaussWeight,
+                Jac,
                 self.W,
                 self.JacInv,
         )
@@ -679,12 +699,16 @@ cdef class MassAssembler3D(BaseAssembler3D):
         self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=0)
         self.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=0)
 
+        cdef double[:, :, :, :, ::1] Jac
+        cdef double[:, :, ::1] GaussWeight
         geo_jac = geo.grid_jacobian(gaussgrid)
         gauss_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:]
+        Jac = geo_jac
+        GaussWeight = gauss_weights
         self.W = np.empty(N + ())
         MassAssembler3D.precompute_fields(
-                geo_jac,
-                gauss_weights,
+                Jac,
+                GaussWeight,
                 self.W,
         )
 
@@ -801,12 +825,16 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
         self.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=1)
 
+        cdef double[:, :, :, :, ::1] Jac
+        cdef double[:, :, ::1] GaussWeight
         geo_jac = geo.grid_jacobian(gaussgrid)
         gauss_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:]
+        Jac = geo_jac
+        GaussWeight = gauss_weights
         self.B = np.empty(N + (3, 3))
         StiffnessAssembler3D.precompute_fields(
-                geo_jac,
-                gauss_weights,
+                Jac,
+                GaussWeight,
                 self.B,
         )
 
@@ -957,13 +985,17 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
         self.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=1)
 
+        cdef double[:, :, ::1] GaussWeight
+        cdef double[:, :, :, :, ::1] Jac
         geo_jac = geo.grid_jacobian(gaussgrid)
         gauss_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:]
+        GaussWeight = gauss_weights
+        Jac = geo_jac
         self.W = np.empty(N + ())
         self.JacInv = np.empty(N + (3, 3))
         HeatAssembler_ST3D.precompute_fields(
-                gauss_weights,
-                geo_jac,
+                GaussWeight,
+                Jac,
                 self.W,
                 self.JacInv,
         )
@@ -1118,13 +1150,17 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=2)
         self.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=2)
 
+        cdef double[:, :, ::1] GaussWeight
+        cdef double[:, :, :, :, ::1] Jac
         geo_jac = geo.grid_jacobian(gaussgrid)
         gauss_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:]
+        GaussWeight = gauss_weights
+        Jac = geo_jac
         self.W = np.empty(N + ())
         self.JacInv = np.empty(N + (3, 3))
         WaveAssembler_ST3D.precompute_fields(
-                gauss_weights,
-                geo_jac,
+                GaussWeight,
+                Jac,
                 self.W,
                 self.JacInv,
         )
@@ -1281,13 +1317,17 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
         self.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=1)
 
+        cdef double[:, :, ::1] GaussWeight
+        cdef double[:, :, :, :, ::1] Jac
         geo_jac = geo.grid_jacobian(gaussgrid)
         gauss_weights = gaussweights[0][:,None,None] * gaussweights[1][None,:,None] * gaussweights[2][None,None,:]
+        GaussWeight = gauss_weights
+        Jac = geo_jac
         self.W = np.empty(N + ())
         self.JacInv = np.empty(N + (3, 3))
         DivDivAssembler3D.precompute_fields(
-                gauss_weights,
-                geo_jac,
+                GaussWeight,
+                Jac,
                 self.W,
                 self.JacInv,
         )

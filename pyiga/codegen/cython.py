@@ -157,6 +157,12 @@ class AsmGenerator:
         for var in params:
             self.putf('{type} _{name},', type=self.field_type(var), name=var.name)
 
+    def declare_array_vars(self, vars):
+        for var in vars:
+            self.putf('cdef double[{X}:1] {name}',
+                    X=', '.join((self.dim + len(var.shape)) * ':'),
+                    name=var.name)
+
     def load_field_var(self, var, I, ref_only=False):
         if var.is_scalar():
             if not ref_only: self.putf('{name} = _{name}[{I}]', name=var.name, I=I)
@@ -344,6 +350,10 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
             self.putf('self.C{k} = compute_values_derivs(kvs[{k}], gaussgrid[{k}], derivs={maxderiv})', k=k)
         self.put('')
 
+        # declare array storage for non-global variables
+        self.declare_array_vars(var for var in self.vform.precomp_deps
+                if var.is_array and not var.is_global)
+
         # compute Jacobian
         if 'Jac' in vf.vars:
             self.put('geo_jac = geo.grid_jacobian(gaussgrid)')
@@ -351,20 +361,25 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
         if 'GaussWeight' in vf.vars:
             self.put('gauss_weights = %s' % self.tensorprod('gaussweights'))
 
-        for var in vf.field_vars():
-            if var.src:
-                self.putf("self.{name} = {src}", name=var.name, src=var.src)
-            elif var.expr:  # custom precomputed field var
-                self.putf("self.{name} = np.empty(N + {shape})", name=var.name, shape=var.shape)
+        def array_var_ref(var):
+            assert var.is_array
+            return ('self.' if var.is_global else '') + var.name
+
+        for var in vf.precomp_deps + vf.kernel_deps:
+            if var.is_array:
+                arr = array_var_ref(var)
+                if var.src:
+                    self.putf("{arr} = {src}", arr=arr, src=var.src)
+                elif var.expr:  # custom precomputed field var
+                    self.putf("{arr} = np.empty(N + {shape})", arr=arr, shape=var.shape)
 
         if vf.precomp:
             # call precompute function
             self.putf('{classname}.precompute_fields(', classname=self.classname)
             self.indent(2)
-            for var in vf.precomp_deps: # input fields
-                self.put(var.src + ',')
-            for var in vf.precomp:      # output fields
-                self.put('self.' + var.name + ',')
+            # generate arguments for input and output fields
+            for var in vf.precomp_deps + vf.precomp:
+                self.put(array_var_ref(var) + ',')
             self.dedent(2)
             self.put(')')
 
@@ -424,11 +439,9 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
         for k in range(self.dim):
             self.putf('cdef double[:, :, ::1] C{k}', k=k)
 
-        # declare field variables
-        for var in self.vform.field_vars():
-            self.putf('cdef double[{X}:1] {name}',
-                    X=', '.join((self.dim + len(var.shape)) * ':'),
-                    name=var.name)
+        # declare array storage for global variables
+        self.declare_array_vars(var for var in self.vform.kernel_deps
+                if var.is_array and var.is_global)
         self.put('')
 
         # generate methods

@@ -11,7 +11,7 @@ def set_union(sets):
     return reduce(operator.or_, sets, set())
 
 class AsmVar:
-    def __init__(self, name, src, shape, local, symmetric=False):
+    def __init__(self, name, src, shape, is_array=False, symmetric=False):
         self.name = name
         if isinstance(src, Expr):
             self.expr = src
@@ -22,7 +22,8 @@ class AsmVar:
             self.expr = None
             assert shape is not None
             self.shape = shape
-        self.local = local
+        self.is_array = is_array
+        self.is_global = False  # is variable needed during assemble, or only setup?
         self.symmetric = (len(self.shape) == 2 and symmetric)
         self.as_expr = make_var_expr(self)
 
@@ -37,9 +38,9 @@ class AsmVar:
         return len(self.shape) == 2
 
     def is_local(self):
-        return self.local
+        return not self.is_array
     def is_field(self):
-        return not self.local
+        return self.is_array
 
 class BasisFun:
     def __init__(self, name, vform, numcomp=None, component=None):
@@ -115,9 +116,6 @@ class VForm:
         assert order == 1, 'only first derivatives implemented'
         return as_vector(self.get_pderiv(bfun, (i,)) for i in range(self.dim))
 
-    def field_vars(self):
-        return (var for var in self.vars.values() if var.is_field())
-
     def set_var(self, name, var):
         if name in self.vars:
             raise KeyError('variable %s already declared' % name)
@@ -125,10 +123,10 @@ class VForm:
         return var
 
     def let(self, name, expr, symmetric=False):
-        return self.set_var(name, AsmVar(name, expr, shape=None, local=True, symmetric=symmetric)).as_expr
+        return self.set_var(name, AsmVar(name, expr, shape=None, symmetric=symmetric)).as_expr
 
     def declare_sourced_var(self, name, shape, src, symmetric=False):
-        return self.set_var(name, AsmVar(name, src=src, shape=shape, local=True, symmetric=symmetric)).as_expr
+        return self.set_var(name, AsmVar(name, src=src, shape=shape, is_array=True, symmetric=symmetric)).as_expr
 
     def add(self, expr):
         if self.vec:
@@ -268,6 +266,8 @@ class VForm:
         self.precomp_deps = [v for v in precomputable if v.src]
 
         for var in precomputable:
+            # ensure we allocate array storage for this var
+            var.is_array = True
             # remove all dependencies since it's now precomputed
             # this ensures kernel_deps will not depend on dependencies of precomputed vars
             dep_graph.remove_edges_from(list(dep_graph.in_edges([var])))
@@ -277,14 +277,14 @@ class VForm:
         kernel_deps |= self.transitive_deps(dep_graph, kernel_deps)
         self.kernel_deps = self.linearize_vars(kernel_deps - {'@u', '@v'})
 
-        # promote precomputed/manually sourced dependencies to field variables
+        # make arrays for kernel dependencies global (store as class member)
         for var in self.kernel_deps:
-            if var.src or var in self.precomp:
-                var.local = False
+            if var.is_array:
+                var.is_global = True
 
         # separate precomp into locals (not used in kernel, only during precompute) and true dependencies
-        self.precomp_locals = [v for v in self.precomp if v.local]
-        self.precomp        = [v for v in self.precomp if not v.local]
+        self.precomp_locals = [v for v in self.precomp if not v.is_global]
+        self.precomp        = [v for v in self.precomp if v.is_global]
 
     def all_exprs(self, type=None, once=True):
         """Deep, depth-first iteration of all expressions with dependencies.

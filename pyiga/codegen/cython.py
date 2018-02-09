@@ -366,8 +366,10 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
             assert var.is_array
             return ('self.' if var.is_global else '') + var.name
 
-        for var in vf.precomp_deps + vf.kernel_deps:
-            if var.is_array:
+        # declare/initialize array variables
+        for var in vf.linear_deps:
+            # exclude virtual basis function nodes '@u', '@v'
+            if not isinstance(var, str) and var.is_array:
                 arr = array_var_ref(var)
                 if var.src:
                     self.putf("{arr} = {src}", arr=arr, src=self.replace_predefined_var(var.src))

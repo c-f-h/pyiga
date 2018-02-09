@@ -273,9 +273,7 @@ class VForm:
         pdeps = self.transitive_closure(dep_graph, self.precomp)
         self.precomp_deps = [v for v in pdeps if v.src]
 
-        for var in precomputable:
-            # ensure we allocate array storage for this var
-            var.is_array = True
+        for var in self.precomp:
             # remove all dependencies since it's now precomputed
             # this ensures kernel_deps will not depend on dependencies of precomputed vars
             dep_graph.remove_edges_from(list(dep_graph.in_edges([var])))
@@ -285,8 +283,11 @@ class VForm:
         self.kernel_deps = self.transitive_closure(dep_graph, kernel_deps,
                 exclude={'@u', '@v'})
 
-        # make arrays for kernel dependencies global (store as class member)
         for var in self.kernel_deps:
+            # ensure precomputed kernel deps get array storage
+            if var in self.precomp:
+                var.is_array = True
+            # make arrays for kernel dependencies global (store as class member)
             if var.is_array:
                 var.is_global = True
 

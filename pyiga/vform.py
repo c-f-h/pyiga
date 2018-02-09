@@ -1010,7 +1010,7 @@ def tree_print(expr, data=None, indent=''):
 dx = VolumeMeasureExpr()
 
 def Dx(expr, k, times=1):
-    if expr.is_var_expr():
+    if expr.is_var_expr() and expr.var.expr:
         expr = expr.var.expr    # access underlying expression - mild hack
     if expr.is_vector():
         return LiteralVectorExpr(Dx(z, k, times) for z in expr)
@@ -1022,7 +1022,7 @@ def Dx(expr, k, times=1):
         return expr.dx(k, times)
 
 def Dt(expr, times=1):
-    if expr.is_var_expr():
+    if expr.is_var_expr() and expr.var.expr:
         expr = expr.var.expr    # access underlying expression - mild hack
     if expr.is_vector():
         return LiteralVectorExpr(Dt(z, times) for z in expr)
@@ -1036,7 +1036,7 @@ def Dt(expr, times=1):
         return expr.dx(expr.basisfun.vform.timedim, times)
 
 def grad(expr, dims=None):
-    if expr.is_var_expr():
+    if expr.is_var_expr() and expr.var.expr:
         expr = expr.var.expr    # access underlying expression - mild hack
     if expr.is_vector():
         return as_matrix([grad(z, dims=dims) for z in expr])  # compute Jacobian of vector expression

@@ -213,13 +213,13 @@ class VForm:
     @property
     def GaussWeight(self):
         if not 'GaussWeight' in self.vars:
-            self.declare_sourced_var('GaussWeight', shape=(), src='gauss_weights')
+            self.declare_sourced_var('GaussWeight', shape=(), src='@GaussWeight')
         return self.vars['GaussWeight'].as_expr
 
     @property
     def Jac(self):
         if not 'Jac' in self.vars:
-            self.declare_sourced_var('Jac', shape=(self.dim,self.dim), src='geo_jac')
+            self.declare_sourced_var('Jac', shape=(self.dim,self.dim), src='@GeoJac')
         return self.vars['Jac'].as_expr
 
     # expression analyis and transformations

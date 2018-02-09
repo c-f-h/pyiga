@@ -326,6 +326,14 @@ class AsmGenerator:
         self.put(')')
         self.end_function()
 
+    def replace_predefined_var(self, s):
+        if s == '@GaussWeight':
+            return '%s' % self.tensorprod('gaussweights')
+        elif s == '@GeoJac':
+            return 'geo.grid_jacobian(gaussgrid)'
+        else:
+            return s
+
     def generate_init(self):
         vf = self.vform
 
@@ -354,13 +362,6 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
         self.declare_array_vars(var for var in self.vform.precomp_deps
                 if var.is_array and not var.is_global)
 
-        # compute Jacobian
-        if 'Jac' in vf.vars:
-            self.put('geo_jac = geo.grid_jacobian(gaussgrid)')
-
-        if 'GaussWeight' in vf.vars:
-            self.put('gauss_weights = %s' % self.tensorprod('gaussweights'))
-
         def array_var_ref(var):
             assert var.is_array
             return ('self.' if var.is_global else '') + var.name
@@ -369,7 +370,7 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
             if var.is_array:
                 arr = array_var_ref(var)
                 if var.src:
-                    self.putf("{arr} = {src}", arr=arr, src=var.src)
+                    self.putf("{arr} = {src}", arr=arr, src=self.replace_predefined_var(var.src))
                 elif var.expr:  # custom precomputed field var
                     self.putf("{arr} = np.empty(N + {shape})", arr=arr, shape=var.shape)
 

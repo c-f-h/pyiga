@@ -219,11 +219,11 @@ class AsmGenerator:
         self.putf('cdef {rettype} combine(', rettype=rettype)
         self.indent(2)
 
-        field_params = [var for var in self.vform.kernel_deps if var.is_field()]
-        local_vars   = [var for var in self.vform.kernel_deps if var.is_local()]
+        array_params = [var for var in self.vform.kernel_deps if var.is_array]
+        local_vars   = [var for var in self.vform.kernel_deps if not var.is_array]
 
         # parameters
-        self.declare_params(field_params)
+        self.declare_params(array_params)
 
         # arrays for basis function values/derivatives
         for bfun in self.vform.basis_funs:
@@ -244,7 +244,7 @@ class AsmGenerator:
 
         ############################################################
         # main loop over all Gauss points
-        self.start_loop_with_fields(field_params, local_vars=local_vars)
+        self.start_loop_with_fields(array_params, local_vars=local_vars)
 
         # if needed, generate custom code for the bilinear form a(u,v)
         self.generate_biform_custom()
@@ -307,10 +307,10 @@ class AsmGenerator:
             self.putf('return {classname}.combine(', classname=self.classname)
         self.indent(2)
 
-        # generate field variable arguments
+        # generate array variable arguments
         idx = self.dimrep('g_sta[{0}]:g_end[{0}]')
         for var in self.vform.kernel_deps:
-            if var.is_field():
+            if var.is_array:
                 self.putf('self.{name} [ {idx} ],', name=var.name, idx=idx)
 
         # generate basis function value arguments

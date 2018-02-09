@@ -37,11 +37,6 @@ class AsmVar:
     def is_matrix(self):
         return len(self.shape) == 2
 
-    def is_local(self):
-        return not self.is_array
-    def is_field(self):
-        return self.is_array
-
 class BasisFun:
     def __init__(self, name, vform, numcomp=None, component=None):
         self.name = name

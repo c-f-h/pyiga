@@ -326,20 +326,24 @@ class AsmGenerator:
         self.put(')')
         self.end_function()
 
-    def replace_predefined_var(self, s):
-        if s == '@GaussWeight':
+    def parse_src(self, s):
+        if s[0] == '&':
+            # input field reference
+            name = s[1:]
+            if name[0] == "'":
+                return '%s.grid_jacobian(gaussgrid)' % name[1:]
+            else:
+                return 'grid_eval(%s, gaussgrid)' % name
+        elif s == '@GaussWeight':
             return '%s' % self.tensorprod('gaussweights')
-        elif s == '@Geo':
-            return 'geo.grid_eval(gaussgrid)'
-        elif s == '@GeoJac':
-            return 'geo.grid_jacobian(gaussgrid)'
         else:
             return s
 
     def generate_init(self):
         vf = self.vform
 
-        self.put('def __init__(self, kvs, geo):')
+        input_args = ', '.join(inp[0] for inp in vf.inputs)
+        self.putf('def __init__(self, kvs, {inp}):', inp=input_args)
         self.indent()
 
         if self.vec:
@@ -374,7 +378,7 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
             if not isinstance(var, str) and var.is_array:
                 arr = array_var_ref(var)
                 if var.src:
-                    self.putf("{arr} = {src}", arr=arr, src=self.replace_predefined_var(var.src))
+                    self.putf("{arr} = {src}", arr=arr, src=self.parse_src(var.src))
                 elif var.expr:  # custom precomputed field var
                     self.putf("{arr} = np.empty(N + {shape})", arr=arr, shape=var.shape)
 
@@ -820,5 +824,6 @@ from pyiga.assemble_tools_cy cimport (
     IntInterval, make_intv, intersect_intervals,
 )
 from pyiga.assemble_tools_cy import compute_values_derivs
+from pyiga.utils import grid_eval
 
 """

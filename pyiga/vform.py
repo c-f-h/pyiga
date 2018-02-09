@@ -57,6 +57,7 @@ class VForm:
         else:
             self.spacedims = range(self.dim)
 
+        self.inputs = []
         self.vars = OrderedDict()
         self.exprs = []         # expressions to be added to the result
 
@@ -65,6 +66,8 @@ class VForm:
             'JacInv': lambda self: inv(self.Jac),
             'W':      lambda self: self.GaussWeight * abs(det(self.Jac)),
         }
+        # default input field: geometry transform
+        self.Geo = self.input('geo', shape=(dim,))
 
     def basisfuns(self, parametric=False, components=(None,None)):
         def make_bfun_expr(bf):
@@ -91,6 +94,12 @@ class VForm:
         """Return number of vector components for each basis function space."""
         assert self.vec
         return tuple(bf.numcomp for bf in self.basis_funs)
+
+    def input(self, name, shape=()):
+        self.inputs.append((name, shape))
+        expr = self.declare_sourced_var(name + '_a', shape=shape, src='&'+name)
+        expr.vf = self      # HACK
+        return expr
 
     def indices_to_D(self, indices):
         """Convert a list of derivative indices into a partial derivative tuple D."""
@@ -212,16 +221,11 @@ class VForm:
         return self.vars['GaussWeight'].as_expr
 
     @property
-    def Geo(self):
-        if not 'Geo' in self.vars:
-            self.declare_sourced_var('Geo', shape=(self.dim,), src='@Geo')
-        return self.vars['Geo'].as_expr
-
-    @property
     def Jac(self):
-        if not 'Jac' in self.vars:
-            self.declare_sourced_var('Jac', shape=(self.dim,self.dim), src='@GeoJac')
-        return self.vars['Jac'].as_expr
+        if 'geo_grad_a' in self.vars:
+            return self.vars['geo_grad_a'].as_expr
+        else:
+            return grad(self.Geo)
 
     # expression analyis and transformations
 
@@ -1046,8 +1050,17 @@ def Dt(expr, times=1):
         return expr.dx(expr.basisfun.vform.timedim, times)
 
 def grad(expr, dims=None):
-    if expr.is_var_expr() and expr.var.expr:
-        expr = expr.var.expr    # access underlying expression - mild hack
+    if expr.is_var_expr():
+        if expr.var.expr:
+            expr = expr.var.expr    # access underlying expression - mild hack
+        if expr.var.src:
+            # gradient/Jacobian of an input field
+            s = expr.var.src
+            assert s[0] == '&' and s[1] != "'", 'can only compute gradients of input fields'
+            assert dims is None, 'can only compute full gradient'
+            name = s[1:]
+            vf = expr.vf
+            return vf.declare_sourced_var(name + '_grad_a', shape=expr.shape+(vf.dim,), src="&'"+name)
     if expr.is_vector():
         return as_matrix([grad(z, dims=dims) for z in expr])  # compute Jacobian of vector expression
     if not isinstance(expr, PartialDerivExpr):

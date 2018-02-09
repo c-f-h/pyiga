@@ -247,6 +247,11 @@ class VForm:
         respects the dependency relation."""
         return [var for var in self.linear_deps if var in vars]
 
+    def transitive_closure(self, dep_graph, vars, exclude=set()):
+        """Linearized transitive closure (w.r.t. dependency) of the given vars."""
+        deps = set(vars) | self.transitive_deps(dep_graph, vars)
+        return self.linearize_vars(deps - exclude)
+
     def vars_without_dep_on(self, dep_graph, exclude):
         """Return a linearized list of all expr vars which do not depend on the given vars."""
         nodes = set(dep_graph.nodes())
@@ -262,8 +267,11 @@ class VForm:
 
         # determine precomputable vars (no dependency on basis functions)
         precomputable = self.vars_without_dep_on(dep_graph, ('@u', '@v'))
+        # only expression-based vars can be precomputed
         self.precomp = [v for v in precomputable if v.expr]
-        self.precomp_deps = [v for v in precomputable if v.src]
+        # find deps of precomp vars which are pre-given (have src)
+        pdeps = self.transitive_closure(dep_graph, self.precomp)
+        self.precomp_deps = [v for v in pdeps if v.src]
 
         for var in precomputable:
             # ensure we allocate array storage for this var
@@ -274,8 +282,8 @@ class VForm:
 
         # compute linearized list of vars the kernel depends on
         kernel_deps = set_union(expr.depends() for expr in self.exprs)
-        kernel_deps |= self.transitive_deps(dep_graph, kernel_deps)
-        self.kernel_deps = self.linearize_vars(kernel_deps - {'@u', '@v'})
+        self.kernel_deps = self.transitive_closure(dep_graph, kernel_deps,
+                exclude={'@u', '@v'})
 
         # make arrays for kernel dependencies global (store as class member)
         for var in self.kernel_deps:

@@ -96,6 +96,7 @@ class VForm:
         return tuple(bf.numcomp for bf in self.basis_funs)
 
     def input(self, name, shape=()):
+        """Declare an input field with the given name and shape."""
         self.inputs.append((name, shape))
         expr = self.declare_sourced_var(name + '_a', shape=shape, src='&'+name)
         expr.vf = self      # HACK

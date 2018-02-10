@@ -105,7 +105,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double assemble_impl(self, size_t[2] i, size_t[2] j) nogil:
+    cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[2]
@@ -231,7 +231,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double assemble_impl(self, size_t[2] i, size_t[2] j) nogil:
+    cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[2]
@@ -363,7 +363,7 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double assemble_impl(self, size_t[2] i, size_t[2] j) nogil:
+    cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[2]
@@ -498,7 +498,7 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double assemble_impl(self, size_t[2] i, size_t[2] j) nogil:
+    cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[2]
@@ -643,7 +643,7 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef void assemble_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[2]
@@ -761,7 +761,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double assemble_impl(self, size_t[3] i, size_t[3] j) nogil:
+    cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[3]
@@ -918,7 +918,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double assemble_impl(self, size_t[3] i, size_t[3] j) nogil:
+    cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[3]
@@ -1080,7 +1080,7 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double assemble_impl(self, size_t[3] i, size_t[3] j) nogil:
+    cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[3]
@@ -1245,7 +1245,7 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double assemble_impl(self, size_t[3] i, size_t[3] j) nogil:
+    cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[3]
@@ -1429,7 +1429,7 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef void assemble_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[3]

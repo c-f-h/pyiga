@@ -29,29 +29,29 @@ cdef class BaseAssembler2D:
         # by convention, the order of indices is (y,x)
         return (ii[0]) * self.S0.ndofs[1] + ii[1]
 
-    cdef double assemble_impl(self, size_t[2] i, size_t[2] j) nogil:
+    cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
         return -9999.99  # Not implemented
 
-    cpdef double assemble(self, size_t i, size_t j):
+    cpdef double entry(self, size_t i, size_t j):
         cdef size_t[2] I, J
         with nogil:
             from_seq2(i, self.S0.ndofs, I)
             from_seq2(j, self.S0.ndofs, J)
-            return self.assemble_impl(I, J)
+            return self.entry_impl(I, J)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef void multi_assemble_chunk(self, size_t[:,::1] idx_arr, double[::1] out) nogil:
+    cdef void multi_entries_chunk(self, size_t[:,::1] idx_arr, double[::1] out) nogil:
         cdef size_t[2] I, J
         cdef size_t k
 
         for k in range(idx_arr.shape[0]):
             from_seq2(idx_arr[k,0], self.S0.ndofs, I)
             from_seq2(idx_arr[k,1], self.S0.ndofs, J)
-            out[k] = self.assemble_impl(I, J)
+            out[k] = self.entry_impl(I, J)
 
-    def multi_assemble(self, indices):
-        """Assemble all entries given by `indices`.
+    def multi_entries(self, indices):
+        """Compute all entries given by `indices`.
 
         Args:
             indices: a sequence of `(i,j)` pairs or an `ndarray`
@@ -67,7 +67,7 @@ cdef class BaseAssembler2D:
 
         num_threads = pyiga.get_max_threads()
         if num_threads <= 1:
-            self.multi_assemble_chunk(idx_arr, result)
+            self.multi_entries_chunk(idx_arr, result)
         else:
             thread_pool = get_thread_pool()
 
@@ -75,7 +75,7 @@ cdef class BaseAssembler2D:
                 cdef size_t[:, ::1] idxchunk_ = idxchunk
                 cdef double[::1] out_ = out
                 with nogil:
-                    self.multi_assemble_chunk(idxchunk_, out_)
+                    self.multi_entries_chunk(idxchunk_, out_)
 
             results = thread_pool.map(asm_chunk,
                         chunk_tasks(idx_arr, num_threads),
@@ -152,7 +152,7 @@ cdef void _asm_core_2d_kernel(
             if diag0 == 0 and diag1 > 0:
                 continue
 
-        entry = asm.assemble_impl(i, j)
+        entry = asm.entry_impl(i, j)
         entries[mu0, mu1] = entry
 
         if symmetric:
@@ -172,7 +172,7 @@ cdef generic_assemble_2d_parallel(BaseAssembler2D asm, symmetric=False):
 
 # helper function for fast low-rank assembler
 cdef double _entry_func_2d(size_t i, size_t j, void * data):
-    return (<BaseAssembler2D>data).assemble(i, j)
+    return (<BaseAssembler2D>data).entry(i, j)
 
 
 
@@ -203,7 +203,7 @@ cdef class BaseVectorAssembler2D:
         i /= self.S0.ndofs[1]
         out[0] = i
 
-    cdef void assemble_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
         pass
 
 
@@ -277,7 +277,7 @@ cdef void _asm_core_vec_2d_kernel(
             if diag0 == 0 and diag1 > 0:
                 continue
 
-        asm.assemble_impl(i, j, &entries[ mu0, mu1, 0 ])
+        asm.entry_impl(i, j, &entries[ mu0, mu1, 0 ])
 
         if symmetric:
             if diag0 != 0 or diag1 != 0:     # are we off the diagonal?
@@ -316,29 +316,29 @@ cdef class BaseAssembler3D:
         # by convention, the order of indices is (y,x)
         return ((ii[0]) * self.S0.ndofs[1] + ii[1]) * self.S0.ndofs[2] + ii[2]
 
-    cdef double assemble_impl(self, size_t[3] i, size_t[3] j) nogil:
+    cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
         return -9999.99  # Not implemented
 
-    cpdef double assemble(self, size_t i, size_t j):
+    cpdef double entry(self, size_t i, size_t j):
         cdef size_t[3] I, J
         with nogil:
             from_seq3(i, self.S0.ndofs, I)
             from_seq3(j, self.S0.ndofs, J)
-            return self.assemble_impl(I, J)
+            return self.entry_impl(I, J)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef void multi_assemble_chunk(self, size_t[:,::1] idx_arr, double[::1] out) nogil:
+    cdef void multi_entries_chunk(self, size_t[:,::1] idx_arr, double[::1] out) nogil:
         cdef size_t[3] I, J
         cdef size_t k
 
         for k in range(idx_arr.shape[0]):
             from_seq3(idx_arr[k,0], self.S0.ndofs, I)
             from_seq3(idx_arr[k,1], self.S0.ndofs, J)
-            out[k] = self.assemble_impl(I, J)
+            out[k] = self.entry_impl(I, J)
 
-    def multi_assemble(self, indices):
-        """Assemble all entries given by `indices`.
+    def multi_entries(self, indices):
+        """Compute all entries given by `indices`.
 
         Args:
             indices: a sequence of `(i,j)` pairs or an `ndarray`
@@ -354,7 +354,7 @@ cdef class BaseAssembler3D:
 
         num_threads = pyiga.get_max_threads()
         if num_threads <= 1:
-            self.multi_assemble_chunk(idx_arr, result)
+            self.multi_entries_chunk(idx_arr, result)
         else:
             thread_pool = get_thread_pool()
 
@@ -362,7 +362,7 @@ cdef class BaseAssembler3D:
                 cdef size_t[:, ::1] idxchunk_ = idxchunk
                 cdef double[::1] out_ = out
                 with nogil:
-                    self.multi_assemble_chunk(idxchunk_, out_)
+                    self.multi_entries_chunk(idxchunk_, out_)
 
             results = thread_pool.map(asm_chunk,
                         chunk_tasks(idx_arr, num_threads),
@@ -449,7 +449,7 @@ cdef void _asm_core_3d_kernel(
                 if diag0 == 0 and diag1 == 0 and diag2 > 0:
                     continue
 
-            entry = asm.assemble_impl(i, j)
+            entry = asm.entry_impl(i, j)
             entries[mu0, mu1, mu2] = entry
 
             if symmetric:
@@ -469,7 +469,7 @@ cdef generic_assemble_3d_parallel(BaseAssembler3D asm, symmetric=False):
 
 # helper function for fast low-rank assembler
 cdef double _entry_func_3d(size_t i, size_t j, void * data):
-    return (<BaseAssembler3D>data).assemble(i, j)
+    return (<BaseAssembler3D>data).entry(i, j)
 
 
 
@@ -502,7 +502,7 @@ cdef class BaseVectorAssembler3D:
         i /= self.S0.ndofs[1]
         out[0] = i
 
-    cdef void assemble_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
         pass
 
 
@@ -586,7 +586,7 @@ cdef void _asm_core_vec_3d_kernel(
                 if diag0 == 0 and diag1 == 0 and diag2 > 0:
                     continue
 
-            asm.assemble_impl(i, j, &entries[ mu0, mu1, mu2, 0 ])
+            asm.entry_impl(i, j, &entries[ mu0, mu1, mu2, 0 ])
 
             if symmetric:
                 if diag0 != 0 or diag1 != 0 or diag2 != 0:     # are we off the diagonal?

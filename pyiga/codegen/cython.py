@@ -267,11 +267,11 @@ class AsmGenerator:
             self.put('return result')
         self.end_function()
 
-    def gen_assemble_impl_header(self):
+    def gen_entry_impl_header(self):
         if self.vec:
-            funcdecl = 'cdef void assemble_impl(self, size_t[{dim}] i, size_t[{dim}] j, double result[]) nogil:'.format(dim=self.dim)
+            funcdecl = 'cdef void entry_impl(self, size_t[{dim}] i, size_t[{dim}] j, double result[]) nogil:'.format(dim=self.dim)
         else:
-            funcdecl = 'cdef double assemble_impl(self, size_t[{dim}] i, size_t[{dim}] j) nogil:'.format(dim=self.dim)
+            funcdecl = 'cdef double entry_impl(self, size_t[{dim}] i, size_t[{dim}] j) nogil:'.format(dim=self.dim)
         zeroret = '' if self.vec else '0.0'  # for vector assemblers, result[] is 0-initialized
 
         self.cython_pragmas()
@@ -297,8 +297,8 @@ class AsmGenerator:
         self.put('')
 
 
-    def generate_assemble_impl(self):
-        self.gen_assemble_impl_header()
+    def generate_entry_impl(self):
+        self.gen_entry_impl_header()
 
         # generate call to assembler kernel
         if self.vec:
@@ -461,7 +461,7 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
             self.put('')
         self.generate_kernel()
         self.put('')
-        self.generate_assemble_impl()
+        self.generate_entry_impl()
         self.dedent()
         self.put('')
 
@@ -513,29 +513,29 @@ cdef class BaseAssembler{{DIM}}D:
         # by convention, the order of indices is (y,x)
         return {{ to_seq(indices, ndofs) }}
 
-    cdef double assemble_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
+    cdef double entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
         return -9999.99  # Not implemented
 
-    cpdef double assemble(self, size_t i, size_t j):
+    cpdef double entry(self, size_t i, size_t j):
         cdef size_t[{{DIM}}] I, J
         with nogil:
             from_seq{{DIM}}(i, self.S0.ndofs, I)
             from_seq{{DIM}}(j, self.S0.ndofs, J)
-            return self.assemble_impl(I, J)
+            return self.entry_impl(I, J)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef void multi_assemble_chunk(self, size_t[:,::1] idx_arr, double[::1] out) nogil:
+    cdef void multi_entries_chunk(self, size_t[:,::1] idx_arr, double[::1] out) nogil:
         cdef size_t[{{DIM}}] I, J
         cdef size_t k
 
         for k in range(idx_arr.shape[0]):
             from_seq{{DIM}}(idx_arr[k,0], self.S0.ndofs, I)
             from_seq{{DIM}}(idx_arr[k,1], self.S0.ndofs, J)
-            out[k] = self.assemble_impl(I, J)
+            out[k] = self.entry_impl(I, J)
 
-    def multi_assemble(self, indices):
-        """Assemble all entries given by `indices`.
+    def multi_entries(self, indices):
+        """Compute all entries given by `indices`.
 
         Args:
             indices: a sequence of `(i,j)` pairs or an `ndarray`
@@ -551,7 +551,7 @@ cdef class BaseAssembler{{DIM}}D:
 
         num_threads = pyiga.get_max_threads()
         if num_threads <= 1:
-            self.multi_assemble_chunk(idx_arr, result)
+            self.multi_entries_chunk(idx_arr, result)
         else:
             thread_pool = get_thread_pool()
 
@@ -559,7 +559,7 @@ cdef class BaseAssembler{{DIM}}D:
                 cdef size_t[:, ::1] idxchunk_ = idxchunk
                 cdef double[::1] out_ = out
                 with nogil:
-                    self.multi_assemble_chunk(idxchunk_, out_)
+                    self.multi_entries_chunk(idxchunk_, out_)
 
             results = thread_pool.map(asm_chunk,
                         chunk_tasks(idx_arr, num_threads),
@@ -637,7 +637,7 @@ cdef void _asm_core_{{DIM}}d_kernel(
 {{ indent(k)   }}        if {{ dimrepeat('diag{} == 0', sep=' and ', upper=k) }} and diag{{k}} > 0:
 {{ indent(k)   }}            continue
 {% endfor %}
-{{ indent(DIM) }}entry = asm.assemble_impl(i, j)
+{{ indent(DIM) }}entry = asm.entry_impl(i, j)
 {{ indent(DIM) }}entries[{{ dimrepeat('mu{}') }}] = entry
 
 {{ indent(DIM) }}if symmetric:
@@ -657,7 +657,7 @@ cdef generic_assemble_{{DIM}}d_parallel(BaseAssembler{{DIM}}D asm, symmetric=Fal
 
 # helper function for fast low-rank assembler
 cdef double _entry_func_{{DIM}}d(size_t i, size_t j, void * data):
-    return (<BaseAssembler{{DIM}}D>data).assemble(i, j)
+    return (<BaseAssembler{{DIM}}D>data).entry(i, j)
 
 
 
@@ -690,7 +690,7 @@ cdef class BaseVectorAssembler{{DIM}}D:
         {%- endfor %}
         out[0] = i
 
-    cdef void assemble_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j, double result[]) nogil:
         pass
 
 
@@ -765,7 +765,7 @@ cdef void _asm_core_vec_{{DIM}}d_kernel(
 {{ indent(k)   }}        if {{ dimrepeat('diag{} == 0', sep=' and ', upper=k) }} and diag{{k}} > 0:
 {{ indent(k)   }}            continue
 {% endfor %}
-{{ indent(DIM) }}asm.assemble_impl(i, j, &entries[ {{ dimrepeat('mu{}') }}, 0 ])
+{{ indent(DIM) }}asm.entry_impl(i, j, &entries[ {{ dimrepeat('mu{}') }}, 0 ])
 
 {{ indent(DIM) }}if symmetric:
 {{ indent(DIM) }}    if {{ dimrepeat('diag{} != 0', sep=' or ') }}:     # are we off the diagonal?

@@ -493,18 +493,21 @@ cdef struct SpaceInfo{{DIM}}:
     ssize_t[:,::1] meshsupp{{k}}
     {%- endfor %}
 
+cdef void init_spaceinfo{{DIM}}(SpaceInfo{{DIM}} & S, kvs):
+    assert len(kvs) == {{DIM}}, "Assembler requires {{DIM}} knot vectors"
+    S.ndofs[:] = [kv.numdofs for kv in kvs]
+    S.p[:]     = [kv.p for kv in kvs]
+    {%- for k in range(DIM) %}
+    S.meshsupp{{k}} = kvs[{{k}}].mesh_support_idx_all()
+    {%- endfor %}
+
 cdef class BaseAssembler{{DIM}}D:
     cdef int nqp
     cdef SpaceInfo{{DIM}} S0
 
     cdef void base_init(self, kvs):
-        assert len(kvs) == {{DIM}}, "Assembler requires {{DIM}} knot vectors"
+        init_spaceinfo{{DIM}}(self.S0, kvs)
         self.nqp = max([kv.p for kv in kvs]) + 1
-        self.S0.ndofs[:] = [kv.numdofs for kv in kvs]
-        self.S0.p[:]     = [kv.p for kv in kvs]
-        {%- for k in range(DIM) %}
-        self.S0.meshsupp{{k}} = kvs[{{k}}].mesh_support_idx_all()
-        {%- endfor %}
 
     cdef inline size_t to_seq(self, size_t[{{DIM}}] ii) nogil:
         # by convention, the order of indices is (y,x)
@@ -664,12 +667,8 @@ cdef class BaseVectorAssembler{{DIM}}D:
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
 
     cdef void base_init(self, kvs, numcomp):
-        assert len(kvs) == {{DIM}}, "Assembler requires {{DIM}} knot vectors"
+        init_spaceinfo{{DIM}}(self.S0, kvs)
         self.nqp = max([kv.p for kv in kvs]) + 1
-        self.S0.ndofs[:] = [kv.numdofs for kv in kvs]
-        {%- for k in range(DIM) %}
-        self.S0.meshsupp{{k}} = kvs[{{k}}].mesh_support_idx_all()
-        {%- endfor %}
         self.numcomp[:] = numcomp
         assert self.numcomp[0] == self.numcomp[1], 'Only square matrices currently implemented'
 

@@ -135,7 +135,7 @@ class KnotVector:
         return support / nspans
 
 
-def make_knots(p, a, b, n):
+def make_knots(p, a, b, n, mult=1):
     """Create an open knot vector of degree `p` over an interval `(a,b)` with `n` knot spans.
 
     This automatically repeats the first and last knots `p+1` times in order
@@ -147,11 +147,15 @@ def make_knots(p, a, b, n):
         a (float): the starting point of the interval
         b (float): the end point of the interval
         n (int): the number of knot spans to divide the interval into
+        mult (int): the multiplicity of interior knots
 
     Returns:
         :class:`KnotVector`: the new knot vector
     """
-    kv = np.concatenate((np.repeat(a, p), np.arange(a, b, (b-a) / n), np.repeat(b, p+1)))
+    kv = np.concatenate(
+            (np.repeat(a, p+1),
+             np.repeat(np.arange(a, b, (b-a) / n)[1:], mult),
+             np.repeat(b, p+1)))
     return KnotVector(kv, p)
 
 

@@ -557,11 +557,13 @@ def assemble(asm, symmetric=False, format='csr'):
     else:
         return X.asmatrix(format)
 
-def assemble_vector(kvs, asm, symmetric, format, layout):
+def assemble_vector(asm, symmetric, format, layout):
     assert layout in ('packed', 'blocked')
-    dim = len(kvs)
-    bs = tuple(kv.numdofs for kv in kvs)
-    bw = tuple(kv.p for kv in kvs)
+    S0, S1 = asm.space_info()
+    dim = len(S0['ndofs'])
+    bs = tuple(S0['ndofs'])
+    bw = tuple(S0['p'])
+    # TODO: take S1 into account
     nc = asm.num_components()
     assert nc[0] == nc[1], 'Only implemented for square matrices'
     mlb = MLBandedMatrix(bs + (nc[0],), bw + (max(nc),))
@@ -634,7 +636,7 @@ def divdiv(kvs, geo=None, layout='packed', format='csr'):
         asm = assemblers.DivDivAssembler3D(kvs, geo)
     else:
         assert False, 'dimension %d not implemented' % dim
-    return assemble_vector(kvs, asm, symmetric=True, layout=layout, format=format)
+    return assemble_vector(asm, symmetric=True, layout=layout, format=format)
 
 def mass_fast(kvs, geo=None, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
     """Assemble a mass matrix for the given tensor product B-spline basis with

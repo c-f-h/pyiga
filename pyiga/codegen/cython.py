@@ -286,7 +286,7 @@ class AsmGenerator:
 
         for k in range(self.dim):
             self.putf(
-        """intv = intersect_intervals(make_intv(self.S0.meshsupp{k}[i[{k}],0], self.S0.meshsupp{k}[i[{k}],1]),
+        """intv = intersect_intervals(make_intv(self.S1.meshsupp{k}[i[{k}],0], self.S1.meshsupp{k}[i[{k}],1]),
                                       make_intv(self.S0.meshsupp{k}[j[{k}],0], self.S0.meshsupp{k}[j[{k}],1]))""", k=k)
             self.put('if intv.a >= intv.b: return ' + zeroret + '  # no intersection of support')
             self.putf('g_sta[{k}] = self.nqp * intv.a    # start of Gauss nodes', k=k)
@@ -346,11 +346,12 @@ class AsmGenerator:
         self.putf('def __init__(self, kvs, {inp}):', inp=input_args)
         self.indent()
 
+        self.putf('self.base_init(kvs, kvs)')
+
         if self.vec:
             numcomp = '(' + ', '.join(str(nc) for nc in vf.num_components()) + ',)'
-            self.putf('self.base_init(kvs, {nc})', nc=numcomp)
-        else:
-            self.putf('self.base_init(kvs)')
+            self.put("self.numcomp[:] = " + numcomp)
+            self.put("assert self.numcomp[0] == self.numcomp[1], 'Only square matrices currently implemented'")
 
         for line in \
 """assert geo.dim == {dim}, "Geometry has wrong dimension"
@@ -503,11 +504,15 @@ cdef void init_spaceinfo{{DIM}}(SpaceInfo{{DIM}} & S, kvs):
 
 cdef class BaseAssembler{{DIM}}D:
     cdef int nqp
-    cdef SpaceInfo{{DIM}} S0
+    cdef SpaceInfo{{DIM}} S0, S1
 
-    cdef void base_init(self, kvs):
-        init_spaceinfo{{DIM}}(self.S0, kvs)
-        self.nqp = max([kv.p for kv in kvs]) + 1
+    cdef void base_init(self, kvs0, kvs1):
+        init_spaceinfo{{DIM}}(self.S0, kvs0)
+        init_spaceinfo{{DIM}}(self.S1, kvs1)
+        self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
+
+    def space_info(self):
+        return self.S0, self.S1
 
     cdef inline size_t to_seq(self, size_t[{{DIM}}] ii) nogil:
         # by convention, the order of indices is (y,x)
@@ -519,7 +524,7 @@ cdef class BaseAssembler{{DIM}}D:
     cpdef double entry(self, size_t i, size_t j):
         cdef size_t[{{DIM}}] I, J
         with nogil:
-            from_seq{{DIM}}(i, self.S0.ndofs, I)
+            from_seq{{DIM}}(i, self.S1.ndofs, I)
             from_seq{{DIM}}(j, self.S0.ndofs, J)
             return self.entry_impl(I, J)
 
@@ -530,7 +535,7 @@ cdef class BaseAssembler{{DIM}}D:
         cdef size_t k
 
         for k in range(idx_arr.shape[0]):
-            from_seq{{DIM}}(idx_arr[k,0], self.S0.ndofs, I)
+            from_seq{{DIM}}(idx_arr[k,0], self.S1.ndofs, I)
             from_seq{{DIM}}(idx_arr[k,1], self.S0.ndofs, J)
             out[k] = self.entry_impl(I, J)
 
@@ -663,14 +668,16 @@ cdef double _entry_func_{{DIM}}d(size_t i, size_t j, void * data):
 
 cdef class BaseVectorAssembler{{DIM}}D:
     cdef int nqp
-    cdef SpaceInfo{{DIM}} S0
+    cdef SpaceInfo{{DIM}} S0, S1
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
 
-    cdef void base_init(self, kvs, numcomp):
-        init_spaceinfo{{DIM}}(self.S0, kvs)
-        self.nqp = max([kv.p for kv in kvs]) + 1
-        self.numcomp[:] = numcomp
-        assert self.numcomp[0] == self.numcomp[1], 'Only square matrices currently implemented'
+    cdef void base_init(self, kvs0, kvs1):
+        init_spaceinfo{{DIM}}(self.S0, kvs0)
+        init_spaceinfo{{DIM}}(self.S1, kvs1)
+        self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
+
+    def space_info(self):
+        return self.S0, self.S1
 
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]

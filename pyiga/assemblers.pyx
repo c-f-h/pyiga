@@ -31,7 +31,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
     cdef double[:, ::1] W
 
     def __init__(self, kvs, geo):
-        self.base_init(kvs)
+        self.base_init(kvs, kvs)
         assert geo.dim == 2, "Geometry has wrong dimension"
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
@@ -112,14 +112,14 @@ cdef class MassAssembler2D(BaseAssembler2D):
         cdef size_t g_end[2]
         cdef (double*) values_i[2]
         cdef (double*) values_j[2]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp0[i[0],0], self.S0.meshsupp0[i[0],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp0[i[0],0], self.S1.meshsupp0[i[0],1]),
                                       make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
         values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
         values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp1[i[1],0], self.S0.meshsupp1[i[1],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
                                       make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
@@ -140,7 +140,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
     cdef double[:, :, :, ::1] B
 
     def __init__(self, kvs, geo):
-        self.base_init(kvs)
+        self.base_init(kvs, kvs)
         assert geo.dim == 2, "Geometry has wrong dimension"
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
@@ -238,14 +238,14 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         cdef size_t g_end[2]
         cdef (double*) values_i[2]
         cdef (double*) values_j[2]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp0[i[0],0], self.S0.meshsupp0[i[0],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp0[i[0],0], self.S1.meshsupp0[i[0],1]),
                                       make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
         values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
         values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp1[i[1],0], self.S0.meshsupp1[i[1],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
                                       make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
@@ -267,7 +267,7 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
     cdef double[:, :, :, ::1] JacInv
 
     def __init__(self, kvs, geo):
-        self.base_init(kvs)
+        self.base_init(kvs, kvs)
         assert geo.dim == 2, "Geometry has wrong dimension"
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
@@ -370,14 +370,14 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         cdef size_t g_end[2]
         cdef (double*) values_i[2]
         cdef (double*) values_j[2]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp0[i[0],0], self.S0.meshsupp0[i[0],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp0[i[0],0], self.S1.meshsupp0[i[0],1]),
                                       make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
         values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
         values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp1[i[1],0], self.S0.meshsupp1[i[1],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
                                       make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
@@ -400,7 +400,7 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
     cdef double[:, :, :, ::1] JacInv
 
     def __init__(self, kvs, geo):
-        self.base_init(kvs)
+        self.base_init(kvs, kvs)
         assert geo.dim == 2, "Geometry has wrong dimension"
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
@@ -505,14 +505,14 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         cdef size_t g_end[2]
         cdef (double*) values_i[2]
         cdef (double*) values_j[2]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp0[i[0],0], self.S0.meshsupp0[i[0],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp0[i[0],0], self.S1.meshsupp0[i[0],1]),
                                       make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
         values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
         values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp1[i[1],0], self.S0.meshsupp1[i[1],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
                                       make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
@@ -535,7 +535,9 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     cdef double[:, :, :, ::1] JacInv
 
     def __init__(self, kvs, geo):
-        self.base_init(kvs, (2, 2,))
+        self.base_init(kvs, kvs)
+        self.numcomp[:] = (2, 2,)
+        assert self.numcomp[0] == self.numcomp[1], 'Only square matrices currently implemented'
         assert geo.dim == 2, "Geometry has wrong dimension"
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
@@ -650,14 +652,14 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         cdef size_t g_end[2]
         cdef (double*) values_i[2]
         cdef (double*) values_j[2]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp0[i[0],0], self.S0.meshsupp0[i[0],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp0[i[0],0], self.S1.meshsupp0[i[0],1]),
                                       make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]))
         if intv.a >= intv.b: return   # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
         values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
         values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp1[i[1],0], self.S0.meshsupp1[i[1],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
                                       make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
         if intv.a >= intv.b: return   # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
@@ -680,7 +682,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
     cdef double[:, :, ::1] W
 
     def __init__(self, kvs, geo):
-        self.base_init(kvs)
+        self.base_init(kvs, kvs)
         assert geo.dim == 3, "Geometry has wrong dimension"
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
@@ -768,21 +770,21 @@ cdef class MassAssembler3D(BaseAssembler3D):
         cdef size_t g_end[3]
         cdef (double*) values_i[3]
         cdef (double*) values_j[3]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp0[i[0],0], self.S0.meshsupp0[i[0],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp0[i[0],0], self.S1.meshsupp0[i[0],1]),
                                       make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
         values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
         values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp1[i[1],0], self.S0.meshsupp1[i[1],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
                                       make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
         values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
         values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp2[i[2],0], self.S0.meshsupp2[i[2],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp2[i[2],0], self.S1.meshsupp2[i[2],1]),
                                       make_intv(self.S0.meshsupp2[j[2],0], self.S0.meshsupp2[j[2],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
@@ -804,7 +806,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
     cdef double[:, :, :, :, ::1] B
 
     def __init__(self, kvs, geo):
-        self.base_init(kvs)
+        self.base_init(kvs, kvs)
         assert geo.dim == 3, "Geometry has wrong dimension"
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
@@ -925,21 +927,21 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         cdef size_t g_end[3]
         cdef (double*) values_i[3]
         cdef (double*) values_j[3]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp0[i[0],0], self.S0.meshsupp0[i[0],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp0[i[0],0], self.S1.meshsupp0[i[0],1]),
                                       make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
         values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
         values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp1[i[1],0], self.S0.meshsupp1[i[1],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
                                       make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
         values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
         values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp2[i[2],0], self.S0.meshsupp2[i[2],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp2[i[2],0], self.S1.meshsupp2[i[2],1]),
                                       make_intv(self.S0.meshsupp2[j[2],0], self.S0.meshsupp2[j[2],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
@@ -962,7 +964,7 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
     cdef double[:, :, :, :, ::1] JacInv
 
     def __init__(self, kvs, geo):
-        self.base_init(kvs)
+        self.base_init(kvs, kvs)
         assert geo.dim == 3, "Geometry has wrong dimension"
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
@@ -1087,21 +1089,21 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         cdef size_t g_end[3]
         cdef (double*) values_i[3]
         cdef (double*) values_j[3]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp0[i[0],0], self.S0.meshsupp0[i[0],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp0[i[0],0], self.S1.meshsupp0[i[0],1]),
                                       make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
         values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
         values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp1[i[1],0], self.S0.meshsupp1[i[1],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
                                       make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
         values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
         values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp2[i[2],0], self.S0.meshsupp2[i[2],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp2[i[2],0], self.S1.meshsupp2[i[2],1]),
                                       make_intv(self.S0.meshsupp2[j[2],0], self.S0.meshsupp2[j[2],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
@@ -1125,7 +1127,7 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
     cdef double[:, :, :, :, ::1] JacInv
 
     def __init__(self, kvs, geo):
-        self.base_init(kvs)
+        self.base_init(kvs, kvs)
         assert geo.dim == 3, "Geometry has wrong dimension"
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
@@ -1252,21 +1254,21 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         cdef size_t g_end[3]
         cdef (double*) values_i[3]
         cdef (double*) values_j[3]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp0[i[0],0], self.S0.meshsupp0[i[0],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp0[i[0],0], self.S1.meshsupp0[i[0],1]),
                                       make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
         values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
         values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp1[i[1],0], self.S0.meshsupp1[i[1],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
                                       make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
         values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
         values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp2[i[2],0], self.S0.meshsupp2[i[2],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp2[i[2],0], self.S1.meshsupp2[i[2],1]),
                                       make_intv(self.S0.meshsupp2[j[2],0], self.S0.meshsupp2[j[2],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
@@ -1290,7 +1292,9 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     cdef double[:, :, :, :, ::1] JacInv
 
     def __init__(self, kvs, geo):
-        self.base_init(kvs, (3, 3,))
+        self.base_init(kvs, kvs)
+        self.numcomp[:] = (3, 3,)
+        assert self.numcomp[0] == self.numcomp[1], 'Only square matrices currently implemented'
         assert geo.dim == 3, "Geometry has wrong dimension"
 
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
@@ -1436,21 +1440,21 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         cdef size_t g_end[3]
         cdef (double*) values_i[3]
         cdef (double*) values_j[3]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp0[i[0],0], self.S0.meshsupp0[i[0],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp0[i[0],0], self.S1.meshsupp0[i[0],1]),
                                       make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]))
         if intv.a >= intv.b: return   # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
         values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
         values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp1[i[1],0], self.S0.meshsupp1[i[1],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
                                       make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
         if intv.a >= intv.b: return   # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
         values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
         values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
-        intv = intersect_intervals(make_intv(self.S0.meshsupp2[i[2],0], self.S0.meshsupp2[i[2],1]),
+        intv = intersect_intervals(make_intv(self.S1.meshsupp2[i[2],0], self.S1.meshsupp2[i[2],1]),
                                       make_intv(self.S0.meshsupp2[j[2],0], self.S0.meshsupp2[j[2],1]))
         if intv.a >= intv.b: return   # no intersection of support
         g_sta[2] = self.nqp * intv.a    # start of Gauss nodes

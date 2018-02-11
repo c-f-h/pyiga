@@ -19,11 +19,15 @@ cdef void init_spaceinfo2(SpaceInfo2 & S, kvs):
 
 cdef class BaseAssembler2D:
     cdef int nqp
-    cdef SpaceInfo2 S0
+    cdef SpaceInfo2 S0, S1
 
-    cdef void base_init(self, kvs):
-        init_spaceinfo2(self.S0, kvs)
-        self.nqp = max([kv.p for kv in kvs]) + 1
+    cdef void base_init(self, kvs0, kvs1):
+        init_spaceinfo2(self.S0, kvs0)
+        init_spaceinfo2(self.S1, kvs1)
+        self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
+
+    def space_info(self):
+        return self.S0, self.S1
 
     cdef inline size_t to_seq(self, size_t[2] ii) nogil:
         # by convention, the order of indices is (y,x)
@@ -35,7 +39,7 @@ cdef class BaseAssembler2D:
     cpdef double entry(self, size_t i, size_t j):
         cdef size_t[2] I, J
         with nogil:
-            from_seq2(i, self.S0.ndofs, I)
+            from_seq2(i, self.S1.ndofs, I)
             from_seq2(j, self.S0.ndofs, J)
             return self.entry_impl(I, J)
 
@@ -46,7 +50,7 @@ cdef class BaseAssembler2D:
         cdef size_t k
 
         for k in range(idx_arr.shape[0]):
-            from_seq2(idx_arr[k,0], self.S0.ndofs, I)
+            from_seq2(idx_arr[k,0], self.S1.ndofs, I)
             from_seq2(idx_arr[k,1], self.S0.ndofs, J)
             out[k] = self.entry_impl(I, J)
 
@@ -178,14 +182,16 @@ cdef double _entry_func_2d(size_t i, size_t j, void * data):
 
 cdef class BaseVectorAssembler2D:
     cdef int nqp
-    cdef SpaceInfo2 S0
+    cdef SpaceInfo2 S0, S1
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
 
-    cdef void base_init(self, kvs, numcomp):
-        init_spaceinfo2(self.S0, kvs)
-        self.nqp = max([kv.p for kv in kvs]) + 1
-        self.numcomp[:] = numcomp
-        assert self.numcomp[0] == self.numcomp[1], 'Only square matrices currently implemented'
+    cdef void base_init(self, kvs0, kvs1):
+        init_spaceinfo2(self.S0, kvs0)
+        init_spaceinfo2(self.S1, kvs1)
+        self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
+
+    def space_info(self):
+        return self.S0, self.S1
 
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
@@ -306,11 +312,15 @@ cdef void init_spaceinfo3(SpaceInfo3 & S, kvs):
 
 cdef class BaseAssembler3D:
     cdef int nqp
-    cdef SpaceInfo3 S0
+    cdef SpaceInfo3 S0, S1
 
-    cdef void base_init(self, kvs):
-        init_spaceinfo3(self.S0, kvs)
-        self.nqp = max([kv.p for kv in kvs]) + 1
+    cdef void base_init(self, kvs0, kvs1):
+        init_spaceinfo3(self.S0, kvs0)
+        init_spaceinfo3(self.S1, kvs1)
+        self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
+
+    def space_info(self):
+        return self.S0, self.S1
 
     cdef inline size_t to_seq(self, size_t[3] ii) nogil:
         # by convention, the order of indices is (y,x)
@@ -322,7 +332,7 @@ cdef class BaseAssembler3D:
     cpdef double entry(self, size_t i, size_t j):
         cdef size_t[3] I, J
         with nogil:
-            from_seq3(i, self.S0.ndofs, I)
+            from_seq3(i, self.S1.ndofs, I)
             from_seq3(j, self.S0.ndofs, J)
             return self.entry_impl(I, J)
 
@@ -333,7 +343,7 @@ cdef class BaseAssembler3D:
         cdef size_t k
 
         for k in range(idx_arr.shape[0]):
-            from_seq3(idx_arr[k,0], self.S0.ndofs, I)
+            from_seq3(idx_arr[k,0], self.S1.ndofs, I)
             from_seq3(idx_arr[k,1], self.S0.ndofs, J)
             out[k] = self.entry_impl(I, J)
 
@@ -475,14 +485,16 @@ cdef double _entry_func_3d(size_t i, size_t j, void * data):
 
 cdef class BaseVectorAssembler3D:
     cdef int nqp
-    cdef SpaceInfo3 S0
+    cdef SpaceInfo3 S0, S1
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
 
-    cdef void base_init(self, kvs, numcomp):
-        init_spaceinfo3(self.S0, kvs)
-        self.nqp = max([kv.p for kv in kvs]) + 1
-        self.numcomp[:] = numcomp
-        assert self.numcomp[0] == self.numcomp[1], 'Only square matrices currently implemented'
+    cdef void base_init(self, kvs0, kvs1):
+        init_spaceinfo3(self.S0, kvs0)
+        init_spaceinfo3(self.S1, kvs1)
+        self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
+
+    def space_info(self):
+        return self.S0, self.S1
 
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]

@@ -9,8 +9,20 @@ cdef struct SpaceInfo2:
     int[2] p
     ssize_t[:,::1] meshsupp0
     ssize_t[:,::1] meshsupp1
+    # 1D basis values. Indices: basis function, mesh point, derivative
+    double[:, :, ::1] C0
+    double[:, :, ::1] C1
+
+cdef void clear_spaceinfo2(SpaceInfo2 & S):
+    S.meshsupp0 = None
+    S.meshsupp1 = None
+    S.C0 = None
+    S.C1 = None
 
 cdef void init_spaceinfo2(SpaceInfo2 & S, kvs):
+    # work around Cython bug: memoryviews in structs are not properly initialized
+    memset(&S, 0, sizeof(S))
+    clear_spaceinfo2(S)
     assert len(kvs) == 2, "Assembler requires 2 knot vectors"
     S.ndofs[:] = [kv.numdofs for kv in kvs]
     S.p[:]     = [kv.p for kv in kvs]
@@ -25,6 +37,11 @@ cdef class BaseAssembler2D:
         init_spaceinfo2(self.S0, kvs0)
         init_spaceinfo2(self.S1, kvs1)
         self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
+
+    def __dealloc__(self):
+        # work around Cython memory bug
+        clear_spaceinfo2(self.S0)
+        clear_spaceinfo2(self.S1)
 
     def space_info(self):
         return self.S0, self.S1
@@ -190,6 +207,11 @@ cdef class BaseVectorAssembler2D:
         init_spaceinfo2(self.S1, kvs1)
         self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
 
+    def __dealloc__(self):
+        # work around Cython memory bug
+        clear_spaceinfo2(self.S0)
+        clear_spaceinfo2(self.S1)
+
     def space_info(self):
         return self.S0, self.S1
 
@@ -301,8 +323,23 @@ cdef struct SpaceInfo3:
     ssize_t[:,::1] meshsupp0
     ssize_t[:,::1] meshsupp1
     ssize_t[:,::1] meshsupp2
+    # 1D basis values. Indices: basis function, mesh point, derivative
+    double[:, :, ::1] C0
+    double[:, :, ::1] C1
+    double[:, :, ::1] C2
+
+cdef void clear_spaceinfo3(SpaceInfo3 & S):
+    S.meshsupp0 = None
+    S.meshsupp1 = None
+    S.meshsupp2 = None
+    S.C0 = None
+    S.C1 = None
+    S.C2 = None
 
 cdef void init_spaceinfo3(SpaceInfo3 & S, kvs):
+    # work around Cython bug: memoryviews in structs are not properly initialized
+    memset(&S, 0, sizeof(S))
+    clear_spaceinfo3(S)
     assert len(kvs) == 3, "Assembler requires 3 knot vectors"
     S.ndofs[:] = [kv.numdofs for kv in kvs]
     S.p[:]     = [kv.p for kv in kvs]
@@ -318,6 +355,11 @@ cdef class BaseAssembler3D:
         init_spaceinfo3(self.S0, kvs0)
         init_spaceinfo3(self.S1, kvs1)
         self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
+
+    def __dealloc__(self):
+        # work around Cython memory bug
+        clear_spaceinfo3(self.S0)
+        clear_spaceinfo3(self.S1)
 
     def space_info(self):
         return self.S0, self.S1
@@ -492,6 +534,11 @@ cdef class BaseVectorAssembler3D:
         init_spaceinfo3(self.S0, kvs0)
         init_spaceinfo3(self.S1, kvs1)
         self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
+
+    def __dealloc__(self):
+        # work around Cython memory bug
+        clear_spaceinfo3(self.S0)
+        clear_spaceinfo3(self.S1)
 
     def space_info(self):
         return self.S0, self.S1

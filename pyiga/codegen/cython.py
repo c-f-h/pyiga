@@ -292,8 +292,8 @@ class AsmGenerator:
             self.putf('g_sta[{k}] = self.nqp * intv.a    # start of Gauss nodes', k=k)
             self.putf('g_end[{k}] = self.nqp * intv.b    # end of Gauss nodes', k=k)
 
-            self.putf('values_i[{k}] = &self.C{k}[ i[{k}], g_sta[{k}], 0 ]', k=k)
-            self.putf('values_j[{k}] = &self.C{k}[ j[{k}], g_sta[{k}], 0 ]', k=k)
+            self.putf('values_i[{k}] = &self.S0.C{k}[ i[{k}], g_sta[{k}], 0 ]', k=k)
+            self.putf('values_j[{k}] = &self.S0.C{k}[ j[{k}], g_sta[{k}], 0 ]', k=k)
         self.put('')
 
 
@@ -362,7 +362,7 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
         self.put('')
 
         for k in range(self.dim):
-            self.putf('self.C{k} = compute_values_derivs(kvs[{k}], gaussgrid[{k}], derivs={maxderiv})', k=k)
+            self.putf('self.S0.C{k} = compute_values_derivs(kvs[{k}], gaussgrid[{k}], derivs={maxderiv})', k=k)
         self.put('')
 
         # declare array storage for non-global variables
@@ -444,11 +444,6 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
                 classname=self.classname, base=baseclass)
         self.indent()
 
-        # declare instance variables
-        self.put('# 1D basis values. Indices: basis function, mesh point, derivative')
-        for k in range(self.dim):
-            self.putf('cdef double[:, :, ::1] C{k}', k=k)
-
         # declare array storage for global variables
         self.declare_array_vars(var for var in self.vform.kernel_deps
                 if var.is_array and var.is_global)
@@ -493,8 +488,23 @@ cdef struct SpaceInfo{{DIM}}:
     {%- for k in range(DIM) %}
     ssize_t[:,::1] meshsupp{{k}}
     {%- endfor %}
+    # 1D basis values. Indices: basis function, mesh point, derivative
+    {%- for k in range(DIM) %}
+    double[:, :, ::1] C{{k}}
+    {%- endfor %}
+
+cdef void clear_spaceinfo{{DIM}}(SpaceInfo{{DIM}} & S):
+    {%- for k in range(DIM) %}
+    S.meshsupp{{k}} = None
+    {%- endfor %}
+    {%- for k in range(DIM) %}
+    S.C{{k}} = None
+    {%- endfor %}
 
 cdef void init_spaceinfo{{DIM}}(SpaceInfo{{DIM}} & S, kvs):
+    # work around Cython bug: memoryviews in structs are not properly initialized
+    memset(&S, 0, sizeof(S))
+    clear_spaceinfo{{DIM}}(S)
     assert len(kvs) == {{DIM}}, "Assembler requires {{DIM}} knot vectors"
     S.ndofs[:] = [kv.numdofs for kv in kvs]
     S.p[:]     = [kv.p for kv in kvs]
@@ -510,6 +520,11 @@ cdef class BaseAssembler{{DIM}}D:
         init_spaceinfo{{DIM}}(self.S0, kvs0)
         init_spaceinfo{{DIM}}(self.S1, kvs1)
         self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
+
+    def __dealloc__(self):
+        # work around Cython memory bug
+        clear_spaceinfo{{DIM}}(self.S0)
+        clear_spaceinfo{{DIM}}(self.S1)
 
     def space_info(self):
         return self.S0, self.S1
@@ -675,6 +690,11 @@ cdef class BaseVectorAssembler{{DIM}}D:
         init_spaceinfo{{DIM}}(self.S0, kvs0)
         init_spaceinfo{{DIM}}(self.S1, kvs1)
         self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
+
+    def __dealloc__(self):
+        # work around Cython memory bug
+        clear_spaceinfo{{DIM}}(self.S0)
+        clear_spaceinfo{{DIM}}(self.S1)
 
     def space_info(self):
         return self.S0, self.S1

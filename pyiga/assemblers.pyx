@@ -25,9 +25,6 @@ from pyiga.assemble_tools_cy import compute_values_derivs
 from pyiga.utils import grid_eval
 
 cdef class MassAssembler2D(BaseAssembler2D):
-    # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, :, ::1] C0
-    cdef double[:, :, ::1] C1
     cdef double[:, ::1] W
 
     def __init__(self, kvs, geo):
@@ -37,8 +34,8 @@ cdef class MassAssembler2D(BaseAssembler2D):
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=0)
-        self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=0)
+        self.S0.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=0)
+        self.S0.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=0)
 
         cdef double[:, :, :, ::1] geo_grad_a
         cdef double[:, ::1] GaussWeight
@@ -117,15 +114,15 @@ cdef class MassAssembler2D(BaseAssembler2D):
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
-        values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
+        values_i[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
+        values_j[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
         intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
                                       make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
-        values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
+        values_i[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
+        values_j[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
 
         return MassAssembler2D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
@@ -134,9 +131,6 @@ cdef class MassAssembler2D(BaseAssembler2D):
         )
 
 cdef class StiffnessAssembler2D(BaseAssembler2D):
-    # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, :, ::1] C0
-    cdef double[:, :, ::1] C1
     cdef double[:, :, :, ::1] B
 
     def __init__(self, kvs, geo):
@@ -146,8 +140,8 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
-        self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
+        self.S0.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
+        self.S0.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
 
         cdef double[:, :, :, ::1] geo_grad_a
         cdef double[:, ::1] GaussWeight
@@ -243,15 +237,15 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
-        values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
+        values_i[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
+        values_j[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
         intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
                                       make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
-        values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
+        values_i[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
+        values_j[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
 
         return StiffnessAssembler2D.combine(
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
@@ -260,9 +254,6 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         )
 
 cdef class HeatAssembler_ST2D(BaseAssembler2D):
-    # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, :, ::1] C0
-    cdef double[:, :, ::1] C1
     cdef double[:, ::1] W
     cdef double[:, :, :, ::1] JacInv
 
@@ -273,8 +264,8 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
-        self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
+        self.S0.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
+        self.S0.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
 
         cdef double[:, ::1] GaussWeight
         cdef double[:, :, :, ::1] geo_grad_a
@@ -375,15 +366,15 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
-        values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
+        values_i[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
+        values_j[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
         intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
                                       make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
-        values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
+        values_i[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
+        values_j[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
 
         return HeatAssembler_ST2D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
@@ -393,9 +384,6 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         )
 
 cdef class WaveAssembler_ST2D(BaseAssembler2D):
-    # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, :, ::1] C0
-    cdef double[:, :, ::1] C1
     cdef double[:, ::1] W
     cdef double[:, :, :, ::1] JacInv
 
@@ -406,8 +394,8 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=2)
-        self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=2)
+        self.S0.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=2)
+        self.S0.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=2)
 
         cdef double[:, ::1] GaussWeight
         cdef double[:, :, :, ::1] geo_grad_a
@@ -510,15 +498,15 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
-        values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
+        values_i[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
+        values_j[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
         intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
                                       make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
-        values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
+        values_i[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
+        values_j[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
 
         return WaveAssembler_ST2D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
@@ -528,9 +516,6 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         )
 
 cdef class DivDivAssembler2D(BaseVectorAssembler2D):
-    # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, :, ::1] C0
-    cdef double[:, :, ::1] C1
     cdef double[:, ::1] W
     cdef double[:, :, :, ::1] JacInv
 
@@ -543,8 +528,8 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
-        self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
+        self.S0.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
+        self.S0.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
 
         cdef double[:, ::1] GaussWeight
         cdef double[:, :, :, ::1] geo_grad_a
@@ -657,15 +642,15 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         if intv.a >= intv.b: return   # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
-        values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
+        values_i[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
+        values_j[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
         intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
                                       make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
         if intv.a >= intv.b: return   # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
-        values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
+        values_i[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
+        values_j[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
 
         DivDivAssembler2D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
@@ -675,10 +660,6 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
                 result
         )
 cdef class MassAssembler3D(BaseAssembler3D):
-    # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, :, ::1] C0
-    cdef double[:, :, ::1] C1
-    cdef double[:, :, ::1] C2
     cdef double[:, :, ::1] W
 
     def __init__(self, kvs, geo):
@@ -688,9 +669,9 @@ cdef class MassAssembler3D(BaseAssembler3D):
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=0)
-        self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=0)
-        self.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=0)
+        self.S0.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=0)
+        self.S0.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=0)
+        self.S0.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=0)
 
         cdef double[:, :, :, :, ::1] geo_grad_a
         cdef double[:, :, ::1] GaussWeight
@@ -775,22 +756,22 @@ cdef class MassAssembler3D(BaseAssembler3D):
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
-        values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
+        values_i[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
+        values_j[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
         intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
                                       make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
-        values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
+        values_i[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
+        values_j[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
         intv = intersect_intervals(make_intv(self.S1.meshsupp2[i[2],0], self.S1.meshsupp2[i[2],1]),
                                       make_intv(self.S0.meshsupp2[j[2],0], self.S0.meshsupp2[j[2],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
         g_end[2] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[2] = &self.C2[ i[2], g_sta[2], 0 ]
-        values_j[2] = &self.C2[ j[2], g_sta[2], 0 ]
+        values_i[2] = &self.S0.C2[ i[2], g_sta[2], 0 ]
+        values_j[2] = &self.S0.C2[ j[2], g_sta[2], 0 ]
 
         return MassAssembler3D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
@@ -799,10 +780,6 @@ cdef class MassAssembler3D(BaseAssembler3D):
         )
 
 cdef class StiffnessAssembler3D(BaseAssembler3D):
-    # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, :, ::1] C0
-    cdef double[:, :, ::1] C1
-    cdef double[:, :, ::1] C2
     cdef double[:, :, :, :, ::1] B
 
     def __init__(self, kvs, geo):
@@ -812,9 +789,9 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
-        self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
-        self.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=1)
+        self.S0.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
+        self.S0.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
+        self.S0.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=1)
 
         cdef double[:, :, :, :, ::1] geo_grad_a
         cdef double[:, :, ::1] GaussWeight
@@ -932,22 +909,22 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
-        values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
+        values_i[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
+        values_j[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
         intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
                                       make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
-        values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
+        values_i[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
+        values_j[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
         intv = intersect_intervals(make_intv(self.S1.meshsupp2[i[2],0], self.S1.meshsupp2[i[2],1]),
                                       make_intv(self.S0.meshsupp2[j[2],0], self.S0.meshsupp2[j[2],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
         g_end[2] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[2] = &self.C2[ i[2], g_sta[2], 0 ]
-        values_j[2] = &self.C2[ j[2], g_sta[2], 0 ]
+        values_i[2] = &self.S0.C2[ i[2], g_sta[2], 0 ]
+        values_j[2] = &self.S0.C2[ j[2], g_sta[2], 0 ]
 
         return StiffnessAssembler3D.combine(
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
@@ -956,10 +933,6 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         )
 
 cdef class HeatAssembler_ST3D(BaseAssembler3D):
-    # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, :, ::1] C0
-    cdef double[:, :, ::1] C1
-    cdef double[:, :, ::1] C2
     cdef double[:, :, ::1] W
     cdef double[:, :, :, :, ::1] JacInv
 
@@ -970,9 +943,9 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
-        self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
-        self.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=1)
+        self.S0.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
+        self.S0.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
+        self.S0.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=1)
 
         cdef double[:, :, ::1] GaussWeight
         cdef double[:, :, :, :, ::1] geo_grad_a
@@ -1094,22 +1067,22 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
-        values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
+        values_i[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
+        values_j[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
         intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
                                       make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
-        values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
+        values_i[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
+        values_j[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
         intv = intersect_intervals(make_intv(self.S1.meshsupp2[i[2],0], self.S1.meshsupp2[i[2],1]),
                                       make_intv(self.S0.meshsupp2[j[2],0], self.S0.meshsupp2[j[2],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
         g_end[2] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[2] = &self.C2[ i[2], g_sta[2], 0 ]
-        values_j[2] = &self.C2[ j[2], g_sta[2], 0 ]
+        values_i[2] = &self.S0.C2[ i[2], g_sta[2], 0 ]
+        values_j[2] = &self.S0.C2[ j[2], g_sta[2], 0 ]
 
         return HeatAssembler_ST3D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
@@ -1119,10 +1092,6 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         )
 
 cdef class WaveAssembler_ST3D(BaseAssembler3D):
-    # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, :, ::1] C0
-    cdef double[:, :, ::1] C1
-    cdef double[:, :, ::1] C2
     cdef double[:, :, ::1] W
     cdef double[:, :, :, :, ::1] JacInv
 
@@ -1133,9 +1102,9 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=2)
-        self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=2)
-        self.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=2)
+        self.S0.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=2)
+        self.S0.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=2)
+        self.S0.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=2)
 
         cdef double[:, :, ::1] GaussWeight
         cdef double[:, :, :, :, ::1] geo_grad_a
@@ -1259,22 +1228,22 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
-        values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
+        values_i[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
+        values_j[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
         intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
                                       make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
-        values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
+        values_i[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
+        values_j[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
         intv = intersect_intervals(make_intv(self.S1.meshsupp2[i[2],0], self.S1.meshsupp2[i[2],1]),
                                       make_intv(self.S0.meshsupp2[j[2],0], self.S0.meshsupp2[j[2],1]))
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
         g_end[2] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[2] = &self.C2[ i[2], g_sta[2], 0 ]
-        values_j[2] = &self.C2[ j[2], g_sta[2], 0 ]
+        values_i[2] = &self.S0.C2[ i[2], g_sta[2], 0 ]
+        values_j[2] = &self.S0.C2[ j[2], g_sta[2], 0 ]
 
         return WaveAssembler_ST3D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
@@ -1284,10 +1253,6 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         )
 
 cdef class DivDivAssembler3D(BaseVectorAssembler3D):
-    # 1D basis values. Indices: basis function, mesh point, derivative
-    cdef double[:, :, ::1] C0
-    cdef double[:, :, ::1] C1
-    cdef double[:, :, ::1] C2
     cdef double[:, :, ::1] W
     cdef double[:, :, :, :, ::1] JacInv
 
@@ -1300,9 +1265,9 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
-        self.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
-        self.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=1)
+        self.S0.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
+        self.S0.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
+        self.S0.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=1)
 
         cdef double[:, :, ::1] GaussWeight
         cdef double[:, :, :, :, ::1] geo_grad_a
@@ -1445,22 +1410,22 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         if intv.a >= intv.b: return   # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[0] = &self.C0[ i[0], g_sta[0], 0 ]
-        values_j[0] = &self.C0[ j[0], g_sta[0], 0 ]
+        values_i[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
+        values_j[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
         intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
                                       make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
         if intv.a >= intv.b: return   # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[1] = &self.C1[ i[1], g_sta[1], 0 ]
-        values_j[1] = &self.C1[ j[1], g_sta[1], 0 ]
+        values_i[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
+        values_j[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
         intv = intersect_intervals(make_intv(self.S1.meshsupp2[i[2],0], self.S1.meshsupp2[i[2],1]),
                                       make_intv(self.S0.meshsupp2[j[2],0], self.S0.meshsupp2[j[2],1]))
         if intv.a >= intv.b: return   # no intersection of support
         g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
         g_end[2] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[2] = &self.C2[ i[2], g_sta[2], 0 ]
-        values_j[2] = &self.C2[ j[2], g_sta[2], 0 ]
+        values_i[2] = &self.S0.C2[ i[2], g_sta[2], 0 ]
+        values_j[2] = &self.S0.C2[ j[2], g_sta[2], 0 ]
 
         DivDivAssembler3D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],

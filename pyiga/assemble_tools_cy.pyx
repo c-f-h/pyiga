@@ -8,6 +8,8 @@ from cython.parallel import prange
 from libcpp.vector cimport vector
 from cpython cimport pycapsule
 
+from libc.string cimport memset
+
 import numpy as np
 cimport numpy as np
 

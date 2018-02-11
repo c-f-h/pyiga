@@ -557,7 +557,7 @@ def assemble(asm, symmetric=False, format='csr'):
     else:
         return X.asmatrix(format)
 
-def assemble_vector(asm, symmetric, format, layout):
+def assemble_vector(asm, symmetric=False, format='csr', layout='packed'):
     assert layout in ('packed', 'blocked')
     S0, S1 = asm.space_info()
     dim = len(S0['ndofs'])

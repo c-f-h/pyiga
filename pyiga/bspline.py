@@ -139,7 +139,7 @@ def make_knots(p, a, b, n, mult=1):
     """Create an open knot vector of degree `p` over an interval `(a,b)` with `n` knot spans.
 
     This automatically repeats the first and last knots `p+1` times in order
-    to create an open knot vector. Interior knots are single, i.e., have
+    to create an open knot vector. Interior knots are single by default, i.e., have
     maximum continuity.
 
     Args:

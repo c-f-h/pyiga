@@ -160,7 +160,7 @@ cdef void _asm_core_2d_kernel(
                 entries[ transp0[mu0], transp1[mu1] ] = entry   # then also write into the transposed entry
 
 
-cdef generic_assemble_2d_parallel(BaseAssembler2D asm, symmetric=False):
+def generic_assemble_2d_parallel(BaseAssembler2D asm, symmetric=False):
     mlb = MLBandedMatrix(
         tuple(asm.S0.ndofs),
         tuple(asm.S0.p)
@@ -209,7 +209,7 @@ cdef class BaseVectorAssembler2D:
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef object generic_assemble_core_vec_2d(BaseVectorAssembler2D asm, bidx, bint symmetric=False):
+def generic_assemble_core_vec_2d(BaseVectorAssembler2D asm, bidx, bint symmetric=False):
     cdef unsigned[:, ::1] bidx0, bidx1
     cdef long mu0, mu1, MU0, MU1
     cdef double[:, :, ::1] entries
@@ -457,7 +457,7 @@ cdef void _asm_core_3d_kernel(
                     entries[ transp0[mu0], transp1[mu1], transp2[mu2] ] = entry   # then also write into the transposed entry
 
 
-cdef generic_assemble_3d_parallel(BaseAssembler3D asm, symmetric=False):
+def generic_assemble_3d_parallel(BaseAssembler3D asm, symmetric=False):
     mlb = MLBandedMatrix(
         tuple(asm.S0.ndofs),
         tuple(asm.S0.p)
@@ -508,7 +508,7 @@ cdef class BaseVectorAssembler3D:
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef object generic_assemble_core_vec_3d(BaseVectorAssembler3D asm, bidx, bint symmetric=False):
+def generic_assemble_core_vec_3d(BaseVectorAssembler3D asm, bidx, bint symmetric=False):
     cdef unsigned[:, ::1] bidx0, bidx1, bidx2
     cdef long mu0, mu1, mu2, MU0, MU1, MU2
     cdef double[:, :, :, ::1] entries

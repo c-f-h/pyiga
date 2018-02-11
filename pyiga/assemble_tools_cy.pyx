@@ -396,43 +396,4 @@ cdef object get_thread_pool():
 
 include "genericasm.pxi"
 
-################################################################################
-# Driver routines for assemblers
-################################################################################
-
-def assemble(asm, symmetric=False, format='csr'):
-    if isinstance(asm, BaseAssembler2D):
-        X = generic_assemble_2d_parallel(asm, symmetric=symmetric)
-    elif isinstance(asm, BaseAssembler3D):
-        X = generic_assemble_3d_parallel(asm, symmetric=symmetric)
-    else:
-        assert False, 'Unknown assembler type'
-    if format == 'mlb':
-        return X
-    else:
-        return X.asmatrix(format)
-
-def generic_vector_asm(kvs, asm, symmetric, format, layout):
-    assert layout in ('packed', 'blocked')
-    dim = len(kvs)
-    bs = tuple(kv.numdofs for kv in kvs)
-    bw = tuple(kv.p for kv in kvs)
-    nc = asm.num_components()
-    assert nc[0] == nc[1], 'Only implemented for square matrices'
-    mlb = MLBandedMatrix(bs + (nc[0],), bw + (max(nc),))
-    if dim == 2:
-        X = generic_assemble_core_vec_2d(asm, mlb.bidx[:dim], symmetric)
-    elif dim == 3:
-        X = generic_assemble_core_vec_3d(asm, mlb.bidx[:dim], symmetric)
-    else:
-        assert False, 'dimension %d not implemented' % dim
-    mlb.data = X
-    if layout == 'blocked':
-        axes = (dim,) + tuple(range(dim))    # bring last axis to the front
-        mlb = mlb.reorder(axes)
-    if format == 'mlb':
-        return mlb
-    else:
-        return mlb.asmatrix(format)
-
 

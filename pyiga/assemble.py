@@ -83,6 +83,7 @@ from . import utils
 from . import geometry
 
 from .quadrature import make_iterated_quadrature, make_tensor_quadrature
+from .mlmatrix import MLBandedMatrix
 
 ################################################################################
 # 1D assembling routines
@@ -225,7 +226,7 @@ def bsp_mass_2d(knotvecs, geo=None, format='csr'):
         M2 = bsp_mass_1d(kv2)
         return scipy.sparse.kron(M1, M2, format=format)
     else:
-        return assemble_tools.assemble(
+        return assemble(
                 assemblers.MassAssembler2D(knotvecs, geo),
                 symmetric=True, format=format)
 
@@ -238,7 +239,7 @@ def bsp_stiffness_2d(knotvecs, geo=None, format='csr'):
         K2 = bsp_stiffness_1d(kv2)
         return scipy.sparse.kron(K1, M2, format=format) + scipy.sparse.kron(M1, K2, format=format)
     else:
-        return assemble_tools.assemble(
+        return assemble(
                 assemblers.StiffnessAssembler2D(knotvecs, geo),
                 symmetric=True, format=format)
 
@@ -249,7 +250,7 @@ def bsp_mass_3d(knotvecs, geo=None, format='csr'):
             return scipy.sparse.kron(A, B, format=format)
         return k(M[0], k(M[1], M[2]))
     else:
-        return assemble_tools.assemble(
+        return assemble(
                 assemblers.MassAssembler3D(knotvecs, geo),
                 symmetric=True, format=format)
 
@@ -262,7 +263,7 @@ def bsp_stiffness_3d(knotvecs, geo=None, format='csr'):
         K12 = k(MK[1][1], MK[2][0]) + k(MK[1][0], MK[2][1])
         return k(MK[0][1], M12) + k(MK[0][0], K12)
     else:
-        return assemble_tools.assemble(
+        return assemble(
                 assemblers.StiffnessAssembler3D(knotvecs, geo),
                 symmetric=True, format=format)
 
@@ -541,6 +542,45 @@ def integrate(kvs, f, f_physical=False, geo=None):
     return fvals.sum(axis=tuple(range(len(kvs))))
 
 ################################################################################
+# Driver routines for assemblers
+################################################################################
+
+def assemble(asm, symmetric=False, format='csr'):
+    if isinstance(asm, assemble_tools.BaseAssembler2D):
+        X = assemble_tools.generic_assemble_2d_parallel(asm, symmetric=symmetric)
+    elif isinstance(asm, assemble_tools.BaseAssembler3D):
+        X = assemble_tools.generic_assemble_3d_parallel(asm, symmetric=symmetric)
+    else:
+        assert False, 'Unknown assembler type'
+    if format == 'mlb':
+        return X
+    else:
+        return X.asmatrix(format)
+
+def assemble_vector(kvs, asm, symmetric, format, layout):
+    assert layout in ('packed', 'blocked')
+    dim = len(kvs)
+    bs = tuple(kv.numdofs for kv in kvs)
+    bw = tuple(kv.p for kv in kvs)
+    nc = asm.num_components()
+    assert nc[0] == nc[1], 'Only implemented for square matrices'
+    mlb = MLBandedMatrix(bs + (nc[0],), bw + (max(nc),))
+    if dim == 2:
+        X = assemble_tools.generic_assemble_core_vec_2d(asm, mlb.bidx[:dim], symmetric)
+    elif dim == 3:
+        X = assemble_tools.generic_assemble_core_vec_3d(asm, mlb.bidx[:dim], symmetric)
+    else:
+        assert False, 'dimension %d not implemented' % dim
+    mlb.data = X
+    if layout == 'blocked':
+        axes = (dim,) + tuple(range(dim))    # bring last axis to the front
+        mlb = mlb.reorder(axes)
+    if format == 'mlb':
+        return mlb
+    else:
+        return mlb.asmatrix(format)
+
+################################################################################
 # Convenience functions
 ################################################################################
 
@@ -594,7 +634,7 @@ def divdiv(kvs, geo=None, layout='packed', format='csr'):
         asm = assemblers.DivDivAssembler3D(kvs, geo)
     else:
         assert False, 'dimension %d not implemented' % dim
-    return assemble_tools.generic_vector_asm(kvs, asm, symmetric=True, layout=layout, format=format)
+    return assemble_vector(kvs, asm, symmetric=True, layout=layout, format=format)
 
 def mass_fast(kvs, geo=None, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
     """Assemble a mass matrix for the given tensor product B-spline basis with

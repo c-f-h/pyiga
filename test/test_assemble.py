@@ -1,5 +1,4 @@
 from pyiga.assemble import *
-from pyiga import assemble_tools
 from pyiga import geometry
 from pyiga.utils import read_sparse_matrix
 
@@ -94,7 +93,7 @@ def test_heat_st_2d():
     DtD0 = bsp_mixed_deriv_biform_1d(kv_t, 1, 0)
     A_ref = (spkron(DtD0, M) + spkron(M_t, DxDx)).tocsr()
 
-    A = assemble_tools.assemble(assemblers.HeatAssembler_ST2D(kvs, geo))
+    A = assemble(assemblers.HeatAssembler_ST2D(kvs, geo))
     assert abs(A_ref - A).max() < 1e-14
 
 def test_wave_st_2d():
@@ -110,7 +109,7 @@ def test_wave_st_2d():
     DttDt = bsp_mixed_deriv_biform_1d(kv_t, 2, 1)
     A_ref = (spkron(DttDt, M) + spkron(D0Dt, DxDx)).tocsr()
 
-    A = assemble_tools.assemble(assemblers.WaveAssembler_ST2D(kvs, geo))
+    A = assemble(assemblers.WaveAssembler_ST2D(kvs, geo))
     assert abs(A_ref - A).max() < 1e-14
 
 ################################################################################

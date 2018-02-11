@@ -10,7 +10,9 @@ pyiga |travis| |appveyor|
 ``pyiga`` is a Python research toolbox for Isogeometric Analysis. Its current highlights are:
 
 * Automatic generation of efficient matrix assembling code from a high-level, FEniCS_-like description of the bilinear form. See the bottom of `vform.py <pyiga/vform.py>`_ for some built-in examples.
-* Fast assembling by a black-box low-rank assembling algorithm described in `this technical report <http://www.numa.uni-linz.ac.at/publications/List/2017/2017-02.pdf>`_.
+* Fast assembling by a black-box low-rank assembling algorithm described in
+  `this paper <http://dx.doi.org/10.1016/j.cma.2018.01.014>`_
+  (or `this technical report <http://www.numa.uni-linz.ac.at/publications/List/2017/2017-02.pdf>`_).
 
 For a simple example which shows how to solve a Poisson equation with ``pyiga`` and plot
 the solution, have a look at the notebook

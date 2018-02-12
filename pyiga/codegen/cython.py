@@ -281,19 +281,27 @@ class AsmGenerator:
         self.putf('cdef IntInterval intv')
         self.putf('cdef size_t g_sta[{dim}]')
         self.putf('cdef size_t g_end[{dim}]')
-        self.putf('cdef (double*) values_i[{dim}]')
-        self.putf('cdef (double*) values_j[{dim}]')
+        for bfun in self.vform.basis_funs:
+            self.putf('cdef (double*) values_{name}[{dim}]', name=bfun.name)
+
+        idx_bfun = list(zip(('j', 'i'), self.vform.basis_funs))
 
         for k in range(self.dim):
-            self.putf(
-        """intv = intersect_intervals(make_intv(self.S1.meshsupp{k}[i[{k}],0], self.S1.meshsupp{k}[i[{k}],1]),
-                                      make_intv(self.S0.meshsupp{k}[j[{k}],0], self.S0.meshsupp{k}[j[{k}],1]))""", k=k)
+            self.putf('intv = intersect_intervals(')
+            self.indent(2)
+            for idx,bfun in idx_bfun:
+                self.putf('make_intv(self.S{space}.meshsupp{k}[{idx}[{k}],0], self.S{space}.meshsupp{k}[{idx}[{k}],1]),',
+                        k=k, space=bfun.space, idx=idx)
+            self.dedent(2)
+            self.put(')')
             self.put('if intv.a >= intv.b: return ' + zeroret + '  # no intersection of support')
             self.putf('g_sta[{k}] = self.nqp * intv.a    # start of Gauss nodes', k=k)
             self.putf('g_end[{k}] = self.nqp * intv.b    # end of Gauss nodes', k=k)
 
-            self.putf('values_i[{k}] = &self.S0.C{k}[ i[{k}], g_sta[{k}], 0 ]', k=k)
-            self.putf('values_j[{k}] = &self.S0.C{k}[ j[{k}], g_sta[{k}], 0 ]', k=k)
+            # a_ij = a(phi_j, phi_i)  -- second index (j) corresponds to first (trial) function
+            for idx,bfun in idx_bfun:
+                self.putf('values_{name}[{k}] = &self.S{space}.C{k}[ {idx}[{k}], g_sta[{k}], 0 ]',
+                        k=k, name=bfun.name, space=bfun.space, idx=idx)
         self.put('')
 
 
@@ -314,9 +322,8 @@ class AsmGenerator:
                 self.putf('self.{name} [ {idx} ],', name=var.name, idx=idx)
 
         # generate basis function value arguments
-        # a_ij = a(phi_j, phi_i)  -- pass values for j (trial function) first
-        self.put(self.dimrep('values_j[{0}]') + ',')
-        self.put(self.dimrep('values_i[{0}]') + ',')
+        for bfun in self.vform.basis_funs:
+            self.put(self.dimrep('values_%s[{0}]' % bfun.name) + ',')
 
         # generate output argument if needed (for vector assemblers)
         if self.vec:

@@ -38,11 +38,12 @@ class AsmVar:
         return len(self.shape) == 2
 
 class BasisFun:
-    def __init__(self, name, vform, numcomp=None, component=None):
+    def __init__(self, name, vform, numcomp=None, component=None, space=0):
         self.name = name
         self.vform = vform
         self.numcomp = numcomp  # number of components; None means scalar
         self.component = component  # for vector-valued basis functions
+        self.space = space
         self.asmgen = None  # to be set to AsmGenerator for code generation
 
 class VForm:
@@ -69,7 +70,7 @@ class VForm:
         # default input field: geometry transform
         self.Geo = self.input('geo', shape=(dim,))
 
-    def basisfuns(self, parametric=False, components=(None,None)):
+    def basisfuns(self, parametric=False, components=(None,None), spaces=(0,0)):
         def make_bfun_expr(bf):
             if bf.numcomp is not None:
                 # return a vector which contains the components of the bfun
@@ -84,8 +85,8 @@ class VForm:
 
         names = ('u', 'v')
         self.basis_funs = tuple(
-                BasisFun(name, self, numcomp=nc)
-                for (name,nc) in zip(names, components)
+                BasisFun(name, self, numcomp=nc, space=space)
+                for (name,nc,space) in zip(names, components, spaces)
         )
 
         return tuple(make_bfun_expr(bf) for bf in self.basis_funs)

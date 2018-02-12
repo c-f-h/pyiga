@@ -107,27 +107,31 @@ cdef class MassAssembler2D(BaseAssembler2D):
         cdef IntInterval intv
         cdef size_t g_sta[2]
         cdef size_t g_end[2]
-        cdef (double*) values_i[2]
-        cdef (double*) values_j[2]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp0[i[0],0], self.S1.meshsupp0[i[0],1]),
-                                      make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]))
+        cdef (double*) values_u[2]
+        cdef (double*) values_v[2]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]),
+                make_intv(self.S0.meshsupp0[i[0],0], self.S0.meshsupp0[i[0],1]),
+        )
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
-        values_j[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
-                                      make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
+        values_u[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
+        values_v[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]),
+                make_intv(self.S0.meshsupp1[i[1],0], self.S0.meshsupp1[i[1],1]),
+        )
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
-        values_j[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
+        values_u[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
+        values_v[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
 
         return MassAssembler2D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
-                values_j[0], values_j[1],
-                values_i[0], values_i[1],
+                values_u[0], values_u[1],
+                values_v[0], values_v[1],
         )
 
 cdef class StiffnessAssembler2D(BaseAssembler2D):
@@ -230,27 +234,31 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         cdef IntInterval intv
         cdef size_t g_sta[2]
         cdef size_t g_end[2]
-        cdef (double*) values_i[2]
-        cdef (double*) values_j[2]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp0[i[0],0], self.S1.meshsupp0[i[0],1]),
-                                      make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]))
+        cdef (double*) values_u[2]
+        cdef (double*) values_v[2]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]),
+                make_intv(self.S0.meshsupp0[i[0],0], self.S0.meshsupp0[i[0],1]),
+        )
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
-        values_j[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
-                                      make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
+        values_u[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
+        values_v[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]),
+                make_intv(self.S0.meshsupp1[i[1],0], self.S0.meshsupp1[i[1],1]),
+        )
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
-        values_j[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
+        values_u[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
+        values_v[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
 
         return StiffnessAssembler2D.combine(
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
-                values_j[0], values_j[1],
-                values_i[0], values_i[1],
+                values_u[0], values_u[1],
+                values_v[0], values_v[1],
         )
 
 cdef class HeatAssembler_ST2D(BaseAssembler2D):
@@ -359,28 +367,32 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         cdef IntInterval intv
         cdef size_t g_sta[2]
         cdef size_t g_end[2]
-        cdef (double*) values_i[2]
-        cdef (double*) values_j[2]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp0[i[0],0], self.S1.meshsupp0[i[0],1]),
-                                      make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]))
+        cdef (double*) values_u[2]
+        cdef (double*) values_v[2]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]),
+                make_intv(self.S0.meshsupp0[i[0],0], self.S0.meshsupp0[i[0],1]),
+        )
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
-        values_j[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
-                                      make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
+        values_u[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
+        values_v[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]),
+                make_intv(self.S0.meshsupp1[i[1],0], self.S0.meshsupp1[i[1],1]),
+        )
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
-        values_j[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
+        values_u[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
+        values_v[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
 
         return HeatAssembler_ST2D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
-                values_j[0], values_j[1],
-                values_i[0], values_i[1],
+                values_u[0], values_u[1],
+                values_v[0], values_v[1],
         )
 
 cdef class WaveAssembler_ST2D(BaseAssembler2D):
@@ -491,28 +503,32 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         cdef IntInterval intv
         cdef size_t g_sta[2]
         cdef size_t g_end[2]
-        cdef (double*) values_i[2]
-        cdef (double*) values_j[2]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp0[i[0],0], self.S1.meshsupp0[i[0],1]),
-                                      make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]))
+        cdef (double*) values_u[2]
+        cdef (double*) values_v[2]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]),
+                make_intv(self.S0.meshsupp0[i[0],0], self.S0.meshsupp0[i[0],1]),
+        )
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
-        values_j[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
-                                      make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
+        values_u[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
+        values_v[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]),
+                make_intv(self.S0.meshsupp1[i[1],0], self.S0.meshsupp1[i[1],1]),
+        )
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
-        values_j[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
+        values_u[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
+        values_v[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
 
         return WaveAssembler_ST2D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
-                values_j[0], values_j[1],
-                values_i[0], values_i[1],
+                values_u[0], values_u[1],
+                values_v[0], values_v[1],
         )
 
 cdef class DivDivAssembler2D(BaseVectorAssembler2D):
@@ -635,28 +651,32 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         cdef IntInterval intv
         cdef size_t g_sta[2]
         cdef size_t g_end[2]
-        cdef (double*) values_i[2]
-        cdef (double*) values_j[2]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp0[i[0],0], self.S1.meshsupp0[i[0],1]),
-                                      make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]))
+        cdef (double*) values_u[2]
+        cdef (double*) values_v[2]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]),
+                make_intv(self.S0.meshsupp0[i[0],0], self.S0.meshsupp0[i[0],1]),
+        )
         if intv.a >= intv.b: return   # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
-        values_j[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
-                                      make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
+        values_u[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
+        values_v[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]),
+                make_intv(self.S0.meshsupp1[i[1],0], self.S0.meshsupp1[i[1],1]),
+        )
         if intv.a >= intv.b: return   # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
-        values_j[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
+        values_u[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
+        values_v[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
 
         DivDivAssembler2D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
-                values_j[0], values_j[1],
-                values_i[0], values_i[1],
+                values_u[0], values_u[1],
+                values_v[0], values_v[1],
                 result
         )
 cdef class MassAssembler3D(BaseAssembler3D):
@@ -749,34 +769,40 @@ cdef class MassAssembler3D(BaseAssembler3D):
         cdef IntInterval intv
         cdef size_t g_sta[3]
         cdef size_t g_end[3]
-        cdef (double*) values_i[3]
-        cdef (double*) values_j[3]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp0[i[0],0], self.S1.meshsupp0[i[0],1]),
-                                      make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]))
+        cdef (double*) values_u[3]
+        cdef (double*) values_v[3]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]),
+                make_intv(self.S0.meshsupp0[i[0],0], self.S0.meshsupp0[i[0],1]),
+        )
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
-        values_j[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
-                                      make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
+        values_u[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
+        values_v[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]),
+                make_intv(self.S0.meshsupp1[i[1],0], self.S0.meshsupp1[i[1],1]),
+        )
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
-        values_j[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp2[i[2],0], self.S1.meshsupp2[i[2],1]),
-                                      make_intv(self.S0.meshsupp2[j[2],0], self.S0.meshsupp2[j[2],1]))
+        values_u[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
+        values_v[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp2[j[2],0], self.S0.meshsupp2[j[2],1]),
+                make_intv(self.S0.meshsupp2[i[2],0], self.S0.meshsupp2[i[2],1]),
+        )
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
         g_end[2] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[2] = &self.S0.C2[ i[2], g_sta[2], 0 ]
-        values_j[2] = &self.S0.C2[ j[2], g_sta[2], 0 ]
+        values_u[2] = &self.S0.C2[ j[2], g_sta[2], 0 ]
+        values_v[2] = &self.S0.C2[ i[2], g_sta[2], 0 ]
 
         return MassAssembler3D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
-                values_j[0], values_j[1], values_j[2],
-                values_i[0], values_i[1], values_i[2],
+                values_u[0], values_u[1], values_u[2],
+                values_v[0], values_v[1], values_v[2],
         )
 
 cdef class StiffnessAssembler3D(BaseAssembler3D):
@@ -902,34 +928,40 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         cdef IntInterval intv
         cdef size_t g_sta[3]
         cdef size_t g_end[3]
-        cdef (double*) values_i[3]
-        cdef (double*) values_j[3]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp0[i[0],0], self.S1.meshsupp0[i[0],1]),
-                                      make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]))
+        cdef (double*) values_u[3]
+        cdef (double*) values_v[3]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]),
+                make_intv(self.S0.meshsupp0[i[0],0], self.S0.meshsupp0[i[0],1]),
+        )
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
-        values_j[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
-                                      make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
+        values_u[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
+        values_v[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]),
+                make_intv(self.S0.meshsupp1[i[1],0], self.S0.meshsupp1[i[1],1]),
+        )
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
-        values_j[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp2[i[2],0], self.S1.meshsupp2[i[2],1]),
-                                      make_intv(self.S0.meshsupp2[j[2],0], self.S0.meshsupp2[j[2],1]))
+        values_u[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
+        values_v[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp2[j[2],0], self.S0.meshsupp2[j[2],1]),
+                make_intv(self.S0.meshsupp2[i[2],0], self.S0.meshsupp2[i[2],1]),
+        )
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
         g_end[2] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[2] = &self.S0.C2[ i[2], g_sta[2], 0 ]
-        values_j[2] = &self.S0.C2[ j[2], g_sta[2], 0 ]
+        values_u[2] = &self.S0.C2[ j[2], g_sta[2], 0 ]
+        values_v[2] = &self.S0.C2[ i[2], g_sta[2], 0 ]
 
         return StiffnessAssembler3D.combine(
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
-                values_j[0], values_j[1], values_j[2],
-                values_i[0], values_i[1], values_i[2],
+                values_u[0], values_u[1], values_u[2],
+                values_v[0], values_v[1], values_v[2],
         )
 
 cdef class HeatAssembler_ST3D(BaseAssembler3D):
@@ -1060,35 +1092,41 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         cdef IntInterval intv
         cdef size_t g_sta[3]
         cdef size_t g_end[3]
-        cdef (double*) values_i[3]
-        cdef (double*) values_j[3]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp0[i[0],0], self.S1.meshsupp0[i[0],1]),
-                                      make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]))
+        cdef (double*) values_u[3]
+        cdef (double*) values_v[3]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]),
+                make_intv(self.S0.meshsupp0[i[0],0], self.S0.meshsupp0[i[0],1]),
+        )
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
-        values_j[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
-                                      make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
+        values_u[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
+        values_v[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]),
+                make_intv(self.S0.meshsupp1[i[1],0], self.S0.meshsupp1[i[1],1]),
+        )
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
-        values_j[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp2[i[2],0], self.S1.meshsupp2[i[2],1]),
-                                      make_intv(self.S0.meshsupp2[j[2],0], self.S0.meshsupp2[j[2],1]))
+        values_u[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
+        values_v[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp2[j[2],0], self.S0.meshsupp2[j[2],1]),
+                make_intv(self.S0.meshsupp2[i[2],0], self.S0.meshsupp2[i[2],1]),
+        )
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
         g_end[2] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[2] = &self.S0.C2[ i[2], g_sta[2], 0 ]
-        values_j[2] = &self.S0.C2[ j[2], g_sta[2], 0 ]
+        values_u[2] = &self.S0.C2[ j[2], g_sta[2], 0 ]
+        values_v[2] = &self.S0.C2[ i[2], g_sta[2], 0 ]
 
         return HeatAssembler_ST3D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
-                values_j[0], values_j[1], values_j[2],
-                values_i[0], values_i[1], values_i[2],
+                values_u[0], values_u[1], values_u[2],
+                values_v[0], values_v[1], values_v[2],
         )
 
 cdef class WaveAssembler_ST3D(BaseAssembler3D):
@@ -1221,35 +1259,41 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         cdef IntInterval intv
         cdef size_t g_sta[3]
         cdef size_t g_end[3]
-        cdef (double*) values_i[3]
-        cdef (double*) values_j[3]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp0[i[0],0], self.S1.meshsupp0[i[0],1]),
-                                      make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]))
+        cdef (double*) values_u[3]
+        cdef (double*) values_v[3]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]),
+                make_intv(self.S0.meshsupp0[i[0],0], self.S0.meshsupp0[i[0],1]),
+        )
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
-        values_j[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
-                                      make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
+        values_u[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
+        values_v[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]),
+                make_intv(self.S0.meshsupp1[i[1],0], self.S0.meshsupp1[i[1],1]),
+        )
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
-        values_j[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp2[i[2],0], self.S1.meshsupp2[i[2],1]),
-                                      make_intv(self.S0.meshsupp2[j[2],0], self.S0.meshsupp2[j[2],1]))
+        values_u[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
+        values_v[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp2[j[2],0], self.S0.meshsupp2[j[2],1]),
+                make_intv(self.S0.meshsupp2[i[2],0], self.S0.meshsupp2[i[2],1]),
+        )
         if intv.a >= intv.b: return 0.0  # no intersection of support
         g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
         g_end[2] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[2] = &self.S0.C2[ i[2], g_sta[2], 0 ]
-        values_j[2] = &self.S0.C2[ j[2], g_sta[2], 0 ]
+        values_u[2] = &self.S0.C2[ j[2], g_sta[2], 0 ]
+        values_v[2] = &self.S0.C2[ i[2], g_sta[2], 0 ]
 
         return WaveAssembler_ST3D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
-                values_j[0], values_j[1], values_j[2],
-                values_i[0], values_i[1], values_i[2],
+                values_u[0], values_u[1], values_u[2],
+                values_v[0], values_v[1], values_v[2],
         )
 
 cdef class DivDivAssembler3D(BaseVectorAssembler3D):
@@ -1403,34 +1447,40 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         cdef IntInterval intv
         cdef size_t g_sta[3]
         cdef size_t g_end[3]
-        cdef (double*) values_i[3]
-        cdef (double*) values_j[3]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp0[i[0],0], self.S1.meshsupp0[i[0],1]),
-                                      make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]))
+        cdef (double*) values_u[3]
+        cdef (double*) values_v[3]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp0[j[0],0], self.S0.meshsupp0[j[0],1]),
+                make_intv(self.S0.meshsupp0[i[0],0], self.S0.meshsupp0[i[0],1]),
+        )
         if intv.a >= intv.b: return   # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
-        values_j[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp1[i[1],0], self.S1.meshsupp1[i[1],1]),
-                                      make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]))
+        values_u[0] = &self.S0.C0[ j[0], g_sta[0], 0 ]
+        values_v[0] = &self.S0.C0[ i[0], g_sta[0], 0 ]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp1[j[1],0], self.S0.meshsupp1[j[1],1]),
+                make_intv(self.S0.meshsupp1[i[1],0], self.S0.meshsupp1[i[1],1]),
+        )
         if intv.a >= intv.b: return   # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
-        values_j[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
-        intv = intersect_intervals(make_intv(self.S1.meshsupp2[i[2],0], self.S1.meshsupp2[i[2],1]),
-                                      make_intv(self.S0.meshsupp2[j[2],0], self.S0.meshsupp2[j[2],1]))
+        values_u[1] = &self.S0.C1[ j[1], g_sta[1], 0 ]
+        values_v[1] = &self.S0.C1[ i[1], g_sta[1], 0 ]
+        intv = intersect_intervals(
+                make_intv(self.S0.meshsupp2[j[2],0], self.S0.meshsupp2[j[2],1]),
+                make_intv(self.S0.meshsupp2[i[2],0], self.S0.meshsupp2[i[2],1]),
+        )
         if intv.a >= intv.b: return   # no intersection of support
         g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
         g_end[2] = self.nqp * intv.b    # end of Gauss nodes
-        values_i[2] = &self.S0.C2[ i[2], g_sta[2], 0 ]
-        values_j[2] = &self.S0.C2[ j[2], g_sta[2], 0 ]
+        values_u[2] = &self.S0.C2[ j[2], g_sta[2], 0 ]
+        values_v[2] = &self.S0.C2[ i[2], g_sta[2], 0 ]
 
         DivDivAssembler3D.combine(
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
-                values_j[0], values_j[1], values_j[2],
-                values_i[0], values_i[1], values_i[2],
+                values_u[0], values_u[1], values_u[2],
+                values_v[0], values_v[1], values_v[2],
                 result
         )

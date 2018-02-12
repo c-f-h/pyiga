@@ -300,6 +300,13 @@ class NurbsFunc:
         del kvs[axis]
         return NurbsFunc(kvs, coeffs, weights=None, premultiplied=True)
 
+    @property
+    def support(self):
+        """Return a sequence of pairs `(lower,upper)`, one per source dimension,
+        which describe the extent of the support in the parameter space."""
+        return tuple(kv.support() for kv in self.kvs)
+
+
 class PhysicalGradientFunc:
     """A class for function objects which evaluate physical (transformed) gradients of
     scalar functions with geometry transforms.

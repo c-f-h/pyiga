@@ -33,7 +33,8 @@ cdef class BaseAssembler2D:
     cdef int nqp
     cdef SpaceInfo2 S0, S1
 
-    cdef void base_init(self, kvs0, kvs1):
+    cdef void base_init(self, kvs0, kvs1=None):
+        if kvs1 is None: kvs1 = kvs0
         init_spaceinfo2(self.S0, kvs0)
         init_spaceinfo2(self.S1, kvs1)
         self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
@@ -202,7 +203,8 @@ cdef class BaseVectorAssembler2D:
     cdef SpaceInfo2 S0, S1
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
 
-    cdef void base_init(self, kvs0, kvs1):
+    cdef void base_init(self, kvs0, kvs1=None):
+        if kvs1 is None: kvs1 = kvs0
         init_spaceinfo2(self.S0, kvs0)
         init_spaceinfo2(self.S1, kvs1)
         self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
@@ -351,7 +353,8 @@ cdef class BaseAssembler3D:
     cdef int nqp
     cdef SpaceInfo3 S0, S1
 
-    cdef void base_init(self, kvs0, kvs1):
+    cdef void base_init(self, kvs0, kvs1=None):
+        if kvs1 is None: kvs1 = kvs0
         init_spaceinfo3(self.S0, kvs0)
         init_spaceinfo3(self.S1, kvs1)
         self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
@@ -530,7 +533,8 @@ cdef class BaseVectorAssembler3D:
     cdef SpaceInfo3 S0, S1
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
 
-    cdef void base_init(self, kvs0, kvs1):
+    cdef void base_init(self, kvs0, kvs1=None):
+        if kvs1 is None: kvs1 = kvs0
         init_spaceinfo3(self.S0, kvs0)
         init_spaceinfo3(self.S1, kvs1)
         self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1

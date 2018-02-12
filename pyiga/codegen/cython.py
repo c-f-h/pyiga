@@ -349,11 +349,13 @@ class AsmGenerator:
     def generate_init(self):
         vf = self.vform
 
+        used_spaces = sorted(set(bf.space for bf in vf.basis_funs))
+        used_kvs = ', '.join('kvs%d' % sp for sp in used_spaces)
         input_args = ', '.join(inp[0] for inp in vf.inputs)
-        self.putf('def __init__(self, kvs, {inp}):', inp=input_args)
+        self.putf('def __init__(self, {kvs}, {inp}):', kvs=used_kvs, inp=input_args)
         self.indent()
 
-        self.putf('self.base_init(kvs, kvs)')
+        self.putf('self.base_init({kvs})', kvs=used_kvs)
 
         if self.vec:
             numcomp = '(' + ', '.join(str(nc) for nc in vf.num_components()) + ',)'
@@ -363,13 +365,16 @@ class AsmGenerator:
         for line in \
 """assert geo.dim == {dim}, "Geometry has wrong dimension"
 
-gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
+# NB: we assume all kvs result in the same mesh
+gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
 N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
             self.putf(line)
         self.put('')
 
-        for k in range(self.dim):
-            self.putf('self.S0.C{k} = compute_values_derivs(kvs[{k}], gaussgrid[{k}], derivs={maxderiv})', k=k)
+        for sp in used_spaces:
+            for k in range(self.dim):
+                self.putf('self.S{sp}.C{k} = compute_values_derivs(kvs{sp}[{k}], gaussgrid[{k}], derivs={maxderiv})',
+                        k=k, sp=sp)
         self.put('')
 
         # declare array storage for non-global variables
@@ -523,7 +528,8 @@ cdef class BaseAssembler{{DIM}}D:
     cdef int nqp
     cdef SpaceInfo{{DIM}} S0, S1
 
-    cdef void base_init(self, kvs0, kvs1):
+    cdef void base_init(self, kvs0, kvs1=None):
+        if kvs1 is None: kvs1 = kvs0
         init_spaceinfo{{DIM}}(self.S0, kvs0)
         init_spaceinfo{{DIM}}(self.S1, kvs1)
         self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
@@ -693,7 +699,8 @@ cdef class BaseVectorAssembler{{DIM}}D:
     cdef SpaceInfo{{DIM}} S0, S1
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
 
-    cdef void base_init(self, kvs0, kvs1):
+    cdef void base_init(self, kvs0, kvs1=None):
+        if kvs1 is None: kvs1 = kvs0
         init_spaceinfo{{DIM}}(self.S0, kvs0)
         init_spaceinfo{{DIM}}(self.S1, kvs1)
         self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1

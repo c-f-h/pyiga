@@ -27,15 +27,16 @@ from pyiga.utils import grid_eval
 cdef class MassAssembler2D(BaseAssembler2D):
     cdef double[:, ::1] W
 
-    def __init__(self, kvs, geo):
-        self.base_init(kvs, kvs)
+    def __init__(self, kvs0, geo):
+        self.base_init(kvs0)
         assert geo.dim == 2, "Geometry has wrong dimension"
 
-        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
+        # NB: we assume all kvs result in the same mesh
+        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.S0.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=0)
-        self.S0.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=0)
+        self.S0.C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=0)
+        self.S0.C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=0)
 
         cdef double[:, :, :, ::1] geo_grad_a
         cdef double[:, ::1] GaussWeight
@@ -137,15 +138,16 @@ cdef class MassAssembler2D(BaseAssembler2D):
 cdef class StiffnessAssembler2D(BaseAssembler2D):
     cdef double[:, :, :, ::1] B
 
-    def __init__(self, kvs, geo):
-        self.base_init(kvs, kvs)
+    def __init__(self, kvs0, geo):
+        self.base_init(kvs0)
         assert geo.dim == 2, "Geometry has wrong dimension"
 
-        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
+        # NB: we assume all kvs result in the same mesh
+        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.S0.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
-        self.S0.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
+        self.S0.C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
+        self.S0.C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
 
         cdef double[:, :, :, ::1] geo_grad_a
         cdef double[:, ::1] GaussWeight
@@ -265,15 +267,16 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
     cdef double[:, ::1] W
     cdef double[:, :, :, ::1] JacInv
 
-    def __init__(self, kvs, geo):
-        self.base_init(kvs, kvs)
+    def __init__(self, kvs0, geo):
+        self.base_init(kvs0)
         assert geo.dim == 2, "Geometry has wrong dimension"
 
-        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
+        # NB: we assume all kvs result in the same mesh
+        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.S0.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
-        self.S0.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
+        self.S0.C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
+        self.S0.C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
 
         cdef double[:, ::1] GaussWeight
         cdef double[:, :, :, ::1] geo_grad_a
@@ -399,15 +402,16 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
     cdef double[:, ::1] W
     cdef double[:, :, :, ::1] JacInv
 
-    def __init__(self, kvs, geo):
-        self.base_init(kvs, kvs)
+    def __init__(self, kvs0, geo):
+        self.base_init(kvs0)
         assert geo.dim == 2, "Geometry has wrong dimension"
 
-        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
+        # NB: we assume all kvs result in the same mesh
+        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.S0.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=2)
-        self.S0.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=2)
+        self.S0.C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=2)
+        self.S0.C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=2)
 
         cdef double[:, ::1] GaussWeight
         cdef double[:, :, :, ::1] geo_grad_a
@@ -535,17 +539,18 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     cdef double[:, ::1] W
     cdef double[:, :, :, ::1] JacInv
 
-    def __init__(self, kvs, geo):
-        self.base_init(kvs, kvs)
+    def __init__(self, kvs0, geo):
+        self.base_init(kvs0)
         self.numcomp[:] = (2, 2,)
         assert self.numcomp[0] == self.numcomp[1], 'Only square matrices currently implemented'
         assert geo.dim == 2, "Geometry has wrong dimension"
 
-        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
+        # NB: we assume all kvs result in the same mesh
+        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.S0.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
-        self.S0.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
+        self.S0.C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
+        self.S0.C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
 
         cdef double[:, ::1] GaussWeight
         cdef double[:, :, :, ::1] geo_grad_a
@@ -682,16 +687,17 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
 cdef class MassAssembler3D(BaseAssembler3D):
     cdef double[:, :, ::1] W
 
-    def __init__(self, kvs, geo):
-        self.base_init(kvs, kvs)
+    def __init__(self, kvs0, geo):
+        self.base_init(kvs0)
         assert geo.dim == 3, "Geometry has wrong dimension"
 
-        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
+        # NB: we assume all kvs result in the same mesh
+        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.S0.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=0)
-        self.S0.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=0)
-        self.S0.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=0)
+        self.S0.C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=0)
+        self.S0.C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=0)
+        self.S0.C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=0)
 
         cdef double[:, :, :, :, ::1] geo_grad_a
         cdef double[:, :, ::1] GaussWeight
@@ -808,16 +814,17 @@ cdef class MassAssembler3D(BaseAssembler3D):
 cdef class StiffnessAssembler3D(BaseAssembler3D):
     cdef double[:, :, :, :, ::1] B
 
-    def __init__(self, kvs, geo):
-        self.base_init(kvs, kvs)
+    def __init__(self, kvs0, geo):
+        self.base_init(kvs0)
         assert geo.dim == 3, "Geometry has wrong dimension"
 
-        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
+        # NB: we assume all kvs result in the same mesh
+        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.S0.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
-        self.S0.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
-        self.S0.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=1)
+        self.S0.C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
+        self.S0.C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
+        self.S0.C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=1)
 
         cdef double[:, :, :, :, ::1] geo_grad_a
         cdef double[:, :, ::1] GaussWeight
@@ -968,16 +975,17 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
     cdef double[:, :, ::1] W
     cdef double[:, :, :, :, ::1] JacInv
 
-    def __init__(self, kvs, geo):
-        self.base_init(kvs, kvs)
+    def __init__(self, kvs0, geo):
+        self.base_init(kvs0)
         assert geo.dim == 3, "Geometry has wrong dimension"
 
-        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
+        # NB: we assume all kvs result in the same mesh
+        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.S0.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
-        self.S0.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
-        self.S0.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=1)
+        self.S0.C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
+        self.S0.C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
+        self.S0.C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=1)
 
         cdef double[:, :, ::1] GaussWeight
         cdef double[:, :, :, :, ::1] geo_grad_a
@@ -1133,16 +1141,17 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
     cdef double[:, :, ::1] W
     cdef double[:, :, :, :, ::1] JacInv
 
-    def __init__(self, kvs, geo):
-        self.base_init(kvs, kvs)
+    def __init__(self, kvs0, geo):
+        self.base_init(kvs0)
         assert geo.dim == 3, "Geometry has wrong dimension"
 
-        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
+        # NB: we assume all kvs result in the same mesh
+        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.S0.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=2)
-        self.S0.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=2)
-        self.S0.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=2)
+        self.S0.C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=2)
+        self.S0.C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=2)
+        self.S0.C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=2)
 
         cdef double[:, :, ::1] GaussWeight
         cdef double[:, :, :, :, ::1] geo_grad_a
@@ -1300,18 +1309,19 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     cdef double[:, :, ::1] W
     cdef double[:, :, :, :, ::1] JacInv
 
-    def __init__(self, kvs, geo):
-        self.base_init(kvs, kvs)
+    def __init__(self, kvs0, geo):
+        self.base_init(kvs0)
         self.numcomp[:] = (3, 3,)
         assert self.numcomp[0] == self.numcomp[1], 'Only square matrices currently implemented'
         assert geo.dim == 3, "Geometry has wrong dimension"
 
-        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], self.nqp)
+        # NB: we assume all kvs result in the same mesh
+        gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
-        self.S0.C0 = compute_values_derivs(kvs[0], gaussgrid[0], derivs=1)
-        self.S0.C1 = compute_values_derivs(kvs[1], gaussgrid[1], derivs=1)
-        self.S0.C2 = compute_values_derivs(kvs[2], gaussgrid[2], derivs=1)
+        self.S0.C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
+        self.S0.C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
+        self.S0.C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=1)
 
         cdef double[:, :, ::1] GaussWeight
         cdef double[:, :, :, :, ::1] geo_grad_a

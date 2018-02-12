@@ -23,6 +23,8 @@ def plot_geo(geo,
              res=50,
              linewidth=None, color='black'):
     """Plot a wireframe representation of a 2D geometry."""
+    if geo.sdim == 1 and geo.dim == 2:
+        return plot_curve(geo, res=res, linewidth=linewidth, color=color)
     assert geo.dim == geo.sdim == 2, 'Can only plot 2D geometries'
     if gridx is None: gridx = grid
     if gridy is None: gridy = grid
@@ -47,3 +49,12 @@ def plot_geo(geo,
     for j in range(1, pts.shape[1]-1):
         plotline(pts[:,j,:])
     plotline(pts[:,-1,:], capstyle='round')
+
+
+def plot_curve(geo, res=50, linewidth=None, color='black'):
+    """Plot a 2D curve."""
+    assert geo.dim == 2 and geo.sdim == 1, 'Can only plot 2D curves'
+    supp = geo.support
+    mesh = np.linspace(supp[0][0], supp[0][1], res)
+    pts = utils.grid_eval(geo, (mesh,))
+    plt.plot(pts[:,0], pts[:,1], color=color, linewidth=linewidth)

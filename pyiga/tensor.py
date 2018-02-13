@@ -158,3 +158,59 @@ def find_truncation_rank(X, tol=1e-12):
             X = X[sl]
     return X.shape
 
+
+def outer(*xs):
+    """Outer product of an arbitrary number of vectors.
+
+    Args:
+        `d` input vectors `(x1, ..., xd)` with lengths `n1, ..., nd`
+    Returns:
+        ndarray: the outer product as an `ndarray` with `d` dimensions
+    """
+    if len(xs) == 1:
+        return xs[0]
+    else:
+        return outer(*xs[:-1])[..., None] * xs[-1][None, ...]
+
+
+def als1(B, tol=1e-15):
+    """Compute best rank 1 approximation to tensor `B` using Alternating Least Squares.
+
+    Returns:
+        A tuple of vectors `(x1, ..., xd)` such that ``outer(x1, ..., xd)`` is
+        the approximate best rank 1 approximation to `B`.
+    """
+    d = B.ndim
+    # use random row vectors as starting values
+    xs = [np.random.rand(1,n) for n in B.shape]
+
+    while True:
+        delta = 1.0
+        for k in range(d):
+            ys = xs.copy()
+            ys[k] = None
+            xk = apply_tprod(ys, B).ravel() / np.prod([np.sum(xs[l]*xs[l]) for l in range(d) if l != k])
+            delta = delta * np.linalg.norm(xk - xs[k][0])
+            xs[k][0, :] = xk
+        if delta < tol:
+            break
+    return tuple(x[0] for x in xs)  # return xs as 1D vectors
+
+
+class CanonicalTensor:
+    """A tensor in CP (canonical/PARAFAC) format, i.e., a sum of rank 1 tensors."""
+    def __init__(self, Xs):
+        # ensure Xs are matrices
+        self.Xs = tuple(X[:,None] if X.ndim==1 else X for X in Xs)
+        self.ndim = len(self.Xs)
+        self.shape = tuple(X.shape[0] for X in self.Xs)
+        self.R = self.Xs[0].shape[1]
+        assert all(X.shape[1] == self.R for X in self.Xs), 'invalid matrix shape'
+
+    def asarray(self):
+        """Convert canonical tensor to a full `ndarray`."""
+        X = np.zeros(self.shape)
+        for r in range(self.R):
+            X += outer(*tuple(X[:,r] for X in self.Xs))
+        return X
+

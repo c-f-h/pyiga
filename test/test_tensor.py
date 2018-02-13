@@ -58,3 +58,32 @@ def test_truncation_rank():
     X = np.zeros((4,3,7))
     X[:2,:3,:4] = rand(2,3,4)
     assert find_truncation_rank(X, 1e-12) == (2,3,4)
+
+def test_outer():
+    x, y, z, = rand(3), rand(4), rand(5)
+    X = outer(x, y, z)
+    Y = x[:, None, None] * y[None, :, None] * z[None, None, :]
+    assert np.allclose(X, Y)
+
+def test_canonical():
+    X,Y,Z = tuple(np.zeros((5,2)) for _ in range(3))
+    for i in range(2):
+        X[i,i] = Y[i,i] = Z[i,i] = 2.0
+    A = CanonicalTensor((X,Y,Z))
+    assert A.ndim == 3
+    assert A.shape == (5,5,5)
+    assert A.R == 2
+    B = A.asarray()
+    assert B.shape == A.shape
+    C = np.zeros((2,2,2))
+    np.fill_diagonal(C, 8.0)
+    B[:2, :2, :2] -= C
+    assert np.allclose(B, 0.0)
+
+def test_als1():
+    xs = rand(3), rand(4), rand(5)
+    X = outer(*xs)
+    ys = als1(X)
+    from numpy.linalg import norm
+    assert all(np.allclose(x / norm(x), y / norm(y))
+            for (x,y) in zip(xs, ys))

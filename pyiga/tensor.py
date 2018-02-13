@@ -1,27 +1,11 @@
-r"""Functions for manipulating tensors in full and in Tucker format,
-and for tensor approximation.
+r"""Functions and classes for manipulating tensors in full, canonical, and
+Tucker format, and for tensor approximation.
 
 A **full tensor** is simply represented as a :class:`numpy.ndarray`.
+Additional tensor formats are implemented in the following classes:
 
-A *d*-dimensional tensor in **Tucker format** is given as a list of *d* basis matrices
-
-.. math::
-    U_k \in \mathbb R^{n_k \times m_k}, \qquad k=1,\ldots,d
-
-and a (typically small) core coefficient tensor
-
-.. math::
-    X \in \mathbb R^{m_1 \times \ldots \times m_d}.
-
-When expanded (using :func:`tucker_prod`), a Tucker tensor turns into a full
-tensor
-
-.. math::
-    A \in \mathbb R^{n_1 \times \ldots \times n_d}.
-
-One way to compute a Tucker tensor approximation from a full tensor is to first
-compute the HOSVD using :func:`hosvd` and then truncate it using
-:func:`truncate` to the rank estimated by :func:`find_truncation_rank`.
+* :class:`CanonicalTensor`
+* :class:`TuckerTensor`
 """
 import numpy as np
 import numpy.linalg
@@ -122,18 +106,7 @@ def hosvd(X):
     U = [scipy.linalg.svd(matricize(X,k), full_matrices=False, check_finite=False)[0]
             for k in range(X.ndim)]
     C = tucker_prod(tuple(Uk.T for Uk in U), X)   # core tensor (same size as X)
-    return (U, C)
-
-def truncate(T, k):
-    """Truncate a Tucker tensor `T` to the given rank `k`."""
-    Uk, C = T
-    N = C.ndim
-    if np.isscalar(k):
-        slices = N * (slice(None,k),)
-    else:
-        assert len(k) == N
-        slices = tuple(slice(None, ki) for ki in k)
-    return (tuple(Uk[i][:,slices[i]] for i in range(N)), C[slices])
+    return TuckerTensor(U, C)
 
 def find_best_truncation_axis(X):
     """Find the axis along which truncating the last slice causes the smallest error."""
@@ -236,4 +209,60 @@ class CanonicalTensor:
             sum(dot_rank1(term(i), term(j))
                 for i in range(self.R)
                 for j in range(self.R)))
+
+
+class TuckerTensor:
+    """A *d*-dimensional tensor in **Tucker format** is given as a list of *d* basis matrices
+
+    .. math::
+        U_k \in \mathbb R^{n_k \times m_k}, \qquad k=1,\ldots,d
+
+    and a (typically small) core coefficient tensor
+
+    .. math::
+        X \in \mathbb R^{m_1 \times \ldots \times m_d}.
+
+    When expanded (using :func:`tucker_prod`), a Tucker tensor turns into a full
+    tensor
+
+    .. math::
+        A \in \mathbb R^{n_1 \times \ldots \times n_d}.
+
+    One way to compute a Tucker tensor approximation from a full tensor is to first
+    compute the HOSVD using :func:`hosvd` and then truncate it using
+    :func:`TuckerTensor.truncate` to the rank estimated by :func:`find_truncation_rank`.
+    """
+    def __init__(self, Us, X):
+        self.Us = tuple(Us)
+        self.X = X
+        self.ndim = len(Us)
+        assert self.ndim == X.ndim, 'Incompatible sizes'
+        self.shape = tuple(U.shape[0] for U in self.Us)
+
+    def asarray(self):
+        """Convert Tucker tensor to a full `ndarray`."""
+        return apply_tprod(self.Us, self.X)
+
+    def orthogonalize(self):
+        """Compute an equivalent Tucker representation of the current tensor
+        where the matrices `U` have orthonormal columns.
+        """
+        QR = tuple(np.linalg.qr(U) for U in self.Us)
+        Rinv = tuple(scipy.linalg.solve_triangular(R, np.eye(R.shape[1])) for (_,R) in QR)
+        return TuckerTensor(tuple(Q for (Q,_) in QR),
+                apply_tprod(Rinv, self.X))
+
+    def norm(self):
+        """Compute the Frobenius norm of the tensor."""
+        return fro_norm(self.orthogonalize().X)
+
+    def truncate(self, k):
+        """Truncate a Tucker tensor `T` to the given rank `k`."""
+        N = self.ndim
+        if np.isscalar(k):
+            slices = N * (slice(None,k),)
+        else:
+            assert len(k) == N
+            slices = tuple(slice(None, ki) for ki in k)
+        return TuckerTensor(tuple(self.Us[i][:,slices[i]] for i in range(N)), self.X[slices])
 

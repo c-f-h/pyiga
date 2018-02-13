@@ -30,17 +30,19 @@ def test_tuckerprod():
 def test_tucker():
     X = rand(3,4,5)
     T = hosvd(X)
-    assert np.allclose(X, tucker_prod(*T))
+    assert np.allclose(X, T.asarray())
+    assert np.allclose(T.asarray(), T.orthogonalize().asarray())
+    assert np.allclose(np.linalg.norm(X), T.norm())
 
 def test_truncate():
     """Check that a rank 1 tensor is exactly represented
     by the 1-truncation of the HOSVD."""
     # rank 1 tensor
-    X = np.outer(rand(3),rand(4))[:,:,None] * rand(5)[None,None,:]
+    X = outer(rand(3), rand(4), rand(5))
     T = hosvd(X)
-    assert find_truncation_rank(T[1], 1e-12) == (1,1,1)
-    T1 = truncate(T, 1)
-    assert np.allclose(X, tucker_prod(*T1))
+    assert find_truncation_rank(T.X, 1e-12) == (1,1,1)
+    T1 = T.truncate(1)
+    assert np.allclose(X, T1.asarray())
 
 def test_truncate2():
     """Check that Tucker truncation error is the Frobenius norm
@@ -48,16 +50,11 @@ def test_truncate2():
     X = rand(5,5,5)
     T = hosvd(X)
     k = 3
-    Tk = truncate(T, k)
-    E = X - tucker_prod(*Tk)
-    Cdk = T[1]
+    Tk = T.truncate(k)
+    E = X - Tk.asarray()
+    Cdk = T.X
     Cdk[:k,:k,:k] = 0
     assert np.allclose(fro_norm(E), fro_norm(Cdk))
-
-def test_truncation_rank():
-    X = np.zeros((4,3,7))
-    X[:2,:3,:4] = rand(2,3,4)
-    assert find_truncation_rank(X, 1e-12) == (2,3,4)
 
 def test_outer():
     x, y, z, = rand(3), rand(4), rand(5)

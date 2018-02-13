@@ -163,7 +163,7 @@ def outer(*xs):
     """Outer product of an arbitrary number of vectors.
 
     Args:
-        `d` input vectors `(x1, ..., xd)` with lengths `n1, ..., nd`
+        xs: `d` input vectors `(x1, ..., xd)` with lengths `n1, ..., nd`
     Returns:
         ndarray: the outer product as an `ndarray` with `d` dimensions
     """
@@ -198,7 +198,16 @@ def als1(B, tol=1e-15):
 
 
 class CanonicalTensor:
-    """A tensor in CP (canonical/PARAFAC) format, i.e., a sum of rank 1 tensors."""
+    """A tensor in CP (canonical/PARAFAC) format, i.e., a sum of rank 1 tensors.
+
+    For a tensor of order `d`, `Xs` should be a tuple of `d` matrices.  Their
+    number of columns should be identical and determines the rank `R` of the
+    tensor.  The number of rows of the `j`-th matrix determines the size of the
+    tensor along the `j`-th axis.
+
+    The tensor is given by the sum, for `r` up to `R`, of the outer products of the
+    `r`-th columns of the matrices `Xs`.
+    """
     def __init__(self, Xs):
         # ensure Xs are matrices
         self.Xs = tuple(X[:,None] if X.ndim==1 else X for X in Xs)

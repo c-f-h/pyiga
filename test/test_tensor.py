@@ -22,9 +22,9 @@ def test_tuckerprod():
     for i in range(3):
         U2 = U[:]
         U2[i] = np.eye(i+3)
-        X1 = tucker_prod(U2, C)
+        X1 = apply_tprod(U2, C)
         U2[i] = None
-        X2 = tucker_prod(U2, C)
+        X2 = apply_tprod(U2, C)
         assert np.allclose(X1, X2)
 
 def test_tucker():

@@ -91,11 +91,6 @@ def modek_tprod(B, k, X):
         return np.moveaxis(Y, 0, k) # put first (new) axis back into k-th position
 
 
-def tucker_prod(Uk, X):
-    """Convert the Tucker tensor `(Uk,X)` to a full tensor (`ndarray`) by multiplying
-    each mode of `X` by the corresponding matrix in `Uk`."""
-    return apply_tprod(Uk, X)
-
 def hosvd(X):
     """Compute higher-order SVD (Tucker decomposition).
 
@@ -105,7 +100,7 @@ def hosvd(X):
     # left singular vectors for each matricization
     U = [scipy.linalg.svd(matricize(X,k), full_matrices=False, check_finite=False)[0]
             for k in range(X.ndim)]
-    C = tucker_prod(tuple(Uk.T for Uk in U), X)   # core tensor (same size as X)
+    C = apply_tprod(tuple(Uk.T for Uk in U), X)   # core tensor (same size as X)
     return TuckerTensor(U, C)
 
 def find_best_truncation_axis(X):
@@ -222,7 +217,7 @@ class TuckerTensor:
     .. math::
         X \in \mathbb R^{m_1 \times \ldots \times m_d}.
 
-    When expanded (using :func:`tucker_prod`), a Tucker tensor turns into a full
+    When expanded (using :func:`TuckerTensor.asarray`), a Tucker tensor turns into a full
     tensor
 
     .. math::

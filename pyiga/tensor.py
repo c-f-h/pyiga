@@ -172,6 +172,11 @@ def outer(*xs):
     else:
         return outer(*xs[:-1])[..., None] * xs[-1][None, ...]
 
+def dot_rank1(xs, ys):
+    """Compute the inner (Frobenius) product of two rank 1 tensors."""
+    return np.prod(tuple(np.dot(xs[j], ys[j]) for j in range(len(xs))))
+
+
 
 def als1(B, tol=1e-15):
     """Compute best rank 1 approximation to tensor `B` using Alternating Least Squares.
@@ -222,4 +227,13 @@ class CanonicalTensor:
         for r in range(self.R):
             X += outer(*tuple(X[:,r] for X in self.Xs))
         return X
+
+    def norm(self):
+        """Compute the Frobenius norm of the tensor."""
+        def term(j):
+            return tuple(X[:,j] for X in self.Xs)
+        return np.sqrt(
+            sum(dot_rank1(term(i), term(j))
+                for i in range(self.R)
+                for j in range(self.R)))
 

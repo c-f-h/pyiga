@@ -79,6 +79,9 @@ def test_canonical():
     np.fill_diagonal(C, 8.0)
     B[:2, :2, :2] -= C
     assert np.allclose(B, 0.0)
+    ###
+    A = CanonicalTensor((rand(3,2), rand(4,2), rand(5,2)))
+    assert np.allclose(A.norm(), np.linalg.norm(A.asarray()))
 
 def test_als1():
     xs = rand(3), rand(4), rand(5)

@@ -156,6 +156,10 @@ def dot_rank1(xs, ys):
 def als1(B, tol=1e-15):
     """Compute best rank 1 approximation to tensor `B` using Alternating Least Squares.
 
+    Args:
+        B: input tensor, either as `ndarray`, :class:`CanonicalTensor`, or
+           :class:`TuckerTensor`
+        tol (float): tolerance for the stopping criterion
     Returns:
         A tuple of vectors `(x1, ..., xd)` such that ``outer(x1, ..., xd)`` is
         the approximate best rank 1 approximation to `B`.
@@ -216,7 +220,7 @@ class CanonicalTensor:
         """Implements :func:`apply_tprod` for canonical tensors.
 
         Returns:
-            TuckerTensor: the result in Tucker format
+            :class:`CanonicalTensor`: the result in canonical format
         """
         Bs = tuple(Bs)
         assert len(Bs) == self.ndim
@@ -305,7 +309,7 @@ class TuckerTensor:
         """Implements :func:`apply_tprod` for Tucker tensors.
 
         Returns:
-            TuckerTensor: the result in Tucker format
+            :class:`TuckerTensor`: the result in Tucker format
         """
         Bs = tuple(Bs)
         assert len(Bs) == self.ndim

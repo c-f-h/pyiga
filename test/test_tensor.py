@@ -112,6 +112,10 @@ def test_canonical():
     x = als1(A)
     y = als1(A.asarray())
     assert np.allclose(outer(*x), outer(*y))
+    # add and sub
+    B = _random_canonical(A.shape, 3)
+    assert np.allclose((A + B).asarray(), A.asarray() + B.asarray())
+    assert np.allclose((A - B).asarray(), A.asarray() - B.asarray())
 
 def test_als1():
     xs = rand(3), rand(4), rand(5)

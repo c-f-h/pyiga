@@ -236,6 +236,18 @@ class CanonicalTensor:
         """Return the vectorization of this tensor."""
         return self.asarray().ravel()
 
+    def __neg__(self):
+        return CanonicalTensor((-self.Xs[0],) + self.Xs[1:])
+
+    def __add__(self, T2):
+        assert self.shape == T2.shape, 'incompatible shapes'
+        assert isinstance(T2, CanonicalTensor), 'can only add canonical to canonical tensor'
+        return CanonicalTensor(
+                (np.hstack((X1,X2)) for (X1,X2) in zip(self.Xs, T2.Xs)))
+
+    def __sub__(self, T2):
+        return self + (-T2)
+
 class TuckerTensor:
     r"""A *d*-dimensional tensor in **Tucker format** is given as a list of *d* basis matrices
 

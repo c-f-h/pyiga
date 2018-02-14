@@ -211,7 +211,7 @@ class CanonicalTensor:
 
 
 class TuckerTensor:
-    """A *d*-dimensional tensor in **Tucker format** is given as a list of *d* basis matrices
+    r"""A *d*-dimensional tensor in **Tucker format** is given as a list of *d* basis matrices
 
     .. math::
         U_k \in \mathbb R^{n_k \times m_k}, \qquad k=1,\ldots,d

@@ -66,8 +66,11 @@ def apply_tprod(ops, A):
 
 
 def fro_norm(X):
-    """Compute the Frobenius norm of multi-dimensional array `X`."""
-    return np.linalg.norm(X.ravel(order='K'))
+    """Compute the Frobenius norm of multi-dimensional array or tensor class instance `X`."""
+    if hasattr(X, 'norm'):
+        return X.norm()
+    else:
+        return np.linalg.norm(X.ravel(order='K'))
 
 def matricize(X, k):
     """Return the mode-`k` matricization of the ndarray `X`."""
@@ -179,6 +182,66 @@ def als1(B, tol=1e-15):
         if delta < tol:
             break
     return tuple(x[0] for x in xs)  # return xs as 1D vectors
+
+
+def _without_k(L, k):
+    """Drop the k-th component of a list."""
+    return L[:k] + L[k+1:]
+
+
+def als(A, R, tol=1e-10, maxiter=10000, startval=None):
+    """Compute best rank `R` approximation to tensor `A` using Alternating Least Squares.
+
+    Args:
+        A (tensor): the tensor to be approximated, given either as `ndarray` or
+            tensor class instance
+        R (int): the desired rank
+        tol (float): tolerance for the stopping criterion
+        maxiter (int): maximum number of iterations
+        startval: starting tensor for iteration. By default, a random rank `R`
+            tensor is used. A :class:`CanonicalTensor` with rank `R` may be
+            supplied for `startval` instead.
+    Returns:
+        :class:`CanonicalTensor`: a rank `R` approximation to `A`; generally close
+        to the best rank `R` approximation if the algorithm converged to a small
+        enough tolerance.
+    """
+    if startval is None:
+        xs = [np.random.rand(R,n) for n in A.shape]
+    else:
+        if isinstance(startval, CanonicalTensor):
+            assert startval.R == R, 'starting value has wrong rank'
+            startval = startval.Xs
+        xs = [x.T for x in startval]
+        assert all(x.shape == (R,n) for (x,n) in zip(xs, A.shape)), \
+                'starting value has wrong shape'
+
+    d = A.ndim
+    A_norm = fro_norm(A)
+    ys = d * [None]     # temporary
+    # precompute matrices x_j x_j^T
+    xxT = [xs[j].dot(xs[j].T) for j in range(d)]
+
+    for it in range(maxiter):
+        delta = 0.0
+        for k in range(d):
+            C = np.empty((R, A.shape[k]))
+            for r in range(R):
+                for j in range(d):
+                    ys[j] = xs[j][r:r+1,:]
+                ys[k] = None
+                C[r, :] = apply_tprod(ys, A).ravel()
+
+            # entrywise product of the matrices (x_j x_j^T) (size R x R) for all j != k
+            Gamma = np.prod(_without_k(xxT, k), axis=0)
+
+            delta = delta + fro_norm(-C + Gamma.dot(xs[k]))**2
+            xs[k] = np.linalg.solve(Gamma, C)
+            # update x[k] x[k]^T
+            xxT[k] = xs[k].dot(xs[k].T)
+        if (np.sqrt(delta) / A_norm) < tol:
+            break
+    return CanonicalTensor((x.T for x in xs))
 
 
 class CanonicalTensor:

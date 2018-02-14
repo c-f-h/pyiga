@@ -124,3 +124,19 @@ def test_als1():
     from numpy.linalg import norm
     assert all(np.allclose(x / norm(x), y / norm(y))
             for (x,y) in zip(xs, ys))
+
+def test_als():
+    ### canonical
+    A = _random_canonical((3,4,5), 2)
+    B = als(A, R=2)
+    assert np.allclose(A.asarray(), B.asarray())
+    ### full tensor
+    C = als(A.asarray(), R=2)
+    assert np.allclose(A.asarray(), C.asarray())
+    ### Tucker
+    A = _random_tucker((3,4,5), 2)
+    # diagonalize core tensor
+    A.X[:] = 0.0
+    A.X[0,0,0] = A.X[1,1,1] = 1.0
+    B = als(A, R=2)
+    assert np.allclose(A.asarray(), B.asarray())

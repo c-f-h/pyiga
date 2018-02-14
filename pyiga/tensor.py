@@ -50,6 +50,9 @@ def apply_tprod(ops, A):
     operators, but `A` is allowed to have an arbitrary number of
     trailing dimensions. ``None`` is a valid operator and is
     treated like the identity."""
+    if hasattr(A, 'nway_prod'):
+        # tensor classes provide their own implementation
+        return A.nway_prod(ops)
     n = len(ops)
     for i in reversed(range(n)):
         if ops[i] is not None:
@@ -209,6 +212,25 @@ class CanonicalTensor:
                 for i in range(self.R)
                 for j in range(self.R)))
 
+    def nway_prod(self, Bs):
+        """Implements :func:`apply_tprod` for canonical tensors.
+
+        Returns:
+            TuckerTensor: the result in Tucker format
+        """
+        Bs = tuple(Bs)
+        assert len(Bs) == self.ndim
+        Xs = []
+        for j in range(self.ndim):
+            if Bs[j] is not None:
+                Xs.append(Bs[j].dot(self.Xs[j]))
+            else:
+                Xs.append(np.array(self.Xs[j]))
+        return CanonicalTensor(Xs)
+
+    def ravel(self):
+        """Return the vectorization of this tensor."""
+        return self.asarray().ravel()
 
 class TuckerTensor:
     r"""A *d*-dimensional tensor in **Tucker format** is given as a list of *d* basis matrices
@@ -265,3 +287,22 @@ class TuckerTensor:
             slices = tuple(slice(None, ki) for ki in k)
         return TuckerTensor(tuple(self.Us[i][:,slices[i]] for i in range(N)), self.X[slices])
 
+    def nway_prod(self, Bs):
+        """Implements :func:`apply_tprod` for Tucker tensors.
+
+        Returns:
+            TuckerTensor: the result in Tucker format
+        """
+        Bs = tuple(Bs)
+        assert len(Bs) == self.ndim
+        Us = []
+        for j in range(self.ndim):
+            if Bs[j] is not None:
+                Us.append(Bs[j].dot(self.Us[j]))
+            else:
+                Us.append(np.array(self.Us[j]))
+        return TuckerTensor(Us, self.X)
+
+    def ravel(self):
+        """Return the vectorization of this tensor."""
+        return self.asarray().ravel()

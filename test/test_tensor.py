@@ -27,12 +27,22 @@ def test_tuckerprod():
         X2 = apply_tprod(U2, C)
         assert np.allclose(X1, X2)
 
+def _random_tucker(shape, R):
+    Us = tuple(rand(n,R) for n in shape)
+    d = len(Us)
+    return TuckerTensor(Us, rand(*(d * (R,))))
+
 def test_tucker():
     X = rand(3,4,5)
     T = hosvd(X)
     assert np.allclose(X, T.asarray())
     assert np.allclose(T.asarray(), T.orthogonalize().asarray())
     assert np.allclose(np.linalg.norm(X), T.norm())
+    ###
+    X = _random_tucker((3,4,5), 2)
+    x = als1(X)
+    y = als1(X.asarray())
+    assert np.allclose(outer(*x), outer(*y))
 
 def test_truncate():
     """Check that a rank 1 tensor is exactly represented
@@ -62,6 +72,10 @@ def test_outer():
     Y = x[:, None, None] * y[None, :, None] * z[None, None, :]
     assert np.allclose(X, Y)
 
+def _random_canonical(shape, R):
+    Xs = tuple(rand(n,R) for n in shape)
+    return CanonicalTensor(Xs)
+
 def test_canonical():
     X,Y,Z = tuple(np.zeros((5,2)) for _ in range(3))
     for i in range(2):
@@ -77,8 +91,13 @@ def test_canonical():
     B[:2, :2, :2] -= C
     assert np.allclose(B, 0.0)
     ###
-    A = CanonicalTensor((rand(3,2), rand(4,2), rand(5,2)))
+    # norm
+    A = _random_canonical((3,4,5), 2)
     assert np.allclose(A.norm(), np.linalg.norm(A.asarray()))
+    # als1
+    x = als1(A)
+    y = als1(A.asarray())
+    assert np.allclose(outer(*x), outer(*y))
 
 def test_als1():
     xs = rand(3), rand(4), rand(5)

@@ -40,6 +40,9 @@ def test_tucker():
     assert np.allclose(np.linalg.norm(X), T.norm())
     ###
     X = _random_tucker((3,4,5), 2)
+    # orthogonalize
+    assert np.allclose(X.asarray(), X.orthogonalize().asarray())
+    # als1
     x = als1(X)
     y = als1(X.asarray())
     assert np.allclose(outer(*x), outer(*y))

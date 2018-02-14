@@ -256,7 +256,7 @@ class TuckerTensor:
     def __init__(self, Us, X):
         self.Us = tuple(Us)
         self.X = X
-        self.ndim = len(Us)
+        self.ndim = len(self.Us)
         assert self.ndim == X.ndim, 'Incompatible sizes'
         self.shape = tuple(U.shape[0] for U in self.Us)
 
@@ -267,7 +267,21 @@ class TuckerTensor:
     def orthogonalize(self):
         """Compute an equivalent Tucker representation of the current tensor
         where the matrices `U` have orthonormal columns.
+
+        Returns:
+            TuckerTensor: the orthonormalized Tucker tensor
         """
+        USVh = [scipy.linalg.svd(U, full_matrices=False, check_finite=False)
+                for U in self.Us]
+        transform = []
+        for (U,S,Vh) in USVh:
+            # make sure S has same length as first axis of Vh
+            S = np.pad(S, (0, Vh.shape[0]-S.shape[0]), 'constant')
+            transform.append(S[:, None] * Vh)
+        return TuckerTensor(
+                (U for (U,_,_) in USVh),
+                apply_tprod(transform, self.X))
+
         QR = tuple(np.linalg.qr(U) for U in self.Us)
         Rinv = tuple(scipy.linalg.solve_triangular(R, np.eye(R.shape[1])) for (_,R) in QR)
         return TuckerTensor(tuple(Q for (Q,_) in QR),

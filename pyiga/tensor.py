@@ -320,3 +320,34 @@ class TuckerTensor:
     def ravel(self):
         """Return the vectorization of this tensor."""
         return self.asarray().ravel()
+
+    def __add__(self, T2):
+        assert T2.shape == self.shape, 'incompatible shapes'
+        assert isinstance(T2, TuckerTensor), 'can only add Tucker tensor to Tucker tensor'
+        U, X1, X2 = join_tucker_bases(self, T2)
+        return TuckerTensor(U, X1 + X2)
+
+    def __sub__(self, T2):
+        assert T2.shape == self.shape, 'incompatible shapes'
+        assert isinstance(T2, TuckerTensor), 'can only subtract Tucker tensor from Tucker tensor'
+        U, X1, X2 = join_tucker_bases(self, T2)
+        return TuckerTensor(U, X1 - X2)
+
+
+def join_tucker_bases(T1, T2):
+    """Represent the two Tucker tensors `T1` and `T2` in a joint basis.
+
+    Returns:
+        tuple: `(U,X1,X2)` such that ``T1 == TuckerTensor(U,X1)`` and
+        ``T2 == TuckerTensor(U,X2)``. The basis `U` is the concatenation
+        of the bases of `T1` and `T2`.
+    """
+    assert T1.shape == T2.shape
+    # join basis matrices
+    U = tuple(np.hstack((U1, U2))
+            for (U1,U2) in zip(T1.Us, T2.Us))
+    # pad X1 and X2 with zeros
+    R1, R2 = T1.X.shape, T2.X.shape
+    X1 = np.pad(T1.X, tuple((0,n) for n in R2), 'constant')
+    X2 = np.pad(T2.X, tuple((n,0) for n in R1), 'constant')
+    return U, X1, X2

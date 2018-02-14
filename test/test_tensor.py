@@ -46,6 +46,17 @@ def test_tucker():
     x = als1(X)
     y = als1(X.asarray())
     assert np.allclose(outer(*x), outer(*y))
+    # add and sub
+    Y = _random_tucker((3,4,5), 3)
+    assert np.allclose((X + Y).asarray(), X.asarray() + Y.asarray())
+    assert np.allclose((X - Y).asarray(), X.asarray() - Y.asarray())
+
+def test_join_tucker():
+    A = _random_tucker((3,4,5), 2)
+    B = _random_tucker((3,4,5), 3)
+    Us, XA, XB = join_tucker_bases(A, B)
+    assert np.allclose(A.asarray(), TuckerTensor(Us,XA).asarray())
+    assert np.allclose(B.asarray(), TuckerTensor(Us,XB).asarray())
 
 def test_truncate():
     """Check that a rank 1 tensor is exactly represented

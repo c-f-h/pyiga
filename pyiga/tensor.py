@@ -263,6 +263,10 @@ class CanonicalTensor:
         self.R = self.Xs[0].shape[1]
         assert all(X.shape[1] == self.R for X in self.Xs), 'invalid matrix shape'
 
+    def copy(self):
+        """Create a deep copy of this tensor."""
+        return CanonicalTensor((X.copy() for X in self.Xs))
+
     def asarray(self):
         """Convert canonical tensor to a full `ndarray`."""
         X = np.zeros(self.shape)
@@ -350,6 +354,10 @@ class TuckerTensor:
             return A
         else:
             raise TypeError('tensor type %s not supported' % str(type(X)))
+
+    def copy(self):
+        """Create a deep copy of this tensor."""
+        return TuckerTensor((U.copy() for U in self.Us), self.X.copy())
 
     def asarray(self):
         """Convert Tucker tensor to a full `ndarray`."""

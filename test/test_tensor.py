@@ -38,6 +38,7 @@ def test_tucker():
     assert np.allclose(X, T.asarray())
     assert np.allclose(T.asarray(), T.orthogonalize().asarray())
     assert np.allclose(np.linalg.norm(X), T.norm())
+    assert np.allclose(T.asarray(), T.copy().asarray())
     ###
     X = _random_tucker((3,4,5), 2)
     # orthogonalize
@@ -102,6 +103,7 @@ def test_canonical():
     assert A.ndim == 3
     assert A.shape == (5,5,5)
     assert A.R == 2
+    assert np.allclose(A.asarray(), A.copy().asarray())
     B = A.asarray()
     assert B.shape == A.shape
     C = np.zeros((2,2,2))

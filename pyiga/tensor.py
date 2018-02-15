@@ -174,7 +174,7 @@ def als1(B, tol=1e-15):
     while True:
         delta = 1.0
         for k in range(d):
-            ys = xs.copy()
+            ys = xs[:]      # copy list
             ys[k] = None
             xk = apply_tprod(ys, B).ravel() / np.prod([np.sum(xs[l]*xs[l]) for l in range(d) if l != k])
             delta = delta * np.linalg.norm(xk - xs[k][0])

@@ -50,6 +50,10 @@ def test_tucker():
     Y = _random_tucker((3,4,5), 3)
     assert np.allclose((X + Y).asarray(), X.asarray() + Y.asarray())
     assert np.allclose((X - Y).asarray(), X.asarray() - Y.asarray())
+    # conversion
+    X = _random_canonical((3,4,5), 2)
+    Y = TuckerTensor.from_tensor(X)
+    assert np.allclose(X.asarray(), Y.asarray())
 
 def test_join_tucker():
     A = _random_tucker((3,4,5), 2)

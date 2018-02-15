@@ -339,6 +339,18 @@ class TuckerTensor:
         assert self.ndim == X.ndim, 'Incompatible sizes'
         self.shape = tuple(U.shape[0] for U in self.Us)
 
+    @staticmethod
+    def from_tensor(A):
+        """Convert `A` from other tensor formats to Tucker format."""
+        if isinstance(A, CanonicalTensor):
+            X = np.zeros(A.ndim * (A.R,))
+            np.fill_diagonal(X, 1.0)
+            return TuckerTensor(A.Xs, X)
+        elif isinstance(A, TuckerTensor):
+            return A
+        else:
+            raise TypeError('tensor type %s not supported' % str(type(X)))
+
     def asarray(self):
         """Convert Tucker tensor to a full `ndarray`."""
         return apply_tprod(self.Us, self.X)

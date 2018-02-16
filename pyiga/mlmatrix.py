@@ -30,22 +30,25 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
         data (ndarray): alternatively, the compact data array for the matrix
             can be specified directly
     """
-    def __init__(self, bs, bw, data=None, matrix=None):
-        if (data is not None) and (matrix is not None):
-            assert False, 'Can only specify one of `data` and `matrix`'
+    def __init__(self, bs, bw, bidx=None, data=None, matrix=None):
         self.bs = tuple(bs)
         self._total_bs = np.array([(b,b) for b in self.bs])
-        self.bw = tuple(bw)
         self.L = len(bs)
-        assert self.L == len(bw), \
-            'Inconsistent dimensions for block sizes and bandwidths'
+        if bidx is not None:
+            self.bidx = bidx
+        else:
+            self.bidx = tuple(compute_banded_sparsity_ij(n, p)
+                    for (n,p) in zip(self.bs, bw))
+        assert self.L == len(self.bidx), \
+            'Inconsistent dimensions for block sizes and bandwidths/structure'
         # bidx is a tuple where each bidx_k has shape (mu_k, 2)
-        self.bidx = tuple(compute_banded_sparsity_ij(n, p)
-                for (n,p) in zip(self.bs, bw))
         N = np.prod(self.bs)
 
-        # initialize data (ndarray of shape mu_1 x ... x mu_L)
         self.datashape = tuple(len(bi) for bi in self.bidx)
+
+        # initialize data (ndarray of shape mu_1 x ... x mu_L)
+        if (data is not None) and (matrix is not None):
+            assert False, 'Can only specify one of `data` and `matrix`'
         if data is not None:
             assert data.shape == self.datashape, 'Wrong shape of data tensor'
             self._data = np.asarray(data, order='C')
@@ -135,7 +138,8 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
             newdata = None
         return MLBandedMatrix(
                 np.take(self.bs, axes),
-                np.take(self.bw, axes),
+                bw=None,
+                bidx=np.take(self.bidx, axes),
                 data=newdata)
 
 
@@ -251,6 +255,27 @@ def compute_banded_sparsity_ij(n, bw):
             I.append((i, j))
     return np.array(I, dtype=np.uint32)
 
+def compute_sparsity_ij(kv1, kv2):
+    """Returns an `N x 2` array of those basis function indices (i,j) where the
+    two given knot vectors have joint support.
+
+    This describes the sparsity pattern of a stiffness matrix assembled for these
+    two knot vectors.
+    """
+    def do_intersect(intva, intvb):
+        c0, c1 = (max(intva[0], intvb[0]), min(intva[1], intvb[1]))
+        return c1 > c0
+
+    meshsupp1 = kv1.mesh_support_idx_all()
+    meshsupp2 = kv2.mesh_support_idx_all()
+
+    IJ = []
+    for i in range(meshsupp2.shape[0]):
+        j = np.searchsorted(meshsupp1[:,1], meshsupp2[i,0], side='right')
+        while j < meshsupp1.shape[0] and do_intersect(meshsupp2[i], meshsupp1[j]):
+            IJ.append((i,j))
+            j += 1
+    return np.array(IJ, dtype=np.uint32)
 
 
 ################################################################################

@@ -111,7 +111,7 @@ cdef class BaseAssembler2D:
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef object generic_assemble_core_2d(BaseAssembler2D asm, bidx, bint symmetric=False):
+def generic_assemble_core_2d(BaseAssembler2D asm, bidx, bint symmetric=False):
     cdef unsigned[:, ::1] bidx0, bidx1
     cdef long mu0, mu1, MU0, MU1
     cdef double[:, ::1] entries
@@ -180,16 +180,6 @@ cdef void _asm_core_2d_kernel(
         if symmetric:
             if diag0 != 0 or diag1 != 0:     # are we off the diagonal?
                 entries[ transp0[mu0], transp1[mu1] ] = entry   # then also write into the transposed entry
-
-
-def generic_assemble_2d_parallel(BaseAssembler2D asm, symmetric=False):
-    mlb = MLBandedMatrix(
-        tuple(asm.S0.ndofs),
-        tuple(asm.S0.p)
-    )
-    X = generic_assemble_core_2d(asm, mlb.bidx, symmetric=symmetric)
-    mlb.data = X
-    return mlb
 
 
 # helper function for fast low-rank assembler
@@ -431,7 +421,7 @@ cdef class BaseAssembler3D:
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef object generic_assemble_core_3d(BaseAssembler3D asm, bidx, bint symmetric=False):
+def generic_assemble_core_3d(BaseAssembler3D asm, bidx, bint symmetric=False):
     cdef unsigned[:, ::1] bidx0, bidx1, bidx2
     cdef long mu0, mu1, mu2, MU0, MU1, MU2
     cdef double[:, :, ::1] entries
@@ -510,16 +500,6 @@ cdef void _asm_core_3d_kernel(
             if symmetric:
                 if diag0 != 0 or diag1 != 0 or diag2 != 0:     # are we off the diagonal?
                     entries[ transp0[mu0], transp1[mu1], transp2[mu2] ] = entry   # then also write into the transposed entry
-
-
-def generic_assemble_3d_parallel(BaseAssembler3D asm, symmetric=False):
-    mlb = MLBandedMatrix(
-        tuple(asm.S0.ndofs),
-        tuple(asm.S0.p)
-    )
-    X = generic_assemble_core_3d(asm, mlb.bidx, symmetric=symmetric)
-    mlb.data = X
-    return mlb
 
 
 # helper function for fast low-rank assembler

@@ -546,10 +546,15 @@ def integrate(kvs, f, f_physical=False, geo=None):
 ################################################################################
 
 def assemble(asm, symmetric=False, format='csr'):
+    S0, S1 = asm.space_info()
+    X = MLBandedMatrix(
+        tuple(S0['ndofs']),
+        tuple(S0['p']),
+    )
     if isinstance(asm, assemble_tools.BaseAssembler2D):
-        X = assemble_tools.generic_assemble_2d_parallel(asm, symmetric=symmetric)
+        X.data = assemble_tools.generic_assemble_core_2d(asm, X.bidx, symmetric=symmetric)
     elif isinstance(asm, assemble_tools.BaseAssembler3D):
-        X = assemble_tools.generic_assemble_3d_parallel(asm, symmetric=symmetric)
+        X.data = assemble_tools.generic_assemble_core_3d(asm, X.bidx, symmetric=symmetric)
     else:
         assert False, 'Unknown assembler type'
     if format == 'mlb':

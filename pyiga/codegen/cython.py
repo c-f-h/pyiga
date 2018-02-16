@@ -606,7 +606,7 @@ cdef class BaseAssembler{{DIM}}D:
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef object generic_assemble_core_{{DIM}}d(BaseAssembler{{DIM}}D asm, bidx, bint symmetric=False):
+def generic_assemble_core_{{DIM}}d(BaseAssembler{{DIM}}D asm, bidx, bint symmetric=False):
     cdef unsigned[:, ::1] {{ dimrepeat('bidx{}') }}
     cdef long {{ dimrepeat('mu{}') }}, {{ dimrepeat('MU{}') }}
     cdef double[{{ dimrepeat(':') }}:1] entries
@@ -676,16 +676,6 @@ cdef void _asm_core_{{DIM}}d_kernel(
 {{ indent(DIM) }}if symmetric:
 {{ indent(DIM) }}    if {{ dimrepeat('diag{} != 0', sep=' or ') }}:     # are we off the diagonal?
 {{ indent(DIM) }}        entries[ {{ dimrepeat('transp{0}[mu{0}]') }} ] = entry   # then also write into the transposed entry
-
-
-def generic_assemble_{{DIM}}d_parallel(BaseAssembler{{DIM}}D asm, symmetric=False):
-    mlb = MLBandedMatrix(
-        tuple(asm.S0.ndofs),
-        tuple(asm.S0.p)
-    )
-    X = generic_assemble_core_{{DIM}}d(asm, mlb.bidx, symmetric=symmetric)
-    mlb.data = X
-    return mlb
 
 
 # helper function for fast low-rank assembler

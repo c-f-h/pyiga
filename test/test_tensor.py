@@ -43,14 +43,17 @@ def test_tucker():
     X = _random_tucker((3,4,5), 2)
     # orthogonalize
     assert np.allclose(X.asarray(), X.orthogonalize().asarray())
-    # als1
-    x = als1(X)
-    y = als1(X.asarray())
-    assert np.allclose(outer(*x), outer(*y))
     # add and sub
     Y = _random_tucker((3,4,5), 3)
     assert np.allclose((X + Y).asarray(), X.asarray() + Y.asarray())
     assert np.allclose((X - Y).asarray(), X.asarray() - Y.asarray())
+    # compression
+    XX = (X + X).compress()
+    assert XX.R == X.R and np.allclose(XX.asarray(), 2*X.asarray())
+    # als1
+    x = als1(X)
+    y = als1(X.asarray())
+    assert np.allclose(outer(*x), outer(*y))
     # conversion
     X = _random_canonical((3,4,5), 2)
     Y = TuckerTensor.from_tensor(X)

@@ -342,6 +342,7 @@ class TuckerTensor:
         self.ndim = len(self.Us)
         assert self.ndim == X.ndim, 'Incompatible sizes'
         self.shape = tuple(U.shape[0] for U in self.Us)
+        self.R = self.X.shape
 
     @staticmethod
     def from_tensor(A):
@@ -399,6 +400,18 @@ class TuckerTensor:
             assert len(k) == N
             slices = tuple(slice(None, ki) for ki in k)
         return TuckerTensor(tuple(self.Us[i][:,slices[i]] for i in range(N)), self.X[slices])
+
+    def compress(self, tol=1e-15, rtol=1e-15):
+        """Compress a Tucker tensor to have smaller rank, up to an absolute error tolerance `tol`
+        or a relative error tolerance `rtol`.
+        """
+        # first, orthogonalize the basis
+        T = self.orthogonalize()
+        tol = max(tol, fro_norm(T.X) * rtol)
+        # we could now simply truncate T.X, but we get better results by computing its HOSVD first
+        TXSVD = hosvd(T.X)
+        TX2 = TXSVD.truncate(find_truncation_rank(TXSVD.X, tol))
+        return TX2.nway_prod(T.Us)
 
     def nway_prod(self, Bs):
         """Implements :func:`apply_tprod` for Tucker tensors.

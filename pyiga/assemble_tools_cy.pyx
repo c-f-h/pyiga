@@ -15,7 +15,7 @@ cimport numpy as np
 
 import pyiga
 from . import bspline
-from .mlmatrix import MLBandedMatrix, get_transpose_idx_for_bidx
+from .mlmatrix import get_transpose_idx_for_bidx
 
 from concurrent.futures import ThreadPoolExecutor
 

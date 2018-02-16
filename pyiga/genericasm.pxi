@@ -47,10 +47,6 @@ cdef class BaseAssembler2D:
     def space_info(self):
         return self.S0, self.S1
 
-    cdef inline size_t to_seq(self, size_t[2] ii) nogil:
-        # by convention, the order of indices is (y,x)
-        return (ii[0]) * self.S0.ndofs[1] + ii[1]
-
     cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
         return -9999.99  # Not implemented
 
@@ -210,9 +206,6 @@ cdef class BaseVectorAssembler2D:
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
 
-    cdef inline size_t to_seq(self, size_t[3] ii) nogil:
-        return ((ii[0]) * self.S0.ndofs[1] + ii[1]) * self.numcomp[0] + ii[2]
-
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.cdivision(True)
@@ -356,10 +349,6 @@ cdef class BaseAssembler3D:
 
     def space_info(self):
         return self.S0, self.S1
-
-    cdef inline size_t to_seq(self, size_t[3] ii) nogil:
-        # by convention, the order of indices is (y,x)
-        return ((ii[0]) * self.S0.ndofs[1] + ii[1]) * self.S0.ndofs[2] + ii[2]
 
     cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
         return -9999.99  # Not implemented
@@ -529,9 +518,6 @@ cdef class BaseVectorAssembler3D:
 
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
-
-    cdef inline size_t to_seq(self, size_t[4] ii) nogil:
-        return (((ii[0]) * self.S0.ndofs[1] + ii[1]) * self.S0.ndofs[2] + ii[2]) * self.numcomp[0] + ii[3]
 
     @cython.boundscheck(False)
     @cython.wraparound(False)

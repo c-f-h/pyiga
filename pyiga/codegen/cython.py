@@ -542,10 +542,6 @@ cdef class BaseAssembler{{DIM}}D:
     def space_info(self):
         return self.S0, self.S1
 
-    cdef inline size_t to_seq(self, size_t[{{DIM}}] ii) nogil:
-        # by convention, the order of indices is (y,x)
-        return {{ to_seq(indices, ndofs) }}
-
     cdef double entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
         return -9999.99  # Not implemented
 
@@ -706,9 +702,6 @@ cdef class BaseVectorAssembler{{DIM}}D:
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
 
-    cdef inline size_t to_seq(self, size_t[{{DIM + 1}}] ii) nogil:
-        return {{ to_seq(indices + ['ii[%d]' % DIM], ndofs + ['self.numcomp[0]']) }}
-
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.cdivision(True)
@@ -813,18 +806,8 @@ def generate_generic(dim):
     def dimrepeat(s, sep=', ', upper=DIM):
         return sep.join([s.format(k) for k in range(upper)])
 
-    def to_seq(i, n):
-        s = i[0]
-        for k in range(1, len(i)):
-            s = '({0}) * {1} + {2}'.format(s, n[k], i[k])
-        return s
-
     def indent(num):
         return num * '    ';
-
-    # helper variables for to_seq
-    indices = ['ii[%d]' % k for k in range(DIM)]
-    ndofs   = ['self.S0.ndofs[%d]' % k for k in range(DIM)]
 
     return tmpl_generic.render(locals())
 

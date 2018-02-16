@@ -527,20 +527,19 @@ cdef void init_spaceinfo{{DIM}}(SpaceInfo{{DIM}} & S, kvs):
 cdef class BaseAssembler{{DIM}}D:
     cdef int nqp
     cdef SpaceInfo{{DIM}} S0, S1
+    cdef readonly tuple kvs
 
     cdef void base_init(self, kvs0, kvs1=None):
         if kvs1 is None: kvs1 = kvs0
         init_spaceinfo{{DIM}}(self.S0, kvs0)
         init_spaceinfo{{DIM}}(self.S1, kvs1)
         self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
+        self.kvs = (kvs0, kvs1)
 
     def __dealloc__(self):
         # work around Cython memory bug
         clear_spaceinfo{{DIM}}(self.S0)
         clear_spaceinfo{{DIM}}(self.S1)
-
-    def space_info(self):
-        return self.S0, self.S1
 
     cdef double entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
         return -9999.99  # Not implemented
@@ -684,20 +683,19 @@ cdef class BaseVectorAssembler{{DIM}}D:
     cdef int nqp
     cdef SpaceInfo{{DIM}} S0, S1
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
+    cdef readonly tuple kvs
 
     cdef void base_init(self, kvs0, kvs1=None):
         if kvs1 is None: kvs1 = kvs0
         init_spaceinfo{{DIM}}(self.S0, kvs0)
         init_spaceinfo{{DIM}}(self.S1, kvs1)
         self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
+        self.kvs = (kvs0, kvs1)
 
     def __dealloc__(self):
         # work around Cython memory bug
         clear_spaceinfo{{DIM}}(self.S0)
         clear_spaceinfo{{DIM}}(self.S1)
-
-    def space_info(self):
-        return self.S0, self.S1
 
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]

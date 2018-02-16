@@ -277,6 +277,10 @@ def compute_sparsity_ij(kv1, kv2):
             j += 1
     return np.array(IJ, dtype=np.uint32)
 
+def compute_dense_ij(m, n):
+    """Returns an `N x 2` array of all indices (i,j) in a dense `m x n` matrix.  """
+    return np.array([ (i,j) for i in range(m) for j in range(n)], dtype=np.uint32)
+
 
 ################################################################################
 # Elementwise generators for ML-reordered sparse matrices

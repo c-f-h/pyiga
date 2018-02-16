@@ -177,11 +177,17 @@ cpdef object inflate_2d(object X, np.int_t[:] sparsidx1, np.int_t[:] sparsidx2,
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef object inflate_2d_bidx(object X, unsigned[:,::1] bidx0, unsigned[:,::1] bidx1,
-        int m1, int n1, int m2, int n2):
+cpdef object inflate_2d_bidx(object X, bidx, block_sizes):
     """Convert the dense ndarray X from reordered, compressed two-level
     banded form back to a standard sparse matrix format.
     """
+    cdef unsigned[:,::1] bidx0, bidx1
+    bidx0, bidx1 = bidx
+
+    cdef int m1,n1, m2,n2
+    m1,n1 = block_sizes[0]
+    m2,n2 = block_sizes[1]
+
     cdef long[::1] entries_i, entries_j
     cdef size_t i, j, MU0, MU1, k=0
     MU0, MU1 = X.shape[0], X.shape[1]
@@ -211,10 +217,13 @@ cpdef object inflate_2d_bidx(object X, unsigned[:,::1] bidx0, unsigned[:,::1] bi
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef void ml_matvec_2d(double[:,::1] X,
-        unsigned[:,::1] bidx1, unsigned[:,::1] bidx2,
-        int m1, int n1, int m2, int n2,
-        double[::1] x, double[::1] y):
+cpdef void ml_matvec_2d(double[:,::1] X, bidx, block_sizes, double[::1] x, double[::1] y):
+    cdef unsigned[:,::1] bidx1, bidx2
+    bidx1,bidx2 = bidx
+
+    cdef int m2, n2
+    m2,n2 = block_sizes[1]
+
     cdef size_t i, j, M, N, I, J
     M, N = X.shape[0], X.shape[1]
 

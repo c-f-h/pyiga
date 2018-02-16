@@ -31,18 +31,20 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
             can be specified directly
     """
     def __init__(self, bs, bw, bidx=None, data=None, matrix=None):
-        self.bs = tuple(bs)
-        self._total_bs = np.array([(b,b) for b in self.bs])
+        self.bs = tuple((n,n) if np.isscalar(n) else n for n in bs)
+        self._bs_arr = np.array(self.bs)
         self.L = len(bs)
         if bidx is not None:
             self.bidx = bidx
         else:
-            self.bidx = tuple(compute_banded_sparsity_ij(n, p)
+            self.bidx = tuple(compute_banded_sparsity_ij(n[0], p)
                     for (n,p) in zip(self.bs, bw))
         assert self.L == len(self.bidx), \
             'Inconsistent dimensions for block sizes and bandwidths/structure'
         # bidx is a tuple where each bidx_k has shape (mu_k, 2)
-        N = np.prod(self.bs)
+
+        M = np.prod(self._bs_arr[:,0])
+        N = np.prod(self._bs_arr[:,1])
 
         self.datashape = tuple(len(bi) for bi in self.bidx)
 
@@ -54,7 +56,7 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
             self._data = np.asarray(data, order='C')
             dtype = self._data.dtype
         elif matrix is not None:
-            assert matrix.shape == (N,N), 'Matrix has wrong shape'
+            assert matrix.shape == (M,N), 'Matrix has wrong shape'
             data = np.asarray(matrix[self.nonzero()]).reshape(self.datashape)
             self._data = np.asarray(data, order='C')
             dtype = self._data.dtype
@@ -62,7 +64,7 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
             self._data = None
             dtype = np.float_
 
-        scipy.sparse.linalg.LinearOperator.__init__(self, shape=(N,N), dtype=dtype)
+        scipy.sparse.linalg.LinearOperator.__init__(self, shape=(M,N), dtype=dtype)
 
     @property
     def nnz(self):
@@ -86,10 +88,9 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
                     (self._data, (self.bidx[0][:,0], self.bidx[0][:,1])),
                     shape=self.shape).asformat(format)
         elif self.L == 2:
-            A = inflate_2d_bidx(self._data, self.bidx[0], self.bidx[1],
-                self.bs[0], self.bs[0], self.bs[1], self.bs[1])
+            A = inflate_2d_bidx(self._data, self.bidx, self._bs_arr)
         elif self.L == 3:
-            A = inflate_3d_bidx(self._data, self.bidx, self._total_bs)
+            A = inflate_3d_bidx(self._data, self.bidx, self._bs_arr)
         else:
             assert False, 'dimension %d not implemented' % self.L
         return A.asformat(format)
@@ -100,12 +101,11 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
         assert len(x) == self.shape[1], 'Invalid input size'
         if self.L == 2:
             y = np.zeros(len(x))
-            ml_matvec_2d(self._data, self.bidx[0], self.bidx[1],
-                self.bs[0], self.bs[0], self.bs[1], self.bs[1], x, y)
+            ml_matvec_2d(self._data, self.bidx, self._bs_arr, x, y)
             return y
         elif self.L == 3:
             y = np.zeros(len(x))
-            ml_matvec_3d(self._data, self.bidx, self._total_bs, x, y)
+            ml_matvec_3d(self._data, self.bidx, self._bs_arr, x, y)
             return y
         else:
             return self.asmatrix().dot(x)
@@ -122,9 +122,9 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
             assert not lower_tri, 'Lower triangular part not implemented in 1D'
             IJ = self.bidx[0].T.copy()
         elif self.L == 2:
-            IJ = ml_nonzero_2d(self.bidx, self._total_bs, lower_tri=lower_tri)
+            IJ = ml_nonzero_2d(self.bidx, self._bs_arr, lower_tri=lower_tri)
         elif self.L == 3:
-            IJ = ml_nonzero_3d(self.bidx, self._total_bs, lower_tri=lower_tri)
+            IJ = ml_nonzero_3d(self.bidx, self._bs_arr, lower_tri=lower_tri)
         else:
             assert False, 'dimension %d not implemented' % self.L
         return IJ[0,:], IJ[1,:]
@@ -137,9 +137,9 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
         else:
             newdata = None
         return MLBandedMatrix(
-                np.take(self.bs, axes),
+                bs=tuple(self.bs[j] for j in axes),
                 bw=None,
-                bidx=np.take(self.bidx, axes),
+                bidx=tuple(self.bidx[j] for j in axes),
                 data=newdata)
 
 

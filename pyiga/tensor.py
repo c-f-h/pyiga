@@ -353,7 +353,7 @@ class TuckerTensor:
         elif isinstance(A, TuckerTensor):
             return A
         else:
-            raise TypeError('tensor type %s not supported' % str(type(X)))
+            raise TypeError('tensor type %s not supported' % str(type(A)))
 
     def copy(self):
         """Create a deep copy of this tensor."""

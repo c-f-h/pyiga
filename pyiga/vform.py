@@ -71,6 +71,8 @@ class VForm:
         self.Geo = self.input('geo', shape=(dim,))
 
     def basisfuns(self, parametric=False, components=(None,None), spaces=(0,0)):
+        if not self.vec:
+            assert all(nc is None for nc in components), 'need to set `vec` in constructor for vector assemblers'
         def make_bfun_expr(bf):
             if bf.numcomp is not None:
                 # return a vector which contains the components of the bfun

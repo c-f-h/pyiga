@@ -569,7 +569,7 @@ def assemble_vector(asm, symmetric=False, format='csr', layout='packed'):
     dim = len(kvs0)
     block_sizes = tuple((kv1.numdofs, kv0.numdofs) for (kv0,kv1) in zip(kvs0,kvs1))
     bidx = tuple(compute_sparsity_ij(kv0, kv1) for (kv0,kv1) in zip(kvs0,kvs1))
-    nc = asm.num_components()
+    nc = asm.num_components()[::-1]  # reverse axes (u = kv0 = columns)
     mlb = MLBandedMatrix(block_sizes + (nc,), bw=None, bidx=bidx + (compute_dense_ij(*nc),))
 
     if dim == 2:

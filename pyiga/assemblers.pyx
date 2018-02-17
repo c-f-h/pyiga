@@ -542,7 +542,6 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     def __init__(self, kvs0, geo):
         self.base_init(kvs0)
         self.numcomp[:] = (2, 2,)
-        assert self.numcomp[0] == self.numcomp[1], 'Only square matrices currently implemented'
         assert geo.dim == 2, "Geometry has wrong dimension"
 
         # NB: we assume all kvs result in the same mesh
@@ -1312,7 +1311,6 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     def __init__(self, kvs0, geo):
         self.base_init(kvs0)
         self.numcomp[:] = (3, 3,)
-        assert self.numcomp[0] == self.numcomp[1], 'Only square matrices currently implemented'
         assert geo.dim == 3, "Geometry has wrong dimension"
 
         # NB: we assume all kvs result in the same mesh

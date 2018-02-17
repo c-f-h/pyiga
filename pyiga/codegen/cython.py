@@ -360,7 +360,6 @@ class AsmGenerator:
         if self.vec:
             numcomp = '(' + ', '.join(str(nc) for nc in vf.num_components()) + ',)'
             self.put("self.numcomp[:] = " + numcomp)
-            self.put("assert self.numcomp[0] == self.numcomp[1], 'Only square matrices currently implemented'")
 
         for line in \
 """assert geo.dim == {dim}, "Geometry has wrong dimension"
@@ -736,7 +735,6 @@ def generic_assemble_core_vec_{{DIM}}d(BaseVectorAssembler{{DIM}}D asm, bidx, bi
         {{ dimrepeat('transp{}', sep=' = ') }} = None
 
     numcomp[:] = asm.num_components()
-    assert numcomp[0] == numcomp[1], 'only square matrices currently implemented'
     entries = np.zeros(({{ dimrepeat('MU{}') }}, numcomp[0]*numcomp[1]))
 
     cdef int num_threads = pyiga.get_max_threads()

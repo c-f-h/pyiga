@@ -237,7 +237,6 @@ def generic_assemble_core_vec_2d(BaseVectorAssembler2D asm, bidx, bint symmetric
         transp0 = transp1 = None
 
     numcomp[:] = asm.num_components()
-    assert numcomp[0] == numcomp[1], 'only square matrices currently implemented'
     entries = np.zeros((MU0, MU1, numcomp[0]*numcomp[1]))
 
     cdef int num_threads = pyiga.get_max_threads()
@@ -551,7 +550,6 @@ def generic_assemble_core_vec_3d(BaseVectorAssembler3D asm, bidx, bint symmetric
         transp0 = transp1 = transp2 = None
 
     numcomp[:] = asm.num_components()
-    assert numcomp[0] == numcomp[1], 'only square matrices currently implemented'
     entries = np.zeros((MU0, MU1, MU2, numcomp[0]*numcomp[1]))
 
     cdef int num_threads = pyiga.get_max_threads()

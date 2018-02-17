@@ -570,7 +570,6 @@ def assemble_vector(asm, symmetric=False, format='csr', layout='packed'):
     block_sizes = tuple((kv1.numdofs, kv0.numdofs) for (kv0,kv1) in zip(kvs0,kvs1))
     bidx = tuple(compute_sparsity_ij(kv0, kv1) for (kv0,kv1) in zip(kvs0,kvs1))
     nc = asm.num_components()
-    assert nc[0] == nc[1], 'Only implemented for square matrices'
     mlb = MLBandedMatrix(block_sizes + (nc,), bw=None, bidx=bidx + (compute_dense_ij(*nc),))
 
     if dim == 2:

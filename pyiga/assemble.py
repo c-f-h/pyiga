@@ -547,7 +547,7 @@ def integrate(kvs, f, f_physical=False, geo=None):
 
 def assemble(asm, symmetric=False, format='csr'):
     kvs0, kvs1 = asm.kvs
-    block_sizes = tuple((kv0.numdofs, kv1.numdofs) for (kv0,kv1) in zip(kvs0,kvs1))
+    block_sizes = tuple((kv1.numdofs, kv0.numdofs) for (kv0,kv1) in zip(kvs0,kvs1))
     bidx = tuple(compute_sparsity_ij(kv0, kv1) for (kv0,kv1) in zip(kvs0,kvs1))
     X = MLBandedMatrix(block_sizes, bw=None, bidx=bidx)
 
@@ -567,7 +567,7 @@ def assemble_vector(asm, symmetric=False, format='csr', layout='packed'):
 
     kvs0, kvs1 = asm.kvs
     dim = len(kvs0)
-    block_sizes = tuple((kv0.numdofs, kv1.numdofs) for (kv0,kv1) in zip(kvs0,kvs1))
+    block_sizes = tuple((kv1.numdofs, kv0.numdofs) for (kv0,kv1) in zip(kvs0,kvs1))
     bidx = tuple(compute_sparsity_ij(kv0, kv1) for (kv0,kv1) in zip(kvs0,kvs1))
     nc = asm.num_components()
     assert nc[0] == nc[1], 'Only implemented for square matrices'

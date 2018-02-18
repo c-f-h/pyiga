@@ -291,6 +291,9 @@ def inner_products(kvs, f, f_physical=False, geo=None):
         `kvs[0].ndofs x kvs[1].ndofs x ... x kvs[-1].ndofs`.
         Each entry corresponds to the inner product of the
         corresponding basis function with `f`.
+        If `f` is not scalar, then each of its components is treated separately
+        and the corresponding dimensions are appended to the end of the return
+        value.
     """
     if isinstance(kvs, bspline.KnotVector):
         kvs = (kvs,)
@@ -312,6 +315,10 @@ def inner_products(kvs, f, f_physical=False, geo=None):
     if geo is not None:
         geo_jac = geo.grid_jacobian(gaussgrid)
         geo_det = np.abs(assemble_tools.determinants(geo_jac))
+        # if f is not scalar, we simply add trivial dimensions on to the end
+        extra_dims = fvals.ndim - geo_det.ndim
+        if extra_dims > 0:
+            geo_det.shape = geo_det.shape + (extra_dims * (1,))
         fvals *= geo_det
     # apply transposed spline collocation matrices (sum over Gauss nodes)
     Ct = [bspline.collocation(kvs[i], gaussgrid[i]).T

@@ -359,7 +359,9 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
             0 for the "lower" boundary or 1 for the "upper" boundary.
         dir_func: a function which will be interpolated to obtain the
             Dirichlet boundary values. Assumed to be given in physical
-            coordinates.
+            coordinates. If it is vector-valued, one Dirichlet dof is
+            computed per component, and they are numbered according to
+            the "blocked" matrix layout.
 
     Returns:
         A pair of arrays `(indices, values)` which denote the indices of the
@@ -375,13 +377,24 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
     # get boundary geometry and interpolate dir_func
     bdgeo = geo.boundary(bdax, bdside)
     from .approx import interpolate
-    dircoeffs = interpolate(bdbasis, dir_func, geo=bdgeo).ravel()
+    dircoeffs = interpolate(bdbasis, dir_func, geo=bdgeo)
 
     # compute sequential indices for eliminated dofs
     N = tuple(kv.numdofs for kv in kvs)
     bdindices = slice_indices(bdax, 0 if bdside==0 else -1, N, ravel=True)
 
-    return bdindices, dircoeffs
+    extra_dims = dircoeffs.ndim - len(bdbasis)
+    if extra_dims == 0:
+        return bdindices, dircoeffs.ravel()
+    elif extra_dims == 1:
+        # vector function; assume blocked vector discretization
+        numcomp = dircoeffs.shape[-1]
+        NN = np.prod(N)
+        return combine_bcs([
+            (bdindices + j*NN, dircoeffs[..., j].ravel())
+                for j in range(numcomp)])
+    else:
+        raise ValueError('invalid dimension of Dirichlet coefficients: %s' % dircoeffs.shape)
 
 
 def compute_initial_condition_01(kvs, geo, bdspec, g0, g1, physical=True):

@@ -493,15 +493,27 @@ class RestrictedLinearSystem:
         self.R_elim = I[np.logical_not(mask)]
         self.values = values
 
-        self.A = self.R_free.dot(A).dot(self.R_free.T)
-        self.b = self.R_free.dot(b - A.dot(self.R_elim.T.dot(values)))
+        self.A = self.restrict_matrix(A)
+        self.b = self.restrict(b - A.dot(self.R_elim.T.dot(values)))
+
+    def restrict(self, u):
+        """Given a vector `u` containing all dofs, return its restriction to the free dofs."""
+        return self.R_free.dot(u)
+
+    def restrict_matrix(self, B):
+        """Given a matrix `B` which operates on all dofs, return its restriction to the free dofs."""
+        return self.R_free.dot(B).dot(self.R_free.T)
+
+    def extend(self, u):
+        """Given a vector `u` containing only the free dofs, pad it with zeros to all dofs."""
+        return self.R_free.T.dot(u)
 
     def complete(self, u):
         """Given a solution `u` of the restricted linear system, complete it
         with the values of the eliminated dofs to a solution of the original
         system.
         """
-        return self.R_free.T.dot(u) + self.R_elim.T.dot(self.values)
+        return self.extend(u) + self.R_elim.T.dot(self.values)
 
 ################################################################################
 # Integration

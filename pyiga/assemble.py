@@ -581,7 +581,7 @@ def assemble(asm, symmetric=False, format='csr'):
     else:
         return X.asmatrix(format)
 
-def assemble_vector(asm, symmetric=False, format='csr', layout='packed'):
+def assemble_vector(asm, symmetric=False, format='csr', layout='blocked'):
     assert layout in ('packed', 'blocked')
 
     kvs0, kvs1 = asm.kvs
@@ -650,7 +650,7 @@ def stiffness(kvs, geo=None, format='csr'):
     else:
         assert False, "Dimensions higher than 3 are currently not implemented."
 
-def divdiv(kvs, geo=None, layout='packed', format='csr'):
+def divdiv(kvs, geo=None, layout='blocked', format='csr'):
     dim = _detect_dim(kvs)
     if geo is None:
         geo = geometry.unit_cube(dim=dim)   # TODO: fast assembling for div-div?

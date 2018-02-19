@@ -390,9 +390,9 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
         # vector function; assume blocked vector discretization
         numcomp = dircoeffs.shape[-1]
         NN = np.prod(N)
-        return combine_bcs([
+        return combine_bcs(
             (bdindices + j*NN, dircoeffs[..., j].ravel())
-                for j in range(numcomp)])
+                for j in range(numcomp))
     else:
         raise ValueError('invalid dimension of Dirichlet coefficients: %s' % dircoeffs.shape)
 
@@ -459,13 +459,14 @@ def compute_initial_condition_01(kvs, geo, bdspec, g0, g1, physical=True):
 
 
 def combine_bcs(bcs):
-    """Given a list of `(indices, values)` pairs such as returned by
+    """Given a sequence of `(indices, values)` pairs such as returned by
     :func:`compute_dirichlet_bc`, combine them into a single pair
     `(indices, values)`.
 
     Dofs which occur in more than one `indices` array take their
     value from an arbitrary corresponding `values` array.
     """
+    bcs = list(bcs)
     indices = np.concatenate([ind for ind,_ in bcs])
     values  = np.concatenate([val for _,val in bcs])
     assert indices.shape == values.shape, 'Inconsistent BC sizes'
@@ -480,8 +481,9 @@ class RestrictedLinearSystem:
     Args:
         A: the full matrix
         b: the right-hand side (may be 0)
-        indices (ndarray): the indices of the dofs to be eliminated
-        values (ndarray): the values of the dofs to be eliminated
+        bcs: a pair of arrays `(indices, values)` which contain the
+            indices and values, respectively, of dofs to be eliminated
+            from the system
 
     Once constructed, the restricted linear system can be accessed through
     the following attributes:
@@ -490,7 +492,8 @@ class RestrictedLinearSystem:
         A: the restricted matrix
         b: the restricted and updated right-hand side
     """
-    def __init__(self, A, b, indices, values):
+    def __init__(self, A, b, bcs):
+        indices, values = bcs
         if np.isscalar(b):
             b = np.broadcast_to(b, A.shape[0])
         if np.isscalar(values):

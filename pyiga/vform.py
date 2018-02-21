@@ -237,7 +237,7 @@ class VForm:
         """Compute a directed graph of the dependencies between all used variables."""
         G = networkx.DiGraph()
         # make sure virtual basis function nodes are always in the graph
-        G.add_nodes_from(('@u', '@v'))
+        G.add_nodes_from('@' + bf.name for bf in self.basis_funs)
 
         for e in self.all_exprs(type=VarExpr):
             var = e.var
@@ -273,9 +273,11 @@ class VForm:
     def dependency_analysis(self):
         dep_graph = self.dependency_graph()
         self.linear_deps = list(networkx.topological_sort(dep_graph))
+        # virtual nodes which represent the basis functions
+        bfuns = tuple('@' + bf.name for bf in self.basis_funs)
 
         # determine precomputable vars (no dependency on basis functions)
-        precomputable = self.vars_without_dep_on(dep_graph, ('@u', '@v'))
+        precomputable = self.vars_without_dep_on(dep_graph, bfuns)
         # only expression-based vars can be precomputed
         self.precomp = [v for v in precomputable if v.expr]
         # find deps of precomp vars which are pre-given (have src)
@@ -290,7 +292,7 @@ class VForm:
         # compute linearized list of vars the kernel depends on
         kernel_deps = set_union(expr.depends() for expr in self.exprs)
         self.kernel_deps = self.transitive_closure(dep_graph, kernel_deps,
-                exclude={'@u', '@v'})
+                exclude=set(bfuns))
 
         for var in self.kernel_deps:
             # ensure precomputed kernel deps get array storage

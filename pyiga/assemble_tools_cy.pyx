@@ -151,10 +151,10 @@ cdef IntInterval intersect_intervals(IntInterval intva, IntInterval intvb) nogil
 
 cdef int next_lexicographic2(size_t[2] cur, size_t start[2], size_t end[2]) nogil:
     cdef size_t i
-    for i in range(2):
+    for i in reversed(range(2)):
         cur[i] += 1
         if cur[i] == end[i]:
-            if i == (2-1):
+            if i == 0:
                 return 0
             else:
                 cur[i] = start[i]
@@ -163,10 +163,10 @@ cdef int next_lexicographic2(size_t[2] cur, size_t start[2], size_t end[2]) nogi
 
 cdef int next_lexicographic3(size_t[3] cur, size_t start[3], size_t end[3]) nogil:
     cdef size_t i
-    for i in range(3):
+    for i in reversed(range(3)):
         cur[i] += 1
         if cur[i] == end[i]:
-            if i == (3-1):
+            if i == 0:
                 return 0
             else:
                 cur[i] = start[i]

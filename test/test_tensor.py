@@ -113,6 +113,8 @@ def test_canonical():
     np.fill_diagonal(C, 8.0)
     B[:2, :2, :2] -= C
     assert np.allclose(B, 0.0)
+    Z = CanonicalTensor.zeros((3,4,5))
+    assert fro_norm(Z.asarray()) == 0.0
     ###
     # norm
     A = _random_canonical((3,4,5), 2)

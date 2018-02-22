@@ -263,6 +263,11 @@ class CanonicalTensor:
         self.R = self.Xs[0].shape[1]
         assert all(X.shape[1] == self.R for X in self.Xs), 'invalid matrix shape'
 
+    @staticmethod
+    def zeros(shape):
+        """Construct a zero canonical tensor with the given shape."""
+        return CanonicalTensor(np.zeros((n,0)) for n in shape)
+
     def copy(self):
         """Create a deep copy of this tensor."""
         return CanonicalTensor((X.copy() for X in self.Xs))

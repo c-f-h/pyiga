@@ -640,6 +640,8 @@ class LiteralMatrixExpr(Expr):
         self.children = tuple(as_expr(e) for e in entries.flat)
         if not all(e.is_scalar() for e in self.children):
             raise ValueError('all matrix entries should be scalars')
+    def __str__(self):
+        return '(' + ',\n '.join(str(self[i,:]) for i in range(self.shape[0])) + ')'
     def at(self, i, j):
         return self.children[i * self.shape[1] + j]
     base_complexity = 0

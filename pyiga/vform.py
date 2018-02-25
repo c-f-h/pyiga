@@ -547,9 +547,14 @@ class Expr:
         return self
 
     def __deepcopy__(self, memo):
-        new = copy.copy(self)
-        new.children = copy.deepcopy(self.children, memo)
-        return new
+        if self.children:
+            new = copy.copy(self)
+            new.children = copy.deepcopy(self.children, memo)
+            return new
+        else:
+            # we only care about reproducing the tree structure --
+            # make sure we don't clone VarExprs etc which depend on identity
+            return self
 
     base_complexity = 1
 

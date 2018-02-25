@@ -30,6 +30,7 @@ cdef void init_spaceinfo2(SpaceInfo2 & S, kvs):
     S.meshsupp1 = kvs[1].mesh_support_idx_all()
 
 cdef class BaseAssembler2D:
+    cdef readonly int arity
     cdef int nqp
     cdef SpaceInfo2 S0, S1
     cdef readonly tuple kvs
@@ -49,7 +50,19 @@ cdef class BaseAssembler2D:
     cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
         return -9999.99  # Not implemented
 
+    cpdef double entry1(self, size_t i):
+        """Compute an entry of the vector to be assembled."""
+        if self.arity != 1:
+            return 0.0
+        cdef size_t[2] I, J
+        with nogil:
+            from_seq2(i, self.S0.ndofs, I)
+            return self.entry_impl(I, <size_t*>0)
+
     cpdef double entry(self, size_t i, size_t j):
+        """Compute an entry of the matrix."""
+        if self.arity != 2:
+            return 0.0
         cdef size_t[2] I, J
         with nogil:
             from_seq2(i, self.S1.ndofs, I)
@@ -59,6 +72,8 @@ cdef class BaseAssembler2D:
     @cython.boundscheck(False)
     @cython.wraparound(False)
     cdef void multi_entries_chunk(self, size_t[:,::1] idx_arr, double[::1] out) nogil:
+        if self.arity != 2:
+            return
         cdef size_t[2] I, J
         cdef size_t k
 
@@ -74,6 +89,8 @@ cdef class BaseAssembler2D:
             indices: a sequence of `(i,j)` pairs or an `ndarray`
             of size `N x 2`.
         """
+        if self.arity != 2:
+            return None
         cdef size_t[:,::1] idx_arr
         if isinstance(indices, np.ndarray):
             idx_arr = np.asarray(indices, order='C', dtype=np.uintp)
@@ -100,6 +117,26 @@ cdef class BaseAssembler2D:
             list(results)   # wait for threads to finish
         return result
 
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def assemble_vector(self):
+        if self.arity != 1:
+            return None
+        result = np.empty(tuple(self.S0.ndofs), order='C')
+        cdef double[:, ::1] _result = result
+        cdef double* out = &_result[ 0, 0 ]
+
+        cdef size_t[2] I, zero
+        zero[0] = zero[1] = 0
+        I[0] = I[1] = 0
+        with nogil:
+            while True:
+               out[0] = self.entry_impl(I, <size_t*>0)
+               out += 1
+               if not next_lexicographic2(I, zero, self.S0.ndofs):
+                   break
+        return result
+
     def entry_func_ptr(self):
         return pycapsule.PyCapsule_New(<void*>_entry_func_2d, "entryfunc", NULL)
 
@@ -107,6 +144,8 @@ cdef class BaseAssembler2D:
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def generic_assemble_core_2d(BaseAssembler2D asm, bidx, bint symmetric=False):
+    if asm.arity != 2:
+        return None
     cdef unsigned[:, ::1] bidx0, bidx1
     cdef long mu0, mu1, MU0, MU1
     cdef double[:, ::1] entries
@@ -184,6 +223,7 @@ cdef double _entry_func_2d(size_t i, size_t j, void * data):
 
 
 cdef class BaseVectorAssembler2D:
+    cdef readonly int arity
     cdef int nqp
     cdef SpaceInfo2 S0, S1
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
@@ -221,6 +261,8 @@ cdef class BaseVectorAssembler2D:
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def generic_assemble_core_vec_2d(BaseVectorAssembler2D asm, bidx, bint symmetric=False):
+    if asm.arity != 2:
+        return None
     cdef unsigned[:, ::1] bidx0, bidx1
     cdef long mu0, mu1, MU0, MU1
     cdef double[:, :, ::1] entries
@@ -330,6 +372,7 @@ cdef void init_spaceinfo3(SpaceInfo3 & S, kvs):
     S.meshsupp2 = kvs[2].mesh_support_idx_all()
 
 cdef class BaseAssembler3D:
+    cdef readonly int arity
     cdef int nqp
     cdef SpaceInfo3 S0, S1
     cdef readonly tuple kvs
@@ -349,7 +392,19 @@ cdef class BaseAssembler3D:
     cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
         return -9999.99  # Not implemented
 
+    cpdef double entry1(self, size_t i):
+        """Compute an entry of the vector to be assembled."""
+        if self.arity != 1:
+            return 0.0
+        cdef size_t[3] I, J
+        with nogil:
+            from_seq3(i, self.S0.ndofs, I)
+            return self.entry_impl(I, <size_t*>0)
+
     cpdef double entry(self, size_t i, size_t j):
+        """Compute an entry of the matrix."""
+        if self.arity != 2:
+            return 0.0
         cdef size_t[3] I, J
         with nogil:
             from_seq3(i, self.S1.ndofs, I)
@@ -359,6 +414,8 @@ cdef class BaseAssembler3D:
     @cython.boundscheck(False)
     @cython.wraparound(False)
     cdef void multi_entries_chunk(self, size_t[:,::1] idx_arr, double[::1] out) nogil:
+        if self.arity != 2:
+            return
         cdef size_t[3] I, J
         cdef size_t k
 
@@ -374,6 +431,8 @@ cdef class BaseAssembler3D:
             indices: a sequence of `(i,j)` pairs or an `ndarray`
             of size `N x 2`.
         """
+        if self.arity != 2:
+            return None
         cdef size_t[:,::1] idx_arr
         if isinstance(indices, np.ndarray):
             idx_arr = np.asarray(indices, order='C', dtype=np.uintp)
@@ -400,6 +459,26 @@ cdef class BaseAssembler3D:
             list(results)   # wait for threads to finish
         return result
 
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def assemble_vector(self):
+        if self.arity != 1:
+            return None
+        result = np.empty(tuple(self.S0.ndofs), order='C')
+        cdef double[:, :, ::1] _result = result
+        cdef double* out = &_result[ 0, 0, 0 ]
+
+        cdef size_t[3] I, zero
+        zero[0] = zero[1] = zero[2] = 0
+        I[0] = I[1] = I[2] = 0
+        with nogil:
+            while True:
+               out[0] = self.entry_impl(I, <size_t*>0)
+               out += 1
+               if not next_lexicographic3(I, zero, self.S0.ndofs):
+                   break
+        return result
+
     def entry_func_ptr(self):
         return pycapsule.PyCapsule_New(<void*>_entry_func_3d, "entryfunc", NULL)
 
@@ -407,6 +486,8 @@ cdef class BaseAssembler3D:
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def generic_assemble_core_3d(BaseAssembler3D asm, bidx, bint symmetric=False):
+    if asm.arity != 2:
+        return None
     cdef unsigned[:, ::1] bidx0, bidx1, bidx2
     cdef long mu0, mu1, mu2, MU0, MU1, MU2
     cdef double[:, :, ::1] entries
@@ -494,6 +575,7 @@ cdef double _entry_func_3d(size_t i, size_t j, void * data):
 
 
 cdef class BaseVectorAssembler3D:
+    cdef readonly int arity
     cdef int nqp
     cdef SpaceInfo3 S0, S1
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
@@ -533,6 +615,8 @@ cdef class BaseVectorAssembler3D:
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def generic_assemble_core_vec_3d(BaseVectorAssembler3D asm, bidx, bint symmetric=False):
+    if asm.arity != 2:
+        return None
     cdef unsigned[:, ::1] bidx0, bidx1, bidx2
     cdef long mu0, mu1, mu2, MU0, MU1, MU2
     cdef double[:, :, :, ::1] entries

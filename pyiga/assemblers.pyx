@@ -20,6 +20,7 @@ from pyiga.assemble_tools_cy cimport (
     BaseAssembler2D, BaseAssembler3D,
     BaseVectorAssembler2D, BaseVectorAssembler3D,
     IntInterval, make_intv, intersect_intervals,
+    next_lexicographic2, next_lexicographic3,
 )
 from pyiga.assemble_tools_cy import compute_values_derivs
 from pyiga.utils import grid_eval
@@ -28,6 +29,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
     cdef double[:, ::1] W
 
     def __init__(self, kvs0, geo):
+        self.arity = 2
         self.base_init(kvs0)
         assert geo.dim == 2, "Geometry has wrong dimension"
 
@@ -139,6 +141,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
     cdef double[:, :, :, ::1] B
 
     def __init__(self, kvs0, geo):
+        self.arity = 2
         self.base_init(kvs0)
         assert geo.dim == 2, "Geometry has wrong dimension"
 
@@ -268,6 +271,7 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
     cdef double[:, :, :, ::1] JacInv
 
     def __init__(self, kvs0, geo):
+        self.arity = 2
         self.base_init(kvs0)
         assert geo.dim == 2, "Geometry has wrong dimension"
 
@@ -403,6 +407,7 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
     cdef double[:, :, :, ::1] JacInv
 
     def __init__(self, kvs0, geo):
+        self.arity = 2
         self.base_init(kvs0)
         assert geo.dim == 2, "Geometry has wrong dimension"
 
@@ -540,6 +545,7 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     cdef double[:, :, :, ::1] JacInv
 
     def __init__(self, kvs0, geo):
+        self.arity = 2
         self.base_init(kvs0)
         self.numcomp[:] = (2, 2,)
         assert geo.dim == 2, "Geometry has wrong dimension"
@@ -687,6 +693,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
     cdef double[:, :, ::1] W
 
     def __init__(self, kvs0, geo):
+        self.arity = 2
         self.base_init(kvs0)
         assert geo.dim == 3, "Geometry has wrong dimension"
 
@@ -814,6 +821,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
     cdef double[:, :, :, :, ::1] B
 
     def __init__(self, kvs0, geo):
+        self.arity = 2
         self.base_init(kvs0)
         assert geo.dim == 3, "Geometry has wrong dimension"
 
@@ -975,6 +983,7 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
     cdef double[:, :, :, :, ::1] JacInv
 
     def __init__(self, kvs0, geo):
+        self.arity = 2
         self.base_init(kvs0)
         assert geo.dim == 3, "Geometry has wrong dimension"
 
@@ -1141,6 +1150,7 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
     cdef double[:, :, :, :, ::1] JacInv
 
     def __init__(self, kvs0, geo):
+        self.arity = 2
         self.base_init(kvs0)
         assert geo.dim == 3, "Geometry has wrong dimension"
 
@@ -1309,6 +1319,7 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     cdef double[:, :, :, :, ::1] JacInv
 
     def __init__(self, kvs0, geo):
+        self.arity = 2
         self.base_init(kvs0)
         self.numcomp[:] = (3, 3,)
         assert geo.dim == 3, "Geometry has wrong dimension"

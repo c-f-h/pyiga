@@ -48,8 +48,9 @@ class BasisFun:
 
 class VForm:
     """Abstract representation of a variational form."""
-    def __init__(self, dim, vec=False, spacetime=False):
+    def __init__(self, dim, arity=2, vec=False, spacetime=False):
         self.dim = dim
+        self.arity = arity
         self.vec = vec
         self.spacetime = bool(spacetime)
         if self.spacetime:
@@ -85,13 +86,14 @@ class VForm:
             else:
                 return self.basisval(bf, physical=not parametric)
 
+        ar = self.arity
         names = ('u', 'v')
         self.basis_funs = tuple(
                 BasisFun(name, self, numcomp=nc, space=space)
-                for (name,nc,space) in zip(names, components, spaces)
+                for (name,nc,space) in zip(names[:ar], components[:ar], spaces[:ar])
         )
-
-        return tuple(make_bfun_expr(bf) for bf in self.basis_funs)
+        result = tuple(make_bfun_expr(bf) for bf in self.basis_funs)
+        return result[0] if ar==1 else result
 
     def num_components(self):
         """Return number of vector components for each basis function space."""

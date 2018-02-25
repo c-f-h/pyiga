@@ -284,17 +284,28 @@ class AsmGenerator:
         for bfun in self.vform.basis_funs:
             self.putf('cdef (double*) values_{name}[{dim}]', name=bfun.name)
 
-        idx_bfun = list(zip(('j', 'i'), self.vform.basis_funs))
+        if self.vform.arity == 1:
+            idx_bfun = [('i', self.vform.basis_funs[0])]
+        elif self.vform.arity == 2:
+            idx_bfun = list(zip(('j', 'i'), self.vform.basis_funs))
+        else:
+            assert False, 'invalid arity: %d' % self.vform.arity
 
         for k in range(self.dim):
-            self.putf('intv = intersect_intervals(')
-            self.indent(2)
-            for idx,bfun in idx_bfun:
-                self.putf('make_intv(self.S{space}.meshsupp{k}[{idx}[{k}],0], self.S{space}.meshsupp{k}[{idx}[{k}],1]),',
+            if len(idx_bfun) == 1:
+                idx, bfun = idx_bfun[0]
+                self.putf('intv = make_intv(self.S{space}.meshsupp{k}[{idx}[{k}],0], self.S{space}.meshsupp{k}[{idx}[{k}],1])',
                         k=k, space=bfun.space, idx=idx)
-            self.dedent(2)
-            self.put(')')
-            self.put('if intv.a >= intv.b: return ' + zeroret + '  # no intersection of support')
+            elif len(idx_bfun) == 2:
+                self.putf('intv = intersect_intervals(')
+                self.indent(2)
+                for idx,bfun in idx_bfun:
+                    self.putf('make_intv(self.S{space}.meshsupp{k}[{idx}[{k}],0], self.S{space}.meshsupp{k}[{idx}[{k}],1]),',
+                            k=k, space=bfun.space, idx=idx)
+                self.dedent(2)
+                self.put(')')
+                self.put('if intv.a >= intv.b: return ' + zeroret + '  # no intersection of support')
+
             self.putf('g_sta[{k}] = self.nqp * intv.a    # start of Gauss nodes', k=k)
             self.putf('g_end[{k}] = self.nqp * intv.b    # end of Gauss nodes', k=k)
 
@@ -355,6 +366,7 @@ class AsmGenerator:
         self.putf('def __init__(self, {kvs}, {inp}):', kvs=used_kvs, inp=input_args)
         self.indent()
 
+        self.putf('self.arity = {ar}', ar=vf.arity)
         self.putf('self.base_init({kvs})', kvs=used_kvs)
 
         if self.vec:
@@ -524,6 +536,7 @@ cdef void init_spaceinfo{{DIM}}(SpaceInfo{{DIM}} & S, kvs):
     {%- endfor %}
 
 cdef class BaseAssembler{{DIM}}D:
+    cdef readonly int arity
     cdef int nqp
     cdef SpaceInfo{{DIM}} S0, S1
     cdef readonly tuple kvs
@@ -543,7 +556,19 @@ cdef class BaseAssembler{{DIM}}D:
     cdef double entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
         return -9999.99  # Not implemented
 
+    cpdef double entry1(self, size_t i):
+        """Compute an entry of the vector to be assembled."""
+        if self.arity != 1:
+            return 0.0
+        cdef size_t[{{DIM}}] I, J
+        with nogil:
+            from_seq{{DIM}}(i, self.S0.ndofs, I)
+            return self.entry_impl(I, <size_t*>0)
+
     cpdef double entry(self, size_t i, size_t j):
+        """Compute an entry of the matrix."""
+        if self.arity != 2:
+            return 0.0
         cdef size_t[{{DIM}}] I, J
         with nogil:
             from_seq{{DIM}}(i, self.S1.ndofs, I)
@@ -553,6 +578,8 @@ cdef class BaseAssembler{{DIM}}D:
     @cython.boundscheck(False)
     @cython.wraparound(False)
     cdef void multi_entries_chunk(self, size_t[:,::1] idx_arr, double[::1] out) nogil:
+        if self.arity != 2:
+            return
         cdef size_t[{{DIM}}] I, J
         cdef size_t k
 
@@ -568,6 +595,8 @@ cdef class BaseAssembler{{DIM}}D:
             indices: a sequence of `(i,j)` pairs or an `ndarray`
             of size `N x 2`.
         """
+        if self.arity != 2:
+            return None
         cdef size_t[:,::1] idx_arr
         if isinstance(indices, np.ndarray):
             idx_arr = np.asarray(indices, order='C', dtype=np.uintp)
@@ -594,6 +623,26 @@ cdef class BaseAssembler{{DIM}}D:
             list(results)   # wait for threads to finish
         return result
 
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def assemble_vector(self):
+        if self.arity != 1:
+            return None
+        result = np.empty(tuple(self.S0.ndofs), order='C')
+        cdef double[{{ dimrepeat(':') }}:1] _result = result
+        cdef double* out = &_result[ {{ dimrepeat('0') }} ]
+
+        cdef size_t[{{DIM}}] I, zero
+        {{ dimrepeat('zero[{}]', sep=' = ') }} = 0
+        {{ dimrepeat('I[{}]', sep=' = ') }} = 0
+        with nogil:
+            while True:
+               out[0] = self.entry_impl(I, <size_t*>0)
+               out += 1
+               if not next_lexicographic{{DIM}}(I, zero, self.S0.ndofs):
+                   break
+        return result
+
     def entry_func_ptr(self):
         return pycapsule.PyCapsule_New(<void*>_entry_func_{{DIM}}d, "entryfunc", NULL)
 
@@ -601,6 +650,8 @@ cdef class BaseAssembler{{DIM}}D:
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def generic_assemble_core_{{DIM}}d(BaseAssembler{{DIM}}D asm, bidx, bint symmetric=False):
+    if asm.arity != 2:
+        return None
     cdef unsigned[:, ::1] {{ dimrepeat('bidx{}') }}
     cdef long {{ dimrepeat('mu{}') }}, {{ dimrepeat('MU{}') }}
     cdef double[{{ dimrepeat(':') }}:1] entries
@@ -679,6 +730,7 @@ cdef double _entry_func_{{DIM}}d(size_t i, size_t j, void * data):
 
 
 cdef class BaseVectorAssembler{{DIM}}D:
+    cdef readonly int arity
     cdef int nqp
     cdef SpaceInfo{{DIM}} S0, S1
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
@@ -718,6 +770,8 @@ cdef class BaseVectorAssembler{{DIM}}D:
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def generic_assemble_core_vec_{{DIM}}d(BaseVectorAssembler{{DIM}}D asm, bidx, bint symmetric=False):
+    if asm.arity != 2:
+        return None
     cdef unsigned[:, ::1] {{ dimrepeat('bidx{}') }}
     cdef long {{ dimrepeat('mu{}') }}, {{ dimrepeat('MU{}') }}
     cdef double[{{ dimrepeat(':') }}, ::1] entries
@@ -831,6 +885,7 @@ from pyiga.assemble_tools_cy cimport (
     BaseAssembler2D, BaseAssembler3D,
     BaseVectorAssembler2D, BaseVectorAssembler3D,
     IntInterval, make_intv, intersect_intervals,
+    next_lexicographic2, next_lexicographic3,
 )
 from pyiga.assemble_tools_cy import compute_values_derivs
 from pyiga.utils import grid_eval

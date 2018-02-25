@@ -257,6 +257,26 @@ cdef class BaseVectorAssembler2D:
     cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
         pass
 
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def assemble_vector(self):
+        if self.arity != 1:
+            return None
+        result = np.zeros(tuple(self.S0.ndofs) + (self.numcomp[0],), order='C')
+        cdef double[:, :, ::1] _result = result
+        cdef double* out = &_result[ 0, 0, 0 ]
+
+        cdef size_t[2] I, zero
+        zero[0] = zero[1] = 0
+        I[0] = I[1] = 0
+        with nogil:
+            while True:
+               self.entry_impl(I, <size_t*>0, out)
+               out += self.numcomp[0]
+               if not next_lexicographic2(I, zero, self.S0.ndofs):
+                   break
+        return result
+
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -610,6 +630,26 @@ cdef class BaseVectorAssembler3D:
 
     cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
         pass
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def assemble_vector(self):
+        if self.arity != 1:
+            return None
+        result = np.zeros(tuple(self.S0.ndofs) + (self.numcomp[0],), order='C')
+        cdef double[:, :, :, ::1] _result = result
+        cdef double* out = &_result[ 0, 0, 0, 0 ]
+
+        cdef size_t[3] I, zero
+        zero[0] = zero[1] = zero[2] = 0
+        I[0] = I[1] = I[2] = 0
+        with nogil:
+            while True:
+               self.entry_impl(I, <size_t*>0, out)
+               out += self.numcomp[0]
+               if not next_lexicographic3(I, zero, self.S0.ndofs):
+                   break
+        return result
 
 
 @cython.boundscheck(False)

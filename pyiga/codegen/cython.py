@@ -370,7 +370,9 @@ class AsmGenerator:
         self.putf('self.base_init({kvs})', kvs=used_kvs)
 
         if self.vec:
-            numcomp = '(' + ', '.join(str(nc) for nc in vf.num_components()) + ',)'
+            numcomp = vf.num_components()
+            numcomp += (2 - len(numcomp)) * (0,) # pad to 2
+            numcomp = '(' + ', '.join(str(nc) for nc in numcomp) + ',)'
             self.put("self.numcomp[:] = " + numcomp)
 
         for line in \
@@ -765,6 +767,26 @@ cdef class BaseVectorAssembler{{DIM}}D:
 
     cdef void entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j, double result[]) nogil:
         pass
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def assemble_vector(self):
+        if self.arity != 1:
+            return None
+        result = np.zeros(tuple(self.S0.ndofs) + (self.numcomp[0],), order='C')
+        cdef double[{{ dimrepeat(':') }}, ::1] _result = result
+        cdef double* out = &_result[ {{ dimrepeat('0') }}, 0 ]
+
+        cdef size_t[{{DIM}}] I, zero
+        {{ dimrepeat('zero[{}]', sep=' = ') }} = 0
+        {{ dimrepeat('I[{}]', sep=' = ') }} = 0
+        with nogil:
+            while True:
+               self.entry_impl(I, <size_t*>0, out)
+               out += self.numcomp[0]
+               if not next_lexicographic{{DIM}}(I, zero, self.S0.ndofs):
+                   break
+        return result
 
 
 @cython.boundscheck(False)

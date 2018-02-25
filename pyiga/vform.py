@@ -168,28 +168,41 @@ class VForm:
         """
         assert self.vec
         assert expr.is_scalar()
-        assert len(self.basis_funs) == 2, 'Only implemented for bilinear forms'
-
         # for each output component, replace one component of the basis functions
         # by the corresponding scalar basis function and all others by 0
         result = []
-        bfu, bfv = self.basis_funs
-        assert self.vec == bfu.numcomp * bfv.numcomp, 'Incorrect output size'
 
-        for i in range(bfv.numcomp):
-            row = []
-            for j in range(bfu.numcomp):
-                exprij = copy.deepcopy(expr)    # transform_expr is destructive, so copy the original
-                exprij = transform_expr(exprij,
-                    lambda e: self.replace_vector_bfuns(e, bfv.name, i),
+        if self.arity == 1:
+            bfu = self.basis_funs[0]
+            assert self.vec == bfu.numcomp, 'incorrect output size'
+            for i in range(bfu.numcomp):
+                expri = copy.deepcopy(expr)    # transform_expr is destructive, so copy the original
+                expri = transform_expr(expri,
+                    lambda e: self.replace_vector_bfuns(e, bfu.name, i),
                     type=PartialDerivExpr)
-                exprij = transform_expr(exprij,
-                    lambda e: self.replace_vector_bfuns(e, bfu.name, j),
-                    type=PartialDerivExpr)
-                row.append(exprij)
+                result.append(expri)
+            return as_vector(result)
 
-            result.append(row)
-        return as_matrix(result)
+        elif self.arity == 2:
+            bfu, bfv = self.basis_funs
+            assert self.vec == bfu.numcomp * bfv.numcomp, 'incorrect output size'
+
+            for i in range(bfv.numcomp):
+                row = []
+                for j in range(bfu.numcomp):
+                    exprij = copy.deepcopy(expr)    # transform_expr is destructive, so copy the original
+                    exprij = transform_expr(exprij,
+                        lambda e: self.replace_vector_bfuns(e, bfv.name, i),
+                        type=PartialDerivExpr)
+                    exprij = transform_expr(exprij,
+                        lambda e: self.replace_vector_bfuns(e, bfu.name, j),
+                        type=PartialDerivExpr)
+                    row.append(exprij)
+
+                result.append(row)
+            return as_matrix(result)
+        else:
+            assert False, 'invalid arity %d' % self.arity
 
     def basisval(self, basisfun, physical=False):
         return PartialDerivExpr(basisfun, self.dim * (0,), physical=physical)
@@ -430,7 +443,7 @@ class VForm:
         self.dependency_analysis()
 
     def find_max_deriv(self):
-        return max(max(e.D) for e in self.all_exprs(type=PartialDerivExpr))
+        return max((max(e.D) for e in self.all_exprs(type=PartialDerivExpr)), default=0)
 
 
 ################################################################################

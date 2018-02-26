@@ -53,7 +53,7 @@ def test_tucker():
     # als1
     x = als1(X)
     y = als1(X.asarray())
-    assert np.allclose(outer(*x), outer(*y))
+    assert np.allclose(outer(*x), outer(*y), atol=1e-4)
     # conversion
     X = _random_canonical((3,4,5), 2)
     Y = TuckerTensor.from_tensor(X)
@@ -122,7 +122,7 @@ def test_canonical():
     # als1
     x = als1(A)
     y = als1(A.asarray())
-    assert np.allclose(outer(*x), outer(*y))
+    assert np.allclose(outer(*x), outer(*y), atol=1e-4)
     # add and sub
     B = _random_canonical(A.shape, 3)
     assert np.allclose((A + B).asarray(), A.asarray() + B.asarray())
@@ -140,14 +140,14 @@ def test_als():
     ### canonical
     A = _random_canonical((3,4,5), 2)
     B = als(A, R=2)
-    assert np.allclose(A.asarray(), B.asarray())
+    assert np.allclose(A.asarray(), B.asarray(), atol=1e-4)
     ### full tensor
     C = als(A.asarray(), R=2)
-    assert np.allclose(A.asarray(), C.asarray())
+    assert np.allclose(A.asarray(), C.asarray(), atol=1e-4)
     ### Tucker
     A = _random_tucker((3,4,5), 2)
     # diagonalize core tensor
     A.X[:] = 0.0
     A.X[0,0,0] = A.X[1,1,1] = 1.0
     B = als(A, R=2)
-    assert np.allclose(A.asarray(), B.asarray())
+    assert np.allclose(A.asarray(), B.asarray(), atol=1e-4)

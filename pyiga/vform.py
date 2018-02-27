@@ -46,6 +46,12 @@ class BasisFun:
         self.space = space
         self.asmgen = None  # to be set to AsmGenerator for code generation
 
+class InputField:
+    def __init__(self, name, shape, updatable=False):
+        self.name = name
+        self.shape = shape
+        self.updatable = updatable
+
 class VForm:
     """Abstract representation of a variational form."""
     def __init__(self, dim, arity=2, vec=False, spacetime=False):
@@ -100,9 +106,9 @@ class VForm:
         assert self.vec
         return tuple(bf.numcomp for bf in self.basis_funs)
 
-    def input(self, name, shape=()):
+    def input(self, name, shape=(), updatable=False):
         """Declare an input field with the given name and shape."""
-        self.inputs.append((name, shape))
+        self.inputs.append(InputField(name, shape, updatable))
         expr = self.declare_sourced_var(name + '_a', shape=shape, src='&'+name)
         expr.vf = self      # HACK
         return expr
@@ -1223,3 +1229,9 @@ def divdiv_vf(dim):
     V.add(div(u) * div(v) * dx)
     return V
 
+def L2functional_vf(dim):
+    V = VForm(dim, arity=1)
+    u = V.basisfuns()
+    f = V.input('f', shape=(), updatable=True)
+    V.add(f * u * dx)
+    return V

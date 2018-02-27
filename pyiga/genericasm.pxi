@@ -34,6 +34,7 @@ cdef class BaseAssembler2D:
     cdef int nqp
     cdef SpaceInfo2 S0, S1
     cdef readonly tuple kvs
+    cdef tuple gaussgrid
 
     cdef void base_init(self, kvs0, kvs1=None):
         if kvs1 is None: kvs1 = kvs0
@@ -228,6 +229,7 @@ cdef class BaseVectorAssembler2D:
     cdef SpaceInfo2 S0, S1
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
     cdef readonly tuple kvs
+    cdef tuple gaussgrid
 
     cdef void base_init(self, kvs0, kvs1=None):
         if kvs1 is None: kvs1 = kvs0
@@ -396,6 +398,7 @@ cdef class BaseAssembler3D:
     cdef int nqp
     cdef SpaceInfo3 S0, S1
     cdef readonly tuple kvs
+    cdef tuple gaussgrid
 
     cdef void base_init(self, kvs0, kvs1=None):
         if kvs1 is None: kvs1 = kvs0
@@ -600,6 +603,7 @@ cdef class BaseVectorAssembler3D:
     cdef SpaceInfo3 S0, S1
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
     cdef readonly tuple kvs
+    cdef tuple gaussgrid
 
     cdef void base_init(self, kvs0, kvs1=None):
         if kvs1 is None: kvs1 = kvs0

@@ -46,6 +46,7 @@ class AsmGenerator:
         self.code = code
         self.dim = self.vform.dim
         self.vec = self.vform.vec
+        self.updatable = tuple(inp for inp in vform.inputs if inp.updatable)
 
         # fixup PartialDerivExprs for code generation
         for bf in self.vform.basis_funs:
@@ -349,9 +350,9 @@ class AsmGenerator:
             # input field reference
             name = s[1:]
             if name[0] == "'":
-                return '%s.grid_jacobian(gaussgrid)' % name[1:]
+                return '%s.grid_jacobian(self.gaussgrid)' % name[1:]
             else:
-                return 'grid_eval(%s, gaussgrid)' % name
+                return 'grid_eval(%s, self.gaussgrid)' % name
         elif s == '@GaussWeight':
             return '%s' % self.tensorprod('gaussweights')
         else:
@@ -362,7 +363,7 @@ class AsmGenerator:
 
         used_spaces = sorted(set(bf.space for bf in vf.basis_funs))
         used_kvs = ', '.join('kvs%d' % sp for sp in used_spaces)
-        input_args = ', '.join(inp[0] for inp in vf.inputs)
+        input_args = ', '.join(inp.name for inp in vf.inputs)
         self.putf('def __init__(self, {kvs}, {inp}):', kvs=used_kvs, inp=input_args)
         self.indent()
 
@@ -380,6 +381,7 @@ class AsmGenerator:
 
 # NB: we assume all kvs result in the same mesh
 gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
+self.gaussgrid = gaussgrid
 N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
             self.putf(line)
         self.put('')
@@ -453,6 +455,28 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
             self.code.end_loop()
         self.end_function()
 
+    def generate_update(self):
+        vf = self.vform
+
+        self.putf('def update(self, {args}):',
+                args=', '.join('%s=None' % inp.name for inp in self.updatable))
+        self.indent()
+
+        var_names = [inp.name + '_a' for inp in self.updatable] + \
+                    [inp.name + '_grad_a' for inp in self.updatable]
+
+        # declare/initialize array variables
+        for var in vf.linear_deps:
+            if not isinstance(var, str) and var.name in var_names:
+                assert var.is_array and var.is_global, 'only global array vars can be updated'
+                assert var.src, 'only input variables can be updated'
+                arr = 'self.' + var.name
+                self.putf("if {name}:", name=var.name.split('_')[0])
+                self.indent()
+                self.putf("{arr} = {src}", arr=arr, src=self.parse_src(var.src))
+                self.dedent()
+        self.end_function()
+
     # main code generation entry point
 
     def generate(self):
@@ -483,6 +507,12 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
         self.generate_kernel()
         self.put('')
         self.generate_entry_impl()
+
+        if self.updatable:
+            self.put('')
+            self.generate_update()
+
+        # end of class definition
         self.dedent()
         self.put('')
 
@@ -542,6 +572,7 @@ cdef class BaseAssembler{{DIM}}D:
     cdef int nqp
     cdef SpaceInfo{{DIM}} S0, S1
     cdef readonly tuple kvs
+    cdef tuple gaussgrid
 
     cdef void base_init(self, kvs0, kvs1=None):
         if kvs1 is None: kvs1 = kvs0
@@ -737,6 +768,7 @@ cdef class BaseVectorAssembler{{DIM}}D:
     cdef SpaceInfo{{DIM}} S0, S1
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
     cdef readonly tuple kvs
+    cdef tuple gaussgrid
 
     cdef void base_init(self, kvs0, kvs1=None):
         if kvs1 is None: kvs1 = kvs0

@@ -11,7 +11,7 @@ def set_union(sets):
     return reduce(operator.or_, sets, set())
 
 class AsmVar:
-    def __init__(self, name, src, shape, is_array=False, symmetric=False):
+    def __init__(self, name, src, shape, is_array=False, symmetric=False, deriv=None):
         self.name = name
         if isinstance(src, Expr):
             self.expr = src
@@ -25,6 +25,7 @@ class AsmVar:
         self.is_array = is_array
         self.is_global = False  # is variable needed during assemble, or only setup?
         self.symmetric = (len(self.shape) == 2 and symmetric)
+        self.deriv = deriv      # for input fields only
         self.as_expr = make_var_expr(self)
 
     def __str__(self):
@@ -108,10 +109,26 @@ class VForm:
 
     def input(self, name, shape=(), updatable=False):
         """Declare an input field with the given name and shape."""
-        self.inputs.append(InputField(name, shape, updatable))
-        expr = self.declare_sourced_var(name + '_a', shape=shape, src='&'+name)
-        expr.vf = self      # HACK
-        return expr
+        inp = InputField(name, shape, updatable)
+        self.inputs.append(inp)
+        return self._input_as_varexpr(inp)
+
+    def _input_as_varexpr(self, inp, deriv=0):
+        inpvar = [v for v in self.vars.values()
+                if not isinstance(v,str) and v.src==inp and v.deriv==deriv]
+        if len(inpvar) == 0:
+            # no var defined yet
+            assert deriv <= 1, 'not implemented'
+            deriv_tag = ('_grad') if deriv==1 else ''
+            shape = inp.shape + ((self.dim,) if deriv==1 else ())
+            varexpr = self.declare_sourced_var(inp.name + deriv_tag + '_a',
+                    shape=shape, src=inp, deriv=deriv)
+            varexpr.vf = self   # HACK to enable grad() to find the vf
+            return varexpr
+        elif len(inpvar) == 1:
+            return inpvar[0].as_expr
+        else:
+            assert False, 'multiple variable definitions for input %s' % inp.name
 
     def indices_to_D(self, indices):
         """Convert a list of derivative indices into a partial derivative tuple D."""
@@ -139,10 +156,13 @@ class VForm:
         return var
 
     def let(self, name, expr, symmetric=False):
+        """Define a variable with the given name which has the given expr as its value."""
         return self.set_var(name, AsmVar(name, expr, shape=None, symmetric=symmetric)).as_expr
 
-    def declare_sourced_var(self, name, shape, src, symmetric=False):
-        return self.set_var(name, AsmVar(name, src=src, shape=shape, is_array=True, symmetric=symmetric)).as_expr
+    def declare_sourced_var(self, name, shape, src, symmetric=False, deriv=0):
+        return self.set_var(name,
+            AsmVar(name, src=src, shape=shape, is_array=True,
+                symmetric=symmetric, deriv=deriv)).as_expr
 
     def add(self, expr):
         if self.vec:
@@ -247,10 +267,7 @@ class VForm:
 
     @property
     def Jac(self):
-        if 'geo_grad_a' in self.vars:
-            return self.vars['geo_grad_a'].as_expr
-        else:
-            return grad(self.Geo)
+        return self._input_as_varexpr(self.Geo.var.src, deriv=1)
 
     # expression analyis and transformations
 
@@ -1090,11 +1107,9 @@ def grad(expr, dims=None):
         if expr.var.src:
             # gradient/Jacobian of an input field
             s = expr.var.src
-            assert s[0] == '&' and s[1] != "'", 'can only compute gradients of input fields'
+            assert isinstance(s, InputField), 'can only compute gradients of input fields'
             assert dims is None, 'can only compute full gradient'
-            name = s[1:]
-            vf = expr.vf
-            return vf.declare_sourced_var(name + '_grad_a', shape=expr.shape+(vf.dim,), src="&'"+name)
+            return expr.vf._input_as_varexpr(s, deriv=expr.var.deriv+1)
     if expr.is_vector():
         return as_matrix([grad(z, dims=dims) for z in expr])  # compute Jacobian of vector expression
     if not isinstance(expr, PartialDerivExpr):

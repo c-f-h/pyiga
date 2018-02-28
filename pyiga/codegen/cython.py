@@ -1,4 +1,5 @@
 from jinja2 import Template
+from pyiga import vform
 
 class CodeGen:
     """Basic code generation helper for Cython."""
@@ -345,16 +346,17 @@ class AsmGenerator:
         self.put(')')
         self.end_function()
 
-    def parse_src(self, s):
-        if s[0] == '&':
-            # input field reference
-            name = s[1:]
-            if name[0] == "'":
-                return '%s.grid_jacobian(self.gaussgrid)' % name[1:]
+    def parse_src(self, var):
+        s = var.src
+        if isinstance(s, vform.InputField):
+            if var.deriv == 0:
+                return 'grid_eval(%s, self.gaussgrid)' % s.name
+            elif var.deriv == 1:
+                return '%s.grid_jacobian(self.gaussgrid)' % s.name
             else:
-                return 'grid_eval(%s, self.gaussgrid)' % name
+                assert False, 'invalid derivative %s for input field %s' % (var.deriv, s.name)
         elif s == '@GaussWeight':
-            return '%s' % self.tensorprod('gaussweights')
+            return self.tensorprod('gaussweights')
         else:
             return s
 
@@ -406,7 +408,7 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
             if not isinstance(var, str) and var.is_array:
                 arr = array_var_ref(var)
                 if var.src:
-                    self.putf("{arr} = {src}", arr=arr, src=self.parse_src(var.src))
+                    self.putf("{arr} = {src}", arr=arr, src=self.parse_src(var))
                 elif var.expr:  # custom precomputed field var
                     self.putf("{arr} = np.empty(N + {shape})", arr=arr, shape=var.shape)
 
@@ -462,18 +464,13 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
                 args=', '.join('%s=None' % inp.name for inp in self.updatable))
         self.indent()
 
-        var_names = [inp.name + '_a' for inp in self.updatable] + \
-                    [inp.name + '_grad_a' for inp in self.updatable]
-
         # declare/initialize array variables
         for var in vf.linear_deps:
-            if not isinstance(var, str) and var.name in var_names:
+            if not isinstance(var, str) and var.src in self.updatable:
                 assert var.is_array and var.is_global, 'only global array vars can be updated'
-                assert var.src, 'only input variables can be updated'
-                arr = 'self.' + var.name
-                self.putf("if {name}:", name=var.name.split('_')[0])
+                self.putf("if {name}:", name=var.src.name)
                 self.indent()
-                self.putf("{arr} = {src}", arr=arr, src=self.parse_src(var.src))
+                self.putf("{arr} = {src}", arr='self.'+var.name, src=self.parse_src(var))
                 self.dedent()
         self.end_function()
 

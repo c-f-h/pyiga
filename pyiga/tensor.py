@@ -72,6 +72,13 @@ def fro_norm(X):
     else:
         return np.linalg.norm(X.ravel(order='K'))
 
+def asarray(X):
+    """Return the tensor `X` as a full ndarray."""
+    if hasattr(X, 'asarray'):
+        return X.asarray()
+    else:
+        return np.asanyarray(X)
+
 def matricize(X, k):
     """Return the mode-`k` matricization of the ndarray `X`."""
     nk = X.shape[k]
@@ -149,6 +156,13 @@ def outer(*xs):
         return xs[0]
     else:
         return outer(*xs[:-1])[..., None] * xs[-1][None, ...]
+
+def array_outer(*xs):
+    """Outer product of an arbitrary number of ndarrays."""
+    if len(xs) == 1:
+        return xs[0]
+    else:
+        return np.multiply.outer(array_outer(*xs[:-1]), xs[-1])
 
 def dot_rank1(xs, ys):
     """Compute the inner (Frobenius) product of two rank 1 tensors."""
@@ -450,6 +464,9 @@ class TuckerTensor:
         U, X1, X2 = join_tucker_bases(self, T2)
         return TuckerTensor(U, X1 - X2)
 
+    def __neg__(self):
+        return TuckerTensor(self.Us, -self.X)
+
 
 def join_tucker_bases(T1, T2):
     """Represent the two Tucker tensors `T1` and `T2` in a joint basis.
@@ -483,7 +500,7 @@ class TensorSum:
         """Convert sum of tensors to a full `ndarray`."""
         A = self.Xs[0].asarray()
         for X in self.Xs[1:]:
-            A += X.asarray()
+            A += asarray(X)
         return A
 
     def ravel(self):
@@ -506,3 +523,39 @@ class TensorSum:
 
     def __neg__(self):
         return TensorSum(*(-X for X in self.Xs))
+
+
+class TensorProd:
+    """Represents the abstract tensor product of an arbitrary number of tensors."""
+    def __init__(self, *Xs):
+        self.Xs = tuple(Xs)
+        shp = ()
+        self.slices = []
+        for X in self.Xs:
+            start = len(shp)
+            shp = shp + X.shape
+            end = len(shp)
+            self.slices.append(slice(start, end))
+        self.ndim = len(shp)
+        self.shape = shp
+
+    def asarray(self):
+        """Convert sum of tensors to a full `ndarray`."""
+        As = tuple(asarray(X) for X in self.Xs)
+        return array_outer(*As)
+
+    def ravel(self):
+        """Return the vectorization of this tensor."""
+        return self.asarray().ravel()
+
+    def nway_prod(self, Bs):
+        """Implements :func:`apply_tprod` for tensor products.
+
+        Returns:
+            :class:`TensorProd`: the result as a tensor product
+        """
+        return TensorProd(
+                *(apply_tprod(Bs[sl], X) for (sl,X) in zip(self.slices, self.Xs)))
+
+    def __neg__(self):
+        return TensorProd(*((-self.Xs[0],) + self.Xs[1:]))

@@ -140,6 +140,27 @@ def test_tensorsum():
             apply_tprod(U, X).asarray(),
             apply_tprod(U, AB).asarray())
 
+def test_tensorprod():
+    A = _random_tucker((2,3), 2)
+    B = _random_canonical((4,2), 3)
+    X = TensorProd(A, B)
+    assert X.ndim == A.ndim + B.ndim
+    assert X.shape == A.shape + B.shape
+    assert np.allclose(X.asarray(),
+            array_outer(A.asarray(), B.asarray()))
+    Us = (rand(2,2), rand(3,3), rand(4,4), rand(2,2))
+    assert np.allclose(apply_tprod(Us, X).asarray(),
+            array_outer(apply_tprod(Us[:2], A).asarray(),
+                        apply_tprod(Us[2:], B).asarray()))
+    ##
+    assert np.allclose((-X).asarray(), -(X.asarray()))
+    ## compare to CanonicalTensor
+    x, y = rand(7), rand(8)
+    X = TensorProd(x, y)
+    Y = CanonicalTensor((x, y))
+    assert np.allclose(X.asarray(), Y.asarray())
+
+
 def test_als1():
     xs = rand(3), rand(4), rand(5)
     X = outer(*xs)

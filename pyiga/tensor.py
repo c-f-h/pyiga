@@ -468,3 +468,41 @@ def join_tucker_bases(T1, T2):
     X1 = np.pad(T1.X, tuple((0,n) for n in R2), 'constant')
     X2 = np.pad(T2.X, tuple((n,0) for n in R1), 'constant')
     return U, X1, X2
+
+
+class TensorSum:
+    """Represents the abstract sum of an arbitrary number of tensors with identical shapes."""
+    def __init__(self, *Xs):
+        self.Xs = tuple(Xs)
+        assert self.Xs, 'cannot form sum of empty list of tensors'
+        self.ndim = self.Xs[0].ndim
+        self.shape = self.Xs[0].shape
+        assert all(X.shape == self.shape for X in self.Xs), 'tensors must have identical shape'
+
+    def asarray(self):
+        """Convert sum of tensors to a full `ndarray`."""
+        A = self.Xs[0].asarray()
+        for X in self.Xs[1:]:
+            A += X.asarray()
+        return A
+
+    def ravel(self):
+        """Return the vectorization of this tensor."""
+        return self.asarray().ravel()
+
+    def nway_prod(self, Bs):
+        """Implements :func:`apply_tprod` for sums of tensors.
+
+        Returns:
+            :class:`TensorSum`: the result as a sum of tensors
+        """
+        return TensorSum(*(apply_tprod(Bs, X) for X in self.Xs))
+
+    def __add__(self, T2):
+        return TensorSum(*(self.Xs + (T2,)))
+
+    def __sub__(self, T2):
+        return TensorSum(*(self.Xs + (-T2,)))
+
+    def __neg__(self):
+        return TensorSum(*(-X for X in self.Xs))

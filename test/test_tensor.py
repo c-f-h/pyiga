@@ -128,6 +128,18 @@ def test_canonical():
     assert np.allclose((A + B).asarray(), A.asarray() + B.asarray())
     assert np.allclose((A - B).asarray(), A.asarray() - B.asarray())
 
+def test_tensorsum():
+    X = _random_canonical((3,4,5), R=2)
+    A = CanonicalTensor(Z[:,0] for Z in X.Xs)
+    B = CanonicalTensor(Z[:,1] for Z in X.Xs)
+    AB = TensorSum(A, B)
+    assert X.shape == AB.shape
+    assert np.allclose(X.asarray(), AB.asarray())
+    U = (rand(3,3), rand(4,4), rand(5,5))
+    assert np.allclose(
+            apply_tprod(U, X).asarray(),
+            apply_tprod(U, AB).asarray())
+
 def test_als1():
     xs = rand(3), rand(4), rand(5)
     X = outer(*xs)

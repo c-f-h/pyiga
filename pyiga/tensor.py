@@ -6,6 +6,25 @@ Additional tensor formats are implemented in the following classes:
 
 * :class:`CanonicalTensor`
 * :class:`TuckerTensor`
+
+In addition, arbitrary tensors can be composed into sums or tensor products
+using the following classes:
+
+* :class:`TensorSum`
+* :class:`TensorProd`
+
+Below, whenever we refer generically to "a tensor", we mean either an `ndarray`
+or an instance of any of these tensor classes.
+
+All tensor classes have members ``ndim``, ``shape``, and ``ravel`` which have the same
+meaning as for an `ndarray`.
+Any tensor can be expanded to a full `ndarray` using :func:`asarray`.
+In addition, most tensor classes have overloaded operators for adding and
+subtracting tensors in their native format.
+
+--------------
+Module members
+--------------
 """
 import numpy as np
 import numpy.linalg
@@ -32,24 +51,24 @@ def _modek_tensordot_sparse(B, X, k):
 
 
 def apply_tprod(ops, A):
-    """Apply tensor product of operators to ndarray `A`.
+    """Apply multi-way tensor product of operators to tensor `A`.
 
     Args:
         ops (seq): a list of matrices, sparse matrices, or LinearOperators
-        A (ndarray): a tensor
+        A (tensor): the tensor to apply the multi-way tensor product to
     Returns:
-        ndarray: a new tensor with the same number of axes as `A` that is
-        the result of applying the tensor product operator
-        ``ops[0] x ... x ops[-1]`` to `A`
-
-    This does essentially the same as :func:`pyiga.kronecker.apply_kronecker`,
-    but assumes that A is an ndarray with the proper number of dimensions
-    rather than its matricization.
+        a new tensor with the same number of axes as `A` that is the result of
+        applying the tensor product operator ``ops[0] x ... x ops[-1]`` to `A`.
+        The return type is typically the same type as `A`.
 
     The initial dimensions of `A` must match the sizes of the
     operators, but `A` is allowed to have an arbitrary number of
     trailing dimensions. ``None`` is a valid operator and is
-    treated like the identity."""
+    treated like the identity.
+
+    An interpretation of this operation is that the Kronecker product of the
+    matrices `ops` is applied to the vectorization of the tensor `A`.
+    """
     if hasattr(A, 'nway_prod'):
         # tensor classes provide their own implementation
         return A.nway_prod(ops)
@@ -120,7 +139,7 @@ def hosvd(X):
     C = apply_tprod(tuple(Uk.T for Uk in U), X)   # core tensor (same size as X)
     return TuckerTensor(U, C)
 
-def find_best_truncation_axis(X):
+def _find_best_truncation_axis(X):
     """Find the axis along which truncating the last slice causes the smallest error."""
     errors = [np.linalg.norm(np.swapaxes(X, i, 0)[-1].ravel())
               for i in range(X.ndim)]
@@ -132,7 +151,7 @@ def find_truncation_rank(X, tol=1e-12):
     total_err_squ = 0.0
     tolsq = tol**2
     while X.size > 0:
-        ax,err = find_best_truncation_axis(X)
+        ax,err = _find_best_truncation_axis(X)
         total_err_squ += err**2
         if total_err_squ > tolsq:
             break
@@ -158,39 +177,45 @@ def outer(*xs):
         return outer(*xs[:-1])[..., None] * xs[-1][None, ...]
 
 def array_outer(*xs):
-    """Outer product of an arbitrary number of ndarrays."""
+    """Outer product of an arbitrary number of ndarrays.
+
+    Args:
+        xs: an arbitrary number of input ndarrays
+    Returns:
+        ndarray: the outer product of the inputs. Its shape is the
+        concatenation of the shapes of the inputs.
+    """
     if len(xs) == 1:
         return xs[0]
     else:
         return np.multiply.outer(array_outer(*xs[:-1]), xs[-1])
 
-def dot_rank1(xs, ys):
+def _dot_rank1(xs, ys):
     """Compute the inner (Frobenius) product of two rank 1 tensors."""
     return np.prod(tuple(np.dot(xs[j], ys[j]) for j in range(len(xs))))
 
 
 
-def als1(B, tol=1e-15):
-    """Compute best rank 1 approximation to tensor `B` using Alternating Least Squares.
+def als1(A, tol=1e-15):
+    """Compute best rank 1 approximation to tensor `A` using Alternating Least Squares.
 
     Args:
-        B: input tensor, either as `ndarray`, :class:`CanonicalTensor`, or
-           :class:`TuckerTensor`
+        A (tensor): the tensor to be approximated
         tol (float): tolerance for the stopping criterion
     Returns:
         A tuple of vectors `(x1, ..., xd)` such that ``outer(x1, ..., xd)`` is
-        the approximate best rank 1 approximation to `B`.
+        the approximate best rank 1 approximation to `A`.
     """
-    d = B.ndim
+    d = A.ndim
     # use random row vectors as starting values
-    xs = [np.random.rand(1,n) for n in B.shape]
+    xs = [np.random.rand(1,n) for n in A.shape]
 
     while True:
         delta = 1.0
         for k in range(d):
             ys = xs[:]      # copy list
             ys[k] = None
-            xk = apply_tprod(ys, B).ravel() / np.prod([np.sum(xs[l]*xs[l]) for l in range(d) if l != k])
+            xk = apply_tprod(ys, A).ravel() / np.prod([np.sum(xs[l]*xs[l]) for l in range(d) if l != k])
             delta = delta * np.linalg.norm(xk - xs[k][0])
             xs[k][0, :] = xk
         if delta < tol:
@@ -207,8 +232,7 @@ def als(A, R, tol=1e-10, maxiter=10000, startval=None):
     """Compute best rank `R` approximation to tensor `A` using Alternating Least Squares.
 
     Args:
-        A (tensor): the tensor to be approximated, given either as `ndarray` or
-            tensor class instance
+        A (tensor): the tensor to be approximated
         R (int): the desired rank
         tol (float): tolerance for the stopping criterion
         maxiter (int): maximum number of iterations
@@ -298,7 +322,7 @@ class CanonicalTensor:
         def term(j):
             return tuple(X[:,j] for X in self.Xs)
         return np.sqrt(
-            sum(dot_rank1(term(i), term(j))
+            sum(_dot_rank1(term(i), term(j))
                 for i in range(self.R)
                 for j in range(self.R)))
 
@@ -333,6 +357,7 @@ class CanonicalTensor:
 
     def __sub__(self, T2):
         return self + (-T2)
+
 
 class TuckerTensor:
     r"""A *d*-dimensional tensor in **Tucker format** is given as a list of *d* basis matrices

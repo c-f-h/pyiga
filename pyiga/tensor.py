@@ -85,7 +85,7 @@ def apply_tprod(ops, A):
 
 
 def fro_norm(X):
-    """Compute the Frobenius norm of multi-dimensional array or tensor class instance `X`."""
+    """Compute the Frobenius norm of the tensor `X`."""
     if hasattr(X, 'norm'):
         return X.norm()
     else:
@@ -413,7 +413,7 @@ class TuckerTensor:
         where the matrices `U` have orthonormal columns.
 
         Returns:
-            TuckerTensor: the orthonormalized Tucker tensor
+            :class:`TuckerTensor`: the orthonormalized Tucker tensor
         """
         USVh = [scipy.linalg.svd(U, full_matrices=False, check_finite=False)
                 for U in self.Us]

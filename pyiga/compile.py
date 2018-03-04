@@ -1,4 +1,5 @@
 import pyiga
+from pyiga.codegen import cython as codegen
 
 import tempfile
 import importlib
@@ -66,3 +67,27 @@ def compile_cython_module(src, verbose=False):
     except ImportError:
         mod = _compile_cython_module_nocache(src, modname, verbose=verbose)
     return mod
+
+
+def generate(vf, classname='CustomAssembler'):
+    code = codegen.CodeGen()
+    codegen.AsmGenerator(vf, classname, code).generate()
+    return codegen.preamble() + '\n' + code.result()
+
+def compile_vform(vf):
+    src = generate(vf)
+    mod = compile_cython_module(src)
+    return mod.CustomAssembler
+
+def compile_vforms(vfs):
+    vfs = tuple(vfs)
+    n = len(vfs)
+    names = tuple('CustomAssembler%d' % i for i in range(n))
+
+    code = codegen.CodeGen()
+    for (name, vf) in zip(names, vfs):
+        codegen.AsmGenerator(vf, name, code).generate()
+    src = codegen.preamble() + '\n' + code.result()
+
+    mod = compile_cython_module(src)
+    return tuple(getattr(mod, name) for name in names)

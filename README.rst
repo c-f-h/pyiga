@@ -9,7 +9,7 @@ pyiga |travis| |appveyor|
 
 ``pyiga`` is a Python research toolbox for Isogeometric Analysis. Its current highlights are:
 
-* Automatic generation of efficient matrix assembling code from a high-level, FEniCS_-like description of the bilinear form. See the bottom of `vform.py <pyiga/vform.py>`_ for some built-in examples.
+* Automatic generation of efficient matrix assembling code from a high-level, FEniCS_-like description of the bilinear form. See the bottom of `vform.py <pyiga/vform.py>`_ for some built-in examples as well as the Navier-Stokes example below.
 * Fast assembling by a black-box low-rank assembling algorithm described in
   `this paper <http://dx.doi.org/10.1016/j.cma.2018.01.014>`_
   (or `this technical report <http://www.numa.uni-linz.ac.at/publications/List/2017/2017-02.pdf>`_).
@@ -23,7 +23,7 @@ Examples
 The ``notebooks`` directory contains several examples of how to use ``pyiga``:
 
 *  `solve-poisson.ipynb <notebooks/solve-poisson.ipynb>`_: solve a Poisson equation and plot the solution
-*  `solve-navier-stokes.ipynb <https://nbviewer.jupyter.org/github/c-f-h/pyiga/blob/master/notebooks/solve-navier-stokes.ipynb>`_:    solve the instationary Navier-Stokes equation with fully implicit Crank-Nicolson timestepping and
+*  `solve-navier-stokes.ipynb <https://nbviewer.jupyter.org/github/c-f-h/pyiga/blob/master/notebooks/solve-navier-stokes.ipynb>`_:    solve the instationary Navier-Stokes equations with fully implicit Crank-Nicolson timestepping and
    produce an animation of the result
 
 

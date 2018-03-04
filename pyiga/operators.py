@@ -210,6 +210,20 @@ def SubspaceOperator(subspaces, Bs):
     )
 
 
+class PardisoSolverWrapper(scipy.sparse.linalg.LinearOperator):
+    """Wraps a PARDISO solver object and frees up the memory when deallocated."""
+    def __init__(self, shape, dtype, solver):
+        self.solver = solver
+        scipy.sparse.linalg.LinearOperator.__init__(self, shape=shape, dtype=dtype)
+    def _matvec(self, x):
+        return self.solver.solve(x)
+    def _matmat(self, x):
+        return self.solver.solve(x)
+    def __del__(self):
+        self.solver.clear()
+        self.solver = None
+
+
 def make_solver(B, symmetric=False, spd=False):
     """Return a :class:`LinearOperator` that acts as a linear solver for the
     (dense or sparse) square matrix `B`.
@@ -228,8 +242,7 @@ def make_solver(B, symmetric=False, spd=False):
                 mtype = 2 if spd else -2
             solver = pyMKL.pardisoSolver(B, mtype)
             solver.factor()
-            return scipy.sparse.linalg.LinearOperator(B.shape, dtype=B.dtype,
-                    matvec=solver.solve, matmat=solver.solve)
+            return PardisoSolverWrapper(B.shape, B.dtype, solver)
         else:
             # use SuperLU (unless scipy uses UMFPACK?) -- really slow!
             spLU = scipy.sparse.linalg.splu(B.tocsc(), permc_spec='NATURAL')

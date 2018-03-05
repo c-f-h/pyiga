@@ -398,7 +398,9 @@ class TuckerTensor:
         elif isinstance(A, TuckerTensor):
             return A
         else:
-            raise TypeError('tensor type %s not supported' % str(type(A)))
+            # trivial full-rank Tucker representation
+            U = tuple(np.eye(n) for n in A.shape)
+            return TuckerTensor(U, asarray(A))
 
     def copy(self):
         """Create a deep copy of this tensor."""

@@ -23,6 +23,7 @@ Examples
 The ``notebooks`` directory contains several examples of how to use ``pyiga``:
 
 *  `solve-poisson.ipynb <notebooks/solve-poisson.ipynb>`_: solve a Poisson equation and plot the solution
+*  `solve-stokes.ipynb <notebooks/solve-stokes.ipynb>`_: solve stationary Stokes flow and plot the velocity field
 *  `solve-navier-stokes.ipynb <https://nbviewer.jupyter.org/github/c-f-h/pyiga/blob/master/notebooks/solve-navier-stokes.ipynb>`_:    solve the instationary Navier-Stokes equations with fully implicit Crank-Nicolson timestepping and
    produce an animation of the result
 

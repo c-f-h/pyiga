@@ -502,6 +502,18 @@ class CanonicalTensor:
                 tuple(np.column_stack([terms[j][k] for j in range(len(terms))])
                     for k in range(d)))
 
+    @staticmethod
+    def from_tensor(A):
+        """Convert `A` from other tensor formats to canonical format."""
+        if isinstance(A, TuckerTensor):
+            terms = []
+            for index in np.ndindex(*A.R):
+                xs = tuple(U[:,j] for (U,j) in zip(A.Us, index))
+                terms.append((A.X[index] * xs[0],) + xs[1:])
+            return CanonicalTensor.from_terms(terms)
+        else:
+            raise TypeError('conversion from %s to canonical not implemented' % type(A))
+
     def copy(self):
         """Create a deep copy of this tensor."""
         return CanonicalTensor((X.copy() for X in self.Xs))

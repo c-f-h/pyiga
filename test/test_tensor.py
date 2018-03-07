@@ -132,6 +132,11 @@ def test_canonical():
     B = CanonicalTensor.from_terms(A.terms())
     assert A.shape == B.shape and A.R == B.R
     assert np.allclose(A.asarray(), B.asarray())
+    # conversion from Tucker
+    T = _random_tucker((3,4,5), 2)
+    B = CanonicalTensor.from_tensor(T)
+    assert B.R == 2**3
+    assert np.allclose(T.asarray(), B.asarray())
     # als1
     x = als1(A)
     y = als1(A.asarray())

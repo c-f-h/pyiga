@@ -71,6 +71,11 @@ class MLStructure:
         """
         return MLMatrix(structure=self, data=data, matrix=matrix)
 
+    def sequential_bidx(self):
+        # returns a version of bidx with ravelled indices
+        return [ self.bs[j][0] * self.bidx[j][:,0] + self.bidx[j][:,1]
+                 for j in range(self.L) ]
+
 
 class MLMatrix(scipy.sparse.linalg.LinearOperator):
     """Compact representation of a multi-level structured sparse matrix.
@@ -334,25 +339,31 @@ def compute_dense_ij(m, n):
 # Elementwise generators for ML-reordered sparse matrices
 ################################################################################
 
-def ReorderedMatrixGenerator(multiasm, sparsidx, n1, n2):
+def ReorderedMatrixGenerator(multiasm, structure):
+    assert structure.L == 2
+    n1, m1 = structure.bs[0]
+    n2, m2 = structure.bs[1]
+    sparsidx = structure.sequential_bidx()
+
     def multientryfunc(indices):
         return multiasm(
-            [reindex_from_reordered(sparsidx[0][i], sparsidx[1][j], n1, n1, n2, n2)
+            [reindex_from_reordered(sparsidx[0][i], sparsidx[1][j], n1, m1, n2, m2)
                 for (i,j) in indices])
     shp = tuple(len(si) for si in sparsidx)
     return lowrank.MatrixGenerator(shp[0], shp[1], multientryfunc=multientryfunc)
 
-def ReorderedTensorGenerator(multiasm, sparsidx, bs):
-    block_sizes = np.array([(b,b) for b in bs])
-    L = len(sparsidx)
-    assert L == block_sizes.shape[0]
+def ReorderedTensorGenerator(multiasm, structure):
+    L = structure.L
+    bs = structure._bs_arr
+    sparsidx = structure.sequential_bidx()
+
     Ms = L * [None]
     def multientryfunc(indices):
         indices = list(indices)
         for n in range(len(indices)):
             for k in range(L):
                 Ms[k] = sparsidx[k][indices[n][k]]
-            indices[n] = reindex_from_multilevel(Ms, block_sizes)
+            indices[n] = reindex_from_multilevel(Ms, bs)
         return multiasm(indices)
     shp = tuple(len(si) for si in sparsidx)
     return lowrank.TensorGenerator(shp, multientryfunc=multientryfunc)

@@ -193,6 +193,12 @@ def array_outer(*xs):
     else:
         return np.multiply.outer(array_outer(*xs[:-1]), xs[-1])
 
+
+################################################################################
+## Approximation algorithms
+################################################################################
+
+
 def _dot_rank1(xs, ys):
     """Compute the inner (Frobenius) product of two rank 1 tensors."""
     return np.prod(tuple(np.dot(xs[j], ys[j]) for j in range(len(xs))))
@@ -401,6 +407,11 @@ def gta_ls(A, F, R, tol=1e-12, verbose=0, gs=None):
             #if norm_orth > 1e-2 * norm_full:
                 # only add if not almost orthogonal to old space
             U[j] = np.column_stack((U[j], y / norm_orth))
+
+
+################################################################################
+## Tensor classes
+################################################################################
 
 
 class CanonicalTensor:

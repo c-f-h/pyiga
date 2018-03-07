@@ -2,6 +2,7 @@ import numpy as np
 import numpy.random
 
 from .lowrank_cy import *
+from . import tensor
 
 ################################################################################
 # Utility classes for entrywise matrix/tensor generation
@@ -228,11 +229,31 @@ def aca_lr(A, tol=1e-10, maxiter=100):
         k += 1
     return crosses
 
-def aca_3d(A, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
+
+def _tensor_slice(A, I):
+    I = tuple(I)
+    assert len(I) == A.ndim, 'invalid slice index'
+    if isinstance(A, np.ndarray):
+        sl = tuple((slice(None) if ii is None else ii) for ii in I)
+        return A[sl]
+    else:
+        def slice_op(j, n):
+            C = scipy.sparse.csr_matrix((1,n))
+            C[0,j] = 1.0
+            return C
+        sl_ops = tuple(slice_op(I[j], A.shape[j]) if (I[j] is not None) else None
+                for j in range(len(I)))
+        S = tensor.apply_tprod(sl_ops, A)
+        return np.squeeze(tensor.asarray(S))
+
+
+def aca_3d(A, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2, lr=False):
     if not isinstance(A, TensorGenerator):
         A = TensorGenerator.from_array(A)  # assume it's an array
 
     X = np.zeros(A.shape)
+    if lr: X_lr = tensor.TensorSum(tensor.CanonicalTensor.zeros(A.shape))
+
     I = list(m//2 for m in A.shape)  # starting index
     def randomize():
         for j in range(len(A.shape)):
@@ -277,6 +298,8 @@ def aca_3d(A, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
 
         # add the scaled tensor product E_col * E_mat
         aca3d_update(X, 1.0 / E_col[i0], E_col, E_mat)
+        if lr:
+            X_lr += tensor.TensorProd(E_col / E_col[i0], E_mat.copy())
 
         E_mat[I[1:]] = 0  # error is now (close to) zero there
         I[1:] = np.unravel_index(abs(E_mat).argmax(), E_mat.shape)
@@ -285,7 +308,10 @@ def aca_3d(A, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
             if verbose >= 1:
                 print('Maximum iteration count reached; aborting (%d outer it.)' % k)
             break
-    return X
+    if lr:
+        return tensor.TensorSum(*X_lr.Xs[1:])    # skip the zero CanonicalTensor
+    else:
+        return X
 
 
 #from .lowrank_cy import *

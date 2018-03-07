@@ -190,15 +190,15 @@ def test_als():
     # asserts are disabled for now since they sometimes fail at random
     ### canonical
     A = _random_canonical((3,4,5), 2)
-    B = als(A, R=2)
+    B = als(A, R=2, maxiter=100)
     #assert np.allclose(A.asarray(), B.asarray(), atol=1e-4)
     ### full tensor
-    C = als(A.asarray(), R=2)
+    C = als(A.asarray(), R=2, maxiter=100)
     #assert np.allclose(A.asarray(), C.asarray(), atol=1e-4)
     ### Tucker
     A = _random_tucker((3,4,5), 2)
     # diagonalize core tensor
     A.X[:] = 0.0
     A.X[0,0,0] = A.X[1,1,1] = 1.0
-    B = als(A, R=2)
+    B = als(A, R=2, maxiter=100)
     #assert np.allclose(A.asarray(), B.asarray(), atol=1e-4)

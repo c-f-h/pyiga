@@ -62,6 +62,13 @@ def test_tucker():
     Y = TuckerTensor.from_tensor(X)
     assert np.allclose(X, Y.asarray())
 
+def test_gta():
+    X = _random_tucker((3,4,5), 2)
+    Y = gta(X, R=2)
+    assert np.allclose(X.asarray(), Y.asarray())
+    Y = gta(X.asarray(), R=2)
+    assert np.allclose(X.asarray(), Y.asarray())
+
 def test_join_tucker():
     A = _random_tucker((3,4,5), 2)
     B = _random_tucker((3,4,5), 3)

@@ -92,7 +92,7 @@ def fro_norm(X):
     if hasattr(X, 'norm'):
         return X.norm()
     else:
-        return np.linalg.norm(X.ravel(order='K'))
+        return np.linalg.norm(X.ravel())
 
 def asarray(X):
     """Return the tensor `X` as a full ndarray."""
@@ -341,6 +341,41 @@ def als1_ls(A, B, tol=1e-15, maxiter=10000):
         if delta < tol:
             break
     return xs
+
+
+def gta(A, R, tol=1e-12, rtol=1e-12, return_errors=False):
+    """Greedy Tucker approximation of the tensor `A`."""
+    us = als1(A)
+    U = [u[:,None] / np.linalg.norm(u) for u in us]
+    d = A.ndim
+    A_norm = fro_norm(A)
+
+    errors = []
+
+    for k in range(R):
+        # compute projection of A into the space spanned by U
+        X = asarray(apply_tprod(tuple(u.T for u in U), A))
+        T = TuckerTensor(U, X)
+
+        E = asarray(A) - asarray(T)
+        err = fro_norm(E)
+        errors.append(err)
+
+        if k == R-1 or err < tol or err < rtol*A_norm:
+            break
+
+        vs = als1(E)
+
+        U = U.copy()
+        for j in range(d):
+            # orthonormalize vs[j]
+            y = vs[j] - U[j].dot( U[j].T.dot( vs[j] ))
+            ny = np.linalg.norm(y)
+            if ny < 1e-14:
+                continue    # skip almost zero vectors
+            U[j] = np.column_stack((U[j], y / ny))
+    return (T, errors) if return_errors else T
+
 
 def gta_ls(A, F, R, tol=1e-12, verbose=0, gs=None):
     """Greedy Tucker approximation of the solution of a linear system"""

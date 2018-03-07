@@ -30,6 +30,9 @@ import numpy as np
 import numpy.linalg
 import scipy.linalg
 
+from functools import reduce
+import operator
+
 
 def _modek_tensordot_sparse(B, X, k):
     # This does the same as the np.tensordot() operation used below in
@@ -194,6 +197,16 @@ def _dot_rank1(xs, ys):
     """Compute the inner (Frobenius) product of two rank 1 tensors."""
     return np.prod(tuple(np.dot(xs[j], ys[j]) for j in range(len(xs))))
 
+def _apply_lowrank(Ts, xs):
+    """Apply a sum of rank 1 operators to a rank 1 tensor."""
+    return list(
+            tuple(T[j].dot(xs[j])
+                for j in range(len(T)))
+            for T in Ts)
+
+def _multi_kron(As):
+    """Kronecker product of an arbitrary number of matrices."""
+    return As[0] if len(As)==1 else np.kron(As[0], _multi_kron(As[1:]))
 
 
 def als1(A, tol=1e-15):
@@ -280,6 +293,114 @@ def als(A, R, tol=1e-10, maxiter=10000, startval=None):
         if (np.sqrt(delta) / A_norm) < tol:
             break
     return CanonicalTensor((x.T for x in xs))
+
+
+def als1_ls(A, B, tol=1e-15, maxiter=10000):
+    """Compute rank 1 approximation to the solution of a linear system by Alternating Least Squares."""
+    d = B.ndim
+    rankA = len(A)
+    xs = list(np.random.rand(B.shape[j]) for j in range(d))
+
+    # precompute the sparse matrices Ai^A A_j for each coordinate axis
+    AitAj = [[[ (A[i][k].T.dot(A[j][k])).tocsr()
+                for j in range(rankA)]
+                for i in range(rankA)]
+                for k in range(d)]
+
+    for it in range(maxiter):
+        delta = 1.0
+        for k in range(d):
+            ys = _apply_lowrank([_without_k(Ar,k) for Ar in A], _without_k(xs, k))
+
+            # compute left-hand side matrix
+            #ZtZ = sum(dot_rank1(ys[i], ys[j]) * A[i][k].T.dot(A[j][k])
+            #          for j in range(rankA) for i in range(rankA))
+            ZtZ = reduce(operator.add,
+                         (_dot_rank1(ys[i], ys[j]) * AitAj[k][i][j]
+                             for j in range(rankA) for i in range(rankA)))
+
+            # compute right-hand side
+            b = np.zeros(B.shape[k])
+            for j in range(rankA):
+                # zs = ((A_1 x_1)^T, ..., A_k^T, ..., (A_d x_d)^T)
+                zs = [y[None, :] for y in ys[j]]
+                zs = zs[:k] + [A[j][k].T] + zs[k:]
+                b += apply_tprod(zs, B).ravel()
+
+            # solve least squares problem
+            xk = scipy.sparse.linalg.spsolve(ZtZ, b)
+            delta *= np.linalg.norm(xs[k] - xk)
+            xs[k] = xk
+
+        if delta < tol:
+            break
+    return xs
+
+def gta_ls(A, F, R, tol=1e-12, verbose=0, gs=None):
+    """Greedy Tucker approximation of the solution of a linear system"""
+    res0_norm = fro_norm(F)
+
+    # start with rank one approximation
+    us = als1_ls(A, F, tol=tol)
+    U = [u[:,None] / np.linalg.norm(u) for u in us]
+    d = F.ndim
+    rankA = len(A)
+    X = np.zeros(d * (0,))
+
+    for it in range(R):
+        # construct reduced linear system in tensor product basis U
+        A_U = reduce(operator.add,
+                     (_multi_kron([U[k].T.dot(A[j][k].dot(U[k])) for k in range(d)])
+                      for j in range(rankA)))
+        F_U = apply_tprod([u.T for u in U], F).ravel()
+        shpX = tuple(U[k].shape[1] for k in range(d))
+
+        ## solve reduced linear system #########################################
+        if gs is not None and A_U.shape[0] > 500:
+            # extend previous coefficients with 0 and do Gauss-Seidel iteration
+            pad_size = tuple((0, U[k].shape[1] - X.shape[k]) for k in range(d))
+            zz = np.pad(X, pad_size, 'constant').ravel()
+            gauss_seidel(A_U, zz, F_U, iterations=gs)
+        else:
+            # do a full direct solve
+            zz = np.linalg.solve(A_U, F_U)
+        X = zz.reshape(shpX)
+        ########################################################################
+
+        UX = TuckerTensor(U, X)
+
+        # stopping criterion: number of iterations
+        if it == R - 1:
+            return UX
+
+        # compute new residual: first, apply A to UX
+        A_UX = reduce(operator.add, (apply_tprod(Aj, UX) for Aj in A))
+        # compute the residual
+        Rk = F - A_UX
+        # recompress it
+        if verbose >= 2: print('Compressing residual', Rk.R, '-> ', end='')
+        Rk = Rk.compress(rtol=1e-2)
+        if verbose >= 2: print(Rk.R)
+
+        # stopping criterion: reduction of initial residual
+        res = fro_norm(Rk)
+        if res < tol * res0_norm:
+            if verbose >= 1:
+                print(it, 'iterations, residual reduction =', res / res0_norm)
+            return UX
+
+        # compute rank 1 approximation to A^(-1) Rk
+        vs = als1_ls(A, Rk, tol=tol)
+
+        # update tensor product basis U
+        for j in range(d):
+            # orthonormalize vs
+            y = vs[j] - U[j].dot( U[j].T.dot(vs[j]) )
+            norm_full = np.linalg.norm(vs[j])
+            norm_orth = np.linalg.norm(y)
+            #if norm_orth > 1e-2 * norm_full:
+                # only add if not almost orthogonal to old space
+            U[j] = np.column_stack((U[j], y / norm_orth))
 
 
 class CanonicalTensor:

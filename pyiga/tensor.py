@@ -504,14 +504,17 @@ class CanonicalTensor:
             X += outer(*tuple(X[:,r] for X in self.Xs))
         return X
 
+    def terms(self):
+        """Return the rank one components as a list of tuples."""
+        for j in range(self.R):
+            yield tuple(X[:,j] for X in self.Xs)
+
     def norm(self):
         """Compute the Frobenius norm of the tensor."""
-        def term(j):
-            return tuple(X[:,j] for X in self.Xs)
         return np.sqrt(
-            sum(_dot_rank1(term(i), term(j))
-                for i in range(self.R)
-                for j in range(self.R)))
+            sum(_dot_rank1(ti, tj)
+                for ti in self.terms()
+                for tj in self.terms()))
 
     def nway_prod(self, Bs):
         """Implements :func:`apply_tprod` for canonical tensors.

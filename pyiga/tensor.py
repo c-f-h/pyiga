@@ -301,6 +301,26 @@ def als(A, R, tol=1e-10, maxiter=10000, startval=None):
     return CanonicalTensor((x.T for x in xs))
 
 
+def grou(A, R, tol=1e-12, return_errors=False):
+    """Approximation by Greedy rank one updates."""
+    E = asarray(A)
+    terms = []
+    errors = []
+
+    for j in range(R):
+        xs = als1(E)
+        terms.append(xs)
+        E = E - outer(*xs)
+        err = fro_norm(E)
+        errors.append(err)
+        if err < tol:
+            break
+    result = tuple(np.column_stack([terms[j][k] for j in range(len(terms))])
+                   for k in range(A.ndim))
+    X = CanonicalTensor(result)
+    return (X, errors) if return_errors else X
+
+
 def als1_ls(A, B, tol=1e-15, maxiter=10000):
     """Compute rank 1 approximation to the solution of a linear system by Alternating Least Squares."""
     d = B.ndim

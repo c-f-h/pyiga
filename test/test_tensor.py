@@ -138,6 +138,13 @@ def test_canonical():
     assert np.allclose((A + B).asarray(), A.asarray() + B.asarray())
     assert np.allclose((A - B).asarray(), A.asarray() - B.asarray())
 
+def test_grou():
+    X = _random_canonical((3,4,5), 1)
+    Y = grou(X, R=2)
+    assert np.allclose(X.asarray(), Y.asarray())
+    Y = grou(X.asarray(), R=2)
+    assert np.allclose(X.asarray(), Y.asarray())
+
 def test_tensorsum():
     X = _random_canonical((3,4,5), R=2)
     A = CanonicalTensor(Z[:,0] for Z in X.Xs)

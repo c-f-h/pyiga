@@ -91,3 +91,5 @@ def test_banded_sparsity():
                 X[i,j] = 1
     assert np.array_equal(np.flatnonzero(X),
                           compute_banded_sparsity(n, bw))
+    assert np.array_equal(np.transpose(np.nonzero(X)),
+                          compute_banded_sparsity_ij(n, bw))

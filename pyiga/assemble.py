@@ -83,7 +83,7 @@ from . import utils
 from . import geometry
 
 from .quadrature import make_iterated_quadrature, make_tensor_quadrature
-from .mlmatrix import MLBandedMatrix, compute_sparsity_ij, compute_dense_ij
+from .mlmatrix import MLStructure
 
 ################################################################################
 # 1D assembling routines
@@ -582,14 +582,12 @@ def integrate(kvs, f, f_physical=False, geo=None):
 
 def assemble(asm, symmetric=False, format='csr'):
     kvs0, kvs1 = asm.kvs
-    block_sizes = tuple((kv1.numdofs, kv0.numdofs) for (kv0,kv1) in zip(kvs0,kvs1))
-    bidx = tuple(compute_sparsity_ij(kv0, kv1) for (kv0,kv1) in zip(kvs0,kvs1))
-    X = MLBandedMatrix(block_sizes, bw=None, bidx=bidx)
+    X = MLStructure.from_kvs(kvs0, kvs1).make_mlmatrix()
 
     if isinstance(asm, assemble_tools.BaseAssembler2D):
-        X.data = assemble_tools.generic_assemble_core_2d(asm, X.bidx, symmetric=symmetric)
+        X.data = assemble_tools.generic_assemble_core_2d(asm, X.structure.bidx, symmetric=symmetric)
     elif isinstance(asm, assemble_tools.BaseAssembler3D):
-        X.data = assemble_tools.generic_assemble_core_3d(asm, X.bidx, symmetric=symmetric)
+        X.data = assemble_tools.generic_assemble_core_3d(asm, X.structure.bidx, symmetric=symmetric)
     else:
         assert False, 'Unknown assembler type'
     if format == 'mlb':
@@ -602,25 +600,24 @@ def assemble_vector(asm, symmetric=False, format='csr', layout='blocked'):
 
     kvs0, kvs1 = asm.kvs
     dim = len(kvs0)
-    block_sizes = tuple((kv1.numdofs, kv0.numdofs) for (kv0,kv1) in zip(kvs0,kvs1))
-    bidx = tuple(compute_sparsity_ij(kv0, kv1) for (kv0,kv1) in zip(kvs0,kvs1))
     nc = asm.num_components()[::-1]  # reverse axes (u = kv0 = columns)
-    mlb = MLBandedMatrix(block_sizes + (nc,), bw=None, bidx=bidx + (compute_dense_ij(*nc),))
+    struc = MLStructure.from_kvs(kvs0, kvs1).join(MLStructure.dense(nc))
+    X = struc.make_mlmatrix()
 
     if dim == 2:
-        X = assemble_tools.generic_assemble_core_vec_2d(asm, mlb.bidx[:dim], symmetric)
+        X.data = assemble_tools.generic_assemble_core_vec_2d(asm, X.structure.bidx[:dim], symmetric)
     elif dim == 3:
-        X = assemble_tools.generic_assemble_core_vec_3d(asm, mlb.bidx[:dim], symmetric)
+        X.data = assemble_tools.generic_assemble_core_vec_3d(asm, X.structure.bidx[:dim], symmetric)
     else:
         assert False, 'dimension %d not implemented' % dim
-    mlb.data = X
+
     if layout == 'blocked':
         axes = (dim,) + tuple(range(dim))    # bring last axis to the front
-        mlb = mlb.reorder(axes)
+        X = X.reorder(axes)
     if format == 'mlb':
-        return mlb
+        return X
     else:
-        return mlb.asmatrix(format)
+        return X.asmatrix(format)
 
 ################################################################################
 # Convenience functions

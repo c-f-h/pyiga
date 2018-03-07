@@ -13,8 +13,67 @@ from . import lowrank
 # Multi-level banded matrix class
 ################################################################################
 
-class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
-    """Compact representation of a multi-level banded matrix.
+class MLStructure:
+    """Class representing the structure of a multi-level block-structured
+    sparse matrix.
+    """
+    def __init__(self, bs, bidx):
+        self.bs = tuple(bs)
+        self._bs_arr = np.array(self.bs)
+        assert self._bs_arr.shape[1] == 2, 'invalid block sizes'
+        self.bidx = tuple(bidx)
+        assert len(self.bs) == len(self.bidx)
+        self.L = len(self.bs)
+        M = np.prod(tuple(b[0] for b in self.bs))
+        N = np.prod(tuple(b[1] for b in self.bs))
+        self.shape = (M,N)
+
+    @staticmethod
+    def multi_banded(bs, bw):
+        """Create the structure of a multi-level banded matrix with square blocks
+        of the sizes `bs` and bandwidths `bw`.
+        """
+        bs = tuple((n,n) for n in bs)
+        bidx = tuple(compute_banded_sparsity_ij(n[0], p)
+                for (n,p) in zip(bs, bw))
+        return MLStructure(bs, bidx)
+
+    @staticmethod
+    def dense(shape):
+        """Create the structure of a one-level dense matrix with the given shape."""
+        return MLStructure((shape,), (compute_dense_ij(shape[0], shape[1]),))
+
+    @staticmethod
+    def from_kvs(kvs0, kvs1):
+        """Create the appropriate multi-level matrix structure for a stiffness
+        matrix defined over the two given tensor product bases.
+        """
+        bs = tuple((kv1.numdofs, kv0.numdofs) for (kv0,kv1) in zip(kvs0,kvs1))
+        bidx = tuple(compute_sparsity_ij(kv0, kv1) for (kv0,kv1) in zip(kvs0,kvs1))
+        return MLStructure(bs, bidx)
+
+    def join(self, other):
+        """Append the given other structure and return the result."""
+        return MLStructure(self.bs + other.bs, self.bidx + other.bidx)
+
+    def reorder(self, axes):
+        """Permute the levels of the matrix according to `axes`."""
+        assert len(axes) == self.L
+        return MLStructure(
+                bs=tuple(self.bs[j] for j in axes),
+                bidx=tuple(self.bidx[j] for j in axes))
+
+    def make_mlmatrix(self, data=None, matrix=None):
+        """Create a multi-level matrix with the structure given by this object.
+
+        Returns:
+            :class:`MLMatrix`: the resulting multi-level matrix
+        """
+        return MLMatrix(structure=self, data=data, matrix=matrix)
+
+
+class MLMatrix(scipy.sparse.linalg.LinearOperator):
+    """Compact representation of a multi-level structured sparse matrix.
 
     Many IgA matrices arising from tensor product bases have multi-level
     banded structure, meaning that they are block-structured, each block
@@ -22,31 +81,22 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
     compact storage of all coefficients in a dense matrix or tensor.
     See (Hofreither 2017) for details.
 
+    This class allows even more general block-structured matrix representations
+    where each level has an arbitrary sparsity pattern.
+
     Args:
-        bs (seq): list of block sizes, one per level (dimension)
-        bw (seq): list of bandwidths, one per level (dimension)
+        bs (:class:`MLStructure`): the multi-level structure of the matrix to create
         matrix: a dense or sparse matrix with the proper multi-level
             banded structure used as initializer
         data (ndarray): alternatively, the compact data array for the matrix
             can be specified directly
     """
-    def __init__(self, bs, bw, bidx=None, data=None, matrix=None):
-        self.bs = tuple((n,n) if np.isscalar(n) else n for n in bs)
-        self._bs_arr = np.array(self.bs)
-        self.L = len(bs)
-        if bidx is not None:
-            self.bidx = bidx
-        else:
-            self.bidx = tuple(compute_banded_sparsity_ij(n[0], p)
-                    for (n,p) in zip(self.bs, bw))
-        assert self.L == len(self.bidx), \
-            'Inconsistent dimensions for block sizes and bandwidths/structure'
-        # bidx is a tuple where each bidx_k has shape (mu_k, 2)
+    def __init__(self, structure, data=None, matrix=None):
+        self.structure = structure
+        self.L = self.structure.L
+        self.shape = self.structure.shape
 
-        M = np.prod(self._bs_arr[:,0])
-        N = np.prod(self._bs_arr[:,1])
-
-        self.datashape = tuple(len(bi) for bi in self.bidx)
+        self.datashape = tuple(len(bi) for bi in self.structure.bidx)
 
         # initialize data (ndarray of shape mu_1 x ... x mu_L)
         if (data is not None) and (matrix is not None):
@@ -56,7 +106,7 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
             self._data = np.asarray(data, order='C')
             dtype = self._data.dtype
         elif matrix is not None:
-            assert matrix.shape == (M,N), 'Matrix has wrong shape'
+            assert matrix.shape == self.shape, 'Matrix has wrong shape'
             data = np.asarray(matrix[self.nonzero()]).reshape(self.datashape)
             self._data = np.asarray(data, order='C')
             dtype = self._data.dtype
@@ -64,7 +114,7 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
             self._data = None
             dtype = np.float_
 
-        scipy.sparse.linalg.LinearOperator.__init__(self, shape=(M,N), dtype=dtype)
+        scipy.sparse.linalg.LinearOperator.__init__(self, shape=self.shape, dtype=dtype)
 
     @property
     def nnz(self):
@@ -85,12 +135,12 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
         assert self._data is not None, 'matrix has no data'
         if self.L == 1:
             return scipy.sparse.coo_matrix(
-                    (self._data, (self.bidx[0][:,0], self.bidx[0][:,1])),
+                    (self._data, (self.structure.bidx[0][:,0], self.structure.bidx[0][:,1])),
                     shape=self.shape).asformat(format)
         elif self.L == 2:
-            A = inflate_2d_bidx(self._data, self.bidx, self._bs_arr)
+            A = inflate_2d_bidx(self._data, self.structure.bidx, self.structure._bs_arr)
         elif self.L == 3:
-            A = inflate_3d_bidx(self._data, self.bidx, self._bs_arr)
+            A = inflate_3d_bidx(self._data, self.structure.bidx, self.structure._bs_arr)
         else:
             assert False, 'dimension %d not implemented' % self.L
         return A.asformat(format)
@@ -101,11 +151,11 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
         assert len(x) == self.shape[1], 'Invalid input size'
         if self.L == 2:
             y = np.zeros(len(x))
-            ml_matvec_2d(self._data, self.bidx, self._bs_arr, x, y)
+            ml_matvec_2d(self._data, self.structure.bidx, self.structure._bs_arr, x, y)
             return y
         elif self.L == 3:
             y = np.zeros(len(x))
-            ml_matvec_3d(self._data, self.bidx, self._bs_arr, x, y)
+            ml_matvec_3d(self._data, self.structure.bidx, self.structure._bs_arr, x, y)
             return y
         else:
             return self.asmatrix().dot(x)
@@ -120,11 +170,11 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
         """
         if self.L == 1:
             assert not lower_tri, 'Lower triangular part not implemented in 1D'
-            IJ = self.bidx[0].T.copy()
+            IJ = self.structure.bidx[0].T.copy()
         elif self.L == 2:
-            IJ = ml_nonzero_2d(self.bidx, self._bs_arr, lower_tri=lower_tri)
+            IJ = ml_nonzero_2d(self.structure.bidx, self.structure._bs_arr, lower_tri=lower_tri)
         elif self.L == 3:
-            IJ = ml_nonzero_3d(self.bidx, self._bs_arr, lower_tri=lower_tri)
+            IJ = ml_nonzero_3d(self.structure.bidx, self.structure._bs_arr, lower_tri=lower_tri)
         else:
             assert False, 'dimension %d not implemented' % self.L
         return IJ[0,:], IJ[1,:]
@@ -136,10 +186,8 @@ class MLBandedMatrix(scipy.sparse.linalg.LinearOperator):
             newdata = np.transpose(self.data, axes)
         else:
             newdata = None
-        return MLBandedMatrix(
-                bs=tuple(self.bs[j] for j in axes),
-                bw=None,
-                bidx=tuple(self.bidx[j] for j in axes),
+        return MLMatrix(
+                structure=self.structure.reorder(axes),
                 data=newdata)
 
 

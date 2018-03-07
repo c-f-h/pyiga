@@ -7,8 +7,9 @@ def _random_banded(n, bw):
 def test_mlbanded_1d():
     bs = (20,)
     bw = (3,)
+    S = MLStructure.multi_banded(bs, bw)
     A = _random_banded(bs[0], bw[0]).A
-    X = MLBandedMatrix(bs, bw, matrix=A)
+    X = MLMatrix(structure=S, matrix=A)
     A2 = X.asmatrix()
     assert np.allclose(A, A2.A)
     x = rand(A.shape[1])
@@ -17,11 +18,13 @@ def test_mlbanded_1d():
 def test_mlbanded_2d():
     bs = (9, 12)
     bw = (2, 3)
+    S = MLStructure.multi_banded(bs, bw)
+
     A, B = (_random_banded(n, p).A for (n,p) in zip(bs, bw))
     # rowwise vectorizations of A and B
     vecA, vecB = (X.ravel()[np.flatnonzero(X.ravel())] for X in (A,B))
     # reordering of Kronecker product is outer product of vecs
-    M = MLBandedMatrix(bs, bw, data=np.outer(vecA, vecB))
+    M = MLMatrix(structure=S, data=np.outer(vecA, vecB))
     assert M.shape == (9*12, 9*12)
     assert M.nnz == vecA.size * vecB.size
     # test asmatrix()
@@ -34,19 +37,21 @@ def test_mlbanded_2d():
     x = rand(M.shape[1])
     assert np.allclose(X.dot(x), M.dot(x))
     # test matrix constructor
-    M2 = MLBandedMatrix(bs, bw, matrix=X)
+    M2 = MLMatrix(structure=S, matrix=X)
     assert np.allclose(X, M.asmatrix().A)
-    M2 = MLBandedMatrix(bs, bw, matrix=scipy.sparse.csr_matrix(X))
+    M2 = MLMatrix(structure=S, matrix=scipy.sparse.csr_matrix(X))
     assert np.allclose(X, M.asmatrix().A)
 
 def test_mlbanded_3d():
     bs = (8, 7, 6)
     bw = (3, 2, 2)
+    S = MLStructure.multi_banded(bs, bw)
+
     A, B, C = (_random_banded(n, p).A for (n,p) in zip(bs, bw))
     # rowwise vectorizations of A, B, C
     vecA, vecB, vecC = (X.ravel()[np.flatnonzero(X.ravel())] for X in (A,B,C))
     # reordering of Kronecker product is outer product of vecs
-    M = MLBandedMatrix(bs, bw,
+    M = MLMatrix(structure=S,
             data=vecA[:,None,None]*vecB[None,:,None]*vecC[None,None,:])
     assert M.shape == (8*7*6, 8*7*6)
     assert M.nnz == vecA.size * vecB.size * vecC.size
@@ -60,9 +65,9 @@ def test_mlbanded_3d():
     x = rand(M.shape[1])
     assert np.allclose(X.dot(x), M.dot(x))
     # test matrix constructor
-    M2 = MLBandedMatrix(bs, bw, matrix=X)
+    M2 = MLMatrix(structure=S, matrix=X)
     assert np.allclose(X, M.asmatrix().A)
-    M2 = MLBandedMatrix(bs, bw, matrix=scipy.sparse.csr_matrix(X))
+    M2 = MLMatrix(structure=S, matrix=scipy.sparse.csr_matrix(X))
     assert np.allclose(X, M.asmatrix().A)
 
 def test_tofrom_seq():

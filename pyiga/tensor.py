@@ -315,9 +315,7 @@ def grou(A, R, tol=1e-12, return_errors=False):
         errors.append(err)
         if err < tol:
             break
-    result = tuple(np.column_stack([terms[j][k] for j in range(len(terms))])
-                   for k in range(A.ndim))
-    X = CanonicalTensor(result)
+    X = CanonicalTensor.from_terms(terms)
     return (X, errors) if return_errors else X
 
 
@@ -492,6 +490,17 @@ class CanonicalTensor:
     def zeros(shape):
         """Construct a zero canonical tensor with the given shape."""
         return CanonicalTensor(np.zeros((n,0)) for n in shape)
+
+    @staticmethod
+    def from_terms(terms):
+        """Construct a canonical tensor from a list of rank 1 terms, represented
+        as tuples of vectors.
+        """
+        terms = list(terms)
+        d = len(terms[0])
+        return CanonicalTensor(
+                tuple(np.column_stack([terms[j][k] for j in range(len(terms))])
+                    for k in range(d)))
 
     def copy(self):
         """Create a deep copy of this tensor."""

@@ -125,10 +125,13 @@ def test_canonical():
     assert np.allclose(B, 0.0)
     Z = CanonicalTensor.zeros((3,4,5))
     assert fro_norm(Z.asarray()) == 0.0
-    ###
     # norm
     A = _random_canonical((3,4,5), 2)
     assert np.allclose(A.norm(), np.linalg.norm(A.asarray()))
+    # generation from terms
+    B = CanonicalTensor.from_terms(A.terms())
+    assert A.shape == B.shape and A.R == B.R
+    assert np.allclose(A.asarray(), B.asarray())
     # als1
     x = als1(A)
     y = als1(A.asarray())

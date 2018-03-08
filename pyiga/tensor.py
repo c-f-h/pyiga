@@ -365,6 +365,8 @@ def als1_ls(A, B, tol=1e-15, maxiter=10000):
 
 def gta(A, R, tol=1e-12, rtol=1e-12, return_errors=False):
     """Greedy Tucker approximation of the tensor `A`."""
+    if isinstance(A, np.ndarray):
+        A = TensorSum(A) # make sure it's a tensor object so A-T works
     us = als1(A)
     U = [u[:,None] / np.linalg.norm(u) for u in us]
     d = A.ndim
@@ -377,7 +379,7 @@ def gta(A, R, tol=1e-12, rtol=1e-12, return_errors=False):
         X = asarray(apply_tprod(tuple(u.T for u in U), A))
         T = TuckerTensor(U, X)
 
-        E = asarray(A) - asarray(T)
+        E = A - T
         err = fro_norm(E)
         errors.append(err)
 
@@ -742,7 +744,7 @@ class TensorSum:
 
     def asarray(self):
         """Convert sum of tensors to a full `ndarray`."""
-        A = self.Xs[0].asarray()
+        A = np.array(asarray(self.Xs[0]))
         for X in self.Xs[1:]:
             A += asarray(X)
         return A

@@ -925,7 +925,7 @@ def preamble():
 #######################
 
 cimport cython
-from libc.math cimport fabs
+from libc.math cimport fabs, sqrt, exp, log, sin, cos, tan
 
 import numpy as np
 cimport numpy as np

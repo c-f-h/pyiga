@@ -491,7 +491,7 @@ class Expr:
 
     def __pos__(self):  return self
     def __neg__(self):  return NegExpr(self)
-    def __abs__(self):  return AbsExpr(self)
+    def __abs__(self):  return BuiltinFuncExpr('abs', self)
 
     def __bool__(self):  return True
     __nonzero__ = __bool__  # Python 2 compatibility
@@ -753,15 +753,21 @@ class NegExpr(Expr):
         return '-' + self.x.gencode()
     base_complexity = 0 # don't bother extracting subexpressions which are simple negation
 
-class AbsExpr(Expr):
-    def __init__(self, expr):
-        if not expr.is_scalar(): raise TypeError('can only take abs of scalars')
+class BuiltinFuncExpr(Expr):
+    def __init__(self, funcname, expr):
+        expr = as_expr(expr)
+        if not expr.is_scalar(): raise TypeError('can only compute %s of scalars' % funcname)
+        self.funcname = funcname
         self.shape = ()
         self.children = (expr,)
     def __str__(self):
         return 'abs(%s)' % str(self.x)
     def gencode(self):
-        return 'fabs(%s)' % self.x.gencode()
+        f = self.func_to_code.get(self.funcname, self.funcname)
+        return '%s(%s)' % (f, self.x.gencode())
+    func_to_code = {
+            'abs' : 'fabs',
+    }
 
 def OperExpr(oper, x, y):
     # coerce arguments to Expr, in case they are number literals
@@ -1199,6 +1205,13 @@ def cross(x, y):
 
 def outer(x, y):
     return OuterProdExpr(x, y)
+
+def sqrt(x): return BuiltinFuncExpr('sqrt', x)
+def exp(x): return BuiltinFuncExpr('exp', x)
+def log(x): return BuiltinFuncExpr('log', x)
+def sin(x): return BuiltinFuncExpr('sin', x)
+def cos(x): return BuiltinFuncExpr('cos', x)
+def tan(x): return BuiltinFuncExpr('tan', x)
 
 ################################################################################
 # concrete variational forms

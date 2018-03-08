@@ -510,9 +510,14 @@ class CanonicalTensor:
         if isinstance(A, TuckerTensor):
             terms = []
             for index in np.ndindex(*A.R):
-                xs = tuple(U[:,j] for (U,j) in zip(A.Us, index))
-                terms.append((A.X[index] * xs[0],) + xs[1:])
-            return CanonicalTensor.from_terms(terms)
+                a = A.X[index]
+                if abs(a) > 1e-15:
+                    xs = tuple(U[:,j] for (U,j) in zip(A.Us, index))
+                    terms.append((a * xs[0],) + xs[1:])
+            if terms:
+                return CanonicalTensor.from_terms(terms)
+            else:
+                return CanonicalTensor.zeros(A.shape)
         else:
             raise TypeError('conversion from %s to canonical not implemented' % type(A))
 
@@ -796,6 +801,12 @@ class TensorProd:
         """
         return TensorProd(
                 *(apply_tprod(Bs[sl], X) for (sl,X) in zip(self.slices, self.Xs)))
+
+    def __add__(self, T2):
+        return TensorSum(self, T2)
+
+    def __sub__(self, T2):
+        return TensorSum(self, -T2)
 
     def __neg__(self):
         return TensorProd(*((-self.Xs[0],) + self.Xs[1:]))

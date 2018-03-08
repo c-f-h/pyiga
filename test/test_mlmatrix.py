@@ -46,6 +46,11 @@ def test_mlbanded_3d():
     bs = (8, 7, 6)
     bw = (3, 2, 2)
     S = MLStructure.multi_banded(bs, bw)
+    S1 = MLStructure.multi_banded(bs[:2], bw[:2])
+    S2 = MLStructure.multi_banded(bs[2:], bw[2:])
+    S12 = S1.join(S2)
+    assert S.bs == S12.bs
+    assert S.slice(0,2).bs == S1.bs
 
     A, B, C = (_random_banded(n, p).A for (n,p) in zip(bs, bw))
     # rowwise vectorizations of A, B, C

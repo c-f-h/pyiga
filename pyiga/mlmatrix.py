@@ -63,6 +63,13 @@ class MLStructure:
                 bs=tuple(self.bs[j] for j in axes),
                 bidx=tuple(self.bidx[j] for j in axes))
 
+    def slice(self, start, end=None):
+        """Get structure for a single dimension or several consecutive dimensions."""
+        assert 0 <= start < self.L, 'invalid slice index'
+        if end is None: end = start + 1
+        sl = slice(start, end)
+        return MLStructure(self.bs[sl], self.bidx[sl])
+
     def make_mlmatrix(self, data=None, matrix=None):
         """Create a multi-level matrix with the structure given by this object.
 

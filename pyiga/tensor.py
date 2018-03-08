@@ -386,7 +386,6 @@ def gta(A, R, tol=1e-12, rtol=1e-12, return_errors=False):
 
         vs = als1(E)
 
-        U = U.copy()
         for j in range(d):
             # orthonormalize vs[j]
             y = vs[j] - U[j].dot( U[j].T.dot( vs[j] ))

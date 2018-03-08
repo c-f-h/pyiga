@@ -26,6 +26,8 @@ subtracting tensors in their native format.
 Module members
 --------------
 """
+from __future__ import print_function
+
 import numpy as np
 import numpy.linalg
 import scipy.linalg

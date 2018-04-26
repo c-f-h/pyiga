@@ -74,12 +74,12 @@ def generate(vf, classname='CustomAssembler'):
     codegen.AsmGenerator(vf, classname, code).generate()
     return codegen.preamble() + '\n' + code.result()
 
-def compile_vform(vf):
+def compile_vform(vf, verbose=False):
     src = generate(vf)
-    mod = compile_cython_module(src)
+    mod = compile_cython_module(src, verbose=verbose)
     return mod.CustomAssembler
 
-def compile_vforms(vfs):
+def compile_vforms(vfs, verbose=False):
     vfs = tuple(vfs)
     n = len(vfs)
     names = tuple('CustomAssembler%d' % i for i in range(n))
@@ -89,5 +89,5 @@ def compile_vforms(vfs):
         codegen.AsmGenerator(vf, name, code).generate()
     src = codegen.preamble() + '\n' + code.result()
 
-    mod = compile_cython_module(src)
+    mod = compile_cython_module(src, verbose=verbose)
     return tuple(getattr(mod, name) for name in names)

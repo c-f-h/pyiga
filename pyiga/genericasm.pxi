@@ -4,49 +4,34 @@
 # 2D Assemblers
 ################################################################################
 
-cdef struct SpaceInfo2:
-    size_t[2] ndofs
-    int[2] p
-    ssize_t[:,::1] meshsupp0
-    ssize_t[:,::1] meshsupp1
-    # 1D basis values. Indices: basis function, mesh point, derivative
-    double[:, :, ::1] C0
-    double[:, :, ::1] C1
-
-cdef void clear_spaceinfo2(SpaceInfo2 & S):
-    S.meshsupp0 = None
-    S.meshsupp1 = None
-    S.C0 = None
-    S.C1 = None
-
-cdef void init_spaceinfo2(SpaceInfo2 & S, kvs):
-    # work around Cython bug: memoryviews in structs are not properly initialized
-    memset(&S, 0, sizeof(S))
-    clear_spaceinfo2(S)
-    assert len(kvs) == 2, "Assembler requires 2 knot vectors"
-    S.ndofs[:] = [kv.numdofs for kv in kvs]
-    S.p[:]     = [kv.p for kv in kvs]
-    S.meshsupp0 = kvs[0].mesh_support_idx_all()
-    S.meshsupp1 = kvs[1].mesh_support_idx_all()
-
 cdef class BaseAssembler2D:
     cdef readonly int arity
     cdef int nqp
-    cdef SpaceInfo2 S0, S1
+    cdef size_t[2] S0_ndofs
+    cdef ssize_t[:,::1] S0_meshsupp0
+    cdef double[:, :, ::1] S0_C0
+    cdef ssize_t[:,::1] S0_meshsupp1
+    cdef double[:, :, ::1] S0_C1
+    cdef size_t[2] S1_ndofs
+    cdef ssize_t[:,::1] S1_meshsupp0
+    cdef double[:, :, ::1] S1_C0
+    cdef ssize_t[:,::1] S1_meshsupp1
+    cdef double[:, :, ::1] S1_C1
     cdef readonly tuple kvs
     cdef tuple gaussgrid
 
     cdef void base_init(self, kvs0, kvs1=None):
         if kvs1 is None: kvs1 = kvs0
-        init_spaceinfo2(self.S0, kvs0)
-        init_spaceinfo2(self.S1, kvs1)
+        assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
+        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
+        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
+        assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
+        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
         self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
         self.kvs = (kvs0, kvs1)
-
-    def __dealloc__(self):
-        # work around Cython memory bug
-        clear_spaceinfo2(self.S0)
-        clear_spaceinfo2(self.S1)
 
     cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
         return -9999.99  # Not implemented
@@ -57,7 +42,7 @@ cdef class BaseAssembler2D:
             return 0.0
         cdef size_t[2] I, J
         with nogil:
-            from_seq2(i, self.S0.ndofs, I)
+            from_seq2(i, self.S0_ndofs, I)
             return self.entry_impl(I, <size_t*>0)
 
     cpdef double entry(self, size_t i, size_t j):
@@ -66,8 +51,8 @@ cdef class BaseAssembler2D:
             return 0.0
         cdef size_t[2] I, J
         with nogil:
-            from_seq2(i, self.S1.ndofs, I)
-            from_seq2(j, self.S0.ndofs, J)
+            from_seq2(i, self.S1_ndofs, I)
+            from_seq2(j, self.S0_ndofs, J)
             return self.entry_impl(I, J)
 
     @cython.boundscheck(False)
@@ -79,8 +64,8 @@ cdef class BaseAssembler2D:
         cdef size_t k
 
         for k in range(idx_arr.shape[0]):
-            from_seq2(idx_arr[k,0], self.S1.ndofs, I)
-            from_seq2(idx_arr[k,1], self.S0.ndofs, J)
+            from_seq2(idx_arr[k,0], self.S1_ndofs, I)
+            from_seq2(idx_arr[k,1], self.S0_ndofs, J)
             out[k] = self.entry_impl(I, J)
 
     def multi_entries(self, indices):
@@ -123,7 +108,7 @@ cdef class BaseAssembler2D:
     def assemble_vector(self):
         if self.arity != 1:
             return None
-        result = np.empty(tuple(self.S0.ndofs), order='C')
+        result = np.empty(tuple(self.S0_ndofs), order='C')
         cdef double[:, ::1] _result = result
         cdef double* out = &_result[ 0, 0 ]
 
@@ -134,7 +119,7 @@ cdef class BaseAssembler2D:
             while True:
                out[0] = self.entry_impl(I, <size_t*>0)
                out += 1
-               if not next_lexicographic2(I, zero, self.S0.ndofs):
+               if not next_lexicographic2(I, zero, self.S0_ndofs):
                    break
         return result
 
@@ -226,22 +211,32 @@ cdef double _entry_func_2d(size_t i, size_t j, void * data):
 cdef class BaseVectorAssembler2D:
     cdef readonly int arity
     cdef int nqp
-    cdef SpaceInfo2 S0, S1
+    cdef size_t[2] S0_ndofs
+    cdef ssize_t[:,::1] S0_meshsupp0
+    cdef double[:, :, ::1] S0_C0
+    cdef ssize_t[:,::1] S0_meshsupp1
+    cdef double[:, :, ::1] S0_C1
+    cdef size_t[2] S1_ndofs
+    cdef ssize_t[:,::1] S1_meshsupp0
+    cdef double[:, :, ::1] S1_C0
+    cdef ssize_t[:,::1] S1_meshsupp1
+    cdef double[:, :, ::1] S1_C1
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
     cdef readonly tuple kvs
     cdef tuple gaussgrid
 
     cdef void base_init(self, kvs0, kvs1=None):
         if kvs1 is None: kvs1 = kvs0
-        init_spaceinfo2(self.S0, kvs0)
-        init_spaceinfo2(self.S1, kvs1)
+        assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
+        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
+        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
+        assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
+        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
         self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
         self.kvs = (kvs0, kvs1)
-
-    def __dealloc__(self):
-        # work around Cython memory bug
-        clear_spaceinfo2(self.S0)
-        clear_spaceinfo2(self.S1)
 
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
@@ -252,8 +247,8 @@ cdef class BaseVectorAssembler2D:
     cdef inline void from_seq(self, size_t i, size_t[3] out) nogil:
         out[2] = i % self.numcomp[0]
         i /= self.numcomp[0]
-        out[1] = i % self.S0.ndofs[1]
-        i /= self.S0.ndofs[1]
+        out[1] = i % self.S0_ndofs[1]
+        i /= self.S0_ndofs[1]
         out[0] = i
 
     cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
@@ -264,7 +259,7 @@ cdef class BaseVectorAssembler2D:
     def assemble_vector(self):
         if self.arity != 1:
             return None
-        result = np.zeros(tuple(self.S0.ndofs) + (self.numcomp[0],), order='C')
+        result = np.zeros(tuple(self.S0_ndofs) + (self.numcomp[0],), order='C')
         cdef double[:, :, ::1] _result = result
         cdef double* out = &_result[ 0, 0, 0 ]
 
@@ -275,7 +270,7 @@ cdef class BaseVectorAssembler2D:
             while True:
                self.entry_impl(I, <size_t*>0, out)
                out += self.numcomp[0]
-               if not next_lexicographic2(I, zero, self.S0.ndofs):
+               if not next_lexicographic2(I, zero, self.S0_ndofs):
                    break
         return result
 
@@ -363,54 +358,40 @@ cdef void _asm_core_vec_2d_kernel(
 # 3D Assemblers
 ################################################################################
 
-cdef struct SpaceInfo3:
-    size_t[3] ndofs
-    int[3] p
-    ssize_t[:,::1] meshsupp0
-    ssize_t[:,::1] meshsupp1
-    ssize_t[:,::1] meshsupp2
-    # 1D basis values. Indices: basis function, mesh point, derivative
-    double[:, :, ::1] C0
-    double[:, :, ::1] C1
-    double[:, :, ::1] C2
-
-cdef void clear_spaceinfo3(SpaceInfo3 & S):
-    S.meshsupp0 = None
-    S.meshsupp1 = None
-    S.meshsupp2 = None
-    S.C0 = None
-    S.C1 = None
-    S.C2 = None
-
-cdef void init_spaceinfo3(SpaceInfo3 & S, kvs):
-    # work around Cython bug: memoryviews in structs are not properly initialized
-    memset(&S, 0, sizeof(S))
-    clear_spaceinfo3(S)
-    assert len(kvs) == 3, "Assembler requires 3 knot vectors"
-    S.ndofs[:] = [kv.numdofs for kv in kvs]
-    S.p[:]     = [kv.p for kv in kvs]
-    S.meshsupp0 = kvs[0].mesh_support_idx_all()
-    S.meshsupp1 = kvs[1].mesh_support_idx_all()
-    S.meshsupp2 = kvs[2].mesh_support_idx_all()
-
 cdef class BaseAssembler3D:
     cdef readonly int arity
     cdef int nqp
-    cdef SpaceInfo3 S0, S1
+    cdef size_t[3] S0_ndofs
+    cdef ssize_t[:,::1] S0_meshsupp0
+    cdef double[:, :, ::1] S0_C0
+    cdef ssize_t[:,::1] S0_meshsupp1
+    cdef double[:, :, ::1] S0_C1
+    cdef ssize_t[:,::1] S0_meshsupp2
+    cdef double[:, :, ::1] S0_C2
+    cdef size_t[3] S1_ndofs
+    cdef ssize_t[:,::1] S1_meshsupp0
+    cdef double[:, :, ::1] S1_C0
+    cdef ssize_t[:,::1] S1_meshsupp1
+    cdef double[:, :, ::1] S1_C1
+    cdef ssize_t[:,::1] S1_meshsupp2
+    cdef double[:, :, ::1] S1_C2
     cdef readonly tuple kvs
     cdef tuple gaussgrid
 
     cdef void base_init(self, kvs0, kvs1=None):
         if kvs1 is None: kvs1 = kvs0
-        init_spaceinfo3(self.S0, kvs0)
-        init_spaceinfo3(self.S1, kvs1)
+        assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
+        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
+        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
+        self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
+        assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
+        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
         self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
         self.kvs = (kvs0, kvs1)
-
-    def __dealloc__(self):
-        # work around Cython memory bug
-        clear_spaceinfo3(self.S0)
-        clear_spaceinfo3(self.S1)
 
     cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
         return -9999.99  # Not implemented
@@ -421,7 +402,7 @@ cdef class BaseAssembler3D:
             return 0.0
         cdef size_t[3] I, J
         with nogil:
-            from_seq3(i, self.S0.ndofs, I)
+            from_seq3(i, self.S0_ndofs, I)
             return self.entry_impl(I, <size_t*>0)
 
     cpdef double entry(self, size_t i, size_t j):
@@ -430,8 +411,8 @@ cdef class BaseAssembler3D:
             return 0.0
         cdef size_t[3] I, J
         with nogil:
-            from_seq3(i, self.S1.ndofs, I)
-            from_seq3(j, self.S0.ndofs, J)
+            from_seq3(i, self.S1_ndofs, I)
+            from_seq3(j, self.S0_ndofs, J)
             return self.entry_impl(I, J)
 
     @cython.boundscheck(False)
@@ -443,8 +424,8 @@ cdef class BaseAssembler3D:
         cdef size_t k
 
         for k in range(idx_arr.shape[0]):
-            from_seq3(idx_arr[k,0], self.S1.ndofs, I)
-            from_seq3(idx_arr[k,1], self.S0.ndofs, J)
+            from_seq3(idx_arr[k,0], self.S1_ndofs, I)
+            from_seq3(idx_arr[k,1], self.S0_ndofs, J)
             out[k] = self.entry_impl(I, J)
 
     def multi_entries(self, indices):
@@ -487,7 +468,7 @@ cdef class BaseAssembler3D:
     def assemble_vector(self):
         if self.arity != 1:
             return None
-        result = np.empty(tuple(self.S0.ndofs), order='C')
+        result = np.empty(tuple(self.S0_ndofs), order='C')
         cdef double[:, :, ::1] _result = result
         cdef double* out = &_result[ 0, 0, 0 ]
 
@@ -498,7 +479,7 @@ cdef class BaseAssembler3D:
             while True:
                out[0] = self.entry_impl(I, <size_t*>0)
                out += 1
-               if not next_lexicographic3(I, zero, self.S0.ndofs):
+               if not next_lexicographic3(I, zero, self.S0_ndofs):
                    break
         return result
 
@@ -600,22 +581,38 @@ cdef double _entry_func_3d(size_t i, size_t j, void * data):
 cdef class BaseVectorAssembler3D:
     cdef readonly int arity
     cdef int nqp
-    cdef SpaceInfo3 S0, S1
+    cdef size_t[3] S0_ndofs
+    cdef ssize_t[:,::1] S0_meshsupp0
+    cdef double[:, :, ::1] S0_C0
+    cdef ssize_t[:,::1] S0_meshsupp1
+    cdef double[:, :, ::1] S0_C1
+    cdef ssize_t[:,::1] S0_meshsupp2
+    cdef double[:, :, ::1] S0_C2
+    cdef size_t[3] S1_ndofs
+    cdef ssize_t[:,::1] S1_meshsupp0
+    cdef double[:, :, ::1] S1_C0
+    cdef ssize_t[:,::1] S1_meshsupp1
+    cdef double[:, :, ::1] S1_C1
+    cdef ssize_t[:,::1] S1_meshsupp2
+    cdef double[:, :, ::1] S1_C2
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
     cdef readonly tuple kvs
     cdef tuple gaussgrid
 
     cdef void base_init(self, kvs0, kvs1=None):
         if kvs1 is None: kvs1 = kvs0
-        init_spaceinfo3(self.S0, kvs0)
-        init_spaceinfo3(self.S1, kvs1)
+        assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
+        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
+        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
+        self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
+        assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
+        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
         self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
         self.kvs = (kvs0, kvs1)
-
-    def __dealloc__(self):
-        # work around Cython memory bug
-        clear_spaceinfo3(self.S0)
-        clear_spaceinfo3(self.S1)
 
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
@@ -626,10 +623,10 @@ cdef class BaseVectorAssembler3D:
     cdef inline void from_seq(self, size_t i, size_t[4] out) nogil:
         out[3] = i % self.numcomp[0]
         i /= self.numcomp[0]
-        out[2] = i % self.S0.ndofs[2]
-        i /= self.S0.ndofs[2]
-        out[1] = i % self.S0.ndofs[1]
-        i /= self.S0.ndofs[1]
+        out[2] = i % self.S0_ndofs[2]
+        i /= self.S0_ndofs[2]
+        out[1] = i % self.S0_ndofs[1]
+        i /= self.S0_ndofs[1]
         out[0] = i
 
     cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
@@ -640,7 +637,7 @@ cdef class BaseVectorAssembler3D:
     def assemble_vector(self):
         if self.arity != 1:
             return None
-        result = np.zeros(tuple(self.S0.ndofs) + (self.numcomp[0],), order='C')
+        result = np.zeros(tuple(self.S0_ndofs) + (self.numcomp[0],), order='C')
         cdef double[:, :, :, ::1] _result = result
         cdef double* out = &_result[ 0, 0, 0, 0 ]
 
@@ -651,7 +648,7 @@ cdef class BaseVectorAssembler3D:
             while True:
                self.entry_impl(I, <size_t*>0, out)
                out += self.numcomp[0]
-               if not next_lexicographic3(I, zero, self.S0.ndofs):
+               if not next_lexicographic3(I, zero, self.S0_ndofs):
                    break
         return result
 

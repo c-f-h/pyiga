@@ -296,13 +296,13 @@ class AsmGenerator:
         for k in range(self.dim):
             if len(idx_bfun) == 1:
                 idx, bfun = idx_bfun[0]
-                self.putf('intv = make_intv(self.S{space}.meshsupp{k}[{idx}[{k}],0], self.S{space}.meshsupp{k}[{idx}[{k}],1])',
+                self.putf('intv = make_intv(self.S{space}_meshsupp{k}[{idx}[{k}],0], self.S{space}_meshsupp{k}[{idx}[{k}],1])',
                         k=k, space=bfun.space, idx=idx)
             elif len(idx_bfun) == 2:
                 self.putf('intv = intersect_intervals(')
                 self.indent(2)
                 for idx,bfun in idx_bfun:
-                    self.putf('make_intv(self.S{space}.meshsupp{k}[{idx}[{k}],0], self.S{space}.meshsupp{k}[{idx}[{k}],1]),',
+                    self.putf('make_intv(self.S{space}_meshsupp{k}[{idx}[{k}],0], self.S{space}_meshsupp{k}[{idx}[{k}],1]),',
                             k=k, space=bfun.space, idx=idx)
                 self.dedent(2)
                 self.put(')')
@@ -313,7 +313,7 @@ class AsmGenerator:
 
             # a_ij = a(phi_j, phi_i)  -- second index (j) corresponds to first (trial) function
             for idx,bfun in idx_bfun:
-                self.putf('values_{name}[{k}] = &self.S{space}.C{k}[ {idx}[{k}], g_sta[{k}], 0 ]',
+                self.putf('values_{name}[{k}] = &self.S{space}_C{k}[ {idx}[{k}], g_sta[{k}], 0 ]',
                         k=k, name=bfun.name, space=bfun.space, idx=idx)
         self.put('')
 
@@ -390,7 +390,7 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
 
         for sp in used_spaces:
             for k in range(self.dim):
-                self.putf('self.S{sp}.C{k} = compute_values_derivs(kvs{sp}[{k}], gaussgrid[{k}], derivs={maxderiv})',
+                self.putf('self.S{sp}_C{k} = compute_values_derivs(kvs{sp}[{k}], gaussgrid[{k}], derivs={maxderiv})',
                         k=k, sp=sp)
         self.put('')
 
@@ -534,54 +534,33 @@ tmpl_generic = Template(r'''
 # {{DIM}}D Assemblers
 ################################################################################
 
-cdef struct SpaceInfo{{DIM}}:
-    size_t[{{DIM}}] ndofs
-    int[{{DIM}}] p
-    {%- for k in range(DIM) %}
-    ssize_t[:,::1] meshsupp{{k}}
-    {%- endfor %}
-    # 1D basis values. Indices: basis function, mesh point, derivative
-    {%- for k in range(DIM) %}
-    double[:, :, ::1] C{{k}}
-    {%- endfor %}
-
-cdef void clear_spaceinfo{{DIM}}(SpaceInfo{{DIM}} & S):
-    {%- for k in range(DIM) %}
-    S.meshsupp{{k}} = None
-    {%- endfor %}
-    {%- for k in range(DIM) %}
-    S.C{{k}} = None
-    {%- endfor %}
-
-cdef void init_spaceinfo{{DIM}}(SpaceInfo{{DIM}} & S, kvs):
-    # work around Cython bug: memoryviews in structs are not properly initialized
-    memset(&S, 0, sizeof(S))
-    clear_spaceinfo{{DIM}}(S)
-    assert len(kvs) == {{DIM}}, "Assembler requires {{DIM}} knot vectors"
-    S.ndofs[:] = [kv.numdofs for kv in kvs]
-    S.p[:]     = [kv.p for kv in kvs]
-    {%- for k in range(DIM) %}
-    S.meshsupp{{k}} = kvs[{{k}}].mesh_support_idx_all()
-    {%- endfor %}
+{% macro INIT_SPACE(S, kvs, DIM) -%}
+        assert len({{kvs}}) == {{DIM}}, "Assembler requires {{DIM}} knot vectors"
+        self.S{{S}}_ndofs[:] = [kv.numdofs for kv in {{kvs}}]
+        {%- for k in range(DIM) %}
+        self.S{{S}}_meshsupp{{k}} = {{kvs}}[{{k}}].mesh_support_idx_all()
+        {%- endfor %}
+{%- endmacro -%}
 
 cdef class BaseAssembler{{DIM}}D:
     cdef readonly int arity
     cdef int nqp
-    cdef SpaceInfo{{DIM}} S0, S1
+    {%- for S in range(2) %}
+    cdef size_t[{{DIM}}] S{{S}}_ndofs
+    {%- for k in range(DIM) %}
+    cdef ssize_t[:,::1] S{{S}}_meshsupp{{k}}
+    cdef double[:, :, ::1] S{{S}}_C{{k}}
+    {%- endfor %}
+    {%- endfor %}
     cdef readonly tuple kvs
     cdef tuple gaussgrid
 
     cdef void base_init(self, kvs0, kvs1=None):
         if kvs1 is None: kvs1 = kvs0
-        init_spaceinfo{{DIM}}(self.S0, kvs0)
-        init_spaceinfo{{DIM}}(self.S1, kvs1)
+        {{ INIT_SPACE(0, 'kvs0', DIM) }}
+        {{ INIT_SPACE(1, 'kvs1', DIM) }}
         self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
         self.kvs = (kvs0, kvs1)
-
-    def __dealloc__(self):
-        # work around Cython memory bug
-        clear_spaceinfo{{DIM}}(self.S0)
-        clear_spaceinfo{{DIM}}(self.S1)
 
     cdef double entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
         return -9999.99  # Not implemented
@@ -592,7 +571,7 @@ cdef class BaseAssembler{{DIM}}D:
             return 0.0
         cdef size_t[{{DIM}}] I, J
         with nogil:
-            from_seq{{DIM}}(i, self.S0.ndofs, I)
+            from_seq{{DIM}}(i, self.S0_ndofs, I)
             return self.entry_impl(I, <size_t*>0)
 
     cpdef double entry(self, size_t i, size_t j):
@@ -601,8 +580,8 @@ cdef class BaseAssembler{{DIM}}D:
             return 0.0
         cdef size_t[{{DIM}}] I, J
         with nogil:
-            from_seq{{DIM}}(i, self.S1.ndofs, I)
-            from_seq{{DIM}}(j, self.S0.ndofs, J)
+            from_seq{{DIM}}(i, self.S1_ndofs, I)
+            from_seq{{DIM}}(j, self.S0_ndofs, J)
             return self.entry_impl(I, J)
 
     @cython.boundscheck(False)
@@ -614,8 +593,8 @@ cdef class BaseAssembler{{DIM}}D:
         cdef size_t k
 
         for k in range(idx_arr.shape[0]):
-            from_seq{{DIM}}(idx_arr[k,0], self.S1.ndofs, I)
-            from_seq{{DIM}}(idx_arr[k,1], self.S0.ndofs, J)
+            from_seq{{DIM}}(idx_arr[k,0], self.S1_ndofs, I)
+            from_seq{{DIM}}(idx_arr[k,1], self.S0_ndofs, J)
             out[k] = self.entry_impl(I, J)
 
     def multi_entries(self, indices):
@@ -658,7 +637,7 @@ cdef class BaseAssembler{{DIM}}D:
     def assemble_vector(self):
         if self.arity != 1:
             return None
-        result = np.empty(tuple(self.S0.ndofs), order='C')
+        result = np.empty(tuple(self.S0_ndofs), order='C')
         cdef double[{{ dimrepeat(':') }}:1] _result = result
         cdef double* out = &_result[ {{ dimrepeat('0') }} ]
 
@@ -669,7 +648,7 @@ cdef class BaseAssembler{{DIM}}D:
             while True:
                out[0] = self.entry_impl(I, <size_t*>0)
                out += 1
-               if not next_lexicographic{{DIM}}(I, zero, self.S0.ndofs):
+               if not next_lexicographic{{DIM}}(I, zero, self.S0_ndofs):
                    break
         return result
 
@@ -762,22 +741,23 @@ cdef double _entry_func_{{DIM}}d(size_t i, size_t j, void * data):
 cdef class BaseVectorAssembler{{DIM}}D:
     cdef readonly int arity
     cdef int nqp
-    cdef SpaceInfo{{DIM}} S0, S1
+    {%- for S in range(2) %}
+    cdef size_t[{{DIM}}] S{{S}}_ndofs
+    {%- for k in range(DIM) %}
+    cdef ssize_t[:,::1] S{{S}}_meshsupp{{k}}
+    cdef double[:, :, ::1] S{{S}}_C{{k}}
+    {%- endfor %}
+    {%- endfor %}
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
     cdef readonly tuple kvs
     cdef tuple gaussgrid
 
     cdef void base_init(self, kvs0, kvs1=None):
         if kvs1 is None: kvs1 = kvs0
-        init_spaceinfo{{DIM}}(self.S0, kvs0)
-        init_spaceinfo{{DIM}}(self.S1, kvs1)
+        {{ INIT_SPACE(0, 'kvs0', DIM) }}
+        {{ INIT_SPACE(1, 'kvs1', DIM) }}
         self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
         self.kvs = (kvs0, kvs1)
-
-    def __dealloc__(self):
-        # work around Cython memory bug
-        clear_spaceinfo{{DIM}}(self.S0)
-        clear_spaceinfo{{DIM}}(self.S1)
 
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
@@ -789,8 +769,8 @@ cdef class BaseVectorAssembler{{DIM}}D:
         out[{{DIM}}] = i % self.numcomp[0]
         i /= self.numcomp[0]
         {%- for k in range(1, DIM)|reverse %}
-        out[{{k}}] = i % self.S0.ndofs[{{k}}]
-        i /= self.S0.ndofs[{{k}}]
+        out[{{k}}] = i % self.S0_ndofs[{{k}}]
+        i /= self.S0_ndofs[{{k}}]
         {%- endfor %}
         out[0] = i
 
@@ -802,7 +782,7 @@ cdef class BaseVectorAssembler{{DIM}}D:
     def assemble_vector(self):
         if self.arity != 1:
             return None
-        result = np.zeros(tuple(self.S0.ndofs) + (self.numcomp[0],), order='C')
+        result = np.zeros(tuple(self.S0_ndofs) + (self.numcomp[0],), order='C')
         cdef double[{{ dimrepeat(':') }}, ::1] _result = result
         cdef double* out = &_result[ {{ dimrepeat('0') }}, 0 ]
 
@@ -813,7 +793,7 @@ cdef class BaseVectorAssembler{{DIM}}D:
             while True:
                self.entry_impl(I, <size_t*>0, out)
                out += self.numcomp[0]
-               if not next_lexicographic{{DIM}}(I, zero, self.S0.ndofs):
+               if not next_lexicographic{{DIM}}(I, zero, self.S0_ndofs):
                    break
         return result
 

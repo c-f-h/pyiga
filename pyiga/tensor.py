@@ -398,6 +398,29 @@ def gta(A, R, tol=1e-12, rtol=1e-12, return_errors=False):
     return (T, errors) if return_errors else T
 
 
+def _tucker_sum(terms):
+    terms = list(terms)
+    A = terms[0]
+    for B in terms[1:]:
+        U, X1, X2 = join_tucker_bases(A, B)
+        A = TuckerTensor(U, X1 + X2)
+        if any(u.shape[1] > u.shape[0] for u in A.Us):
+            A = A.compress()
+    return A
+
+def _gauss_seidel_sweep(A, u, f, indices=None):
+    if indices is None:
+        indices = range(A.shape[0])
+    for i in indices:
+        x = A[i].dot(u)
+        a = A[i,i]
+        x -= a * u[i]
+        u[i] = (f[i] - x) / a
+
+def _gauss_seidel(A, u, f, iterations=1, indices=None):
+    for it in range(iterations):
+        _gauss_seidel_sweep(A, u, f, indices=indices)
+
 def gta_ls(A, F, R, tol=1e-12, verbose=0, gs=None):
     """Greedy Tucker approximation of the solution of a linear system"""
     res0_norm = fro_norm(F)
@@ -422,7 +445,7 @@ def gta_ls(A, F, R, tol=1e-12, verbose=0, gs=None):
             # extend previous coefficients with 0 and do Gauss-Seidel iteration
             pad_size = tuple((0, U[k].shape[1] - X.shape[k]) for k in range(d))
             zz = np.pad(X, pad_size, 'constant').ravel()
-            gauss_seidel(A_U, zz, F_U, iterations=gs)
+            _gauss_seidel(A_U, zz, F_U, iterations=gs)
         else:
             # do a full direct solve
             zz = np.linalg.solve(A_U, F_U)
@@ -436,16 +459,26 @@ def gta_ls(A, F, R, tol=1e-12, verbose=0, gs=None):
             return UX
 
         # compute new residual: first, apply A to UX
-        A_UX = reduce(operator.add, (apply_tprod(Aj, UX) for Aj in A))
+        #A_UX = reduce(operator.add, (apply_tprod(Aj, UX) for Aj in A))
+        A_UX = _tucker_sum(apply_tprod(Aj, UX) for Aj in A)
+
+        if False:
+            if verbose >= 2: print('Compressing A(UX)', A_UX.R, '-> ', end='')
+            A_UX = A_UX.compress(rtol=1e-3)
+            if verbose >= 2: print(A_UX.R)
+
         # compute the residual
         Rk = F - A_UX
-        # recompress it
-        if verbose >= 2: print('Compressing residual', Rk.R, '-> ', end='')
-        Rk = Rk.compress(rtol=1e-2)
-        if verbose >= 2: print(Rk.R)
+
+        if True:
+            # recompress it
+            if verbose >= 2: print('Compressing residual', Rk.R, '-> ', end='')
+            Rk = Rk.compress(rtol=1e-2)
+            if verbose >= 2: print(Rk.R)
 
         # stopping criterion: reduction of initial residual
         res = fro_norm(Rk)
+        if verbose >= 2: print('Residual norm:', res)
         if res < tol * res0_norm:
             if verbose >= 1:
                 print(it, 'iterations, residual reduction =', res / res0_norm)

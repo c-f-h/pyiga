@@ -164,7 +164,7 @@ def find_truncation_rank(X, tol=1e-12):
             # truncate one slice off axis ax
             sl = X.ndim * [slice(None)]
             sl[ax] = slice(None, -1)
-            X = X[sl]
+            X = X[tuple(sl)]
     return X.shape
 
 
@@ -344,6 +344,49 @@ def als1_ls(A, B, tol=1e-15, maxiter=10000):
             ZtZ = reduce(operator.add,
                          (_dot_rank1(ys[i], ys[j]) * AitAj[k][i][j]
                              for j in range(rankA) for i in range(rankA)))
+
+            # compute right-hand side
+            b = np.zeros(B.shape[k])
+            for j in range(rankA):
+                # zs = ((A_1 x_1)^T, ..., A_k^T, ..., (A_d x_d)^T)
+                zs = [y[None, :] for y in ys[j]]
+                zs = zs[:k] + [A[j][k].T] + zs[k:]
+                b += apply_tprod(zs, B).ravel()
+
+            # solve least squares problem
+            xk = scipy.sparse.linalg.spsolve(ZtZ, b)
+            delta *= np.linalg.norm(xs[k] - xk)
+            xs[k] = xk
+
+        if delta < tol:
+            break
+    return xs
+
+
+# only legal if all the A matrices have the same structure
+def als1_ls_structured(A, B, tol=1e-15, maxiter=10000):
+    """Compute rank 1 approximation to the solution of a linear system by Alternating Least Squares."""
+    d = B.ndim
+    rankA = len(A)
+    xs = list(np.random.rand(B.shape[j]) for j in range(d))
+
+    # precompute the sparse matrices Ai^A A_j for each coordinate axis
+    AitAj = [[[ (A[i][k].T.dot(A[j][k])).tocsr()
+                for j in range(rankA)]
+                for i in range(rankA)]
+                for k in range(d)]
+
+    for it in range(maxiter):
+        delta = 1.0
+        for k in range(d):
+            ys = _apply_lowrank([_without_k(Ar,k) for Ar in A], _without_k(xs, k))
+
+            # compute left-hand side matrix
+            ZtZ = AitAj[k][0][0].copy()
+            ZtZ.data[:] = 0.0
+            for i in range(rankA):
+                for j in range(rankA):
+                    ZtZ.data += _dot_rank1(ys[i], ys[j]) * AitAj[k][i][j].data
 
             # compute right-hand side
             b = np.zeros(B.shape[k])

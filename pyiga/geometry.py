@@ -128,7 +128,7 @@ class BSplineFunc:
         assert 0 <= axis < self.sdim, 'Invalid axis'
         slices = self.sdim * [slice(None)]
         slices[axis] = (0 if side==0 else -1)
-        coeffs = self.coeffs[slices]
+        coeffs = self.coeffs[tuple(slices)]
         kvs = list(self.kvs)
         del kvs[axis]
         return BSplineFunc(kvs, coeffs)
@@ -300,7 +300,7 @@ class NurbsFunc:
         assert 0 <= axis < self.sdim, 'Invalid axis'
         slices = self.sdim * [slice(None)]
         slices[axis] = (0 if side==0 else -1)
-        coeffs = self.coeffs[slices]
+        coeffs = self.coeffs[tuple(slices)]
         kvs = list(self.kvs)
         del kvs[axis]
         return NurbsFunc(kvs, coeffs, weights=None, premultiplied=True)

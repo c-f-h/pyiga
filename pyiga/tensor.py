@@ -363,9 +363,12 @@ def als1_ls(A, B, tol=1e-15, maxiter=10000):
     return xs
 
 
-# only legal if all the A matrices have the same structure
 def als1_ls_structured(A, B, tol=1e-15, maxiter=10000):
-    """Compute rank 1 approximation to the solution of a linear system by Alternating Least Squares."""
+    """Compute rank 1 approximation to the solution of a linear system by Alternating Least Squares.
+
+    Faster version of :func:`als1_ls`, but works only if all the matrices in the
+    operator `A` have identical sparsity structure.
+    """
     d = B.ndim
     rankA = len(A)
     xs = list(np.random.rand(B.shape[j]) for j in range(d))

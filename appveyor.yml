@@ -5,10 +5,8 @@ environment:
 
     - PYTHON_VERSION: 3.4
       MINICONDA: "C:\\Miniconda3"
-      MSVC_RUNTIME: msvc_runtime
     - PYTHON_VERSION: 3.4
       MINICONDA: "C:\\Miniconda3-x64"
-      MSVC_RUNTIME: msvc_runtime
     - PYTHON_VERSION: 3.5
       MINICONDA: "C:\\Miniconda35"
     - PYTHON_VERSION: 3.5

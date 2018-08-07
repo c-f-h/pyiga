@@ -50,6 +50,8 @@ def grid_eval_transformed(f, grid, geo):
 
 def read_sparse_matrix(fname):
     I,J,vals = np.loadtxt(fname, skiprows=1, unpack=True)
+    I = I.astype(int)
+    J = J.astype(int)
     I -= 1
     J -= 1
     return scipy.sparse.coo_matrix((vals, (I,J))).tocsr()

@@ -87,3 +87,13 @@ the unit tests, and the `IPython notebooks`_ to learn more.
 .. _API reference: http://pyiga.readthedocs.io/en/latest/
 .. _FEniCS: https://fenicsproject.org/
 .. _Anaconda: https://www.continuum.io/downloads
+
+FAQ
+---
+
+During compilation, I get an error message involving ``numpy._build_utils``.
+~~~~~
+
+Try installing/upgrading setuptools: ::
+
+    $ pip install --upgrade --user setuptools

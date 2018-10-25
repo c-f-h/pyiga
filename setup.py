@@ -87,6 +87,7 @@ setup(
         'scipy',
         'appdirs',
         'networkx',
+        'jinja2',
         'future;python_version<"3.0"',
         'futures;python_version<"3.0"'   # backport of concurrent.futures to Py2
     ],

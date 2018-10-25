@@ -74,7 +74,7 @@ setup(
         'Topic :: Scientific/Engineering :: Physics',
         'License :: Free For Educational Use',
     ],
-    packages = ['pyiga'],
+    packages = ['pyiga', 'pyiga.codegen'],
 
     ext_modules = cythonize(extensions),
     package_data = {

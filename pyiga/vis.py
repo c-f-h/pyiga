@@ -33,22 +33,27 @@ def plot_geo(geo,
     if gridx is None: gridx = grid
     if gridy is None: gridy = grid
     supp = geo.support
-    gx    = np.linspace(supp[0][0], supp[0][1], gridx)
+
+    # if gridx/gridy is not an array, build an array with given number of ticks
+    if np.isscalar(gridx):
+        gridx = np.linspace(supp[0][0], supp[0][1], gridx)
+    if np.isscalar(gridy):
+        gridy = np.linspace(supp[1][0], supp[1][1], gridy)
+
     meshx = np.linspace(supp[0][0], supp[0][1], res)
-    gy    = np.linspace(supp[1][0], supp[1][1], gridy)
     meshy = np.linspace(supp[1][0], supp[1][1], res)
 
     def plotline(pts, capstyle='butt'):
         plt.plot(pts[:,0], pts[:,1], color=color, linewidth=linewidth,
                 solid_joinstyle='round', solid_capstyle=capstyle)
 
-    pts = utils.grid_eval(geo, (gx, meshy))
+    pts = utils.grid_eval(geo, (gridx, meshy))
     plotline(pts[0,:,:], capstyle='round')
     for i in range(1, pts.shape[0]-1):
         plotline(pts[i,:,:])
     plotline(pts[-1,:,:], capstyle='round')
 
-    pts = utils.grid_eval(geo, (meshx, gy))
+    pts = utils.grid_eval(geo, (meshx, gridy))
     plotline(pts[:,0,:], capstyle='round')
     for j in range(1, pts.shape[1]-1):
         plotline(pts[:,j,:])

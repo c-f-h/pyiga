@@ -218,8 +218,8 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
 
         cdef size_t n0 = _B.shape[0]
         cdef size_t n1 = _B.shape[1]
-        cdef double _tmp3
         cdef double _tmp4
+        cdef double _tmp3
         cdef double* B
         cdef size_t i0
         cdef size_t i1
@@ -228,8 +228,8 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
             for i1 in range(n1):
                 B = &_B[i0, i1, 0, 0]
 
-                _tmp3 = (VDu0[2*i0+0] * VDu1[2*i1+1])
                 _tmp4 = (VDu0[2*i0+1] * VDu1[2*i1+0])
+                _tmp3 = (VDu0[2*i0+0] * VDu1[2*i1+1])
                 result += ((((B[0] * _tmp3) + (B[1] * _tmp4)) * (VDv0[2*i0+0] * VDv1[2*i1+1])) + (((B[1] * _tmp3) + (B[3] * _tmp4)) * (VDv0[2*i0+1] * VDv1[2*i1+0])))
         return result
 
@@ -351,8 +351,8 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
         cdef double _dv_10
-        cdef double _du_10
         cdef double _du_01
+        cdef double _du_10
         cdef double W
         cdef double* JacInv
         cdef size_t i0
@@ -364,8 +364,8 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
                 JacInv = &_JacInv[i0, i1, 0, 0]
 
                 _dv_10 = (VDv0[2*i0+0] * VDv1[2*i1+1])
-                _du_10 = (VDu0[2*i0+0] * VDu1[2*i1+1])
                 _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
+                _du_10 = (VDu0[2*i0+0] * VDu1[2*i1+1])
                 result += ((((JacInv[0] * _du_10) * (JacInv[0] * _dv_10)) + (_du_01 * (VDv0[2*i0+0] * VDv1[2*i1+0]))) * W)
         return result
 
@@ -487,10 +487,10 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
 
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
-        cdef double _dv_01
         cdef double _dv_11
-        cdef double _du_02
+        cdef double _dv_01
         cdef double _du_10
+        cdef double _du_02
         cdef double W
         cdef double* JacInv
         cdef size_t i0
@@ -501,10 +501,10 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
                 W = _W[i0, i1]
                 JacInv = &_JacInv[i0, i1, 0, 0]
 
-                _dv_01 = (VDv0[3*i0+1] * VDv1[3*i1+0])
                 _dv_11 = (VDv0[3*i0+1] * VDv1[3*i1+1])
-                _du_02 = (VDu0[3*i0+2] * VDu1[3*i1+0])
+                _dv_01 = (VDv0[3*i0+1] * VDv1[3*i1+0])
                 _du_10 = (VDu0[3*i0+0] * VDu1[3*i1+1])
+                _du_02 = (VDu0[3*i0+2] * VDu1[3*i1+0])
                 result += (((_du_02 * _dv_01) + ((JacInv[0] * _du_10) * (JacInv[0] * _dv_11))) * W)
         return result
 
@@ -627,14 +627,14 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
 
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
-        cdef double _dv_10
         cdef double _dv_01
-        cdef double _tmp4
+        cdef double _dv_10
         cdef double _tmp6
-        cdef double _du_10
+        cdef double _tmp4
         cdef double _du_01
-        cdef double _tmp3
+        cdef double _du_10
         cdef double _tmp5
+        cdef double _tmp3
         cdef double W
         cdef double* JacInv
         cdef size_t i0
@@ -645,14 +645,14 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
                 W = _W[i0, i1]
                 JacInv = &_JacInv[i0, i1, 0, 0]
 
-                _dv_10 = (VDv0[2*i0+0] * VDv1[2*i1+1])
                 _dv_01 = (VDv0[2*i0+1] * VDv1[2*i1+0])
-                _tmp4 = ((JacInv[0] * _dv_10) + (JacInv[2] * _dv_01))
+                _dv_10 = (VDv0[2*i0+0] * VDv1[2*i1+1])
                 _tmp6 = ((JacInv[1] * _dv_10) + (JacInv[3] * _dv_01))
-                _du_10 = (VDu0[2*i0+0] * VDu1[2*i1+1])
+                _tmp4 = ((JacInv[0] * _dv_10) + (JacInv[2] * _dv_01))
                 _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
-                _tmp3 = ((JacInv[0] * _du_10) + (JacInv[2] * _du_01))
+                _du_10 = (VDu0[2*i0+0] * VDu1[2*i1+1])
                 _tmp5 = ((JacInv[1] * _du_10) + (JacInv[3] * _du_01))
+                _tmp3 = ((JacInv[0] * _du_10) + (JacInv[2] * _du_01))
                 result[0] += ((_tmp3 * _tmp4) * W)
                 result[1] += ((_tmp5 * _tmp4) * W)
                 result[2] += ((_tmp3 * _tmp6) * W)
@@ -975,9 +975,9 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         cdef size_t n0 = _geo_grad_a.shape[0]
         cdef size_t n1 = _geo_grad_a.shape[1]
         cdef size_t n2 = _geo_grad_a.shape[2]
-        cdef double _tmp3
-        cdef double _tmp4
         cdef double _tmp5
+        cdef double _tmp4
+        cdef double _tmp3
         cdef double _tmp2
         cdef double _tmp1
         cdef double JacInv[9]
@@ -996,9 +996,9 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                     GaussWeight = _GaussWeight[i0, i1, i2]
                     B = &_B[i0, i1, i2, 0, 0]
 
-                    _tmp3 = ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))
-                    _tmp4 = ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6]))
                     _tmp5 = ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))
+                    _tmp4 = ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6]))
+                    _tmp3 = ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))
                     _tmp2 = (((geo_grad_a[0] * _tmp3) - (geo_grad_a[1] * _tmp4)) + (geo_grad_a[2] * _tmp5))
                     _tmp1 = (1.0 / _tmp2)
                     JacInv[0] = (_tmp1 * _tmp3)
@@ -1032,9 +1032,9 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         cdef size_t n0 = _B.shape[0]
         cdef size_t n1 = _B.shape[1]
         cdef size_t n2 = _B.shape[2]
-        cdef double _tmp6
-        cdef double _tmp7
         cdef double _tmp8
+        cdef double _tmp7
+        cdef double _tmp6
         cdef double* B
         cdef size_t i0
         cdef size_t i1
@@ -1045,9 +1045,9 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                 for i2 in range(n2):
                     B = &_B[i0, i1, i2, 0, 0]
 
-                    _tmp6 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
-                    _tmp7 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
                     _tmp8 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
+                    _tmp7 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
+                    _tmp6 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
                     result += ((((((B[0] * _tmp6) + (B[1] * _tmp7)) + (B[2] * _tmp8)) * (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])) + ((((B[1] * _tmp6) + (B[4] * _tmp7)) + (B[5] * _tmp8)) * (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0]))) + ((((B[2] * _tmp6) + (B[5] * _tmp7)) + (B[8] * _tmp8)) * (VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0])))
         return result
 
@@ -1141,9 +1141,9 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         cdef size_t n0 = _GaussWeight.shape[0]
         cdef size_t n1 = _GaussWeight.shape[1]
         cdef size_t n2 = _GaussWeight.shape[2]
-        cdef double _tmp3
-        cdef double _tmp4
         cdef double _tmp5
+        cdef double _tmp4
+        cdef double _tmp3
         cdef double _tmp2
         cdef double _tmp1
         cdef double GaussWeight
@@ -1161,9 +1161,9 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
                     geo_grad_a = &_geo_grad_a[i0, i1, i2, 0, 0]
                     JacInv = &_JacInv[i0, i1, i2, 0, 0]
 
-                    _tmp3 = ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))
-                    _tmp4 = ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6]))
                     _tmp5 = ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))
+                    _tmp4 = ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6]))
+                    _tmp3 = ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))
                     _tmp2 = (((geo_grad_a[0] * _tmp3) - (geo_grad_a[1] * _tmp4)) + (geo_grad_a[2] * _tmp5))
                     _tmp1 = (1.0 / _tmp2)
                     W = (GaussWeight * fabs(_tmp2))
@@ -1193,11 +1193,11 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
         cdef size_t n2 = _W.shape[2]
-        cdef double _dv_100
         cdef double _dv_010
-        cdef double _du_100
-        cdef double _du_010
+        cdef double _dv_100
         cdef double _du_001
+        cdef double _du_010
+        cdef double _du_100
         cdef double W
         cdef double* JacInv
         cdef size_t i0
@@ -1210,11 +1210,11 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
                     W = _W[i0, i1, i2]
                     JacInv = &_JacInv[i0, i1, i2, 0, 0]
 
-                    _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
                     _dv_010 = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
-                    _du_100 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
-                    _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
+                    _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
                     _du_001 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
+                    _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
+                    _du_100 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
                     result += ((((((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) * ((JacInv[0] * _dv_100) + (JacInv[3] * _dv_010))) + (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) * ((JacInv[1] * _dv_100) + (JacInv[4] * _dv_010)))) + (_du_001 * (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+0]))) * W)
         return result
 
@@ -1309,9 +1309,9 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         cdef size_t n0 = _GaussWeight.shape[0]
         cdef size_t n1 = _GaussWeight.shape[1]
         cdef size_t n2 = _GaussWeight.shape[2]
-        cdef double _tmp3
-        cdef double _tmp4
         cdef double _tmp5
+        cdef double _tmp4
+        cdef double _tmp3
         cdef double _tmp2
         cdef double _tmp1
         cdef double GaussWeight
@@ -1329,9 +1329,9 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
                     geo_grad_a = &_geo_grad_a[i0, i1, i2, 0, 0]
                     JacInv = &_JacInv[i0, i1, i2, 0, 0]
 
-                    _tmp3 = ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))
-                    _tmp4 = ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6]))
                     _tmp5 = ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))
+                    _tmp4 = ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6]))
+                    _tmp3 = ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))
                     _tmp2 = (((geo_grad_a[0] * _tmp3) - (geo_grad_a[1] * _tmp4)) + (geo_grad_a[2] * _tmp5))
                     _tmp1 = (1.0 / _tmp2)
                     W = (GaussWeight * fabs(_tmp2))
@@ -1361,12 +1361,12 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
         cdef size_t n2 = _W.shape[2]
-        cdef double _dv_001
-        cdef double _dv_101
         cdef double _dv_011
-        cdef double _du_002
-        cdef double _du_100
+        cdef double _dv_101
+        cdef double _dv_001
         cdef double _du_010
+        cdef double _du_100
+        cdef double _du_002
         cdef double W
         cdef double* JacInv
         cdef size_t i0
@@ -1379,12 +1379,12 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
                     W = _W[i0, i1, i2]
                     JacInv = &_JacInv[i0, i1, i2, 0, 0]
 
-                    _dv_001 = (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+0])
-                    _dv_101 = (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+1])
                     _dv_011 = (VDv0[3*i0+1] * VDv1[3*i1+1] * VDv2[3*i2+0])
-                    _du_002 = (VDu0[3*i0+2] * VDu1[3*i1+0] * VDu2[3*i2+0])
-                    _du_100 = (VDu0[3*i0+0] * VDu1[3*i1+0] * VDu2[3*i2+1])
+                    _dv_101 = (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+1])
+                    _dv_001 = (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+0])
                     _du_010 = (VDu0[3*i0+0] * VDu1[3*i1+1] * VDu2[3*i2+0])
+                    _du_100 = (VDu0[3*i0+0] * VDu1[3*i1+0] * VDu2[3*i2+1])
+                    _du_002 = (VDu0[3*i0+2] * VDu1[3*i1+0] * VDu2[3*i2+0])
                     result += (((_du_002 * _dv_001) + ((((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) * ((JacInv[0] * _dv_101) + (JacInv[3] * _dv_011))) + (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) * ((JacInv[1] * _dv_101) + (JacInv[4] * _dv_011))))) * W)
         return result
 
@@ -1480,9 +1480,9 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         cdef size_t n0 = _GaussWeight.shape[0]
         cdef size_t n1 = _GaussWeight.shape[1]
         cdef size_t n2 = _GaussWeight.shape[2]
-        cdef double _tmp9
-        cdef double _tmp10
         cdef double _tmp11
+        cdef double _tmp10
+        cdef double _tmp9
         cdef double _tmp2
         cdef double _tmp1
         cdef double GaussWeight
@@ -1500,9 +1500,9 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
                     geo_grad_a = &_geo_grad_a[i0, i1, i2, 0, 0]
                     JacInv = &_JacInv[i0, i1, i2, 0, 0]
 
-                    _tmp9 = ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))
-                    _tmp10 = ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6]))
                     _tmp11 = ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))
+                    _tmp10 = ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6]))
+                    _tmp9 = ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))
                     _tmp2 = (((geo_grad_a[0] * _tmp9) - (geo_grad_a[1] * _tmp10)) + (geo_grad_a[2] * _tmp11))
                     _tmp1 = (1.0 / _tmp2)
                     W = (GaussWeight * fabs(_tmp2))
@@ -1532,18 +1532,18 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         cdef size_t n0 = _W.shape[0]
         cdef size_t n1 = _W.shape[1]
         cdef size_t n2 = _W.shape[2]
-        cdef double _dv_100
-        cdef double _dv_010
         cdef double _dv_001
-        cdef double _tmp4
-        cdef double _tmp7
+        cdef double _dv_010
+        cdef double _dv_100
         cdef double _tmp8
-        cdef double _du_100
-        cdef double _du_010
+        cdef double _tmp7
+        cdef double _tmp4
         cdef double _du_001
-        cdef double _tmp3
-        cdef double _tmp5
+        cdef double _du_010
+        cdef double _du_100
         cdef double _tmp6
+        cdef double _tmp5
+        cdef double _tmp3
         cdef double W
         cdef double* JacInv
         cdef size_t i0
@@ -1556,18 +1556,18 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
                     W = _W[i0, i1, i2]
                     JacInv = &_JacInv[i0, i1, i2, 0, 0]
 
-                    _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
-                    _dv_010 = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
                     _dv_001 = (VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0])
-                    _tmp4 = (((JacInv[0] * _dv_100) + (JacInv[3] * _dv_010)) + (JacInv[6] * _dv_001))
-                    _tmp7 = (((JacInv[1] * _dv_100) + (JacInv[4] * _dv_010)) + (JacInv[7] * _dv_001))
+                    _dv_010 = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
+                    _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
                     _tmp8 = (((JacInv[2] * _dv_100) + (JacInv[5] * _dv_010)) + (JacInv[8] * _dv_001))
-                    _du_100 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
-                    _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
+                    _tmp7 = (((JacInv[1] * _dv_100) + (JacInv[4] * _dv_010)) + (JacInv[7] * _dv_001))
+                    _tmp4 = (((JacInv[0] * _dv_100) + (JacInv[3] * _dv_010)) + (JacInv[6] * _dv_001))
                     _du_001 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
-                    _tmp3 = (((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) + (JacInv[6] * _du_001))
-                    _tmp5 = (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) + (JacInv[7] * _du_001))
+                    _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
+                    _du_100 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
                     _tmp6 = (((JacInv[2] * _du_100) + (JacInv[5] * _du_010)) + (JacInv[8] * _du_001))
+                    _tmp5 = (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) + (JacInv[7] * _du_001))
+                    _tmp3 = (((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) + (JacInv[6] * _du_001))
                     result[0] += ((_tmp3 * _tmp4) * W)
                     result[1] += ((_tmp5 * _tmp4) * W)
                     result[2] += ((_tmp6 * _tmp4) * W)

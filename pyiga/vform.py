@@ -1004,14 +1004,20 @@ def iterexprs(exprs, deep=False, type=None, once=True):
                 seen.add(e)
 
         for c in e.children:
-            yield from recurse(c)
+            # Py2.7
+            #yield from recurse(c)
+            for x in recurse(c): yield x
         if (deep and e.is_var_expr()
                  and e.var.expr is not None):
-            yield from recurse(e.var.expr)
+            # Py2.7
+            #yield from recurse(e.var.expr)
+            for x in recurse(e.var.expr): yield x
         if type is None or isinstance(e, type):
             yield e
     for e in exprs:
-        yield from recurse(e)
+        # Py2.7
+        #yield from recurse(e)
+        for x in recurse(e): yield x
 
 def mapexprs(exprs, fun, deep=False):
     """Replace each expr `e` in a list of expr trees by `fun(e)`, depth first.

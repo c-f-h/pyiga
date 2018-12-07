@@ -350,9 +350,9 @@ class AsmGenerator:
         s = var.src
         if isinstance(s, vform.InputField):
             if var.deriv == 0:
-                return 'grid_eval(%s, self.gaussgrid)' % s.name
+                return 'np.ascontiguousarray(grid_eval(%s, self.gaussgrid))' % s.name
             elif var.deriv == 1:
-                return '%s.grid_jacobian(self.gaussgrid)' % s.name
+                return 'np.ascontiguousarray(%s.grid_jacobian(self.gaussgrid))' % s.name
             else:
                 assert False, 'invalid derivative %s for input field %s' % (var.deriv, s.name)
         elif s == '@GaussWeight':

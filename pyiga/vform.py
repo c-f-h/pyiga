@@ -466,7 +466,12 @@ class VForm:
         self.dependency_analysis()
 
     def find_max_deriv(self):
-        return max((max(e.D) for e in self.all_exprs(type=PartialDerivExpr)), default=0)
+        #return max((max(e.D) for e in self.all_exprs(type=PartialDerivExpr)), default=0)
+        # Py2.7
+        try:
+            return max((max(e.D) for e in self.all_exprs(type=PartialDerivExpr)))
+        except ValueError:  # empty iterator
+            return 0
 
 
 ################################################################################

@@ -183,13 +183,16 @@ def bsp_stiffness_1d(knotvec):
     "Assemble the Laplacian stiffness matrix for the B-spline basis over the given knot vector"""
     return bsp_mixed_deriv_biform_1d(knotvec, 1, 1)
 
-def bsp_mixed_deriv_biform_1d(knotvec, du, dv):
-    "Assemble the matrix for a(u,v)=(u^(du),v^(dv)) for the B-spline basis over the given knot vector"""
+def bsp_mixed_deriv_biform_1d(knotvec, du, dv, nqp=None, weightfunc=None):
+    "Assemble the matrix for a(u,v)=(weight*u^(du),v^(dv)) for the B-spline basis over the given knot vector"""
     nspans = knotvec.numspans
-    nqp = knotvec.p
+    if nqp is None: nqp = knotvec.p
     q = make_iterated_quadrature(knotvec.kv[knotvec.p:-knotvec.p], nqp)
     derivs = bspline.active_deriv(knotvec, q[0], max(du, dv))
-    return _assemble_matrix(nspans, nqp, derivs[dv, :, :], derivs[du, :, :], q[1])
+    qweights = q[1]
+    if weightfunc is not None:
+        qweights *= utils.grid_eval(weightfunc, (q[0],))
+    return _assemble_matrix(nspans, nqp, derivs[dv, :, :], derivs[du, :, :], qweights)
 
 def bsp_stiffness_1d_asym(knotvec1, knotvec2, quadgrid=None):
     """Assemble a stiffness matrix relating two B-spline bases. By default, uses the first knot vector for quadrature."""

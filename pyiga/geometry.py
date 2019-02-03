@@ -420,7 +420,7 @@ def unit_cube(dim=3, num_intervals=1):
     kv = bspline.make_knots(1, 0.0, 1.0, num_intervals)
     x = np.linspace(0.0, 1.0, num_intervals+1)
     XYZ = np.meshgrid(*(dim * (x,)), indexing='ij')
-    coeffs = np.stack(reversed(XYZ), axis=-1)   # make X correspond to 1st axis
+    coeffs = np.stack(tuple(reversed(XYZ)), axis=-1)   # make X correspond to 1st axis
     return BSplinePatch(dim * (kv,), coeffs)
 
 def twisted_box():

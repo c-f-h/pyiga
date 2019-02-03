@@ -23,10 +23,15 @@ class CodeGen:
         self.put(s.format(**kwargs))
 
     def declare_local_variable(self, type, name, init=None):
-        if init is not None:
-            self.putf('cdef {type} {name} = {init}', type=type, name=name, init=init)
+        if isinstance(type, str):
+            typeandname = '%s %s' % (type, name)
         else:
-            self.putf('cdef {type} {name}', type=type, name=name)
+            typeandname = '%s %s[%d]' % (type[0], name, type[1])    # fixed size array
+
+        if init is not None:
+            self.putf('cdef {typeandname} = {init}', typeandname=typeandname, init=init)
+        else:
+            self.putf('cdef {typeandname}', typeandname=typeandname)
 
     def for_loop(self, idx, upper):
         self.putf('for {idx} in range({upper}):', idx=idx, upper=upper)
@@ -111,7 +116,7 @@ class AsmGenerator:
     def declare_vec(self, name, size=None):
         if size is None:
             size = self.dim
-        self.putf('cdef double {name}[{size}]', name=name, size=size)
+        self.code.declare_local_variable(('double', size), name)
 
     def gen_assign(self, var, expr):
         if expr.is_vector():
@@ -161,9 +166,8 @@ class AsmGenerator:
 
     def declare_array_vars(self, vars):
         for var in vars:
-            self.putf('cdef double[{X}:1] {name}',
-                    X=', '.join((self.dim + len(var.shape)) * ':'),
-                    name=var.name)
+            type = 'double[%s:1]' % (', '.join((self.dim + len(var.shape)) * ':'))
+            self.code.declare_local_variable(type, var.name)
 
     def load_field_var(self, var, I, ref_only=False):
         if var.is_scalar():
@@ -279,12 +283,13 @@ class AsmGenerator:
         self.cython_pragmas()
         self.putf(funcdecl)
         self.indent()
-        self.putf('cdef int k')
-        self.putf('cdef IntInterval intv')
-        self.putf('cdef size_t g_sta[{dim}]')
-        self.putf('cdef size_t g_end[{dim}]')
+        self.code.declare_local_variable('int', 'k')
+        self.code.declare_local_variable('IntInterval', 'intv')
+        self.code.declare_local_variable(('size_t', self.dim), 'g_sta')
+        self.code.declare_local_variable(('size_t', self.dim), 'g_end')
+
         for bfun in self.vform.basis_funs:
-            self.putf('cdef (double*) values_{name}[{dim}]', name=bfun.name)
+            self.code.declare_local_variable(('(double*)', self.dim), 'values_' + bfun.name)
 
         if self.vform.arity == 1:
             idx_bfun = [('i', self.vform.basis_funs[0])]

@@ -41,13 +41,13 @@ cdef class MassAssembler2D(BaseAssembler2D):
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
-        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_ndofs = tuple(kv.numdofs for kv in kvs0)
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=0)
         self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=0)
         assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
-        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_ndofs = tuple(kv.numdofs for kv in kvs1)
         self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=0)
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
@@ -170,13 +170,13 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
-        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_ndofs = tuple(kv.numdofs for kv in kvs0)
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
         self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
         assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
-        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_ndofs = tuple(kv.numdofs for kv in kvs1)
         self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=1)
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
@@ -317,13 +317,13 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
-        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_ndofs = tuple(kv.numdofs for kv in kvs0)
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
         self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
         assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
-        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_ndofs = tuple(kv.numdofs for kv in kvs1)
         self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=1)
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
@@ -470,13 +470,13 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
-        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_ndofs = tuple(kv.numdofs for kv in kvs0)
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=2)
         self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=2)
         assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
-        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_ndofs = tuple(kv.numdofs for kv in kvs1)
         self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=2)
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
@@ -626,13 +626,13 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
-        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_ndofs = tuple(kv.numdofs for kv in kvs0)
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
         self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
         assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
-        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_ndofs = tuple(kv.numdofs for kv in kvs1)
         self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=1)
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
@@ -793,13 +793,13 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
-        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_ndofs = tuple(kv.numdofs for kv in kvs0)
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=0)
         self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=0)
         assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
-        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_ndofs = tuple(kv.numdofs for kv in kvs1)
         self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=0)
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
@@ -916,7 +916,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
-        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_ndofs = tuple(kv.numdofs for kv in kvs0)
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=0)
         self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
@@ -924,7 +924,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
         self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
         self.S0_C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=0)
         assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
-        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_ndofs = tuple(kv.numdofs for kv in kvs1)
         self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=0)
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
@@ -1066,7 +1066,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
-        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_ndofs = tuple(kv.numdofs for kv in kvs0)
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
         self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
@@ -1074,7 +1074,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
         self.S0_C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=1)
         assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
-        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_ndofs = tuple(kv.numdofs for kv in kvs1)
         self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=1)
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
@@ -1250,7 +1250,7 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
-        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_ndofs = tuple(kv.numdofs for kv in kvs0)
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
         self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
@@ -1258,7 +1258,7 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
         self.S0_C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=1)
         assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
-        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_ndofs = tuple(kv.numdofs for kv in kvs1)
         self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=1)
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
@@ -1439,7 +1439,7 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
-        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_ndofs = tuple(kv.numdofs for kv in kvs0)
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=2)
         self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
@@ -1447,7 +1447,7 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
         self.S0_C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=2)
         assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
-        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_ndofs = tuple(kv.numdofs for kv in kvs1)
         self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=2)
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
@@ -1631,7 +1631,7 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
-        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_ndofs = tuple(kv.numdofs for kv in kvs0)
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
         self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
@@ -1639,7 +1639,7 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
         self.S0_C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=1)
         assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
-        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_ndofs = tuple(kv.numdofs for kv in kvs1)
         self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=1)
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
@@ -1843,7 +1843,7 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
-        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_ndofs = tuple(kv.numdofs for kv in kvs0)
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=0)
         self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
@@ -1851,7 +1851,7 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
         self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
         self.S0_C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=0)
         assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
-        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_ndofs = tuple(kv.numdofs for kv in kvs1)
         self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=0)
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()

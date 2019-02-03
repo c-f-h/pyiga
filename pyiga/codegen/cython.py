@@ -127,6 +127,9 @@ class AsmGenerator:
             size = self.dim
         self.code.declare_local_variable(('double', size), name)
 
+    def matrix_entry(self, var, i, j):
+        return '{name}[{k}]'.format(name=var.name, k=i*var.shape[0] + j)
+
     def gen_assign(self, var, expr):
         if expr.is_vector():
             for k in range(expr.shape[0]):
@@ -140,9 +143,8 @@ class AsmGenerator:
                 for j in range(n):
                     if var.symmetric and i > j:
                         continue
-                    self.putf('{name}[{k}] = {rhs}',
-                            name=var.name,
-                            k=i*m + j,
+                    self.putf('{mat_ij} = {rhs}',
+                            mat_ij=self.matrix_entry(var, i, j),
                             rhs=expr[i,j].gencode())
         else:
             self.put(var.name + ' = ' + expr.gencode())
@@ -421,7 +423,7 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
         for sp in (0,1):        # TODO: do this only for used_spaces? crashes currently
             kvs = 'kvs%d' % sp
             self.putf('assert len({kvs}) == {dim}, "Assembler requires {dim} knot vectors"', kvs=kvs)
-            self.putf('self.S{sp}_ndofs[:] = [kv.numdofs for kv in {kvs}]', sp=sp, kvs=kvs)
+            self.putf('self.S{sp}_ndofs = tuple(kv.numdofs for kv in {kvs})', sp=sp, kvs=kvs)
             for k in range(self.dim):
                 self.putf('self.S{sp}_meshsupp{k} = {kvs}[{k}].mesh_support_idx_all()', sp=sp, k=k, kvs=kvs)
                 self.putf('self.S{sp}_C{k} = compute_values_derivs(kvs{sp}[{k}], gaussgrid[{k}], derivs={maxderiv})',

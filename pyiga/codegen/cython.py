@@ -364,13 +364,18 @@ class AsmGenerator:
         vf = self.vform
 
         used_spaces = sorted(set(bf.space for bf in vf.basis_funs))
-        used_kvs = ', '.join('kvs%d' % sp for sp in used_spaces)
+        assert len(used_spaces) in (1,2), 'Number of spaces should be 1 or 2'
+        used_kvs = tuple('kvs%d' % sp for sp in used_spaces)
         input_args = ', '.join(inp.name for inp in vf.inputs)
-        self.putf('def __init__(self, {kvs}, {inp}):', kvs=used_kvs, inp=input_args)
+
+        self.putf('def __init__(self, {kvs}, {inp}):', kvs=', '.join(used_kvs), inp=input_args)
         self.indent()
 
         self.putf('self.arity = {ar}', ar=vf.arity)
-        self.putf('self.base_init({kvs})', kvs=used_kvs)
+        self.putf('self.nqp = max([kv.p for kv in {kvs}]) + 1', kvs=' + '.join(used_kvs))
+        if len(used_spaces) == 1:
+            self.put('kvs1 = kvs0')
+        self.put('self.kvs = (kvs0, kvs1)')
 
         if self.vec:
             numcomp = vf.num_components()
@@ -388,8 +393,12 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
             self.putf(line)
         self.put('')
 
-        for sp in used_spaces:
+        for sp in (0,1):        # TODO: do this only for used_spaces? crashes currently
+            kvs = 'kvs%d' % sp
+            self.putf('assert len({kvs}) == {dim}, "Assembler requires {dim} knot vectors"', kvs=kvs)
+            self.putf('self.S{sp}_ndofs[:] = [kv.numdofs for kv in {kvs}]', sp=sp, kvs=kvs)
             for k in range(self.dim):
+                self.putf('self.S{sp}_meshsupp{k} = {kvs}[{k}].mesh_support_idx_all()', sp=sp, k=k, kvs=kvs)
                 self.putf('self.S{sp}_C{k} = compute_values_derivs(kvs{sp}[{k}], gaussgrid[{k}], derivs={maxderiv})',
                         k=k, sp=sp)
         self.put('')
@@ -534,14 +543,6 @@ tmpl_generic = Template(r'''
 # {{DIM}}D Assemblers
 ################################################################################
 
-{% macro INIT_SPACE(S, kvs, DIM) -%}
-        assert len({{kvs}}) == {{DIM}}, "Assembler requires {{DIM}} knot vectors"
-        self.S{{S}}_ndofs[:] = [kv.numdofs for kv in {{kvs}}]
-        {%- for k in range(DIM) %}
-        self.S{{S}}_meshsupp{{k}} = {{kvs}}[{{k}}].mesh_support_idx_all()
-        {%- endfor %}
-{%- endmacro -%}
-
 cdef class BaseAssembler{{DIM}}D:
     cdef readonly int arity
     cdef int nqp
@@ -554,13 +555,6 @@ cdef class BaseAssembler{{DIM}}D:
     {%- endfor %}
     cdef readonly tuple kvs
     cdef tuple gaussgrid
-
-    cdef void base_init(self, kvs0, kvs1=None):
-        if kvs1 is None: kvs1 = kvs0
-        {{ INIT_SPACE(0, 'kvs0', DIM) }}
-        {{ INIT_SPACE(1, 'kvs1', DIM) }}
-        self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
-        self.kvs = (kvs0, kvs1)
 
     cdef double entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
         return -9999.99  # Not implemented
@@ -751,13 +745,6 @@ cdef class BaseVectorAssembler{{DIM}}D:
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
     cdef readonly tuple kvs
     cdef tuple gaussgrid
-
-    cdef void base_init(self, kvs0, kvs1=None):
-        if kvs1 is None: kvs1 = kvs0
-        {{ INIT_SPACE(0, 'kvs0', DIM) }}
-        {{ INIT_SPACE(1, 'kvs1', DIM) }}
-        self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
-        self.kvs = (kvs0, kvs1)
 
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]

@@ -30,7 +30,9 @@ cdef class MassAssembler2D(BaseAssembler2D):
 
     def __init__(self, kvs0, geo):
         self.arity = 2
-        self.base_init(kvs0)
+        self.nqp = max([kv.p for kv in kvs0]) + 1
+        kvs1 = kvs0
+        self.kvs = (kvs0, kvs1)
         assert geo.dim == 2, "Geometry has wrong dimension"
 
         # NB: we assume all kvs result in the same mesh
@@ -38,8 +40,18 @@ cdef class MassAssembler2D(BaseAssembler2D):
         self.gaussgrid = gaussgrid
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
+        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=0)
+        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=0)
+        assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
+        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=0)
+        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=0)
 
         cdef double[:, :, :, ::1] geo_grad_a
         cdef double[:, ::1] GaussWeight
@@ -143,7 +155,9 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
 
     def __init__(self, kvs0, geo):
         self.arity = 2
-        self.base_init(kvs0)
+        self.nqp = max([kv.p for kv in kvs0]) + 1
+        kvs1 = kvs0
+        self.kvs = (kvs0, kvs1)
         assert geo.dim == 2, "Geometry has wrong dimension"
 
         # NB: we assume all kvs result in the same mesh
@@ -151,8 +165,18 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         self.gaussgrid = gaussgrid
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
+        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
+        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
+        assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
+        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=1)
+        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
 
         cdef double[:, :, :, ::1] geo_grad_a
         cdef double[:, ::1] GaussWeight
@@ -274,7 +298,9 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
 
     def __init__(self, kvs0, geo):
         self.arity = 2
-        self.base_init(kvs0)
+        self.nqp = max([kv.p for kv in kvs0]) + 1
+        kvs1 = kvs0
+        self.kvs = (kvs0, kvs1)
         assert geo.dim == 2, "Geometry has wrong dimension"
 
         # NB: we assume all kvs result in the same mesh
@@ -282,8 +308,18 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         self.gaussgrid = gaussgrid
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
+        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
+        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
+        assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
+        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=1)
+        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
 
         cdef double[:, ::1] GaussWeight
         cdef double[:, :, :, ::1] geo_grad_a
@@ -411,7 +447,9 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
 
     def __init__(self, kvs0, geo):
         self.arity = 2
-        self.base_init(kvs0)
+        self.nqp = max([kv.p for kv in kvs0]) + 1
+        kvs1 = kvs0
+        self.kvs = (kvs0, kvs1)
         assert geo.dim == 2, "Geometry has wrong dimension"
 
         # NB: we assume all kvs result in the same mesh
@@ -419,8 +457,18 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         self.gaussgrid = gaussgrid
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
+        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=2)
+        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=2)
+        assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
+        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=2)
+        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=2)
 
         cdef double[:, ::1] GaussWeight
         cdef double[:, :, :, ::1] geo_grad_a
@@ -550,7 +598,9 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
 
     def __init__(self, kvs0, geo):
         self.arity = 2
-        self.base_init(kvs0)
+        self.nqp = max([kv.p for kv in kvs0]) + 1
+        kvs1 = kvs0
+        self.kvs = (kvs0, kvs1)
         self.numcomp[:] = (2, 2,)
         assert geo.dim == 2, "Geometry has wrong dimension"
 
@@ -559,8 +609,18 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         self.gaussgrid = gaussgrid
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
+        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
+        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
+        assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
+        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=1)
+        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
 
         cdef double[:, ::1] GaussWeight
         cdef double[:, :, :, ::1] geo_grad_a
@@ -701,7 +761,9 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
 
     def __init__(self, kvs0, geo, f):
         self.arity = 1
-        self.base_init(kvs0)
+        self.nqp = max([kv.p for kv in kvs0]) + 1
+        kvs1 = kvs0
+        self.kvs = (kvs0, kvs1)
         assert geo.dim == 2, "Geometry has wrong dimension"
 
         # NB: we assume all kvs result in the same mesh
@@ -709,8 +771,18 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
         self.gaussgrid = gaussgrid
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
+        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=0)
+        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=0)
+        assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
+        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=0)
+        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=0)
 
         cdef double[:, :, :, ::1] geo_grad_a
         cdef double[:, ::1] GaussWeight
@@ -809,7 +881,9 @@ cdef class MassAssembler3D(BaseAssembler3D):
 
     def __init__(self, kvs0, geo):
         self.arity = 2
-        self.base_init(kvs0)
+        self.nqp = max([kv.p for kv in kvs0]) + 1
+        kvs1 = kvs0
+        self.kvs = (kvs0, kvs1)
         assert geo.dim == 3, "Geometry has wrong dimension"
 
         # NB: we assume all kvs result in the same mesh
@@ -817,9 +891,22 @@ cdef class MassAssembler3D(BaseAssembler3D):
         self.gaussgrid = gaussgrid
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
+        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=0)
+        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=0)
+        self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
         self.S0_C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=0)
+        assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
+        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=0)
+        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=0)
+        self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
+        self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=0)
 
         cdef double[:, :, :, :, ::1] geo_grad_a
         cdef double[:, :, ::1] GaussWeight
@@ -938,7 +1025,9 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
 
     def __init__(self, kvs0, geo):
         self.arity = 2
-        self.base_init(kvs0)
+        self.nqp = max([kv.p for kv in kvs0]) + 1
+        kvs1 = kvs0
+        self.kvs = (kvs0, kvs1)
         assert geo.dim == 3, "Geometry has wrong dimension"
 
         # NB: we assume all kvs result in the same mesh
@@ -946,9 +1035,22 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         self.gaussgrid = gaussgrid
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
+        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
+        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
+        self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
         self.S0_C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=1)
+        assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
+        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=1)
+        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
+        self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
+        self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=1)
 
         cdef double[:, :, :, :, ::1] geo_grad_a
         cdef double[:, :, ::1] GaussWeight
@@ -1101,7 +1203,9 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
 
     def __init__(self, kvs0, geo):
         self.arity = 2
-        self.base_init(kvs0)
+        self.nqp = max([kv.p for kv in kvs0]) + 1
+        kvs1 = kvs0
+        self.kvs = (kvs0, kvs1)
         assert geo.dim == 3, "Geometry has wrong dimension"
 
         # NB: we assume all kvs result in the same mesh
@@ -1109,9 +1213,22 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         self.gaussgrid = gaussgrid
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
+        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
+        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
+        self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
         self.S0_C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=1)
+        assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
+        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=1)
+        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
+        self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
+        self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=1)
 
         cdef double[:, :, ::1] GaussWeight
         cdef double[:, :, :, :, ::1] geo_grad_a
@@ -1269,7 +1386,9 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
 
     def __init__(self, kvs0, geo):
         self.arity = 2
-        self.base_init(kvs0)
+        self.nqp = max([kv.p for kv in kvs0]) + 1
+        kvs1 = kvs0
+        self.kvs = (kvs0, kvs1)
         assert geo.dim == 3, "Geometry has wrong dimension"
 
         # NB: we assume all kvs result in the same mesh
@@ -1277,9 +1396,22 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         self.gaussgrid = gaussgrid
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
+        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=2)
+        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=2)
+        self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
         self.S0_C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=2)
+        assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
+        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=2)
+        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=2)
+        self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
+        self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=2)
 
         cdef double[:, :, ::1] GaussWeight
         cdef double[:, :, :, :, ::1] geo_grad_a
@@ -1439,7 +1571,9 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
 
     def __init__(self, kvs0, geo):
         self.arity = 2
-        self.base_init(kvs0)
+        self.nqp = max([kv.p for kv in kvs0]) + 1
+        kvs1 = kvs0
+        self.kvs = (kvs0, kvs1)
         self.numcomp[:] = (3, 3,)
         assert geo.dim == 3, "Geometry has wrong dimension"
 
@@ -1448,9 +1582,22 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         self.gaussgrid = gaussgrid
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
+        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
+        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
+        self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
         self.S0_C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=1)
+        assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
+        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=1)
+        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
+        self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
+        self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=1)
 
         cdef double[:, :, ::1] GaussWeight
         cdef double[:, :, :, :, ::1] geo_grad_a
@@ -1630,7 +1777,9 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
 
     def __init__(self, kvs0, geo, f):
         self.arity = 1
-        self.base_init(kvs0)
+        self.nqp = max([kv.p for kv in kvs0]) + 1
+        kvs1 = kvs0
+        self.kvs = (kvs0, kvs1)
         assert geo.dim == 3, "Geometry has wrong dimension"
 
         # NB: we assume all kvs result in the same mesh
@@ -1638,9 +1787,22 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
         self.gaussgrid = gaussgrid
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
+        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
+        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=0)
+        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=0)
+        self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
         self.S0_C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=0)
+        assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
+        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
+        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=0)
+        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=0)
+        self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
+        self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=0)
 
         cdef double[:, :, :, :, ::1] geo_grad_a
         cdef double[:, :, ::1] GaussWeight

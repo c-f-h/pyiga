@@ -20,19 +20,6 @@ cdef class BaseAssembler2D:
     cdef readonly tuple kvs
     cdef tuple gaussgrid
 
-    cdef void base_init(self, kvs0, kvs1=None):
-        if kvs1 is None: kvs1 = kvs0
-        assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
-        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
-        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
-        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
-        assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
-        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
-        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
-        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
-        self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
-        self.kvs = (kvs0, kvs1)
-
     cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
         return -9999.99  # Not implemented
 
@@ -225,19 +212,6 @@ cdef class BaseVectorAssembler2D:
     cdef readonly tuple kvs
     cdef tuple gaussgrid
 
-    cdef void base_init(self, kvs0, kvs1=None):
-        if kvs1 is None: kvs1 = kvs0
-        assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
-        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
-        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
-        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
-        assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
-        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
-        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
-        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
-        self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
-        self.kvs = (kvs0, kvs1)
-
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
 
@@ -377,21 +351,6 @@ cdef class BaseAssembler3D:
     cdef double[:, :, ::1] S1_C2
     cdef readonly tuple kvs
     cdef tuple gaussgrid
-
-    cdef void base_init(self, kvs0, kvs1=None):
-        if kvs1 is None: kvs1 = kvs0
-        assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
-        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
-        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
-        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
-        self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
-        assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
-        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
-        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
-        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
-        self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
-        self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
-        self.kvs = (kvs0, kvs1)
 
     cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
         return -9999.99  # Not implemented
@@ -598,21 +557,6 @@ cdef class BaseVectorAssembler3D:
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
     cdef readonly tuple kvs
     cdef tuple gaussgrid
-
-    cdef void base_init(self, kvs0, kvs1=None):
-        if kvs1 is None: kvs1 = kvs0
-        assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
-        self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
-        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
-        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
-        self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
-        assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
-        self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
-        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
-        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
-        self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
-        self.nqp = max([kv.p for kv in kvs0 + kvs1]) + 1
-        self.kvs = (kvs0, kvs1)
 
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]

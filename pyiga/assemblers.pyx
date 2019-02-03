@@ -69,10 +69,8 @@ cdef class MassAssembler2D(BaseAssembler2D):
     @cython.initializedcheck(False)
     @staticmethod
     cdef void precompute_fields(
-            # input
             double[:, :, :, ::1] _geo_grad_a,
             double[:, ::1] _GaussWeight,
-            # output
             double[:, ::1] _W,
         ) nogil:
         cdef size_t n0 = _geo_grad_a.shape[0]
@@ -97,8 +95,10 @@ cdef class MassAssembler2D(BaseAssembler2D):
     @staticmethod
     cdef double combine(
             double[:, ::1] _W,
-            double* VDu0, double* VDu1,
-            double* VDv0, double* VDv1,
+            double* VDu0,
+            double* VDu1,
+            double* VDv0,
+            double* VDv1,
         ) nogil:
         cdef double result = 0.0
 
@@ -118,7 +118,11 @@ cdef class MassAssembler2D(BaseAssembler2D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
+    cdef double entry_impl(
+            self,
+            size_t i[2],
+            size_t j[2],
+        ) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[2]
@@ -194,10 +198,8 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
     @cython.initializedcheck(False)
     @staticmethod
     cdef void precompute_fields(
-            # input
             double[:, :, :, ::1] _geo_grad_a,
             double[:, ::1] _GaussWeight,
-            # output
             double[:, :, :, ::1] _B,
         ) nogil:
         cdef size_t n0 = _geo_grad_a.shape[0]
@@ -235,8 +237,10 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
     @staticmethod
     cdef double combine(
             double[:, :, :, ::1] _B,
-            double* VDu0, double* VDu1,
-            double* VDv0, double* VDv1,
+            double* VDu0,
+            double* VDu1,
+            double* VDv0,
+            double* VDv1,
         ) nogil:
         cdef double result = 0.0
 
@@ -260,7 +264,11 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
+    cdef double entry_impl(
+            self,
+            size_t i[2],
+            size_t j[2],
+        ) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[2]
@@ -339,10 +347,8 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
     @cython.initializedcheck(False)
     @staticmethod
     cdef void precompute_fields(
-            # input
             double[:, ::1] _GaussWeight,
             double[:, :, :, ::1] _geo_grad_a,
-            # output
             double[:, ::1] _W,
             double[:, :, :, ::1] _JacInv,
         ) nogil:
@@ -379,8 +385,10 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
     cdef double combine(
             double[:, ::1] _W,
             double[:, :, :, ::1] _JacInv,
-            double* VDu0, double* VDu1,
-            double* VDv0, double* VDv1,
+            double* VDu0,
+            double* VDu1,
+            double* VDv0,
+            double* VDv1,
         ) nogil:
         cdef double result = 0.0
 
@@ -408,7 +416,11 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
+    cdef double entry_impl(
+            self,
+            size_t i[2],
+            size_t j[2],
+        ) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[2]
@@ -488,10 +500,8 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
     @cython.initializedcheck(False)
     @staticmethod
     cdef void precompute_fields(
-            # input
             double[:, ::1] _GaussWeight,
             double[:, :, :, ::1] _geo_grad_a,
-            # output
             double[:, ::1] _W,
             double[:, :, :, ::1] _JacInv,
         ) nogil:
@@ -528,8 +538,10 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
     cdef double combine(
             double[:, ::1] _W,
             double[:, :, :, ::1] _JacInv,
-            double* VDu0, double* VDu1,
-            double* VDv0, double* VDv1,
+            double* VDu0,
+            double* VDu1,
+            double* VDv0,
+            double* VDv1,
         ) nogil:
         cdef double result = 0.0
 
@@ -559,7 +571,11 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
+    cdef double entry_impl(
+            self,
+            size_t i[2],
+            size_t j[2],
+        ) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[2]
@@ -640,10 +656,8 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     @cython.initializedcheck(False)
     @staticmethod
     cdef void precompute_fields(
-            # input
             double[:, ::1] _GaussWeight,
             double[:, :, :, ::1] _geo_grad_a,
-            # output
             double[:, ::1] _W,
             double[:, :, :, ::1] _JacInv,
         ) nogil:
@@ -680,9 +694,11 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     cdef void combine(
             double[:, ::1] _W,
             double[:, :, :, ::1] _JacInv,
-            double* VDu0, double* VDu1,
-            double* VDv0, double* VDv1,
-            double result[]
+            double* VDu0,
+            double* VDu1,
+            double* VDv0,
+            double* VDv1,
+            double result[],
         ) nogil:
 
         cdef size_t n0 = _W.shape[0]
@@ -721,7 +737,12 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
+    cdef void entry_impl(
+            self,
+            size_t i[2],
+            size_t j[2],
+            double result[],
+        ) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[2]
@@ -801,10 +822,8 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
     @cython.initializedcheck(False)
     @staticmethod
     cdef void precompute_fields(
-            # input
             double[:, :, :, ::1] _geo_grad_a,
             double[:, ::1] _GaussWeight,
-            # output
             double[:, ::1] _W,
         ) nogil:
         cdef size_t n0 = _geo_grad_a.shape[0]
@@ -830,7 +849,8 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
     cdef double combine(
             double[:, ::1] _W,
             double[:, ::1] _f_a,
-            double* VDu0, double* VDu1,
+            double* VDu0,
+            double* VDu1,
         ) nogil:
         cdef double result = 0.0
 
@@ -852,7 +872,11 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
+    cdef double entry_impl(
+            self,
+            size_t i[2],
+            size_t j[2],
+        ) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[2]
@@ -924,10 +948,8 @@ cdef class MassAssembler3D(BaseAssembler3D):
     @cython.initializedcheck(False)
     @staticmethod
     cdef void precompute_fields(
-            # input
             double[:, :, :, :, ::1] _geo_grad_a,
             double[:, :, ::1] _GaussWeight,
-            # output
             double[:, :, ::1] _W,
         ) nogil:
         cdef size_t n0 = _geo_grad_a.shape[0]
@@ -955,8 +977,12 @@ cdef class MassAssembler3D(BaseAssembler3D):
     @staticmethod
     cdef double combine(
             double[:, :, ::1] _W,
-            double* VDu0, double* VDu1, double* VDu2,
-            double* VDv0, double* VDv1, double* VDv2,
+            double* VDu0,
+            double* VDu1,
+            double* VDu2,
+            double* VDv0,
+            double* VDv1,
+            double* VDv2,
         ) nogil:
         cdef double result = 0.0
 
@@ -979,7 +1005,11 @@ cdef class MassAssembler3D(BaseAssembler3D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
+    cdef double entry_impl(
+            self,
+            size_t i[3],
+            size_t j[3],
+        ) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[3]
@@ -1068,10 +1098,8 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
     @cython.initializedcheck(False)
     @staticmethod
     cdef void precompute_fields(
-            # input
             double[:, :, :, :, ::1] _geo_grad_a,
             double[:, :, ::1] _GaussWeight,
-            # output
             double[:, :, :, :, ::1] _B,
         ) nogil:
         cdef size_t n0 = _geo_grad_a.shape[0]
@@ -1126,8 +1154,12 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
     @staticmethod
     cdef double combine(
             double[:, :, :, :, ::1] _B,
-            double* VDu0, double* VDu1, double* VDu2,
-            double* VDv0, double* VDv1, double* VDv2,
+            double* VDu0,
+            double* VDu1,
+            double* VDu2,
+            double* VDv0,
+            double* VDv1,
+            double* VDv2,
         ) nogil:
         cdef double result = 0.0
 
@@ -1156,7 +1188,11 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
+    cdef double entry_impl(
+            self,
+            size_t i[3],
+            size_t j[3],
+        ) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[3]
@@ -1248,10 +1284,8 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
     @cython.initializedcheck(False)
     @staticmethod
     cdef void precompute_fields(
-            # input
             double[:, :, ::1] _GaussWeight,
             double[:, :, :, :, ::1] _geo_grad_a,
-            # output
             double[:, :, ::1] _W,
             double[:, :, :, :, ::1] _JacInv,
         ) nogil:
@@ -1302,8 +1336,12 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
     cdef double combine(
             double[:, :, ::1] _W,
             double[:, :, :, :, ::1] _JacInv,
-            double* VDu0, double* VDu1, double* VDu2,
-            double* VDv0, double* VDv1, double* VDv2,
+            double* VDu0,
+            double* VDu1,
+            double* VDu2,
+            double* VDv0,
+            double* VDv1,
+            double* VDv2,
         ) nogil:
         cdef double result = 0.0
 
@@ -1338,7 +1376,11 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
+    cdef double entry_impl(
+            self,
+            size_t i[3],
+            size_t j[3],
+        ) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[3]
@@ -1431,10 +1473,8 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
     @cython.initializedcheck(False)
     @staticmethod
     cdef void precompute_fields(
-            # input
             double[:, :, ::1] _GaussWeight,
             double[:, :, :, :, ::1] _geo_grad_a,
-            # output
             double[:, :, ::1] _W,
             double[:, :, :, :, ::1] _JacInv,
         ) nogil:
@@ -1485,8 +1525,12 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
     cdef double combine(
             double[:, :, ::1] _W,
             double[:, :, :, :, ::1] _JacInv,
-            double* VDu0, double* VDu1, double* VDu2,
-            double* VDv0, double* VDv1, double* VDv2,
+            double* VDu0,
+            double* VDu1,
+            double* VDu2,
+            double* VDv0,
+            double* VDv1,
+            double* VDv2,
         ) nogil:
         cdef double result = 0.0
 
@@ -1523,7 +1567,11 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
+    cdef double entry_impl(
+            self,
+            size_t i[3],
+            size_t j[3],
+        ) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[3]
@@ -1617,10 +1665,8 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     @cython.initializedcheck(False)
     @staticmethod
     cdef void precompute_fields(
-            # input
             double[:, :, ::1] _GaussWeight,
             double[:, :, :, :, ::1] _geo_grad_a,
-            # output
             double[:, :, ::1] _W,
             double[:, :, :, :, ::1] _JacInv,
         ) nogil:
@@ -1671,9 +1717,13 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     cdef void combine(
             double[:, :, ::1] _W,
             double[:, :, :, :, ::1] _JacInv,
-            double* VDu0, double* VDu1, double* VDu2,
-            double* VDv0, double* VDv1, double* VDv2,
-            double result[]
+            double* VDu0,
+            double* VDu1,
+            double* VDu2,
+            double* VDv0,
+            double* VDv1,
+            double* VDv2,
+            double result[],
         ) nogil:
 
         cdef size_t n0 = _W.shape[0]
@@ -1728,7 +1778,12 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
+    cdef void entry_impl(
+            self,
+            size_t i[3],
+            size_t j[3],
+            double result[],
+        ) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[3]
@@ -1821,10 +1876,8 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
     @cython.initializedcheck(False)
     @staticmethod
     cdef void precompute_fields(
-            # input
             double[:, :, :, :, ::1] _geo_grad_a,
             double[:, :, ::1] _GaussWeight,
-            # output
             double[:, :, ::1] _W,
         ) nogil:
         cdef size_t n0 = _geo_grad_a.shape[0]
@@ -1853,7 +1906,9 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
     cdef double combine(
             double[:, :, ::1] _W,
             double[:, :, ::1] _f_a,
-            double* VDu0, double* VDu1, double* VDu2,
+            double* VDu0,
+            double* VDu1,
+            double* VDu2,
         ) nogil:
         cdef double result = 0.0
 
@@ -1878,7 +1933,11 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
+    cdef double entry_impl(
+            self,
+            size_t i[3],
+            size_t j[3],
+        ) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[3]

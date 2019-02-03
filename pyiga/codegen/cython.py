@@ -22,16 +22,25 @@ class CodeGen:
     def putf(self, s, **kwargs):
         self.put(s.format(**kwargs))
 
-    def declare_local_variable(self, type, name, init=None):
-        if isinstance(type, str):
-            typeandname = '%s %s' % (type, name)
+    def _typeandname(self, type, name):
+        if type is None:
+            return name
+        elif isinstance(type, str):
+            return '%s %s' % (type, name)
         else:
-            typeandname = '%s %s[%d]' % (type[0], name, type[1])    # fixed size array
+            sz = str(type[1]) if (type[1] is not None) else ''
+            return '%s %s[%s]' % (type[0], name, sz)    # fixed size array
 
+    def declare_local_variable(self, type, name, init=None):
+        typeandname = self._typeandname(type, name)
         if init is not None:
             self.putf('cdef {typeandname} = {init}', typeandname=typeandname, init=init)
         else:
             self.putf('cdef {typeandname}', typeandname=typeandname)
+
+    def declare_function_param(self, type, name):
+        typeandname = self._typeandname(type, name)
+        self.put(typeandname + ',')
 
     def for_loop(self, idx, upper):
         self.putf('for {idx} in range({upper}):', idx=idx, upper=upper)
@@ -138,11 +147,6 @@ class AsmGenerator:
         else:
             self.put(var.name + ' = ' + expr.gencode())
 
-    def cython_pragmas(self):
-        self.put('@cython.boundscheck(False)')
-        self.put('@cython.wraparound(False)')
-        self.put('@cython.initializedcheck(False)')
-
     def field_type(self, var):
         return 'double[{X}:1]'.format(X=', '.join((self.dim + len(var.shape)) * ':'))
 
@@ -160,9 +164,8 @@ class AsmGenerator:
             else:
                 self.declare_scalar(var.name)
 
-    def declare_params(self, params):
-        for var in params:
-            self.putf('{type} _{name},', type=self.field_type(var), name=var.name)
+    def params_from_vars(self, vars):
+        return [(self.field_type(var), '_' + var.name) for var in vars]
 
     def declare_array_vars(self, vars):
         for var in vars:
@@ -217,28 +220,41 @@ class AsmGenerator:
         for var in local_vars:
             self.gen_assign(var, var.expr)
 
+    def cython_pragmas(self):
+        self.put('@cython.boundscheck(False)')
+        self.put('@cython.wraparound(False)')
+        self.put('@cython.initializedcheck(False)')
+
+    def start_function(self, rettype, name, params=[], static=False):
+        self.cython_pragmas()
+        if static:
+            self.put('@staticmethod')
+        self.putf('cdef {rettype} {name}(', rettype=rettype, name=name)
+        self.indent(2)
+        for param in params:
+            self.code.declare_function_param(param[0], param[1])
+        self.dedent()
+        self.put(') nogil:')
+
     def generate_kernel(self):
         # function definition
-        self.cython_pragmas()
-        self.put('@staticmethod')
         rettype = 'void' if self.vec else 'double'
-        self.putf('cdef {rettype} combine(', rettype=rettype)
-        self.indent(2)
 
         array_params = [var for var in self.vform.kernel_deps if var.is_array]
         local_vars   = [var for var in self.vform.kernel_deps if not var.is_array]
 
         # parameters
-        self.declare_params(array_params)
+        params = self.params_from_vars(array_params)
 
         # arrays for basis function values/derivatives
         for bfun in self.vform.basis_funs:
-            self.put(self.dimrep('double* VD%s{}' % bfun.name) + ',')
+            for k in range(self.dim):
+                params.append(('double*', 'VD{name}{k}'.format(name=bfun.name, k=k)))
 
         if self.vec:    # for vector assemblers, result is passed as a pointer
-            self.put('double result[]')
-        self.dedent()
-        self.put(') nogil:')
+            params.append((('double', None), 'result'))
+
+        self.start_function(rettype, 'combine', params, static=True)
 
         # local variables
         if not self.vec:    # for vector assemblers, result is passed as a pointer
@@ -274,15 +290,19 @@ class AsmGenerator:
         self.end_function()
 
     def gen_entry_impl_header(self):
+        rettype = 'void' if self.vec else 'double'
+        params = [
+                (None, 'self'),
+                (('size_t', self.dim), 'i'),
+                (('size_t', self.dim), 'j'),
+        ]
         if self.vec:
-            funcdecl = 'cdef void entry_impl(self, size_t[{dim}] i, size_t[{dim}] j, double result[]) nogil:'.format(dim=self.dim)
-        else:
-            funcdecl = 'cdef double entry_impl(self, size_t[{dim}] i, size_t[{dim}] j) nogil:'.format(dim=self.dim)
+            params.append((('double', None), 'result'))
+
+        self.start_function(rettype, 'entry_impl', params)
+
         zeroret = '' if self.vec else '0.0'  # for vector assemblers, result[] is 0-initialized
 
-        self.cython_pragmas()
-        self.putf(funcdecl)
-        self.indent()
         self.code.declare_local_variable('int', 'k')
         self.code.declare_local_variable('IntInterval', 'intv')
         self.code.declare_local_variable(('size_t', self.dim), 'g_sta')
@@ -443,16 +463,9 @@ N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
         vf = self.vform
 
         # function header
-        self.cython_pragmas()
-        self.put('@staticmethod')
-        self.put('cdef void precompute_fields(')
-        self.indent(2)
-        self.put('# input')
-        self.declare_params(vf.precomp_deps)
-        self.put('# output')
-        self.declare_params(vf.precomp)
-        self.dedent()
-        self.put(') nogil:')
+        self.start_function('void', 'precompute_fields',
+                self.params_from_vars(vf.precomp_deps) + self.params_from_vars(vf.precomp),
+                static=True)
 
         # start main loop
         self.start_loop_with_fields(vf.precomp_deps, fields_out=vf.precomp, local_vars=vf.precomp_locals)

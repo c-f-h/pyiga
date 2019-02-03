@@ -563,7 +563,7 @@ cdef class BaseAssembler{{DIM}}D:
         """Compute an entry of the vector to be assembled."""
         if self.arity != 1:
             return 0.0
-        cdef size_t[{{DIM}}] I, J
+        cdef size_t[{{DIM}}] I
         with nogil:
             from_seq{{DIM}}(i, self.S0_ndofs, I)
             return self.entry_impl(I, <size_t*>0)

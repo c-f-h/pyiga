@@ -27,7 +27,7 @@ cdef class BaseAssembler2D:
         """Compute an entry of the vector to be assembled."""
         if self.arity != 1:
             return 0.0
-        cdef size_t[2] I, J
+        cdef size_t[2] I
         with nogil:
             from_seq2(i, self.S0_ndofs, I)
             return self.entry_impl(I, <size_t*>0)
@@ -359,7 +359,7 @@ cdef class BaseAssembler3D:
         """Compute an entry of the vector to be assembled."""
         if self.arity != 1:
             return 0.0
-        cdef size_t[3] I, J
+        cdef size_t[3] I
         with nogil:
             from_seq3(i, self.S0_ndofs, I)
             return self.entry_impl(I, <size_t*>0)

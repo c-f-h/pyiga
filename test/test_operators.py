@@ -42,7 +42,7 @@ def test_block():
     C,D = rand(2,3), rand(2,4)
     blocks = [[A,B],[C,D]]
     X = BlockOperator(blocks)
-    Y = np.block(blocks)
+    Y = np.bmat(blocks)  # should be np.block(blocks) in new numpy
     _test_oper(X, Y)
     _test_oper(X.T, Y.T)
 

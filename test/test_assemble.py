@@ -110,7 +110,7 @@ def test_wave_st_2d():
     A_ref = (spkron(DttDt, M) + spkron(D0Dt, DxDx)).tocsr()
 
     A = assemble(assemblers.WaveAssembler_ST2D(kvs, geo))
-    assert abs(A_ref - A).max() < 1e-14
+    assert abs(A_ref - A).max() < 1e-12
 
 ################################################################################
 # Test full Gauss quadrature assemblers with geometry transforms

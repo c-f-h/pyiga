@@ -40,9 +40,9 @@ def test_blockdiag():
 def test_block():
     A,B = rand(3,3), rand(3,4)
     C,D = rand(2,3), rand(2,4)
-    blocks = ((A,B),(C,D))
+    blocks = [[A,B],[C,D]]
     X = BlockOperator(blocks)
-    Y = np.bmat(blocks)
+    Y = np.block(blocks)
     _test_oper(X, Y)
     _test_oper(X.T, Y.T)
 

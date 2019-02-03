@@ -9,7 +9,7 @@ def test_eval():
     coeffs = np.random.rand(n)
     # evaluate it, B-spline by B-spline
     x = np.linspace(0.0, 1.0, 100)
-    values = np.sum((coeffs[j] * single_ev(kv, j, x) for j in range(n)))
+    values = sum((coeffs[j] * single_ev(kv, j, x) for j in range(n)))
     # evaluate all at once and compare
     values2 = ev(kv, coeffs, x)
     assert np.linalg.norm(values - values2) < 1e-10

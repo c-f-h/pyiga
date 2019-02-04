@@ -172,6 +172,7 @@ def ev(knotvec, coeffs, u):
     Returns:
         `ndarray`: the vector of function values
     """
+    assert len(coeffs) == knotvec.numdofs, 'Wrong size of coefficient vector'
     return scipy.interpolate.splev(u, (knotvec.kv, coeffs, knotvec.p))
 
 def deriv(knotvec, coeffs, deriv, u):
@@ -186,6 +187,7 @@ def deriv(knotvec, coeffs, deriv, u):
     Returns:
         `ndarray`: the vector of function derivatives
     """
+    assert len(coeffs) == knotvec.numdofs, 'Wrong size of coefficient vector'
     return scipy.interpolate.splev(u, (knotvec.kv, coeffs, knotvec.p), der=deriv)
 
 ################################################################################

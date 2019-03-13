@@ -375,6 +375,7 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
 
     # get basis for the boundary face
     bdbasis = list(kvs)
+    assert len(bdbasis) == geo.sdim, 'Invalid dimension of geometry'
     del bdbasis[bdax]
 
     # get boundary geometry and interpolate dir_func

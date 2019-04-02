@@ -303,9 +303,24 @@ def als(A, R, tol=1e-10, maxiter=10000, startval=None):
     return CanonicalTensor((x.T for x in xs))
 
 
-def grou(A, R, tol=1e-12, return_errors=False):
-    """Approximation by Greedy rank one updates."""
-    E = asarray(A)
+def grou(B, R, tol=1e-12, return_errors=False):
+    """Canonical tensor approximation by Greedy Rank One Updates.
+
+    References:
+        https://doi.org/10.1016/j.cam.2019.03.002
+
+    Args:
+        B (tensor): the tensor to be approximated
+        R (int): the desired canonical rank for the approximation
+        tol (double): the desired absolute error tolerance
+        return_errors (bool): whether to return the error history as
+            a second return value
+    Returns:
+        The computed approximation as a :class:`CanonicalTensor`.
+        If `return_errors` is true, instead returns a tuple containing
+        the tensor and a list of the error history over the iterations.
+    """
+    E = asarray(B)
     terms = []
     errors = []
 
@@ -410,7 +425,23 @@ def als1_ls_structured(A, B, tol=1e-15, maxiter=10000):
 
 
 def gta(A, R, tol=1e-12, rtol=1e-12, return_errors=False):
-    """Greedy Tucker approximation of the tensor `A`."""
+    """Greedy Tucker approximation of the tensor `A`.
+
+    References:
+        https://doi.org/10.1016/j.cam.2019.03.002
+
+    Args:
+        A (tensor): the tensor to be approximated
+        R (int): the desired multilinear rank of the approximation
+        tol (double): target absolute error tolerance
+        rtol (double): target relative error tolerance
+        return_errors (bool): whether to return the error history as
+            a second return value
+    Returns:
+        The computed approximation as a :class:`TuckerTensor`.
+        If `return_errors` is true, instead returns a tuple containing
+        the tensor and a list of the error history over the iterations.
+    """
     if isinstance(A, np.ndarray):
         A = TensorSum(A) # make sure it's a tensor object so A-T works
     us = als1(A)
@@ -468,7 +499,27 @@ def _gauss_seidel(A, u, f, iterations=1, indices=None):
         _gauss_seidel_sweep(A, u, f, indices=indices)
 
 def gta_ls(A, F, R, tol=1e-12, verbose=0, gs=None):
-    """Greedy Tucker approximation of the solution of a linear system"""
+    """Greedy Tucker approximation of the solution of a linear system `A U = F`.
+
+    References:
+        https://doi.org/10.1016/j.cam.2019.03.002
+
+    Args:
+        A (list): the linear operator in low Kronecker rank format given as a
+            list of tuples. Each tuple represents a Kronecker product operator and
+            contains `d` matrices or linear operators; the operator is considered
+            as the Kronecker product of these operators
+        F (tensor): the right-hand side of the linear system as a (possibly
+            low-rank) tensor
+        R (int): the desired multilinear rank of the approximation (number of iterations)
+        tol (double): desired reduction of the initial residual
+        verbose (int): 0 = no printed output, 1 = moderate detail, 2 = full detail
+        gs (int): if this is not None, then this many Gauss-Seidel iterations are used on
+            the core linear system instead of direct solution; see the paper for details
+
+    Returns:
+        the computed approximation as a :class:`TuckerTensor`
+    """
     res0_norm = fro_norm(F)
 
     # start with rank one approximation
@@ -677,6 +728,7 @@ class TuckerTensor:
     One way to compute a Tucker tensor approximation from a full tensor is to first
     compute the HOSVD using :func:`hosvd` and then truncate it using
     :func:`TuckerTensor.truncate` to the rank estimated by :func:`find_truncation_rank`.
+    Such a rank compression is implemented in :func:`TuckerTensor.compress`.
     """
     def __init__(self, Us, X):
         self.Us = tuple(Us)
@@ -746,8 +798,11 @@ class TuckerTensor:
         return TuckerTensor(tuple(self.Us[i][:,slices[i]] for i in range(N)), self.X[slices])
 
     def compress(self, tol=1e-15, rtol=1e-15):
-        """Compress a Tucker tensor to have smaller rank, up to an absolute error tolerance `tol`
-        or a relative error tolerance `rtol`.
+        """Approximate this Tucker tensor by another one of smaller rank, up to
+        an absolute error tolerance `tol` or a relative error tolerance `rtol`.
+
+        Returns:
+            the approximation as a :class:`TuckerTensor`
         """
         # first, orthogonalize the basis
         T = self.orthogonalize()

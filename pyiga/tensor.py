@@ -625,6 +625,11 @@ class CanonicalTensor:
         return CanonicalTensor(np.zeros((n,0)) for n in shape)
 
     @staticmethod
+    def ones(shape):
+        """Construct a constant canonical tensor with all entries one and the given shape."""
+        return CanonicalTensor(np.ones((n,1)) for n in shape)
+
+    @staticmethod
     def from_terms(terms):
         """Construct a canonical tensor from a list of rank 1 terms, represented
         as tuples of vectors.

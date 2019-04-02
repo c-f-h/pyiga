@@ -744,6 +744,16 @@ class TuckerTensor:
         self.R = self.X.shape
 
     @staticmethod
+    def zeros(shape):
+        """Construct a zero Tucker tensor with the given shape."""
+        return TuckerTensor.from_tensor(CanonicalTensor.zeros(shape))
+
+    @staticmethod
+    def ones(shape):
+        """Construct a constant Tucker tensor with all entries one and the given shape."""
+        return TuckerTensor.from_tensor(CanonicalTensor.ones(shape))
+
+    @staticmethod
     def from_tensor(A):
         """Convert `A` from other tensor formats to Tucker format."""
         if isinstance(A, CanonicalTensor):

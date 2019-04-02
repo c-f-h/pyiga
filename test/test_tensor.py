@@ -39,6 +39,12 @@ def test_tucker():
     assert np.allclose(T.asarray(), T.orthogonalize().asarray())
     assert np.allclose(np.linalg.norm(X), T.norm())
     assert np.allclose(T.asarray(), T.copy().asarray())
+    # zeros
+    Z = TuckerTensor.zeros((3,4,5))
+    assert fro_norm(Z.asarray()) == 0.0
+    # ones
+    Z = TuckerTensor.ones((3,4,5))
+    assert np.allclose(Z.asarray(), np.ones((3,4,5)))
     ###
     X = _random_tucker((3,4,5), 2)
     # orthogonalize

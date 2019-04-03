@@ -62,7 +62,7 @@ setup(
     description = 'A Python research toolbox for Isogeometric Analysis',
     long_description = 'pyiga is a Python research toolbox for Isogeometric Analysis.\n\nPlease visit the project homepage on Github to learn more.',
     author = 'Clemens Hofreither',
-    author_email = 'chofreither@numa.uni-linz.ac.at',
+    author_email = 'chofreither@ricam.oeaw.ac.at',
     url = 'https://github.com/c-f-h/pyiga',
 
     classifiers=[

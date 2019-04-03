@@ -16,6 +16,7 @@ install:
   - conda config --set always_yes yes --set changeps1 no
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION wheel setuptools Cython nose numpy scipy
   - source activate test-environment
+  - conda install networkx
   - pip install pyamg
   - python setup.py install
 

@@ -38,6 +38,7 @@ well tested. Python 3 is recommended.
 Before installing, make
 sure you have recent versions of **Numpy**, **Scipy** and **Cython** installed
 and that your environment can compile Python extension modules.
+Numpy 1.14 or higher is required.
 If you do not have such an environment set up yet, the easiest way to get it
 is by installing Anaconda_ (this can be done without administrator privileges).
 

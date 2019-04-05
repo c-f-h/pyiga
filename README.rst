@@ -87,7 +87,7 @@ the unit tests, and the `IPython notebooks`_ to learn more.
 .. _IPython notebooks: ./notebooks
 .. _API reference: http://pyiga.readthedocs.io/en/latest/
 .. _FEniCS: https://fenicsproject.org/
-.. _Anaconda: https://www.continuum.io/downloads
+.. _Anaconda: https://www.anaconda.com/distribution/
 
 FAQ
 ---

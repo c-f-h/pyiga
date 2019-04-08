@@ -520,6 +520,7 @@ def gta_ls(A, F, R, tol=1e-12, verbose=0, gs=None):
     Returns:
         the computed approximation as a :class:`TuckerTensor`
     """
+    F = TuckerTensor.from_tensor(F) # ensure Tucker format for rhs
     res0_norm = fro_norm(F)
 
     # start with rank one approximation

@@ -336,8 +336,10 @@ def grou(B, R, tol=1e-12, return_errors=False):
     return (X, errors) if return_errors else X
 
 
-def als1_ls(A, B, tol=1e-15, maxiter=10000):
+def als1_ls(A, B, tol=1e-15, maxiter=10000, spd=False):
     """Compute rank 1 approximation to the solution of a linear system by Alternating Least Squares."""
+    if spd:
+        return _als1_ls_spd(A, B, tol=tol, maxiter=maxiter)
     d = B.ndim
     rankA = len(A)
     xs = list(np.random.rand(B.shape[j]) for j in range(d))
@@ -377,6 +379,39 @@ def als1_ls(A, B, tol=1e-15, maxiter=10000):
             break
     return xs
 
+
+def _als1_ls_spd(A, B, tol=1e-15, maxiter=10000):
+    """Compute rank 1 approximation to the solution of a linear system by Alternating Least Squares,
+    assuming A is spd. Computes the best rank 1 approximation to the solution in the energy norm."""
+    d = B.ndim
+    rankA = len(A)
+    xs = list(np.random.rand(B.shape[j]) for j in range(d))
+
+    for it in range(maxiter):
+        delta = 1.0
+        for k in range(d):
+            Ak = scipy.sparse.csr_matrix(A[0][k].shape)
+
+            for r in range(rankA):
+                w = 1.0
+                for m in range(d):
+                    if m != k:
+                        w *= A[r][m].dot(xs[m]).dot(xs[m])
+                Ak += w * A[r][k]
+
+            # compute right-hand side
+            xts = [x[None,:] for x in xs]
+            xts[k] = None
+            b = apply_tprod(xts, B).ravel()
+
+            # solve least squares problem
+            xk = scipy.sparse.linalg.spsolve(Ak, b)
+            delta *= np.linalg.norm(xs[k] - xk)
+            xs[k] = xk
+
+        if delta < tol:
+            break
+    return xs
 
 def als1_ls_structured(A, B, tol=1e-15, maxiter=10000):
     """Compute rank 1 approximation to the solution of a linear system by Alternating Least Squares.
@@ -498,7 +533,7 @@ def _gauss_seidel(A, u, f, iterations=1, indices=None):
     for it in range(iterations):
         _gauss_seidel_sweep(A, u, f, indices=indices)
 
-def gta_ls(A, F, R, tol=1e-12, verbose=0, gs=None):
+def gta_ls(A, F, R, tol=1e-12, verbose=0, gs=None, spd=False):
     """Greedy Tucker approximation of the solution of a linear system `A U = F`.
 
     References:
@@ -516,6 +551,9 @@ def gta_ls(A, F, R, tol=1e-12, verbose=0, gs=None):
         verbose (int): 0 = no printed output, 1 = moderate detail, 2 = full detail
         gs (int): if this is not None, then this many Gauss-Seidel iterations are used on
             the core linear system instead of direct solution; see the paper for details
+        spd (bool): pass True if `A` is a symmetric positive definite operator; uses a
+            more efficient and accurate rank 1 approximation algorithm (see the corresponding
+            parameter of :func:`als1_ls`)
 
     Returns:
         the computed approximation as a :class:`TuckerTensor`
@@ -523,7 +561,7 @@ def gta_ls(A, F, R, tol=1e-12, verbose=0, gs=None):
     res0_norm = fro_norm(F)
 
     # start with rank one approximation
-    us = als1_ls(A, F, tol=tol)
+    us = als1_ls(A, F, tol=tol, spd=spd)
     U = [u[:,None] / np.linalg.norm(u) for u in us]
     d = F.ndim
     rankA = len(A)

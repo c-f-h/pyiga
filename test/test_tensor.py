@@ -238,3 +238,24 @@ def test_als():
     A.X[0,0,0] = A.X[1,1,1] = 1.0
     B = als(A, R=2, maxiter=100)
     #assert np.allclose(A.asarray(), B.asarray(), atol=1e-4)
+
+def test_ls():
+    from pyiga import bspline, assemble
+    kv = bspline.make_knots(3, 0.0, 1.0, 10)
+    K = assemble.stiffness(kv)[1:-1, 1:-1]
+    M = assemble.mass(kv)[1:-1, 1:-1]
+    A = [(K,M,M), (M,K,M), (M,M,K)]
+    n = K.shape[0]
+    F = CanonicalTensor.ones((n,n,n))
+    #
+    X = CanonicalTensor(als1_ls(A, F))
+    Y = CanonicalTensor(als1_ls(A, F, spd=True))
+    assert X.shape == F.shape
+    assert Y.shape == F.shape
+    assert fro_norm(X - Y) < 0.1 * fro_norm(X)
+    #
+    T1 = gta_ls(A, F, 3)
+    T2 = gta_ls(A, F, 3, spd=True)
+    assert T1.shape == F.shape
+    assert T2.shape == F.shape
+    assert fro_norm(T1 - T2) < 0.1 * fro_norm(T1)

@@ -156,6 +156,24 @@ def test_canonical():
     assert np.allclose((A + B).asarray(), A.asarray() + B.asarray())
     assert np.allclose((A - B).asarray(), A.asarray() - B.asarray())
 
+def test_coercion():
+    C = _random_canonical((3,4,5), 2)
+    T = _random_tucker((3,4,5), 2)
+    A = rand(3,4,5)
+
+    def _test_sum_diff(X, Y, typ):
+        XY = X + Y
+        assert type(XY) is typ
+        assert np.allclose(asarray(XY), asarray(X) + asarray(Y))
+        XY = X - Y
+        assert type(XY) is typ
+        assert np.allclose(asarray(XY), asarray(X) - asarray(Y))
+
+    _test_sum_diff(C, T, TuckerTensor)
+    _test_sum_diff(C, A, np.ndarray)
+    _test_sum_diff(T, C, TuckerTensor)
+    _test_sum_diff(T, A, np.ndarray)
+
 def test_grou():
     X = _random_canonical((3,4,5), 1)
     Y = grou(X, R=2)

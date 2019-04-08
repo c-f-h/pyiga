@@ -520,7 +520,6 @@ def gta_ls(A, F, R, tol=1e-12, verbose=0, gs=None):
     Returns:
         the computed approximation as a :class:`TuckerTensor`
     """
-    F = TuckerTensor.from_tensor(F) # ensure Tucker format for rhs
     res0_norm = fro_norm(F)
 
     # start with rank one approximation
@@ -707,9 +706,15 @@ class CanonicalTensor:
 
     def __add__(self, T2):
         assert self.shape == T2.shape, 'incompatible shapes'
-        assert isinstance(T2, CanonicalTensor), 'can only add canonical to canonical tensor'
-        return CanonicalTensor(
-                (np.hstack((X1,X2)) for (X1,X2) in zip(self.Xs, T2.Xs)))
+        if isinstance(T2, CanonicalTensor):
+            return CanonicalTensor(
+                    (np.hstack((X1,X2)) for (X1,X2) in zip(self.Xs, T2.Xs)))
+        elif isinstance(T2, TuckerTensor):
+            return TuckerTensor.from_tensor(self) + T2
+        elif isinstance(T2, np.ndarray):
+            return self.asarray() + T2
+        else:
+            raise TypeError('cannot add CanonicalTensor and %s' % type(T2))
 
     def __sub__(self, T2):
         return self + (-T2)
@@ -851,15 +856,23 @@ class TuckerTensor:
 
     def __add__(self, T2):
         assert T2.shape == self.shape, 'incompatible shapes'
-        assert isinstance(T2, TuckerTensor), 'can only add Tucker tensor to Tucker tensor'
-        U, X1, X2 = join_tucker_bases(self, T2)
-        return TuckerTensor(U, X1 + X2)
+        if isinstance(T2, TuckerTensor):
+            U, X1, X2 = join_tucker_bases(self, T2)
+            return TuckerTensor(U, X1 + X2)
+        elif isinstance(T2, CanonicalTensor):
+            return self + TuckerTensor.from_tensor(T2)
+        elif isinstance(T2, np.ndarray):
+            return self.asarray() + T2
+        else:
+            raise TypeError('cannot add TuckerTensor and %s' % type(T2))
 
     def __sub__(self, T2):
         assert T2.shape == self.shape, 'incompatible shapes'
-        assert isinstance(T2, TuckerTensor), 'can only subtract Tucker tensor from Tucker tensor'
-        U, X1, X2 = join_tucker_bases(self, T2)
-        return TuckerTensor(U, X1 - X2)
+        if isinstance(T2, TuckerTensor):
+            U, X1, X2 = join_tucker_bases(self, T2)
+            return TuckerTensor(U, X1 - X2)
+        else:
+            return self + (-T2)
 
     def __neg__(self):
         return TuckerTensor((U.copy() for U in self.Us), -self.X)

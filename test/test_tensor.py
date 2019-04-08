@@ -163,10 +163,10 @@ def test_coercion():
 
     def _test_sum_diff(X, Y, typ):
         XY = X + Y
-        assert type(XY) is typ
+        assert isinstance(XY, typ)
         assert np.allclose(asarray(XY), asarray(X) + asarray(Y))
         XY = X - Y
-        assert type(XY) is typ
+        assert isinstance(XY, typ)
         assert np.allclose(asarray(XY), asarray(X) - asarray(Y))
 
     _test_sum_diff(C, T, TuckerTensor)

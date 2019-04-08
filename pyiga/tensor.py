@@ -701,7 +701,8 @@ class CanonicalTensor:
         return self.asarray().ravel()
 
     def __neg__(self):
-        return CanonicalTensor((-self.Xs[0],) + self.Xs[1:])
+        A = self.copy()
+        return CanonicalTensor((-A.Xs[0],) + A.Xs[1:])
 
     def __add__(self, T2):
         assert self.shape == T2.shape, 'incompatible shapes'
@@ -860,7 +861,7 @@ class TuckerTensor:
         return TuckerTensor(U, X1 - X2)
 
     def __neg__(self):
-        return TuckerTensor(self.Us, -self.X)
+        return TuckerTensor((U.copy() for U in self.Us), -self.X)
 
 
 def join_tucker_bases(T1, T2):

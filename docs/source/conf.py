@@ -57,7 +57,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'pyiga'
-copyright = '2017, Clemens Hofreither'
+copyright = '2017-2019, Clemens Hofreither'
 author = 'Clemens Hofreither'
 
 # The version info for the project you're documenting, acts as replacement for

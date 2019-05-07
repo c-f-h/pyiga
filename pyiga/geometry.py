@@ -425,7 +425,7 @@ def unit_cube(dim=3, num_intervals=1):
 
 def identity(extents):
     """Identity mapping (using linear splines) over a d-dimensional box
-    given by `extents` as a list of (min,max) pairs or of :class:`KnotVector`s.
+    given by `extents` as a list of (min,max) pairs or of :class:`pyiga.bspline.KnotVector`.
 
     Returns:
         :class:`BSplinePatch` geometry

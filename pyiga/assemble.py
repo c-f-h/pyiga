@@ -72,6 +72,7 @@ import numpy as np
 import scipy
 import scipy.sparse
 import itertools
+import math
 
 from . import bspline
 from . import assemble_tools
@@ -186,7 +187,8 @@ def bsp_stiffness_1d(knotvec):
 def bsp_mixed_deriv_biform_1d(knotvec, du, dv, nqp=None, weightfunc=None):
     "Assemble the matrix for a(u,v)=(weight*u^(du),v^(dv)) for the B-spline basis over the given knot vector"""
     nspans = knotvec.numspans
-    if nqp is None: nqp = knotvec.p
+    # default: use that q-term Gauss quadrature is exact up to poly degree 2q-1
+    if nqp is None: nqp = int(math.ceil((2 * knotvec.p - du - dv + 1) / 2.0))
     q = make_iterated_quadrature(knotvec.kv[knotvec.p:-knotvec.p], nqp)
     derivs = bspline.active_deriv(knotvec, q[0], max(du, dv))
     qweights = q[1]

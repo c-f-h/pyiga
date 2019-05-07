@@ -2,8 +2,8 @@ from pyiga.geometry import *
 from pyiga import approx, bspline
 
 def geos_roughly_equal(geo1, geo2, n=25):
-    x = np.linspace(0.0, 1.0, n)
-    grid = geo1.sdim * (x,)
+    supp = geo1.support
+    grid = tuple(np.linspace(s[0], s[1], n) for s in supp)
     f1 = geo1.grid_eval(grid)
     f2 = geo2.grid_eval(grid)
     return np.allclose(f1, f2)
@@ -28,6 +28,16 @@ def test_cube():
     cube4 = unit_cube(dim=4)
     assert geos_roughly_equal(cube2, unit_square())
     assert geos_roughly_equal(cube4, cube3.extrude(0.0, 1.0))
+
+def test_identity():
+    geo = identity([(3.0,4.0), (5.0,6.0)])
+    assert geo.dim == geo.sdim == 2
+    assert np.allclose(geo.eval(5,3), (5,3))
+    assert np.allclose(geo.eval(6,4), (6,4))
+    assert np.allclose(geo.eval(5.87,3.21), (5.87,3.21))
+    geo2 = identity([bspline.make_knots(3, 3.0, 4.0, 10),
+                     bspline.make_knots(3, 5.0, 6.0, 5)])
+    assert geos_roughly_equal(geo, geo2)
 
 def test_evaluation():
     geo = bspline_quarter_annulus()

@@ -725,7 +725,12 @@ class CanonicalTensor:
             :class:`CanonicalTensor`: the result in canonical format
         """
         Bs = tuple(Bs)
-        assert len(Bs) == self.ndim
+        if len(Bs) < self.ndim:
+            Bs = Bs + (self.ndim - len(Bs)) * (None,)
+        elif len(Bs) > self.ndim:
+            raise ValueError('more operators than tensor axes (%d vs %d)'
+                    % (len(Bs), self.ndim))
+
         Xs = []
         for j in range(self.ndim):
             if Bs[j] is not None:
@@ -879,7 +884,12 @@ class TuckerTensor:
             :class:`TuckerTensor`: the result in Tucker format
         """
         Bs = tuple(Bs)
-        assert len(Bs) == self.ndim
+        if len(Bs) < self.ndim:
+            Bs = Bs + (self.ndim - len(Bs)) * (None,)
+        elif len(Bs) > self.ndim:
+            raise ValueError('more operators than tensor axes (%d vs %d)'
+                    % (len(Bs), self.ndim))
+
         Us = []
         for j in range(self.ndim):
             if Bs[j] is not None:

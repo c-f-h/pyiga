@@ -657,6 +657,9 @@ class CanonicalTensor:
         self.R = self.Xs[0].shape[1]
         assert all(X.shape[1] == self.R for X in self.Xs), 'invalid matrix shape'
 
+    def __repr__(self):
+        return '<%s shape=%s R=%s>' % (self.__class__.__name__, self.shape, self.R)
+
     @staticmethod
     def zeros(shape):
         """Construct a zero canonical tensor with the given shape."""
@@ -792,6 +795,9 @@ class TuckerTensor:
         assert self.ndim == X.ndim, 'Incompatible sizes'
         self.shape = tuple(U.shape[0] for U in self.Us)
         self.R = self.X.shape
+
+    def __repr__(self):
+        return '<%s shape=%s R=%s>' % (self.__class__.__name__, self.shape, self.R)
 
     @staticmethod
     def zeros(shape):
@@ -954,6 +960,9 @@ class TensorSum:
         self.shape = self.Xs[0].shape
         assert all(X.shape == self.shape for X in self.Xs), 'tensors must have identical shape'
 
+    def __repr__(self):
+        return '<%s shape=%s nterms=%s>' % (self.__class__.__name__, self.shape, len(self.Xs))
+
     def asarray(self):
         """Convert sum of tensors to a full `ndarray`."""
         A = np.array(asarray(self.Xs[0]))
@@ -996,6 +1005,9 @@ class TensorProd:
             self.slices.append(slice(start, end))
         self.ndim = len(shp)
         self.shape = shp
+
+    def __repr__(self):
+        return '<%s shape=%s nterms=%s>' % (self.__class__.__name__, self.shape, len(self.Xs))
 
     def asarray(self):
         """Convert sum of tensors to a full `ndarray`."""

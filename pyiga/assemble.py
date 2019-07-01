@@ -103,16 +103,15 @@ def _assemble_element_matrices(nspans, nqp, vals1, vals2, qweights):
         elMats[k, :, :] = np.dot( f1, (f2 * w).transpose() )
     return elMats       # n_act1*nspans x n_act2
 
-def _create_coo_1d(nspans, n_act1, n_act2=None):
-    """Create COO indices for two sequentially numbered bases over `nspans` knot spans"""
-    if n_act2 is None:
-        n_act2 = n_act1     # if only one given, assume symmetry
+def _create_coo_1d_from_kv(kv):
+    n_act1 = n_act2 = kv.p + 1
+    nspans = kv.numspans
     grid = np.mgrid[:n_act1, :n_act2] # 2 x n_act1 x n_act2 array which indexes element matrix
     I_ref = grid[0].ravel()          # slowly varying index, first basis
     J_ref = grid[1].ravel()          # fast varying index, second basis
 
-    # first active basis function = index of knot span (independent of spline degree)
-    first_act = np.repeat(range(nspans), n_act1*n_act2)
+    first_act = kv.first_active(kv.mesh_span_indices())
+    first_act = np.repeat(first_act, n_act1*n_act2)
     I = first_act + np.tile(I_ref, nspans)
     J = first_act + np.tile(J_ref, nspans)
     return (I, J)
@@ -127,31 +126,23 @@ def _create_coo_1d_custom(nspans, n_act1, n_act2, first_act1, first_act2):
     J = np.repeat(first_act2, n_act1*n_act2) + np.tile(J_ref, nspans)
     return (I, J)
 
-def _assemble_matrix(nspans, nqp, vals1, vals2, qweights):
-    n_act1 = vals1.shape[0]
-    n_act2 = vals2.shape[0]
-    elMats = _assemble_element_matrices(nspans, nqp, vals1, vals2, qweights)
-    (I, J) = _create_coo_1d(nspans, n_act1, n_act2)
-    return scipy.sparse.coo_matrix((elMats.ravel(), (I, J))).tocsr()
-
 def _assemble_matrix_custom(nspans, nqp, vals1, vals2, I, J, qweights):
     n_act1 = vals1.shape[0]
     n_act2 = vals2.shape[0]
     elMats = _assemble_element_matrices(nspans, nqp, vals1, vals2, qweights)
     return scipy.sparse.coo_matrix((elMats.ravel(), (I, J))).tocsr()
 
-def bsp_mass_1d(knotvec):
-    "Assemble the mass matrix for the B-spline basis over the given knot vector"""
-    nspans = knotvec.numspans
-    nqp = knotvec.p + 1
-    q = make_iterated_quadrature(knotvec.kv[knotvec.p:-knotvec.p], nqp)
-    vals = bspline.active_ev(knotvec, q[0])
-    return _assemble_matrix(nspans, nqp, vals, vals, q[1])
+def bsp_mass_1d(knotvec, weightfunc=None):
+    """Assemble the mass matrix for the B-spline basis over the given knot vector.
+
+    Optionally, a weight function can be passed; by default, it is assumed to be 1.
+    """
+    return bsp_mixed_deriv_biform_1d(knotvec, 0, 0, weightfunc=weightfunc)
 
 def bsp_mass_1d_asym(knotvec1, knotvec2, quadgrid=None):
     """Assemble a mass matrix relating two B-spline bases. By default, uses the first knot vector for quadrature."""
     if quadgrid is None:
-        quadgrid = np.unique(knotvec1.kv)
+        quadgrid = knotvec1.mesh
 
     # create iterated Gauss quadrature rule for each interval
     nqp = max(knotvec1.p, knotvec2.p) + 1
@@ -172,34 +163,30 @@ def bsp_mass_1d_asym(knotvec1, knotvec2, quadgrid=None):
 
     return _assemble_matrix_custom(nspans, nqp, vals1, vals2, I, J, q[1])
 
-def bsp_mass_1d_weighted(knotvec, weightfunc):
-    nspans = knotvec.numspans
-    nqp = knotvec.p
-    q = make_iterated_quadrature(knotvec.kv[knotvec.p:-knotvec.p], nqp)
-    vals = bspline.active_ev(knotvec, q[0])
-    weights = q[1] * weightfunc(q[0])
-    return _assemble_matrix(nspans, nqp, vals, vals, weights)
+def bsp_stiffness_1d(knotvec, weightfunc=None):
+    """Assemble the Laplacian stiffness matrix for the B-spline basis over the given knot vector.
 
-def bsp_stiffness_1d(knotvec):
-    "Assemble the Laplacian stiffness matrix for the B-spline basis over the given knot vector"""
-    return bsp_mixed_deriv_biform_1d(knotvec, 1, 1)
+    Optionally, a weight function can be passed; by default, it is assumed to be 1.
+    """
+    return bsp_mixed_deriv_biform_1d(knotvec, 1, 1, weightfunc=weightfunc)
 
 def bsp_mixed_deriv_biform_1d(knotvec, du, dv, nqp=None, weightfunc=None):
     "Assemble the matrix for a(u,v)=(weight*u^(du),v^(dv)) for the B-spline basis over the given knot vector"""
     nspans = knotvec.numspans
     # default: use that q-term Gauss quadrature is exact up to poly degree 2q-1
     if nqp is None: nqp = int(math.ceil((2 * knotvec.p - du - dv + 1) / 2.0))
-    q = make_iterated_quadrature(knotvec.kv[knotvec.p:-knotvec.p], nqp)
+    q = make_iterated_quadrature(knotvec.mesh, nqp)
     derivs = bspline.active_deriv(knotvec, q[0], max(du, dv))
     qweights = q[1]
     if weightfunc is not None:
         qweights *= utils.grid_eval(weightfunc, (q[0],))
-    return _assemble_matrix(nspans, nqp, derivs[dv, :, :], derivs[du, :, :], qweights)
+    I,J = _create_coo_1d_from_kv(knotvec)
+    return _assemble_matrix_custom(nspans, nqp, derivs[dv, :, :], derivs[du, :, :], I, J, qweights)
 
 def bsp_stiffness_1d_asym(knotvec1, knotvec2, quadgrid=None):
     """Assemble a stiffness matrix relating two B-spline bases. By default, uses the first knot vector for quadrature."""
     if quadgrid is None:
-        quadgrid = np.unique(knotvec1.kv)
+        quadgrid = knotvec1.mesh
 
     # create iterated Gauss quadrature rule for each interval
     nqp = max(knotvec1.p, knotvec2.p) + 1

@@ -63,3 +63,12 @@ def test_compare_intproj():
     x1 = interpolate(kvs, f, geo=geo)
     x2 = project_L2(kvs, f, f_physical=True, geo=geo)
     assert abs(x1-x2).max() < 1e-5
+
+def test_exact_poly():
+    for p in range(1, 5):
+        for mult in range(1, p+1):
+            kv = bspline.make_knots(p, 0.0, 1.0, 5, mult=mult)
+            f = lambda x: (x+1)**p
+            u = project_L2(kv, f)
+            x = np.linspace(0, 1, 25)
+            assert np.allclose(f(x), bspline.ev(kv, u, x))

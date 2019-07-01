@@ -59,7 +59,7 @@ class KnotVector:
     @property
     def numspans(self):
         """Number of nontrivial intervals in the knot vector"""
-        return np.unique(self.kv).size - 1
+        return self.mesh.size - 1
 
     def support(self, j=None):
         """Support of the knot vector or, if `j` is passed, of the j-th B-spline"""
@@ -123,8 +123,8 @@ class KnotVector:
 
     def refine(self):
         """Returns the uniform refinement of this knot vector"""
-        uniq = np.unique(self.kv)
-        midpoints = (uniq[1:] + uniq[:-1]) / 2
+        mesh = self.mesh
+        midpoints = (mesh[1:] + mesh[:-1]) / 2
         kvnew = np.sort(np.concatenate((self.kv, midpoints)))
         return KnotVector(kvnew, self.p)
 

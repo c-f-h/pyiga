@@ -65,3 +65,8 @@ def test_prolongation():
     val2 = ev(kv2, coeffs2, x)
     assert np.linalg.norm(val1 - val2) < 1e-10
 
+def test_mesh_span_indices():
+    kv = make_knots(3, 0.0, 1.0, 4)
+    assert np.array_equal(kv.mesh_span_indices(), [3, 4, 5, 6])
+    kv = make_knots(3, 0.0, 1.0, 4, mult=3)
+    assert np.array_equal(kv.mesh_span_indices(), [3, 6, 9, 12])

@@ -98,6 +98,14 @@ class KnotVector:
         startend = np.stack((np.arange(0,n), np.arange(self.p+1, n+self.p+1)), axis=1)
         return self._knots_to_mesh[startend]
 
+    def mesh_span_indices(self):
+        """Return an array of indices i such that kv[i] != kv[i+1], i.e., the indices
+        of the nonempty spans. Return value has length self.numspans.
+        """
+        self._ensure_mesh()
+        k2m = self._knots_to_mesh
+        return np.where(k2m[1:] != k2m[:-1])[0]
+
     def findspan(self, u):
         """Returns an index i such that
          kv[i] <= u < kv[i+1]     (except for the boundary, where u <= kv[m-p] is allowed)

@@ -34,6 +34,7 @@ import scipy.linalg
 
 from functools import reduce
 import operator
+from . import utils
 
 
 def _modek_tensordot_sparse(B, X, k):
@@ -1035,3 +1036,84 @@ class TensorProd:
 
     def __neg__(self):
         return TensorProd(*((-self.Xs[0],) + self.Xs[1:]))
+
+################################################################################
+
+class CanonicalOperator:
+    def __init__(self, terms):
+        """Represents a linear operator on tensors which is described as a sum
+        of rank one operators (Kronecker products).
+        """
+        self.terms = list(terms)
+        self.R = len(self.terms)
+        d = len(self.terms[0])
+        assert all(self.terms[r][j].shape == self.terms[0][j].shape
+                   for r in range(self.R)
+                   for j in range(d)), 'inconsistent shapes'
+        self.shapeout = tuple(A.shape[0] for A in self.terms[0])
+        self.shapein  = tuple(A.shape[1] for A in self.terms[0])
+        self.shape = (self.shapeout, self.shapein)
+
+    def __repr__(self):
+        return '<%s %s -> %s R=%s>' % (self.__class__.__name__, self.shape[0], self.shape[1], self.R)
+
+    @staticmethod
+    def eye(ns, format='dia'):
+        """Represent the identity as a tensor product of identity matrices with sizes
+        given by the tuple of integers `ns`.
+        """
+        return CanonicalOperator([[ scipy.sparse.eye(n, format=format) for n in ns ]])
+
+    def asmatrix(self, format='csr'):
+        """Return the raveled form of this operator as a sparse matrix in the given format."""
+        X = utils.multi_kron_sparse(self.terms[0], format=format)
+        for j in range(1, self.R):
+            X += utils.multi_kron_sparse(self.terms[j], format=format)
+        return X
+
+    @property
+    def T(self):
+        """Return the transpose of this operator as a :class:`CanonicalOperator`."""
+        return CanonicalOperator([
+            tuple(B.T for B in term) for term in self.terms
+        ])
+
+    def __add__(self, other):
+        assert isinstance(other, CanonicalOperator), 'can only add CanonicalOperators to each other'
+        assert self.shapeout == other.shapeout, 'incompatible shapes'
+        assert self.shapein == other.shapein, 'incompatible shapes'
+        return CanonicalOperator(self.terms + other.terms)
+
+    def __neg__(self):
+        return CanonicalOperator([
+            (-t[0],) + t[1:] for t in self.terms
+        ])
+
+    def __sub__(self, other):
+        return self + (-other)
+
+    def __mul__(self, other):
+        assert isinstance(other, CanonicalOperator)
+        assert self.shape[1] == other.shape[0], 'incompatible shapes'
+        def _alldot(t1, t2):
+            return tuple(tj1.dot(tj2) for (tj1,tj2) in zip(t1,t2))
+        return CanonicalOperator([
+            _alldot(t1,t2) for t1 in self.terms for t2 in other.terms
+        ])
+
+    def kron(self, other):
+        """Construct a new :class:`CanonicalOperator` as the Kronecker product of this and `other`."""
+        return CanonicalOperator([
+            tuple(t1) + tuple(t2) for t1 in self.terms for t2 in other.terms
+        ])
+
+    def apply(self, X):
+        """Return the result of applying this operator to a tensor `X`."""
+        assert X.shape == self.shapein, 'wrong shape of input tensor'
+        return reduce(operator.add, (apply_tprod(t, X) for t in self.terms))
+
+    def slice(self, limits):
+        return CanonicalOperator([
+            tuple(A[l[0]:l[1], l[0]:l[1]] for (A,l) in zip(term, limits))
+            for term in self.terms
+        ])

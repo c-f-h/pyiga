@@ -259,3 +259,21 @@ def test_ls():
     assert T1.shape == F.shape
     assert T2.shape == F.shape
     assert fro_norm(T1 - T2) < 0.1 * fro_norm(T1)
+
+def test_canonical_op():
+    N = (3,4,5)
+    I = CanonicalOperator.eye(N)
+    assert I.shapeout == I.shapein == N
+    X = _random_tucker(N, 2)
+    Y = I.apply(X)
+    assert Y.R == (2,2,2)
+    assert np.allclose(X.asarray(), Y.asarray())
+    #
+    A = CanonicalOperator([tuple(scipy.sparse.rand(n,n, 0.1) for n in N) for k in range(3)])
+    B = CanonicalOperator([tuple(scipy.sparse.rand(n,n, 0.1) for n in N) for k in range(2)])
+    AB = A * B
+    assert AB.R == 6
+    assert scipy.sparse.linalg.norm(AB.asmatrix() - (A.asmatrix().dot(B.asmatrix()))) < 1e-6
+    Y1 = A.apply(B.apply(X))
+    Y2 = AB.apply(X)
+    assert np.allclose(Y1.asarray(), Y2.asarray())

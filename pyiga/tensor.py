@@ -1053,7 +1053,7 @@ class CanonicalOperator:
     .. math::
         \mathcal A = \sum_{r=1}^{R} A^1_r \otimes\cdots\otimes A^d_r.
 
-    The argument `terms` is a list of length `r` of `d`-tuples containing the
+    The argument `terms` is a list of length `R` of `d`-tuples containing the
     matrices :math:`A^k_r`.
     """
     def __init__(self, terms):

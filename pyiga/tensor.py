@@ -1061,6 +1061,7 @@ class CanonicalOperator:
         shape (tuple): a pair where `shape[1]` is the shape of input tensors
             accepted by this operator and `shape[0]` is the shape of output
             tensors produced
+        ndim (int): the number of dimensions, i.e., `d` in the formula above
     """
     def __init__(self, terms):
         self.terms = list(terms)
@@ -1072,6 +1073,7 @@ class CanonicalOperator:
         shapeout = tuple(A.shape[0] for A in self.terms[0])
         shapein  = tuple(A.shape[1] for A in self.terms[0])
         self.shape = (shapeout, shapein)
+        self.ndim = len(shapein)
 
     def __repr__(self):
         return '<%s %s -> %s R=%s>' % (self.__class__.__name__, self.shape[0], self.shape[1], self.R)

@@ -1069,9 +1069,9 @@ class CanonicalOperator:
         assert all(self.terms[r][j].shape == self.terms[0][j].shape
                    for r in range(self.R)
                    for j in range(d)), 'inconsistent shapes'
-        self.shapeout = tuple(A.shape[0] for A in self.terms[0])
-        self.shapein  = tuple(A.shape[1] for A in self.terms[0])
-        self.shape = (self.shapeout, self.shapein)
+        shapeout = tuple(A.shape[0] for A in self.terms[0])
+        shapein  = tuple(A.shape[1] for A in self.terms[0])
+        self.shape = (shapeout, shapein)
 
     def __repr__(self):
         return '<%s %s -> %s R=%s>' % (self.__class__.__name__, self.shape[0], self.shape[1], self.R)
@@ -1099,8 +1099,7 @@ class CanonicalOperator:
 
     def __add__(self, other):
         assert isinstance(other, CanonicalOperator), 'can only add CanonicalOperators to each other'
-        assert self.shapeout == other.shapeout, 'incompatible shapes'
-        assert self.shapein == other.shapein, 'incompatible shapes'
+        assert self.shape == other.shape, 'incompatible shapes'
         return CanonicalOperator(self.terms + other.terms)
 
     def __neg__(self):
@@ -1128,7 +1127,7 @@ class CanonicalOperator:
 
     def apply(self, X):
         """Return the result of applying this operator to a tensor `X`."""
-        assert X.shape == self.shapein, 'wrong shape of input tensor'
+        assert X.shape == self.shape[1], 'wrong shape of input tensor'
         return reduce(operator.add, (apply_tprod(t, X) for t in self.terms))
 
     def slice(self, limits):

@@ -263,7 +263,7 @@ def test_ls():
 def test_canonical_op():
     N = (3,4,5)
     I = CanonicalOperator.eye(N)
-    assert I.shapeout == I.shapein == N
+    assert I.shape[0] == I.shape[1] == N
     X = _random_tucker(N, 2)
     Y = I.apply(X)
     assert Y.R == (2,2,2)

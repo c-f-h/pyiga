@@ -1076,7 +1076,7 @@ class CanonicalOperator:
         self.ndim = len(shapein)
 
     def __repr__(self):
-        return '<%s %s -> %s R=%s>' % (self.__class__.__name__, self.shape[0], self.shape[1], self.R)
+        return '<%s %s -> %s R=%s>' % (self.__class__.__name__, self.shape[1], self.shape[0], self.R)
 
     @staticmethod
     def eye(ns, format='dia'):

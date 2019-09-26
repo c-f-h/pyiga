@@ -22,6 +22,11 @@ Any tensor can be expanded to a full `ndarray` using :func:`asarray`.
 In addition, most tensor classes have overloaded operators for adding and
 subtracting tensors in their native format.
 
+Linear operators on tensors, themselves represented in suitable low-rank formats,
+are described by
+
+* :class:`CanonicalOperator`
+
 --------------
 Module members
 --------------
@@ -1038,12 +1043,20 @@ class TensorProd:
         return TensorProd(*((-self.Xs[0],) + self.Xs[1:]))
 
 ################################################################################
+## Linear operators on tensors
+################################################################################
 
 class CanonicalOperator:
+    r"""Represents a linear operator on tensors which is described as a sum
+    of rank one operators (Kronecker products), i.e.,
+
+    .. math::
+        \mathcal A = \sum_{r=1}^{R} A^1_r \otimes\cdots\otimes A^d_r.
+
+    The argument `terms` is a list of length `r` of `d`-tuples containing the
+    matrices :math:`A^k_r`.
+    """
     def __init__(self, terms):
-        """Represents a linear operator on tensors which is described as a sum
-        of rank one operators (Kronecker products).
-        """
         self.terms = list(terms)
         self.R = len(self.terms)
         d = len(self.terms[0])

@@ -1055,6 +1055,12 @@ class CanonicalOperator:
 
     The argument `terms` is a list of length `R` of `d`-tuples containing the
     matrices :math:`A^k_r`.
+
+    Attributes:
+        R (int): Kronecker rank of the operator
+        shape (tuple): a pair where `shape[1]` is the shape of input tensors
+            accepted by this operator and `shape[0]` is the shape of output
+            tensors produced
     """
     def __init__(self, terms):
         self.terms = list(terms)

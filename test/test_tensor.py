@@ -110,6 +110,16 @@ def test_outer():
     Y = x[:, None, None] * y[None, :, None] * z[None, None, :]
     assert np.allclose(X, Y)
 
+def test_pad():
+    X = _random_tucker((3,4,5), 2)
+    Y = pad(X, [(2,2), None, (0,1)])
+    assert Y.shape == (7, 4, 6)
+    YA = Y.asarray()
+    assert np.allclose(YA[2:-2, :, :-1], X.asarray())
+    assert np.linalg.norm(YA[:2, :, :].ravel()) < 1e-10
+    assert np.linalg.norm(YA[-2:, :, :].ravel()) < 1e-10
+    assert np.linalg.norm(YA[:, :, -1:].ravel()) < 1e-10
+
 def _random_canonical(shape, R):
     Xs = tuple(rand(n,R) for n in shape)
     return CanonicalTensor(Xs)

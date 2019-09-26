@@ -201,6 +201,28 @@ def array_outer(*xs):
     else:
         return np.multiply.outer(array_outer(*xs[:-1]), xs[-1])
 
+def pad(X, pad_width):
+    """Pad a tensor with zero rows in each direction.
+
+    Args:
+        pad_width (list): a list of `(before,after)` tuples, the same
+            length as dimensions of `X`, which specifices how many
+            zeros to prepend/append in each direction. `None` is
+            admissible and is equivalent to `(0,0)`.
+    Returns:
+        the padded tensor
+    """
+    assert len(pad_width) == X.ndim, 'invalid length of pad_width'
+    P = []
+    for j in range(X.ndim):
+        if pad_width[j] is None:
+            P.append(None)
+        else:
+            nj = X.shape[j]
+            B = scipy.sparse.lil_matrix((nj + pad_width[j][0] + pad_width[j][1], nj))
+            B[pad_width[j][0] : nj + pad_width[j][0]] = scipy.sparse.eye(nj)
+            P.append(B)
+    return apply_tprod(P, X)
 
 ################################################################################
 ## Approximation algorithms
@@ -642,7 +664,6 @@ def gta_ls(A, F, R, tol=1e-12, verbose=0, gs=None, spd=False):
 ################################################################################
 ## Tensor classes
 ################################################################################
-
 
 class CanonicalTensor:
     """A tensor in CP (canonical/PARAFAC) format, i.e., a sum of rank 1 tensors.

@@ -60,6 +60,18 @@ def test_stiffness_asym():
     itg = K_12.dot(v).dot(u)
     assert abs(itg - 1.0) < 1e-10     # int(4*x^3, 0, 1) = 1
 
+def test_assemble_asym():
+    kv1 = bspline.make_knots(4, 0.0, 1.0, 10)
+    kv2 = bspline.make_knots(1, 0.0, 1.0, 20)
+    K_12 = bsp_mixed_deriv_biform_1d_asym(kv1, kv2, 1, 0, quadgrid=kv2.mesh)
+    assert(K_12.shape[0] == kv1.numdofs)
+    assert(K_12.shape[1] == kv2.numdofs)
+    from pyiga.approx import interpolate
+    u = interpolate(kv1, lambda x: x**4)
+    v = interpolate(kv2, lambda x: 1.0)
+    itg = K_12.dot(v).dot(u)
+    assert abs(itg - 1.0) < 1e-10     # int(4*x^3, 0, 1) = 1
+
 def test_mixed_deriv_biform():
     kv = bspline.make_knots(4, 0.0, 1.0, 20)
     DxxD0 = bsp_mixed_deriv_biform_1d(kv, 2, 0)

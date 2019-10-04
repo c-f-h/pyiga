@@ -139,30 +139,6 @@ def bsp_mass_1d(knotvec, weightfunc=None):
     """
     return bsp_mixed_deriv_biform_1d(knotvec, 0, 0, weightfunc=weightfunc)
 
-def bsp_mass_1d_asym(knotvec1, knotvec2, quadgrid=None):
-    """Assemble a mass matrix relating two B-spline bases. By default, uses the first knot vector for quadrature."""
-    if quadgrid is None:
-        quadgrid = knotvec1.mesh
-
-    # create iterated Gauss quadrature rule for each interval
-    nqp = max(knotvec1.p, knotvec2.p) + 1
-    nspans = len(quadgrid) - 1
-    q = make_iterated_quadrature(quadgrid, nqp)
-    assert len(q[0]) == nspans * nqp
-
-    # evaluate basis functions at quadrature nodes
-    vals1 = bspline.active_ev(knotvec1, q[0])
-    vals2 = bspline.active_ev(knotvec2, q[0])
-
-    first_points = q[0][::nqp]
-    assert len(first_points) == nspans
-    # map first_active_at over first quadrature points to get first active basis function index
-    first_act1 = np.vectorize(knotvec1.first_active_at, otypes=(np.int,))(first_points)
-    first_act2 = np.vectorize(knotvec2.first_active_at, otypes=(np.int,))(first_points)
-    I,J = _create_coo_1d_custom(nspans, vals1.shape[0], vals2.shape[0], first_act1, first_act2)
-
-    return _assemble_matrix_custom(nspans, nqp, vals1, vals2, I, J, q[1])
-
 def bsp_stiffness_1d(knotvec, weightfunc=None):
     """Assemble the Laplacian stiffness matrix for the B-spline basis over the given knot vector.
 
@@ -183,20 +159,23 @@ def bsp_mixed_deriv_biform_1d(knotvec, du, dv, nqp=None, weightfunc=None):
     I,J = _create_coo_1d_from_kv(knotvec)
     return _assemble_matrix_custom(nspans, nqp, derivs[dv, :, :], derivs[du, :, :], I, J, qweights)
 
-def bsp_stiffness_1d_asym(knotvec1, knotvec2, quadgrid=None):
-    """Assemble a stiffness matrix relating two B-spline bases. By default, uses the first knot vector for quadrature."""
+def bsp_mixed_deriv_biform_1d_asym(knotvec1, knotvec2, du, dv, quadgrid=None, nqp=None):
+    """Assemble the matrix for a(u,v)=(u^(du),v^(dv)) relating the two B-spline
+    bases. By default, uses the first knot vector for quadrature.
+    """
     if quadgrid is None:
         quadgrid = knotvec1.mesh
 
     # create iterated Gauss quadrature rule for each interval
-    nqp = max(knotvec1.p, knotvec2.p) + 1
+    if nqp is None:
+        nqp = int(math.ceil((knotvec1.p + knotvec2.p - du - dv + 1) / 2.0))
     nspans = len(quadgrid) - 1
     q = make_iterated_quadrature(quadgrid, nqp)
     assert len(q[0]) == nspans * nqp
 
     # evaluate derivatives of basis functions at quadrature nodes
-    derivs1 = bspline.active_deriv(knotvec1, q[0], 1)[1, :, :]
-    derivs2 = bspline.active_deriv(knotvec2, q[0], 1)[1, :, :]
+    derivs1 = bspline.active_deriv(knotvec1, q[0], du)[du, :, :]
+    derivs2 = bspline.active_deriv(knotvec2, q[0], dv)[dv, :, :]
 
     first_points = q[0][::nqp]
     assert len(first_points) == nspans
@@ -206,6 +185,14 @@ def bsp_stiffness_1d_asym(knotvec1, knotvec2, quadgrid=None):
     I,J = _create_coo_1d_custom(nspans, derivs1.shape[0], derivs2.shape[0], first_act1, first_act2)
 
     return _assemble_matrix_custom(nspans, nqp, derivs1, derivs2, I, J, q[1])
+
+def bsp_mass_1d_asym(knotvec1, knotvec2, quadgrid=None):
+    """Assemble a mass matrix relating two B-spline bases. By default, uses the first knot vector for quadrature."""
+    return bsp_mixed_deriv_biform_1d_asym(knotvec1, knotvec2, 0, 0, quadgrid=quadgrid)
+
+def bsp_stiffness_1d_asym(knotvec1, knotvec2, quadgrid=None):
+    """Assemble a stiffness matrix relating two B-spline bases. By default, uses the first knot vector for quadrature."""
+    return bsp_mixed_deriv_biform_1d_asym(knotvec1, knotvec2, 1, 1, quadgrid=quadgrid)
 
 ################################################################################
 # 2D/3D assembling routines (rely on Cython module)

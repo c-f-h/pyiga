@@ -40,16 +40,25 @@ def test_stiffness():
 def test_mass_asym():
     kv1 = bspline.make_knots(4, 0.0, 1.0, 10)
     kv2 = bspline.make_knots(1, 0.0, 1.0, 20)
-    M_12 = bsp_mass_1d_asym(kv1, kv2, quadgrid=kv2.kv[kv2.p:-kv2.p])
+    M_12 = bsp_mass_1d_asym(kv1, kv2, quadgrid=kv2.mesh)
     assert(M_12.shape[0] == kv1.numdofs)
     assert(M_12.shape[1] == kv2.numdofs)
+    from pyiga.approx import interpolate
+    u = interpolate(kv1, lambda x: x**4)
+    itg = M_12.dot(np.ones(kv2.numdofs)).dot(u)
+    assert abs(itg - 1.0/5) < 1e-10     # int(x^4, 0, 1) = 1/5
 
 def test_stiffness_asym():
     kv1 = bspline.make_knots(4, 0.0, 1.0, 10)
     kv2 = bspline.make_knots(1, 0.0, 1.0, 20)
-    K_12 = bsp_stiffness_1d_asym(kv1, kv2, quadgrid=kv2.kv[kv2.p:-kv2.p])
+    K_12 = bsp_stiffness_1d_asym(kv1, kv2, quadgrid=kv2.mesh)
     assert(K_12.shape[0] == kv1.numdofs)
     assert(K_12.shape[1] == kv2.numdofs)
+    from pyiga.approx import interpolate
+    u = interpolate(kv1, lambda x: x**4)
+    v = interpolate(kv2, lambda x: x)
+    itg = K_12.dot(v).dot(u)
+    assert abs(itg - 1.0) < 1e-10     # int(4*x^3, 0, 1) = 1
 
 def test_mixed_deriv_biform():
     kv = bspline.make_knots(4, 0.0, 1.0, 20)

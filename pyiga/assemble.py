@@ -147,7 +147,7 @@ def bsp_stiffness_1d(knotvec, weightfunc=None):
     return bsp_mixed_deriv_biform_1d(knotvec, 1, 1, weightfunc=weightfunc)
 
 def bsp_mixed_deriv_biform_1d(knotvec, du, dv, nqp=None, weightfunc=None):
-    "Assemble the matrix for a(u,v)=(weight*u^(du),v^(dv)) for the B-spline basis over the given knot vector"""
+    """Assemble the matrix for a(u,v)=(weight*u^(du),v^(dv)) for the B-spline basis over the given knot vector"""
     nspans = knotvec.numspans
     # default: use that q-term Gauss quadrature is exact up to poly degree 2q-1
     if nqp is None: nqp = int(math.ceil((2 * knotvec.p - du - dv + 1) / 2.0))
@@ -162,6 +162,11 @@ def bsp_mixed_deriv_biform_1d(knotvec, du, dv, nqp=None, weightfunc=None):
 def bsp_mixed_deriv_biform_1d_asym(knotvec1, knotvec2, du, dv, quadgrid=None, nqp=None):
     """Assemble the matrix for a(u,v)=(u^(du),v^(dv)) relating the two B-spline
     bases. By default, uses the first knot vector for quadrature.
+
+    `knotvec1` is the space of trial functions, having `du` derivatives applied to them.
+    `knotvec2` is the space of test functions, having `dv` derivatives applied to them.
+
+    The resulting matrix has size `knotvec2.numdofs x knotvec1.numdofs`.
     """
     if quadgrid is None:
         quadgrid = knotvec1.mesh
@@ -182,9 +187,9 @@ def bsp_mixed_deriv_biform_1d_asym(knotvec1, knotvec2, du, dv, quadgrid=None, nq
     # map first_active_at over first quadrature points to get first active basis function index
     first_act1 = np.vectorize(knotvec1.first_active_at, otypes=(np.int,))(first_points)
     first_act2 = np.vectorize(knotvec2.first_active_at, otypes=(np.int,))(first_points)
-    I,J = _create_coo_1d_custom(nspans, derivs1.shape[0], derivs2.shape[0], first_act1, first_act2)
+    I,J = _create_coo_1d_custom(nspans, derivs2.shape[0], derivs1.shape[0], first_act2, first_act1)
 
-    return _assemble_matrix_custom(nspans, nqp, derivs1, derivs2, I, J, q[1])
+    return _assemble_matrix_custom(nspans, nqp, derivs2, derivs1, I, J, q[1])
 
 def bsp_mass_1d_asym(knotvec1, knotvec2, quadgrid=None):
     """Assemble a mass matrix relating two B-spline bases. By default, uses the first knot vector for quadrature."""

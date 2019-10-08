@@ -1,6 +1,7 @@
 from pyiga.assemble import *
 from pyiga import geometry
 from pyiga.utils import read_sparse_matrix
+from pyiga.approx import interpolate
 
 import os.path
 from scipy.sparse import kron as spkron
@@ -43,7 +44,6 @@ def test_mass_asym():
     M_12 = bsp_mass_1d_asym(kv1, kv2, quadgrid=kv2.mesh)
     assert(M_12.shape[0] == kv2.numdofs)
     assert(M_12.shape[1] == kv1.numdofs)
-    from pyiga.approx import interpolate
     u = interpolate(kv1, lambda x: x**4)
     itg = M_12.dot(u).dot(np.ones(kv2.numdofs))
     assert abs(itg - 1.0/5) < 1e-10     # int(x^4, 0, 1) = 1/5
@@ -54,7 +54,6 @@ def test_stiffness_asym():
     K_12 = bsp_stiffness_1d_asym(kv1, kv2, quadgrid=kv2.mesh)
     assert(K_12.shape[0] == kv2.numdofs)
     assert(K_12.shape[1] == kv1.numdofs)
-    from pyiga.approx import interpolate
     u = interpolate(kv1, lambda x: x**4)
     v = interpolate(kv2, lambda x: x)
     itg = K_12.dot(u).dot(v)
@@ -66,7 +65,6 @@ def test_assemble_asym():
     K_12 = bsp_mixed_deriv_biform_1d_asym(kv1, kv2, 1, 0, quadgrid=kv2.mesh)
     assert(K_12.shape[0] == kv2.numdofs)
     assert(K_12.shape[1] == kv1.numdofs)
-    from pyiga.approx import interpolate
     u = interpolate(kv1, lambda x: x**4)
     v = interpolate(kv2, lambda x: 1.0)
     itg = K_12.dot(u).dot(v)
@@ -76,7 +74,6 @@ def test_mixed_deriv_biform():
     kv = bspline.make_knots(4, 0.0, 1.0, 20)
     DxxD0 = bsp_mixed_deriv_biform_1d(kv, 2, 0)
     DxxDx = bsp_mixed_deriv_biform_1d(kv, 2, 1)
-    from pyiga.approx import interpolate
     u = interpolate(kv, lambda x: x)
     # second derivative of linear function x -> x is 0
     assert abs(DxxD0.dot(u)).max() < 1e-10
@@ -174,7 +171,6 @@ def test_divdiv_geo_2d():
     geo = geometry.bspline_quarter_annulus()
     A = divdiv((kv,kv), geo, layout='packed')
     # construct divergence-free function
-    from pyiga.approx import interpolate
     u = interpolate((kv,kv), lambda x,y: (x,-y), geo=geo).ravel()
     assert abs(A.dot(u)).max() < 1e-12
 
@@ -244,3 +240,17 @@ def test_integrate():
     kvs = 2 * (bspline.make_knots(3, 0.0, 1.0, 10),)
     geo = geometry.quarter_annulus()
     assert abs(3*np.pi/4 - integrate(kvs, one, geo=geo)) < 1e-8
+
+################################################################################
+# Test solution
+################################################################################
+
+def test_solution_1d():
+    # solve -u''(x) = 1, u(0) = 0, u(1) = 1
+    kv = bspline.make_knots(2, 0.0, 1.0, 10)
+    A = stiffness(kv)
+    f = inner_products(kv, lambda x: 1.0)
+    LS = RestrictedLinearSystem(A, f, [(0,kv.numdofs-1), (0.0,1.0)])
+    u = LS.complete(np.linalg.solve(LS.A.A, LS.b))
+    u_ex = interpolate(kv, lambda x: 0.5*x*(3-x))
+    assert np.linalg.norm(u - u_ex) < 1e-12

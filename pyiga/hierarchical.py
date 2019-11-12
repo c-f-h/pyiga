@@ -189,6 +189,11 @@ class HSpace:
         """The number of levels in this hierarchical space."""
         return len(self.hmesh.meshes)
 
+    @property
+    def numdofs(self):
+        """The total number of active basis functions in this hierarchical space."""
+        return sum(len(af) for af in self.actfun)
+
     def mesh(self, lvl):
         """Return the underlying :class:`TPMesh` on the given level."""
         return self.hmesh.meshes[lvl]

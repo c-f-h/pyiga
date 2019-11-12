@@ -469,6 +469,10 @@ class RestrictedLinearSystem:
         bcs: a pair of arrays `(indices, values)` which contain the
             indices and values, respectively, of dofs to be eliminated
             from the system
+        elim_rows: for Petrov-Galerkin discretizations, the equations to be
+            eliminated from the linear system may not match the dofs to be
+            eliminated. In this case, an array of indices of rows to be
+            eliminated may be passed in this argument.
 
     Once constructed, the restricted linear system can be accessed through
     the following attributes:
@@ -477,33 +481,56 @@ class RestrictedLinearSystem:
         A: the restricted matrix
         b: the restricted and updated right-hand side
     """
-    def __init__(self, A, b, bcs):
+    def __init__(self, A, b, bcs, elim_rows=None):
         indices, values = bcs
         if np.isscalar(b):
             b = np.broadcast_to(b, A.shape[0])
         if np.isscalar(values):
             values = np.broadcast_to(values, indices.shape[0])
+        self.values = values
 
-        I = scipy.sparse.eye(A.shape[0], format='csr')
+        I = scipy.sparse.eye(A.shape[1], format='csr')
         # compute mask which contains non-eliminated dofs
-        mask = np.ones(A.shape[0], dtype=bool)
+        mask = np.ones(A.shape[1], dtype=bool)
         mask[list(indices)] = False
 
         # TODO/BUG: this may require the indices to be in increasing order?
         self.R_free = I[mask]
         self.R_elim = I[np.logical_not(mask)]
-        self.values = values
+
+        if elim_rows is not None:
+            # if the rows to be eliminated differ from the dofs to be fixed,
+            # build a separate set of matrices
+            elim_rows = sorted(elim_rows)
+            I = scipy.sparse.eye(A.shape[0], format='csr')
+            maskv = np.ones(A.shape[0], dtype=bool)
+            maskv[elim_rows] = False
+            self.R_free_v = I[maskv]
+            self.R_elim_v = I[np.logical_not(maskv)]
+        else:
+            self.R_free_v = self.R_free
+            self.R_elim_v = self.R_elim
 
         self.A = self.restrict_matrix(A)
-        self.b = self.restrict(b - A.dot(self.R_elim.T.dot(values)))
+        self.b = self.restrict_rhs(b - A.dot(self.R_elim.T.dot(values)))
 
     def restrict(self, u):
         """Given a vector `u` containing all dofs, return its restriction to the free dofs."""
         return self.R_free.dot(u)
 
+    def restrict_rhs(self, f):
+        """Given a right-hand side vector `f`, return its restriction to the non-eliminated rows.
+
+        If `elim_rows` was not passed, this is equivalent to :func:`RestrictedLinearSystem.restrict`.
+        """
+        return self.R_free_v.dot(f)
+
     def restrict_matrix(self, B):
         """Given a matrix `B` which operates on all dofs, return its restriction to the free dofs."""
-        return self.R_free.dot(B).dot(self.R_free.T)
+        if not scipy.sparse.issparse(B):
+            # the code below only works for sparse matrices
+            B = scipy.sparse.csr_matrix(B)
+        return self.R_free_v.dot(B).dot(self.R_free.T)
 
     def extend(self, u):
         """Given a vector `u` containing only the free dofs, pad it with zeros to all dofs."""

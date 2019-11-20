@@ -637,15 +637,17 @@ def assemble_vector(asm, symmetric=False, format='csr', layout='blocked'):
 
 def _detect_dim(kvs):
     if isinstance(kvs, bspline.KnotVector):
-        return 1
+        return 1, kvs
     else:
-        return len(kvs)
+        d = len(kvs)
+        # if dim==1, unpack the tuple and return only the kv
+        return d, (kvs[0] if d==1 else kvs)
 
 def mass(kvs, geo=None, format='csr'):
     """Assemble a mass matrix for the given basis (B-spline basis
     or tensor product B-spline basis) with an optional geometry transform.
     """
-    dim = _detect_dim(kvs)
+    dim, kvs = _detect_dim(kvs)
     if geo:
         assert geo.dim == dim, "Geometry has wrong dimension"
     if dim == 1:
@@ -662,7 +664,7 @@ def stiffness(kvs, geo=None, format='csr'):
     """Assemble a stiffness matrix for the given basis (B-spline basis
     or tensor product B-spline basis) with an optional geometry transform.
     """
-    dim = _detect_dim(kvs)
+    dim, kvs = _detect_dim(kvs)
     if geo:
         assert geo.dim == dim, "Geometry has wrong dimension"
     if dim == 1:
@@ -676,7 +678,7 @@ def stiffness(kvs, geo=None, format='csr'):
         assert False, "Dimensions higher than 3 are currently not implemented."
 
 def divdiv(kvs, geo=None, layout='blocked', format='csr'):
-    dim = _detect_dim(kvs)
+    dim, kvs = _detect_dim(kvs)
     if geo is None:
         geo = geometry.unit_cube(dim=dim)   # TODO: fast assembling for div-div?
     if dim == 2:
@@ -695,7 +697,7 @@ def mass_fast(kvs, geo=None, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, ve
     if geo is None:
         # the default assemblers use Kronecker product assembling if no geometry present
         return mass(kvs)
-    dim = _detect_dim(kvs)
+    dim, kvs = _detect_dim(kvs)
     assert geo.dim == dim, "Geometry has wrong dimension"
     if dim == 1:
         assert False, "Geometry map not supported for 1D assembling"
@@ -715,7 +717,7 @@ def stiffness_fast(kvs, geo=None, tol=1e-10, maxiter=100, skipcount=3, tolcount=
     if geo is None:
         # the default assemblers use Kronecker product assembling if no geometry present
         return stiffness(kvs)
-    dim = _detect_dim(kvs)
+    dim, kvs = _detect_dim(kvs)
     assert geo.dim == dim, "Geometry has wrong dimension"
     if dim == 1:
         assert False, "Geometry map not supported for 1D assembling"

@@ -59,6 +59,6 @@ def read_sparse_matrix(fname):
 def multi_kron_sparse(As, format='csr'):
     """Compute the (sparse) Kronecker product of a sequence of sparse matrices."""
     if len(As) == 1:
-        return As[0]
+        return As[0].asformat(format, copy=True)
     else:
         return scipy.sparse.kron(As[0], multi_kron_sparse(As[1:], format=format), format=format)

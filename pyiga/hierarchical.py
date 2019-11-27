@@ -175,6 +175,7 @@ class HSpace:
         tp = TPMesh(kvs)
         hmesh = HMesh(tp)
         assert len(hmesh.meshes) == 1
+        self.dim = hmesh.dim
         self.hmesh = hmesh
         self.actfun = [set(hmesh.meshes[0].functions())]
         self.deactfun = [set()]
@@ -192,7 +193,12 @@ class HSpace:
     @property
     def numdofs(self):
         """The total number of active basis functions in this hierarchical space."""
-        return sum(len(af) for af in self.actfun)
+        return sum(self.numactive)
+
+    @property
+    def numactive(self):
+        """A tuple containing the number of active basis functions per level."""
+        return tuple(len(af) for af in self.actfun)
 
     def mesh(self, lvl):
         """Return the underlying :class:`TPMesh` on the given level."""
@@ -215,6 +221,26 @@ class HSpace:
             return self.hmesh.deactivated[lvl]
         else:
             return [self.deactivated_cells(lv) for lv in range(self.numlevels)]
+
+    def _ravel_indices(self, indexsets):
+        return tuple(
+            (np.ravel_multi_index(np.array(sorted(indexsets[lv])).T, self.mesh(lv).numdofs, order='C')
+                if len(indexsets[lv])
+                else np.arange(0))
+            for lv in range(self.numlevels)
+        )
+
+    def active_indices(self):
+        """Return a tuple which contains, per level, the raveled (sequential) indices of
+        active basis functions.
+        """
+        return self._ravel_indices(self.actfun)
+
+    def deactivated_indices(self):
+        """Return a tuple which contains, per level, the raveled (sequential) indices of
+        deactivated basis functions.
+        """
+        return self._ravel_indices(self.deactfun)
 
     def function_support(self, lv, jj):
         """Return the support (as a tuple of pairs) of the function on level `lv` with index `jj`."""
@@ -276,12 +302,8 @@ class HSpace:
         If `truncate` is True, the representation of the THB-spline (truncated) basis functions
         is computed instead.
         """
-        # compute raveled indices for active functions per level
-        act_indices = [
-            np.ravel_multi_index(np.array(sorted(self.actfun[lv])).T, self.mesh(lv).numdofs, order='C')
-            for lv in range(self.numlevels)
-        ]
-
+        # raveled indices for active functions per level
+        act_indices = self.active_indices()
         blocks = []
 
         for lv in reversed(range(self.numlevels)):
@@ -301,3 +323,16 @@ class HSpace:
 
         blocks.reverse()
         return scipy.sparse.bmat([blocks], format='csr')
+
+    def split_coeffs(self, x):
+        """Given a coefficient vector `x` of length `numdofs`, split it into `numlevels` vectors
+        which contain the contributions from each individual level.
+        """
+        j = 0
+        result = []
+        for af in self.actfun:
+            nk = len(af)
+            result.append(x[j : j+nk])
+            j += nk
+        assert j == x.shape[0], 'Wrong length of input vector'
+        return result

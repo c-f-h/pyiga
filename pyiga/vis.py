@@ -1,5 +1,6 @@
 """Visualization functions."""
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib import animation
 
@@ -95,3 +96,59 @@ def animate_field(fields, geo, vrange=None, res=(50,50), cmap=None, interval=50)
         quadmesh.set_array(C.ravel())
 
     return animation.FuncAnimation(fig, anim_func, frames=len(fields), interval=interval)
+
+class HSpaceVis:
+    def __init__(self, hspace):
+        assert hspace.dim == 2, 'Only 2D visualization implemented'
+        self.hspace = hspace
+
+    @staticmethod
+    def vis_rect(r):
+        Y, X = r        # note: last axis = x
+        return matplotlib.patches.Rectangle((X[0], Y[0]), X[1]-X[0], Y[1]-Y[0])
+
+    def cell_to_rect(self, lv, c):
+        return self.vis_rect(self.hspace.mesh(lv).cell_extents(c))
+
+    def plot_level(self, lv, color_act='steelblue', color_deact='lavender'):
+        ax = plt.gca()
+        ax.set_aspect('equal')
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        from matplotlib.collections import PatchCollection
+        if color_act is not None:
+            Ra = [self.cell_to_rect(lv, c) for c in self.hspace.active_cells(lv)]
+            ax.add_collection(PatchCollection(Ra, facecolor=color_act, edgecolor='black'))
+        if color_deact is not None:
+            Rd = [self.cell_to_rect(lv, c) for c in self.hspace.deactivated_cells(lv)]
+            ax.add_collection(PatchCollection(Rd, facecolor=color_deact, edgecolor='black'));
+
+    def vis_function(self, lv, jj):
+        r = self.vis_rect(self.hspace.function_support(lv, jj))
+        r.set_fill(False)
+        r.set_edgecolor('red')
+        r.set_linewidth(3)
+        return r
+
+def plot_hierarchical_mesh(hspace, levels='all', levelwise=False, color_act='steelblue', color_deact='lavender'):
+    """Visualize the mesh of a 2D hierarchical spline space.
+
+    Args:
+        hspace (:class:`pyiga.hierarchical.HSpace`): the space to be plotted
+        level: either 'all' or a list of levels to plot
+        levelwise (bool): if True, show each level (including active and deactivated
+            basis functions) in a separate subplot
+        color_act: the color to use for the active cells
+        color_deact: the color to use for the deactivated cells (only shown if `levelwise` is True)
+    """
+    V = HSpaceVis(hspace)
+    if levels == 'all':
+        levels = tuple(range(hspace.numlevels))
+    else:
+        levels = tuple(levels)
+
+    for j,lv in enumerate(levels):
+        if levelwise:
+            plt.subplot(1, len(levels), j+1)
+        V.plot_level(lv, color_act=color_act, color_deact=color_deact if levelwise else None)

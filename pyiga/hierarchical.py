@@ -1,3 +1,9 @@
+"""This module contains support for dealing with hierarchical spline spaces and
+truncated hierarchical B-splines (THB-splines).
+
+.. autoclass:: HSpace
+    :members:
+"""
 import numpy as np
 import scipy.sparse
 import itertools

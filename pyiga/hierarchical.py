@@ -170,11 +170,17 @@ class HMesh:
         parents.sort()
         return _make_unique(parents)
 
-    def refine(self, marked):
-        new_cells = dict()
-        if marked.get(len(self.meshes) - 1):
-            # if any cells on finest mesh marked, add a new level
+    def ensure_levels(self, L):
+        """Make sure that the hierarchical space has at least `L` levels."""
+        while len(self.meshes) < L:
             self.add_level()
+
+    def refine(self, marked):
+        # if necessary, add new fine levels to the data structure
+        # NB: if refining on lv 0, we need 2 levels (0 and 1) -- hence the +2
+        self.ensure_levels(max(marked.keys()) + 2)
+
+        new_cells = dict()
         for lv in range(len(self.meshes) - 1):
             cells = set(marked.get(lv, []))
             # deactivate refined cells
@@ -203,9 +209,15 @@ class HSpace:
         self.deactfun = [set()]
 
     def _add_level(self):
+        self.hmesh.add_level()
         self.actfun.append(set())
         self.deactfun.append(set())
         assert len(self.actfun) == len(self.deactfun) == len(self.hmesh.meshes)
+
+    def _ensure_levels(self, L):
+        """Make sure we have at least `L` levels."""
+        while self.numlevels < L:
+            self._add_level()
 
     @property
     def numlevels(self):
@@ -298,11 +310,10 @@ class HSpace:
         """Refine the given cells; `marked` is a dictionary which has the
         levels as indices and the list of marked cells on that level as values.
         """
+        self._ensure_levels(max(marked.keys()) + 2)
+
         new_cells = self.hmesh.refine(marked)
         mf = self._functions_to_deactivate(marked)
-
-        if len(self.hmesh.meshes) > len(self.actfun):
-            self._add_level()
 
         for lv in range(len(self.hmesh.meshes) - 1):
             mfuncs = mf[lv]
@@ -321,6 +332,20 @@ class HSpace:
                 set(self.mesh(lv+1).support([f])).issubset(fine_cells))
             # activate them on the finer level
             self.actfun[lv+1] |= newfuncs
+
+    def refine_region(self, lv, region_function):
+        """Refine all active cells on level `lv` whose cell center satisfies `region_function`.
+
+        `region_function` should be a function of `dim` scalar arguments (e.g., `(x,y)`)
+        which returns True if the point is within the refinement region.
+        """
+        self._ensure_levels(lv + 2)
+
+        def cell_center(c):
+            return tuple(0.5*(lo+hi) for (lo,hi) in reversed(self.cell_extents(lv, c)))
+        self.refine({
+            lv: tuple(c for c in self.active_cells(lv) if region_function(*cell_center(c)))
+        })
 
     def represent_fine(self, truncate=False):
         """Compute a matrix which represents all active HB-spline basis functions on the fine level.

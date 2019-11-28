@@ -136,7 +136,7 @@ def plot_hierarchical_mesh(hspace, levels='all', levelwise=False, color_act='ste
 
     Args:
         hspace (:class:`pyiga.hierarchical.HSpace`): the space to be plotted
-        level: either 'all' or a list of levels to plot
+        levels: either 'all' or a list of levels to plot
         levelwise (bool): if True, show each level (including active and deactivated
             basis functions) in a separate subplot
         color_act: the color to use for the active cells

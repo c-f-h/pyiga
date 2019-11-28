@@ -168,6 +168,14 @@ def make_knots(p, a, b, n, mult=1):
              np.repeat(b, p+1)))
     return KnotVector(kv, p)
 
+def numdofs(kvs):
+    """Convenience function which returns the number of dofs in a single knot vector
+    or in a tensor product space represented by a tuple of knot vectors.
+    """
+    if isinstance(kvs, KnotVector):
+        return kvs.numdofs
+    else:
+        return np.prod([kv.numdofs for kv in kvs])
 
 ################################################################################
 

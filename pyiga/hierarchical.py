@@ -72,7 +72,7 @@ class TPMesh:
             *(range(n) for n in self.numspans)))
 
     def cell_extents(self, c):
-        """Return the extents (as a tuple of pairs) of the cell `c`."""
+        """Return the extents (as a tuple of min/max pairs) of the cell `c`."""
         return tuple((kv.mesh[cd], kv.mesh[cd+1]) for (kv,cd) in zip(self.kvs, c))
 
     def functions(self):
@@ -222,27 +222,35 @@ class HSpace:
         """A tuple containing the number of active basis functions per level."""
         return tuple(len(af) for af in self.actfun)
 
-    def mesh(self, lvl):
+    def mesh(self, lv):
         """Return the underlying :class:`TPMesh` on the given level."""
-        return self.hmesh.meshes[lvl]
+        return self.hmesh.meshes[lv]
 
-    def active_cells(self, lvl=None):
-        """If `lvl` is specified, return the set of active cells on that level.
+    def knotvectors(self, lv):
+        """Return the tuple of knot vectors for the tensor product space on level `lv`."""
+        return self.hmesh.meshes[lv].kvs
+
+    def active_cells(self, lv=None):
+        """If `lv` is specified, return the set of active cells on that level.
         Otherwise, return a list containing, for each level, the set of active cells.
         """
-        if lvl is not None:
-            return self.hmesh.active[lvl]
+        if lv is not None:
+            return self.hmesh.active[lv]
         else:
             return [self.active_cells(lv) for lv in range(self.numlevels)]
 
-    def deactivated_cells(self, lvl=None):
-        """If `lvl` is specified, return the set of deactivated cells on that level.
+    def deactivated_cells(self, lv=None):
+        """If `lv` is specified, return the set of deactivated cells on that level.
         Otherwise, return a list containing, for each level, the set of deactivated cells.
         """
-        if lvl is not None:
-            return self.hmesh.deactivated[lvl]
+        if lv is not None:
+            return self.hmesh.deactivated[lv]
         else:
             return [self.deactivated_cells(lv) for lv in range(self.numlevels)]
+
+    def cell_extents(self, lv, c):
+        """Return the extents (as a tuple of min/max pairs) of the cell `c` on level `lv`."""
+        return self.hmesh.meshes[lv].cell_extents(c)
 
     def _ravel_indices(self, indexsets):
         return tuple(

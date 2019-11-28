@@ -1,8 +1,21 @@
 """This module contains support for dealing with hierarchical spline spaces and
 truncated hierarchical B-splines (THB-splines).
 
-.. autoclass:: HSpace
-    :members:
+The main user-facing class is :class:`HSpace`, which describes a hierarchical
+spline space and supports HB- and THB-spline representations. The remaining
+members of the module are utility functions and classes.
+
+The implementation is loosely based on the approach described in [GV2018]_ and
+the corresponding implementation in [GeoPDEs]_.
+
+.. [GV2018] `Garau, Vazquez: "Algorithms for the implementation of adaptive
+    isogeometric methods using hierarchical B-splines", 2018.
+    <https://doi.org/10.1016/j.apnum.2017.08.006>`_
+.. [GeoPDEs] http://rafavzqz.github.io/geopdes/
+
+--------------
+Module members
+--------------
 """
 import numpy as np
 import scipy.sparse
@@ -98,7 +111,10 @@ class TPMesh:
         return self.supported_in(self.support(indices))
 
 class HMesh:
-    """A hierarchical mesh built on a sequence of uniformly refined tensor product meshes."""
+    """A hierarchical mesh built on a sequence of uniformly refined tensor product meshes.
+
+    This class is an implementation detail and should not be used in user-facing code.
+    """
     def __init__(self, mesh):
         self.dim = mesh.dim
         self.meshes = [mesh]
@@ -307,6 +323,10 @@ class HSpace:
 
         If `truncate` is True, the representation of the THB-spline (truncated) basis functions
         is computed instead.
+
+        .. note::
+            This method is inherently inefficient since it deals with the full
+            fine-level tensor product space.
         """
         # raveled indices for active functions per level
         act_indices = self.active_indices()
@@ -342,3 +362,19 @@ class HSpace:
             j += nk
         assert j == x.shape[0], 'Wrong length of input vector'
         return result
+
+    def tp_prolongation(self, lv, kron=False):
+        """Return the prolongation operator for the underlying tensor product mesh from level
+        `lv` to `lv+1`.
+
+        If `kron` is True, the prolongation is returned as a sparse matrix. Otherwise, the
+        prolongation is returned as a tuple of sparse matrices, one per space dimension,
+        whose Kronecker product represents the prolongation operator.
+
+        .. note::
+            This method, particularly with `kron=True`, is inherently
+            inefficient since it deals with the full tensor product spaces, not
+            merely the active basis functions.
+        """
+        Ps = self.hmesh.P[lv]
+        return utils.multi_kron_sparse(Ps) if kron else Ps

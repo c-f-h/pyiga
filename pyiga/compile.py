@@ -6,6 +6,7 @@ import importlib
 import sys
 import os.path
 import appdirs
+import hashlib
 
 import numpy
 
@@ -61,7 +62,8 @@ def compile_cython_module(src, verbose=False):
     if not MODDIR in sys.path:
         sys.path.append(MODDIR)
 
-    modname = 'mod' + hex(abs(hash(src)))[2:]
+    # NB: builtin hash() is not deterministic across runs! use SHAKE instead
+    modname = 'mod' + hashlib.shake_128(src.encode()).hexdigest(8)
     try:
         mod = importlib.import_module(modname)
     except ImportError:

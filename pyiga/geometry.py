@@ -332,6 +332,8 @@ def line_segment(x0, x1, support=(0.0, 1.0), intervals=1):
     linear spline space. By default, the minimal spline space with 2 dofs is
     used.
     """
+    if np.isscalar(x0): x0 = [x0]
+    if np.isscalar(x1): x1 = [x1]
     assert len(x0) == len(x1), 'Vectors must have same dimension'
     # produce 1D arrays
     x0 = np.array(x0, dtype=float).ravel()

@@ -127,6 +127,8 @@ def test_line_segment():
     assert L1.sdim == 1
     assert L1.dim == 2
     assert np.allclose(L1.eval(1.5), (2.5, 1.0))
+    ###
+    assert line_segment(3, 5).dim == 1
 
 def test_circular_arc():
     alpha = 2./3.*np.pi

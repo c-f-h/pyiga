@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """This module contains support for dealing with hierarchical spline spaces and
 truncated hierarchical B-splines (THB-splines).
 

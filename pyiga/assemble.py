@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Matrix assembling functions for B-spline IgA.
 
 This module contains functions to assemble mass and stiffness matrices

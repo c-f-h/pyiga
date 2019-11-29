@@ -12,12 +12,12 @@ Tensor product Gauss quadrature assemblers
 Standard Gauss quadrature assemblers for mass and stiffness matrices.
 They take one or two arguments:
 
-- `kvs` (list of :class:`pyiga.bspline.KnotVector`):
+- `kvs` (list of :class:`.KnotVector`):
   Describes the tensor product B-spline basis for which to assemble
   the matrix. One :class:`KnotVector` per coordinate direction.
-  In the 1D case, a single :class:`pyiga.bspline.KnotVector` may be passed
+  In the 1D case, a single :class:`.KnotVector` may be passed
   directly.
-- `geo` (:class:`pyiga.geometry.BSplinePatch`; optional):
+- `geo` (:class:`.BSplinePatch`; optional):
   Geometry transform, mapping from the parameter domain to the
   physical domain. If omitted, assume the identity map; a fast
   Kronecker product implementation is used in this case.
@@ -66,6 +66,11 @@ Boundary and initial conditions
 
 .. autoclass:: RestrictedLinearSystem
     :members:
+
+Integration
+-----------
+
+.. autofunction:: integrate
 
 """
 import numpy as np
@@ -166,7 +171,7 @@ def bsp_mixed_deriv_biform_1d_asym(knotvec1, knotvec2, du, dv, quadgrid=None, nq
     `knotvec1` is the space of trial functions, having `du` derivatives applied to them.
     `knotvec2` is the space of test functions, having `dv` derivatives applied to them.
 
-    The resulting matrix has size `knotvec2.numdofs x knotvec1.numdofs`.
+    The resulting matrix has size `knotvec2.numdofs × knotvec1.numdofs`.
     """
     if quadgrid is None:
         quadgrid = knotvec1.mesh
@@ -261,18 +266,18 @@ def inner_products(kvs, f, f_physical=False, geo=None):
     (i.e., the load vector).
 
     Args:
-        kvs (seq): a sequence of :class:`pyiga.bspline.KnotVector`,
+        kvs (seq): a sequence of :class:`.KnotVector`,
             representing a tensor product basis
-        f: a function or :class:`pyiga.geometry.BSplineFunc` object
+        f: a function or :class:`.BSplineFunc` object
         f_physical (bool): whether `f` is given in physical coordinates.
             If `True`, `geo` must be passed as well.
-        geo: a :class:`pyiga.geometry.BSplinePatch` which describes
+        geo: a :class:`.BSplinePatch` which describes
             the integration domain; if not given, the integrals are
             computed in the parameter domain
 
     Returns:
         ndarray: the inner products as an array of size
-        `kvs[0].ndofs x kvs[1].ndofs x ... x kvs[-1].ndofs`.
+        `kvs[0].ndofs × kvs[1].ndofs × ... × kvs[-1].ndofs`.
         Each entry corresponds to the inner product of the
         corresponding basis function with `f`.
         If `f` is not scalar, then each of its components is treated separately
@@ -317,7 +322,7 @@ def slice_indices(ax, idx, shape, ravel=False):
     """Return dof indices for a slice of a tensor product basis with size
     `shape`. The slice is taken across index `idx` on axis `ax`.
 
-    The indices are returned either as a `N x dim` array of multiindices or,
+    The indices are returned either as a `N × dim` array of multiindices or,
     with `ravel=True`, as an array of sequential (raveled) indices.
     """
     shape = tuple(shape)
@@ -337,7 +342,7 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
 
     Args:
         kvs: a tensor product B-spline basis
-        geo (:class:`pyiga.geometry.BSplinePatch`): the geometry transform
+        geo (:class:`.BSplinePatch`): the geometry transform
         bdspec: a pair `(axis, side)`. `axis` denotes the axis along
             which the boundary condition lies, and `side` is either
             0 for the "lower" boundary or 1 for the "upper" boundary.
@@ -392,7 +397,7 @@ def compute_initial_condition_01(kvs, geo, bdspec, g0, g1, physical=True):
 
     Args:
         kvs: a tensor product B-spline basis
-        geo (:class:`pyiga.geometry.BSplinePatch`): the geometry transform of
+        geo (:class:`.BSplinePatch`): the geometry transform of
             the space-time cylinder
         bdspec: a pair `(axis, side)`. `axis` denotes the time axis of `geo`,
             and `side` is either 0 for the "lower" boundary or 1 for the
@@ -552,12 +557,12 @@ def integrate(kvs, f, f_physical=False, geo=None):
     `geo` or a simple tensor product domain.
 
     Args:
-        kvs (seq): a sequence of :class:`pyiga.bspline.KnotVector`;
+        kvs (seq): a sequence of :class:`.KnotVector`;
             determines the parameter domain and the quadrature rule
-        f: a function or :class:`pyiga.geometry.BSplineFunc` object
+        f: a function or :class:`.BSplineFunc` object
         f_physical (bool): whether `f` is given in physical coordinates.
             If `True`, `geo` must be passed as well.
-        geo: a :class:`pyiga.geometry.BSplinePatch` which describes
+        geo: a :class:`.BSplinePatch` which describes
             the integration domain; if not given, the integral is
             computed in the parameter domain
 

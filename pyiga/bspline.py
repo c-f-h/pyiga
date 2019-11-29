@@ -92,7 +92,7 @@ class KnotVector:
         return (self._knots_to_mesh[supp[0]], self._knots_to_mesh[supp[1]])
 
     def mesh_support_idx_all(self):
-        """Compute an integer array of size `N x 2`, where N = self.numdofs, which
+        """Compute an integer array of size `N × 2`, where N = self.numdofs, which
         contains for each B-spline the result of :func:`mesh_support_idx`.
         """
         self._ensure_mesh()
@@ -481,16 +481,16 @@ class BSplineFunc:
     """Any function that is given in terms of a tensor product B-spline basis with coefficients.
 
     Arguments:
-        kvs (seq): tuple of `d` :class:`pyiga.bspline.KnotVector`.
+        kvs (seq): tuple of `d` :class:`KnotVector`.
         coeffs (ndarray): coefficient array
 
     `kvs` represents a tensor product B-spline basis, where the *i*-th
-    :class:`pyiga.bspline.KnotVector` describes the B-spline basis in the *i*-th
+    :class:`KnotVector` describes the B-spline basis in the *i*-th
     coordinate direction.
 
     `coeffs` is the array of coefficients with respect to this tensor product basis.
     The length of its first `d` axes must match the number of degrees of freedom
-    in the corresponding :class:`pyiga.bspline.KnotVector`.
+    in the corresponding :class:`KnotVector`.
     Trailing axes, if any, determine the output dimension of the function.
     If there are no trailing dimensions or only a single one of length 1,
     the function is scalar-valued.
@@ -526,7 +526,11 @@ class BSplineFunc:
         self.dim = dim
 
     def eval(self, *x):
-        """Evaluate the function at a single point of the parameter domain."""
+        """Evaluate the function at a single point of the parameter domain.
+
+        Args:
+            *x: the point at which to evaluate the function, in xyz order
+        """
         coords = tuple(np.asarray([t]) for t in reversed(x))
         return self.grid_eval(coords)
 
@@ -565,9 +569,9 @@ class BSplineFunc:
             the x axis last.
 
         Returns:
-            ndarray: array of Jacobians (`dim x sdim`); shape corresponds to input grid.
-            For scalar functions, the output is a vector of length `sdim` (the gradient)
-            per grid point.
+            ndarray: array of Jacobians (:attr:`dim` × :attr:`sdim`); shape
+            corresponds to input grid.  For scalar functions, the output is a
+            vector of length :attr:`sdim` (the gradient) per grid point.
         """
         assert len(gridaxes) == self.sdim, "Input has wrong dimension"
         colloc = [collocation_derivs(self.kvs[i], gridaxes[i], derivs=1) for i in range(self.sdim)]
@@ -594,7 +598,7 @@ class BSplineFunc:
 
         Returns:
             :class:`BSplineFunc`: representation of the boundary side;
-            has `sdim` reduced by 1 and the same `dim` as this function
+            has :attr:`sdim` reduced by 1 and the same :attr:`dim` as this function
         """
         assert 0 <= axis < self.sdim, 'Invalid axis'
         slices = self.sdim * [slice(None)]

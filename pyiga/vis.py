@@ -135,7 +135,7 @@ def plot_hierarchical_mesh(hspace, levels='all', levelwise=False, color_act='ste
     """Visualize the mesh of a 2D hierarchical spline space.
 
     Args:
-        hspace (:class:`pyiga.hierarchical.HSpace`): the space to be plotted
+        hspace (:class:`.HSpace`): the space to be plotted
         levels: either 'all' or a list of levels to plot
         levelwise (bool): if True, show each level (including active and deactivated
             basis functions) in a separate subplot

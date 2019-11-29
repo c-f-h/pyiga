@@ -196,7 +196,7 @@ class HSpace:
     """Represents a HB-spline or THB-spline space over an adaptively refined mesh.
 
     Arguments:
-        kvs: a sequence of :class:`pyiga.bspline.KnotVector` instances, representing
+        kvs: a sequence of :class:`.KnotVector` instances, representing
             the tensor product B-spline space on the coarsest level
     """
     def __init__(self, kvs):
@@ -350,9 +350,10 @@ class HSpace:
     def represent_fine(self, truncate=False):
         """Compute a matrix which represents all active HB-spline basis functions on the fine level.
 
-        The returned matrix has size `N_fine x N_act`, where `N_fine` is the number of degrees
-        of freedom in the finest tensor product mesh and `N_act` is the total number of active
-        basis functions across all levels.
+        The returned matrix has size `N_fine × N_act`, where `N_fine` is the
+        number of degrees of freedom in the finest tensor product mesh and
+        `N_act` = :attr:`numdofs` is the total number of active basis functions
+        across all levels.
 
         If `truncate` is True, the representation of the THB-spline (truncated) basis functions
         is computed instead.
@@ -384,8 +385,9 @@ class HSpace:
         return scipy.sparse.bmat([blocks], format='csr')
 
     def split_coeffs(self, x):
-        """Given a coefficient vector `x` of length `numdofs`, split it into `numlevels` vectors
-        which contain the contributions from each individual level.
+        """Given a coefficient vector `x` of length :attr:`numdofs`, split it
+        into :attr:`numlevels` vectors which contain the contributions from
+        each individual level.
         """
         j = 0
         result = []

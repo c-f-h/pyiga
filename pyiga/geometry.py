@@ -12,20 +12,20 @@ class BSplinePatch(BSplineFunc):
     Inherits from :class:`BSplineFunc`.
 
     Arguments:
-        kvs (seq): tuple of `d` :class:`pyiga.bspline.KnotVector`.
+        kvs (seq): tuple of `d` :class:`.KnotVector`\ s.
         coeffs (ndarray): the control points. Array of shape `(n1, n2, ..., nd, d)`,
             where `ni` is the number of dofs in the basis given by the *i*-th
-            :class:`pyiga.bspline.KnotVector`.
+            :class:`.KnotVector`.
 
     `kvs` represents a tensor product B-spline basis, where the *i*-th
-    :class:`pyiga.bspline.KnotVector` describes the B-spline basis in the *i*-th
+    :class:`.KnotVector` describes the B-spline basis in the *i*-th
     coordinate direction.
 
     `coeffs` are the control points, i.e., an array of coefficients with
     respect to this tensor product basis.
     The control point for the tensor product basis function `(i1, ..., id)`
     is given by ``coeffs[i1, ..., id, :]``.
-    The j-th component of the geometry is
+    The `j`-th component of the geometry is
     represented by the coefficients ``coeffs[..., j]``.
     """
 
@@ -66,7 +66,7 @@ class NurbsFunc:
     coefficients and weights.
 
     Arguments:
-        kvs (seq): tuple of `d` :class:`pyiga.bspline.KnotVector`.
+        kvs (seq): tuple of `d` :class:`.KnotVector`\ s.
         coeffs (ndarray): coefficient array; see :class:`BSplineFunc` for format.
             The constructor may modify `coeffs` during premultiplication!
         weights (ndarray): coefficients for weight function in the same format
@@ -270,7 +270,7 @@ def unit_cube(dim=3, num_intervals=1):
 
 def identity(extents):
     """Identity mapping (using linear splines) over a d-dimensional box
-    given by `extents` as a list of (min,max) pairs or of :class:`pyiga.bspline.KnotVector`.
+    given by `extents` as a list of (min,max) pairs or of :class:`.KnotVector`.
 
     Returns:
         :class:`BSplinePatch` geometry

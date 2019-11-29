@@ -26,8 +26,8 @@ def test_cube():
     cube2 = unit_cube(dim=2)
     cube3 = unit_cube(dim=3)
     cube4 = unit_cube(dim=4)
-    assert geos_roughly_equal(cube2, unit_square())
-    assert geos_roughly_equal(cube4, cube3.extrude(0.0, 1.0))
+    assert np.allclose(cube2.coeffs, unit_square().coeffs)
+    assert np.allclose(cube4.coeffs, cube3.cylinderize(0.0, 1.0).coeffs)
 
 def test_identity():
     geo = identity([(3.0,4.0), (5.0,6.0)])

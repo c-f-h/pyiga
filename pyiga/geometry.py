@@ -7,58 +7,7 @@ from . import bspline
 from .bspline import BSplineFunc
 from .tensor import apply_tprod
 
-class BSplinePatch(BSplineFunc):
-    """Represents a `d`-dimensional tensor product B-spline patch.
-    Inherits from :class:`BSplineFunc`.
-
-    Arguments:
-        kvs (seq): tuple of `d` :class:`.KnotVector`\ s.
-        coeffs (ndarray): the control points. Array of shape `(n1, n2, ..., nd, d)`,
-            where `ni` is the number of dofs in the basis given by the *i*-th
-            :class:`.KnotVector`.
-
-    `kvs` represents a tensor product B-spline basis, where the *i*-th
-    :class:`.KnotVector` describes the B-spline basis in the *i*-th
-    coordinate direction.
-
-    `coeffs` are the control points, i.e., an array of coefficients with
-    respect to this tensor product basis.
-    The control point for the tensor product basis function `(i1, ..., id)`
-    is given by ``coeffs[i1, ..., id, :]``.
-    The `j`-th component of the geometry is
-    represented by the coefficients ``coeffs[..., j]``.
-    """
-
-    def __init__(self, kvs, coeffs):
-        """Construct a `d`-dimensional tensor product B-spline patch with the given knot vectors and coefficients."""
-        BSplineFunc.__init__(self, kvs, coeffs)
-        assert self.dim == self.sdim, "Wrong dimension: should be %s, not %s" % (self.sdim, self.dim)
-
-    def extrude(self, z0=0.0, z1=1.0, support=(0.0, 1.0)):
-        """Create a patch with one additional space dimension by
-        linearly extruding along the new axis from `z0` to `z1`.
-
-        By default, the new knot vector will be defined over the
-        interval (0, 1). A different interval can be specified through
-        the `support` parameter.
-        """
-        kvz = bspline.make_knots(1, support[0], support[1], 1)      # linear KV with a single interval
-
-        pad0 = np.expand_dims(np.tile(z0, self.coeffs.shape[:-1]), axis=-1)
-        pad1 = np.expand_dims(np.tile(z1, self.coeffs.shape[:-1]), axis=-1)
-        # append the padding in the new direction and stack the two
-        # new coefficient arrays along a new first axis
-        newcoefs = np.stack(
-                      (np.append(self.coeffs, pad0, axis=-1),
-                       np.append(self.coeffs, pad1, axis=-1)),
-                      axis=0)
-        return BSplinePatch((kvz,) + self.kvs, newcoefs)
-
-    def perturb(self, noise):
-        """Create a copy of this patch where all coefficients are randomly perturbed
-        by noise of the given magnitude."""
-        return BSplinePatch(self.kvs,
-            self.coeffs + 2*noise*(np.random.random_sample(self.coeffs.shape) - 0.5))
+import functools
 
 
 class NurbsFunc:
@@ -189,7 +138,7 @@ def unit_square(num_intervals=1):
     """Unit square with given number of intervals per direction.
 
     Returns:
-        :class:`BSplinePatch` 2D geometry
+        :class:`BSplineFunc` 2D geometry
     """
     return unit_cube(dim=2, num_intervals=num_intervals)
 
@@ -201,7 +150,7 @@ def perturbed_square(num_intervals=5, noise=0.02):
     given noise level.
 
     Returns:
-        :class:`BSplinePatch` 2D geometry
+        :class:`BSplineFunc` 2D geometry
     """
     return unit_square(num_intervals).perturb(noise)
 
@@ -213,7 +162,7 @@ def bspline_quarter_annulus(r1=1.0, r2=2.0):
         r2 (float): outer radius
 
     Returns:
-        :class:`BSplinePatch` 2D geometry
+        :class:`BSplineFunc` 2D geometry
     """
     kvx = bspline.make_knots(1, 0.0, 1.0, 1)
     kvy = bspline.make_knots(2, 0.0, 1.0, 1)
@@ -226,7 +175,7 @@ def bspline_quarter_annulus(r1=1.0, r2=2.0):
             [[0.0,  r1],
              [0.0,  r2]],
     ])
-    return BSplinePatch((kvy,kvx), coeffs)
+    return BSplineFunc((kvy,kvx), coeffs)
 
 def quarter_annulus(r1=1.0, r2=2.0):
     """A NURBS representation of a quarter annulus in the first quadrant.
@@ -260,20 +209,16 @@ def unit_cube(dim=3, num_intervals=1):
     per coordinate direction.
 
     Returns:
-        :class:`BSplinePatch` geometry
+        :class:`BSplineFunc` geometry
     """
-    kv = bspline.make_knots(1, 0.0, 1.0, num_intervals)
-    x = np.linspace(0.0, 1.0, num_intervals+1)
-    XYZ = np.meshgrid(*(dim * (x,)), indexing='ij')
-    coeffs = np.stack(tuple(reversed(XYZ)), axis=-1)   # make X correspond to 1st axis
-    return BSplinePatch(dim * (kv,), coeffs)
+    return functools.reduce(tensor_product, dim * (line_segment(0.0, 1.0, intervals=num_intervals),))
 
 def identity(extents):
     """Identity mapping (using linear splines) over a d-dimensional box
     given by `extents` as a list of (min,max) pairs or of :class:`.KnotVector`.
 
     Returns:
-        :class:`BSplinePatch` geometry
+        :class:`BSplineFunc` geometry
     """
     if any(isinstance(ex, bspline.KnotVector) for ex in extents):
         return identity([
@@ -285,7 +230,7 @@ def identity(extents):
     xs = tuple(np.linspace(ex[0], ex[1], 2) for ex in extents)
     XYZ = np.meshgrid(*xs, indexing='ij')
     coeffs = np.stack(tuple(reversed(XYZ)), axis=-1)   # make X correspond to 1st axis
-    return BSplinePatch(kvs, coeffs)
+    return BSplineFunc(kvs, coeffs)
 
 def twisted_box():
     """A 3D volume that resembles a box with its right face twisted
@@ -294,7 +239,7 @@ def twisted_box():
     Corresponds to gismo data file twistedFlatQuarterAnnulus.xml.
 
     Returns:
-        :class:`BSplinePatch` 3D geometry
+        :class:`BSplineFunc` 3D geometry
     """
     kv1 = bspline.make_knots(1, 0.0, 1.0, 1)
     kv2 = bspline.make_knots(3, 0.0, 1.0, 1)
@@ -319,7 +264,7 @@ def twisted_box():
       1   , 2   , 2   ,
     ]).reshape((2, 4, 2, 3))
 
-    return BSplinePatch((kv1,kv2,kv3), coeffs)
+    return BSplineFunc((kv1,kv2,kv3), coeffs)
 
 def line_segment(x0, x1, support=(0.0, 1.0), intervals=1):
     """Return a :class:`.BSplineFunc` which describes the line between the
@@ -425,3 +370,28 @@ def outer_product(G1, G2):
     assert isinstance(G2, BSplineFunc)
     C1, C2 = _prepare_for_outer(G1, G2)
     return BSplineFunc(G1.kvs + G2.kvs, C1 * C2)
+
+def tensor_product(G1, G2):
+    """Compute the tensor product of two :class:`.BSplineFunc` functions.
+
+    The resulting :class:`.BSplineFunc` will have source dimension
+    (:attr:`.BSplineFunc.sdim`) equal to the sum of the source dimensions of
+    the input functions, and target dimension (:attr:`.BSplineFunc.dim`) equal
+    to the sum of the target dimensions of the input functions.
+    """
+    assert isinstance(G1, BSplineFunc)
+    assert isinstance(G2, BSplineFunc)
+    assert G1.is_vector() and G2.is_vector(), 'only implemented for vector-valued functions'
+
+    Gs = (G1, G2)
+    SD1, SD2 = (np.atleast_1d(G.coeffs.shape[:G.sdim]) for G in Gs)
+    VD1, VD2 = (np.atleast_1d(G.coeffs.shape[G.sdim:]) for G in Gs)
+    shape1 = np.concatenate((SD1, np.ones_like(SD2), VD1))
+    shape2 = np.concatenate((np.ones_like(SD1), SD2, VD2))
+    target_shape1 = np.concatenate((SD1, SD2, VD1))
+    target_shape2 = np.concatenate((SD1, SD2, VD2))
+    C1 = np.broadcast_to(np.reshape(G1.coeffs, shape1), target_shape1)
+    C2 = np.broadcast_to(np.reshape(G2.coeffs, shape2), target_shape2)
+    # NB: coefficients are in XY order, but coordinate axes in YX order!
+    C = np.concatenate((C2,C1), axis=-1)
+    return BSplineFunc(G1.kvs + G2.kvs, C)

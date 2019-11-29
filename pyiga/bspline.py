@@ -527,11 +527,11 @@ class BSplineFunc:
 
     def is_scalar(self):
         """Returns True if the function is scalar-valued."""
-        return np.ndim(self.dim) == 0
+        return len(self.coeffs.shape[self.sdim:]) == 0
 
     def is_vector(self):
         """Returns True if the function is vector-valued."""
-        return np.ndim(self.dim) == 1
+        return len(self.coeffs.shape[self.sdim:]) == 1
 
     def eval(self, *x):
         """Evaluate the function at a single point of the parameter domain.
@@ -627,6 +627,22 @@ class BSplineFunc:
         offset = np.broadcast_to(offset, self.coeffs.shape)
         return BSplineFunc(self.kvs, self.coeffs + offset)
 
+    def perturb(self, noise):
+        """Create a copy of this function where all coefficients are randomly perturbed
+        by noise of the given magnitude."""
+        return BSplineFunc(self.kvs,
+            self.coeffs + 2*noise*(np.random.random_sample(self.coeffs.shape) - 0.5))
+
+    def cylinderize(self, z0=0.0, z1=1.0, support=(0.0, 1.0)):
+        """Create a patch with one additional space dimension by
+        linearly extruding along the new axis from `z0` to `z1`.
+
+        By default, the new knot vector will be defined over the
+        interval (0, 1). A different interval can be specified through
+        the `support` parameter.
+        """
+        from .geometry import tensor_product, line_segment
+        return tensor_product(line_segment(z0, z1, support=support), self)
 
 class PhysicalGradientFunc:
     """A class for function objects which evaluate physical (transformed) gradients of

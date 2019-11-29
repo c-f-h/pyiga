@@ -100,7 +100,7 @@ def test_stiffness_3d():
 
 def test_heat_st_2d():
     T_end = 2.0
-    geo = geometry.unit_cube(dim=1).extrude(0.0, T_end, support=(0.0,T_end))
+    geo = geometry.unit_cube(dim=1).cylinderize(0.0, T_end, support=(0.0,T_end))
     kv_t = bspline.make_knots(2, 0.0, T_end, 6)    # time axis
     kv   = bspline.make_knots(3, 0.0,   1.0, 8)    # space axis
     kvs = (kv_t, kv)
@@ -116,7 +116,7 @@ def test_heat_st_2d():
 
 def test_wave_st_2d():
     T_end = 2.0
-    geo = geometry.unit_cube(dim=1).extrude(0.0, T_end, support=(0.0,T_end))
+    geo = geometry.unit_cube(dim=1).cylinderize(0.0, T_end, support=(0.0,T_end))
     kv_t = bspline.make_knots(2, 0.0, T_end, 6)    # time axis
     kv   = bspline.make_knots(3, 0.0,   1.0, 8)    # space axis
     kvs = (kv_t, kv)

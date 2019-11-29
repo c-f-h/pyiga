@@ -525,6 +525,14 @@ class BSplineFunc:
             dim = dim[0]
         self.dim = dim
 
+    def is_scalar(self):
+        """Returns True if the function is scalar-valued."""
+        return np.ndim(self.dim) == 0
+
+    def is_vector(self):
+        """Returns True if the function is vector-valued."""
+        return np.ndim(self.dim) == 1
+
     def eval(self, *x):
         """Evaluate the function at a single point of the parameter domain.
 

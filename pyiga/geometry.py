@@ -321,6 +321,26 @@ def twisted_box():
 
     return BSplinePatch((kv1,kv2,kv3), coeffs)
 
+def line_segment(x0, x1, support=(0.0, 1.0), intervals=1):
+    """Return a :class:`.BSplineFunc` which describes the line between the
+    vectors `x0` and `x1`.
+
+    If specified, `support` describes the interval in which the function is
+    supported; by default, it is the interval (0,1).
+
+    If specified, `intervals` is the number of intervals in the underlying
+    linear spline space. By default, the minimal spline space with 2 dofs is
+    used.
+    """
+    assert len(x0) == len(x1), 'Vectors must have same dimension'
+    # produce 1D arrays
+    x0 = np.array(x0, dtype=float).ravel()
+    x1 = np.array(x1, dtype=float).ravel()
+    # interpolate linearly
+    S = np.linspace(0.0, 1.0, intervals+1).reshape((intervals+1, 1))
+    coeffs = (1-S) * x0 + S * x1
+    return BSplineFunc(bspline.make_knots(1, support[0], support[1], intervals), coeffs)
+
 def circular_arc(alpha, r=1.0):
     """Construct a circular arc with angle `alpha` and radius `r`.
 
@@ -352,3 +372,54 @@ def circle(r=1.0):
     pts[5] *= 2
     W = np.array([1, .5, 1, .5, 1, .5, 1])
     return NurbsFunc(kv, pts, weights=W)
+
+def _prepare_for_outer(G1, G2):
+    """Bring the coefficient arrays of G1 and G2 into a suitable form to apply outer
+    sum or outer product on them.
+    """
+    Gs = (G1, G2)
+    SD1, SD2 = (np.atleast_1d(G.coeffs.shape[:G.sdim]) for G in Gs)
+    VD1, VD2 = (np.atleast_1d(G.coeffs.shape[G.sdim:]) for G in Gs)
+    shape1 = np.concatenate((SD1, np.ones_like(SD2), VD1))
+    shape2 = np.concatenate((np.ones_like(SD1), SD2, VD2))
+    return np.reshape(G1.coeffs, shape1), np.reshape(G2.coeffs, shape2)
+
+def outer_sum(G1, G2):
+    """Compute the outer sum of two :class:`.BSplineFunc` geometries.
+
+    The resulting :class:`.BSplineFunc` will have source dimension
+    (:attr:`.BSplineFunc.sdim`) equal to the sum of the source dimensions of
+    the input functions.
+
+    `G1` and `G2` should have the same image dimension (:attr:`.BSplineFunc.dim`),
+    and the output will have the same as well. However, broadcasting according to
+    standard Numpy rules is permissible; e.g., one function can be vector-valued
+    and the other scalar-valued.
+
+    The coefficients of the result are the pointwise sums of the coefficients of
+    the input functions over a new tensor product spline space.
+    """
+    assert isinstance(G1, BSplineFunc)
+    assert isinstance(G2, BSplineFunc)
+    C1, C2 = _prepare_for_outer(G1, G2)
+    return BSplineFunc(G1.kvs + G2.kvs, C1 + C2)
+
+def outer_product(G1, G2):
+    """Compute the outer product of two :class:`.BSplineFunc` geometries.
+
+    The resulting :class:`.BSplineFunc` will have source dimension
+    (:attr:`.BSplineFunc.sdim`) equal to the sum of the source dimensions of
+    the input functions.
+
+    `G1` and `G2` should have the same image dimension (:attr:`.BSplineFunc.dim`),
+    and the output will have the same as well. However, broadcasting according to
+    standard Numpy rules is permissible; e.g., one function can be vector-valued
+    and the other scalar-valued.
+
+    The coefficients of the result are the pointwise products of the coefficients of
+    the input functions over a new tensor product spline space.
+    """
+    assert isinstance(G1, BSplineFunc)
+    assert isinstance(G2, BSplineFunc)
+    C1, C2 = _prepare_for_outer(G1, G2)
+    return BSplineFunc(G1.kvs + G2.kvs, C1 * C2)

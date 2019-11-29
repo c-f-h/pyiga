@@ -122,6 +122,12 @@ def test_nurbs_boundary():
     assert geos_roughly_equal(geo.boundary(1, 1),
                               circular_arc(np.pi/2, 2.0))
 
+def test_line_segment():
+    L1 = line_segment((1,0), (4,2), support=(1,2))
+    assert L1.sdim == 1
+    assert L1.dim == 2
+    assert np.allclose(L1.eval(1.5), (2.5, 1.0))
+
 def test_circular_arc():
     alpha = 2./3.*np.pi
     geo = circular_arc(alpha, r=2)
@@ -139,3 +145,12 @@ def test_circle():
     assert np.allclose(v[0],  [r,0])
     assert np.allclose(v[-1], [r,0])
     assert abs(r - np.linalg.norm(v, axis=-1)).max() < 1e-12
+
+def test_outer():
+    G1 = outer_sum(line_segment([0,1],[0,2]), line_segment([2,0],[3,0]))
+    G2 = unit_square().translate((2,1))
+    assert geos_roughly_equal(G1, G2)
+    ###
+    G1 = outer_product(line_segment([1,1],[1,2]), line_segment([3,1],[4,1]))
+    G2 = unit_square().translate((3,1))
+    assert geos_roughly_equal(G1, G2)

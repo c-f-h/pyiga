@@ -624,8 +624,34 @@ class BSplineFunc:
 
     def translate(self, offset):
         """Return a version of this geometry translated by the specified offset."""
-        offset = np.broadcast_to(offset, self.coeffs.shape)
         return BSplineFunc(self.kvs, self.coeffs + offset)
+
+    def scale(self, factor):
+        """Scale all control points either by a scalar factor or componentwise by
+        a vector and return the resulting new function.
+        """
+        return BSplineFunc(self.kvs, self.coeffs * factor)
+
+    def apply_matrix(self, A):
+        """Apply a matrix to each control point of this function and return the result.
+
+        `A` should either be a single matrix or an array of matrices, one for each
+        control point. Standard numpy broadcasting rules apply.
+        """
+        assert self.is_vector(), 'Can only apply matrices to vector-valued functions'
+        C = np.matmul(A, self.coeffs[..., None])
+        assert C.shape[-1] == 1  # this should have created a new singleton axis
+        return BSplineFunc(self.kvs, np.squeeze(C, axis=-1))
+
+    def rotate_2d(self, angle):
+        """Rotate a geometry with :attr:`dim` = 2 by the given angle and return the result."""
+        assert self.dim == 2, 'Must be 2D vector function'
+        s, c = np.sin(angle), np.cos(angle)
+        R = np.array([
+            [c, -s],
+            [s, c]
+        ])
+        return self.apply_matrix(R)
 
     def perturb(self, noise):
         """Create a copy of this function where all coefficients are randomly perturbed
@@ -643,6 +669,7 @@ class BSplineFunc:
         """
         from .geometry import tensor_product, line_segment
         return tensor_product(line_segment(z0, z1, support=support), self)
+
 
 class PhysicalGradientFunc:
     """A class for function objects which evaluate physical (transformed) gradients of

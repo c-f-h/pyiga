@@ -71,6 +71,11 @@ class NurbsFunc:
         if not premultiplied:
             self.coeffs[..., :-1] *= self.coeffs[..., -1:]
 
+    def is_vector(self):
+        """Returns True if the function is vector-valued."""
+        # NB: currently, NURBS can never be truly scalar due to how weights are stored
+        return len(self.coeffs.shape[self.sdim:]) == 1
+
     def eval(self, *x):
         coords = tuple(np.asarray([t]) for t in reversed(x))
         return self.grid_eval(coords)
@@ -122,12 +127,45 @@ class NurbsFunc:
         which describe the extent of the support in the parameter space."""
         return tuple(kv.support() for kv in self.kvs)
 
+    def coeffs_weights(self):
+        """Return the non-premultiplied coefficients and weights as a pair of arrays."""
+        W = self.coeffs[..., -1]
+        return self.coeffs[..., :-1] / W[..., None], W.copy()
+
     def translate(self, offset):
         """Return a version of this geometry translated by the specified offset."""
-        offset = np.broadcast_to(offset, self.coeffs[..., :-1].shape)
-        C = self.coeffs.copy()
-        C[..., :-1] += offset * C[..., -1:]
-        return NurbsFunc(self.kvs, C, weights=None, premultiplied=True)
+        C, W = self.coeffs_weights()
+        return NurbsFunc(self.kvs, C + offset, W)
+
+    def scale(self, factor):
+        """Scale all control points either by a scalar factor or componentwise by
+        a vector, leave the weights unchanged, and return the resulting new function.
+        """
+        C, W = self.coeffs_weights()
+        return NurbsFunc(self.kvs, C * factor, W)
+
+    def apply_matrix(self, A):
+        """Apply a matrix to each control point of this function, leave the weights
+        unchanged, and return the result.
+
+        `A` should either be a single matrix or an array of matrices, one for each
+        control point. Standard numpy broadcasting rules apply.
+        """
+        assert self.is_vector(), 'Can only apply matrices to vector-valued functions'
+        C, W = self.coeffs_weights()
+        C = np.matmul(A, C[..., None])
+        assert C.shape[-1] == 1  # this should have created a new singleton axis
+        return NurbsFunc(self.kvs, np.squeeze(C, axis=-1), W)
+
+    def rotate_2d(self, angle):
+        """Rotate a geometry with :attr:`dim` = 2 by the given angle and return the result."""
+        assert self.dim == 2, 'Must be 2D vector function'
+        s, c = np.sin(angle), np.cos(angle)
+        R = np.array([
+            [c, -s],
+            [s, c]
+        ])
+        return self.apply_matrix(R)
 
 
 ################################################################################
@@ -262,6 +300,10 @@ def twisted_box():
 
     return BSplineFunc((kv1,kv2,kv3), coeffs)
 
+################################################################################
+# Functions for creating curves
+################################################################################
+
 def line_segment(x0, x1, support=(0.0, 1.0), intervals=1):
     """Return a :class:`.BSplineFunc` which describes the line between the
     vectors `x0` and `x1`.
@@ -316,6 +358,10 @@ def circle(r=1.0):
     W = np.array([1, .5, 1, .5, 1, .5, 1])
     return NurbsFunc(kv, pts, weights=W)
 
+################################################################################
+# Operations on geometries
+################################################################################
+
 def _prepare_for_outer(G1, G2):
     """Bring the coefficient arrays of G1 and G2 into a suitable form to apply outer
     sum or outer product on them.
@@ -367,14 +413,16 @@ def outer_product(G1, G2):
     C1, C2 = _prepare_for_outer(G1, G2)
     return BSplineFunc(G1.kvs + G2.kvs, C1 * C2)
 
-def tensor_product(G1, G2):
-    """Compute the tensor product of two :class:`.BSplineFunc` functions.
+def tensor_product(G1, G2, *Gs):
+    """Compute the tensor product of two or more :class:`.BSplineFunc` functions.
 
     The resulting :class:`.BSplineFunc` will have source dimension
     (:attr:`.BSplineFunc.sdim`) equal to the sum of the source dimensions of
     the input functions, and target dimension (:attr:`.BSplineFunc.dim`) equal
     to the sum of the target dimensions of the input functions.
     """
+    if Gs is not ():
+        return tensor_product(G1, tensor_product(G2, *Gs))
     assert isinstance(G1, BSplineFunc)
     assert isinstance(G2, BSplineFunc)
     assert G1.is_vector() and G2.is_vector(), 'only implemented for vector-valued functions'

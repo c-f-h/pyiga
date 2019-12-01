@@ -137,7 +137,7 @@ def test_circular_arc():
     v = geo.grid_eval((grd,))
     assert np.allclose(v[0], [2,0])
     assert np.allclose(v[-1], [2*np.cos(alpha), 2*np.sin(alpha)])
-    assert abs(2. - np.linalg.norm(v, axis=-1)).max() < 1e-12
+    assert np.allclose(2., np.linalg.norm(v, axis=-1))
 
 def test_circle():
     r = 1.75
@@ -156,3 +156,44 @@ def test_outer():
     G1 = outer_product(line_segment([1,1],[1,2]), line_segment([3,1],[4,1]))
     G2 = unit_square().translate((3,1))
     assert geos_roughly_equal(G1, G2)
+
+def test_translate():
+    # translation of B-spline functions
+    G = unit_cube().translate((1,2,3))
+    assert geos_roughly_equal(G,
+            tensor_product(line_segment(3,4), line_segment(2,3), line_segment(1,2)))
+    # translation of NURBS patch
+    G = quarter_annulus().translate((1,2))
+    values = G.grid_eval((np.linspace(0,1,20), [0]))
+    assert np.allclose(np.linalg.norm(values - (1,2), axis=-1), 1.0)
+
+def test_scale():
+    G = unit_square().scale(2)
+    assert geos_roughly_equal(G,
+            tensor_product(line_segment(0,2), line_segment(0,2)))
+    G = unit_square().scale((3,1))
+    assert geos_roughly_equal(G,
+            tensor_product(line_segment(0,1), line_segment(0,3)))
+    # scaling a NURBS curve
+    G1 = circular_arc(np.pi / 2)
+    G2 = G1.scale((2,1))
+    grid = (np.linspace(0, 1, 20),)
+    V1, V2 = G1.grid_eval(grid), G2.grid_eval(grid)
+    assert np.allclose(V1 * (2,1), V2)
+
+def test_rotation():
+    # rotation of a rectangle
+    G = unit_square().scale((2,1)).rotate_2d(np.pi / 4)
+    d = 1.0 / np.sqrt(2)
+    assert geos_roughly_equal(G,
+            outer_sum(line_segment([0,0], [-d,d]),
+                      line_segment([0,0], [2*d,2*d])))
+    # rotation of NURBS patch
+    G = quarter_annulus().rotate_2d(np.pi / 4)
+    values = G.grid_eval((np.linspace(0,1,20), [0,1]))
+    assert np.allclose(np.linalg.norm(values[:,0], axis=-1), 1.0) # inner arc r=1
+    assert np.allclose(np.linalg.norm(values[:,1], axis=-1), 2.0) # outer arc r=2
+    assert np.allclose(values[0,0],  (d,d))      # check that the 4 corners are correct
+    assert np.allclose(values[-1,0], (-d,d))
+    assert np.allclose(values[0,1],  (2*d,2*d))
+    assert np.allclose(values[-1,1], (-2*d,2*d))

@@ -220,17 +220,13 @@ def identity(extents):
     Returns:
         :class:`BSplineFunc` geometry
     """
-    if any(isinstance(ex, bspline.KnotVector) for ex in extents):
-        return identity([
-            ex.support() if isinstance(ex, bspline.KnotVector) else ex
-            for ex in extents
-        ])
-
-    kvs = tuple(bspline.make_knots(1, ex[0], ex[1], 1) for ex in extents)
-    xs = tuple(np.linspace(ex[0], ex[1], 2) for ex in extents)
-    XYZ = np.meshgrid(*xs, indexing='ij')
-    coeffs = np.stack(tuple(reversed(XYZ)), axis=-1)   # make X correspond to 1st axis
-    return BSplineFunc(kvs, coeffs)
+    # if any inputs are KnotVectors, extract their supports
+    extents = [
+        ex.support() if isinstance(ex, bspline.KnotVector) else ex
+        for ex in extents
+    ]
+    return functools.reduce(tensor_product,
+            (line_segment(ex[0], ex[1], support=ex) for ex in extents))
 
 def twisted_box():
     """A 3D volume that resembles a box with its right face twisted

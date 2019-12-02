@@ -4,6 +4,7 @@ import numpy as np
 import numpy.random
 
 from . import bspline
+from . import utils
 from .bspline import BSplineFunc
 from .tensor import apply_tprod
 
@@ -167,6 +168,46 @@ class NurbsFunc:
         ])
         return self.apply_matrix(R)
 
+
+class UserFunction:
+    """A function (supporting the same basic protocol as :class:`.BSplineFunc`) which is given
+    in terms of a user-defined callable.
+
+    Args:
+        f (callable): a function of `d` variables; may be scalar or vector-valued
+        support: a sequence of `d` pairs of the form `(lower,upper)` describing
+            the support of the function (see :attr:`.BSplineFunc.support`)
+        dim (int): the dimension of the function output; by default, is
+            automatically determined by calling `f`
+        jac (callable): optionally, a function evaluating the Jacobian matrix
+            of the function
+
+    The :attr:`sdim` attribute (see :attr:`.BSplineFunc.sdim`) is determined from the
+    length of `support`.
+    """
+    def __init__(self, f, support, dim=None, jac=None):
+        self.f = f
+        self.support = tuple(support)
+        self.jac = jac
+        if dim is None:
+            x0 = tuple(lo for (lo,hi) in reversed(support))
+            dim = np.shape(f(*x0))
+            if len(dim) == 0:
+                dim = 1
+            elif len(dim) == 1:
+                dim = dim[0]
+        self.dim = dim
+        self.sdim = len(support)
+
+    def grid_eval(self, grd):
+        return utils.grid_eval(self.f, grd)
+
+    def eval(self, *x):
+        return self.f(*x)
+
+    def grid_jacobian(self, grd):
+        assert self.jac is not None, 'Jacobian not specified in UserFunction'
+        return utils.grid_eval(self.jac, grd)
 
 ################################################################################
 # Examples of 2D geometries

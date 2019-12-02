@@ -197,3 +197,11 @@ def test_rotation():
     assert np.allclose(values[-1,0], (-d,d))
     assert np.allclose(values[0,1],  (2*d,2*d))
     assert np.allclose(values[-1,1], (-2*d,2*d))
+
+def test_userfunction():
+    def f(x, y):
+        r = 1 + x
+        w = 1 - (2 - np.sqrt(2)) * y * (1-y)
+        return (r * (1 - y**2/w), r * (1 - (1-y)**2/w))
+    F = UserFunction(f, [[0,1],[0,1]])
+    assert geos_roughly_equal(F, quarter_annulus())

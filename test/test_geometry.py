@@ -178,6 +178,20 @@ def test_outer():
     assert np.allclose(G1.grid_eval((Y,X)),
             Gy.grid_eval((Y,))[:, None, ...] * Gx.grid_eval((X,))[None, :, ...])
 
+def test_tensorproduct():
+    kv = bspline.make_knots(2, 0.0, 1.0, 1)
+    Gy = NurbsFunc(kv, [0,.5,1], [1,3,1])
+    Gx = NurbsFunc(kv, [0,.5,1], [1,1.0/3.0,1])
+    G = tensor_product(Gy, Gx)
+    assert G.sdim == Gy.sdim + Gx.sdim
+    assert G.dim == Gy.dim + Gx.dim
+    Y,X = np.linspace(0,1,7), np.linspace(0,1,7)
+    Vy,Vx = Gy.grid_eval((Y,)), Gx.grid_eval((X,))
+    V = G.grid_eval((Y,X))
+    for i in range(len(Y)):
+        for j in range(len(X)):
+            assert np.allclose(V[i,j], np.concatenate((Vx[j], Vy[i])))
+
 def test_translate():
     # translation of B-spline functions
     G = unit_cube().translate((1,2,3))

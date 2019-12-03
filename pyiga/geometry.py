@@ -428,13 +428,13 @@ def outer_sum(G1, G2):
 
     .. math:: G(x,y) = G_1(y) + G_2(x).
 
-    The resulting function will be a :class:`.NurbsFunc` if either input is or
-    a :class:`.BSplineFunc` otherwise. It will have source dimension
+    The returned function is a :class:`.NurbsFunc` if either input is and a
+    :class:`.BSplineFunc` otherwise. It has source dimension
     (:attr:`.BSplineFunc.sdim`) equal to the sum of the source dimensions of
     the input functions.
 
     `G1` and `G2` should have the same image dimension (:attr:`.BSplineFunc.dim`),
-    and the output will have the same as well. However, broadcasting according to
+    and the output then has the same as well. However, broadcasting according to
     standard Numpy rules is permissible; e.g., one function can be vector-valued
     and the other scalar-valued.
 
@@ -465,13 +465,13 @@ def outer_product(G1, G2):
     .. math:: G(x,y) = G_1(y) G_2(x),
 
     where the multiplication is componentwise in the case of vector functions.
-    The resulting function will be a :class:`.NurbsFunc` if either input is or
-    a :class:`.BSplineFunc` otherwise. It will have source dimension
+    The returned function is a :class:`.NurbsFunc` if either input is and a
+    :class:`.BSplineFunc` otherwise. It has source dimension
     (:attr:`.BSplineFunc.sdim`) equal to the sum of the source dimensions of
     the input functions.
 
     `G1` and `G2` should have the same image dimension (:attr:`.BSplineFunc.dim`),
-    and the output will have the same as well. However, broadcasting according to
+    and the output then has the same as well. However, broadcasting according to
     standard Numpy rules is permissible; e.g., one function can be vector-valued
     and the other scalar-valued.
 
@@ -492,28 +492,52 @@ def outer_product(G1, G2):
         return BSplineFunc(G1.kvs + G2.kvs, C1 * C2)
 
 def tensor_product(G1, G2, *Gs):
-    """Compute the tensor product of two or more :class:`.BSplineFunc` functions.
+    r"""Compute the tensor product of two or more :class:`.BSplineFunc` or
+    :class:`.NurbsFunc` functions.  This means that given two input functions
 
-    The resulting :class:`.BSplineFunc` will have source dimension
-    (:attr:`.BSplineFunc.sdim`) equal to the sum of the source dimensions of
-    the input functions, and target dimension (:attr:`.BSplineFunc.dim`) equal
-    to the sum of the target dimensions of the input functions.
+    .. math:: G_1(y), G_2(x),
+
+    it returns a new function
+
+    .. math:: G(x,y) = G_2(x) \times G_1(y),
+
+    where :math:`\times` means that vectors are joined together.
+    The resulting :class:`.BSplineFunc` or :class:`NurbsFunc` has source
+    dimension (:attr:`.BSplineFunc.sdim`) equal to the sum of the source
+    dimensions of the input functions, and target dimension
+    (:attr:`.BSplineFunc.dim`) equal to the sum of the target dimensions of the
+    input functions.
     """
     if Gs is not ():
         return tensor_product(G1, tensor_product(G2, *Gs))
-    assert isinstance(G1, BSplineFunc)
-    assert isinstance(G2, BSplineFunc)
     assert G1.is_vector() and G2.is_vector(), 'only implemented for vector-valued functions'
 
     Gs = (G1, G2)
-    SD1, SD2 = (np.atleast_1d(G.coeffs.shape[:G.sdim]) for G in Gs)
-    VD1, VD2 = (np.atleast_1d(G.coeffs.shape[G.sdim:]) for G in Gs)
+    nurbs = any(isinstance(G, NurbsFunc) for G in Gs)
+
+    if nurbs:
+        Gs = tuple(G.as_nurbs() for G in Gs)
+        CC1, W1 = G1.coeffs_weights()
+        CC2, W2 = G2.coeffs_weights()
+        Cs = (CC1, CC2)
+        WW1, WW2 = _prepare_for_outer((W1, W2), (G1.sdim, G2.sdim))
+        W = WW1 * WW2
+    else:
+        assert isinstance(G1, BSplineFunc) and isinstance(G2, BSplineFunc)
+        Cs = tuple(G.coeffs for G in Gs)
+
+    SD1, SD2 = (np.atleast_1d(C.shape[:G.sdim]) for (C,G) in zip(Cs,Gs))
+    VD1, VD2 = (np.atleast_1d(C.shape[G.sdim:]) for (C,G) in zip(Cs,Gs))
     shape1 = np.concatenate((SD1, np.ones_like(SD2), VD1))
     shape2 = np.concatenate((np.ones_like(SD1), SD2, VD2))
     target_shape1 = np.concatenate((SD1, SD2, VD1))
     target_shape2 = np.concatenate((SD1, SD2, VD2))
-    C1 = np.broadcast_to(np.reshape(G1.coeffs, shape1), target_shape1)
-    C2 = np.broadcast_to(np.reshape(G2.coeffs, shape2), target_shape2)
+    C1 = np.broadcast_to(np.reshape(Cs[0], shape1), target_shape1)
+    C2 = np.broadcast_to(np.reshape(Cs[1], shape2), target_shape2)
     # NB: coefficients are in XY order, but coordinate axes in YX order!
     C = np.concatenate((C2,C1), axis=-1)
-    return BSplineFunc(G1.kvs + G2.kvs, C)
+
+    if nurbs:
+        return NurbsFunc(G1.kvs + G2.kvs, C, W)
+    else:
+        return BSplineFunc(G1.kvs + G2.kvs, C)

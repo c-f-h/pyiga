@@ -403,16 +403,15 @@ def circle(r=1.0):
 # Operations on geometries
 ################################################################################
 
-def _prepare_for_outer(G1, G2):
-    """Bring the coefficient arrays of G1 and G2 into a suitable form to apply outer
-    sum or outer product on them.
+def _prepare_for_outer(Cs, sdims):
+    """Bring the coefficient arrays (C1,C2)=Cs with source dimensions as given
+    into a suitable form to apply outer sum or outer product on them.
     """
-    Gs = (G1, G2)
-    SD1, SD2 = (np.atleast_1d(G.coeffs.shape[:G.sdim]) for G in Gs)
-    VD1, VD2 = (np.atleast_1d(G.coeffs.shape[G.sdim:]) for G in Gs)
+    SD1, SD2 = (np.atleast_1d(C.shape[:sdim]) for (C,sdim) in zip(Cs,sdims))
+    VD1, VD2 = (np.atleast_1d(C.shape[sdim:]) for (C,sdim) in zip(Cs,sdims))
     shape1 = np.concatenate((SD1, np.ones_like(SD2), VD1))
     shape2 = np.concatenate((np.ones_like(SD1), SD2, VD2))
-    return np.reshape(G1.coeffs, shape1), np.reshape(G2.coeffs, shape2)
+    return np.reshape(Cs[0], shape1), np.reshape(Cs[1], shape2)
 
 def outer_sum(G1, G2):
     """Compute the outer sum of two :class:`.BSplineFunc` geometries.
@@ -438,7 +437,7 @@ def outer_sum(G1, G2):
     """
     assert isinstance(G1, BSplineFunc)
     assert isinstance(G2, BSplineFunc)
-    C1, C2 = _prepare_for_outer(G1, G2)
+    C1, C2 = _prepare_for_outer((G1.coeffs, G2.coeffs), (G1.sdim, G2.sdim))
     return BSplineFunc(G1.kvs + G2.kvs, C1 + C2)
 
 def outer_product(G1, G2):
@@ -466,7 +465,7 @@ def outer_product(G1, G2):
     """
     assert isinstance(G1, BSplineFunc)
     assert isinstance(G2, BSplineFunc)
-    C1, C2 = _prepare_for_outer(G1, G2)
+    C1, C2 = _prepare_for_outer((G1.coeffs, G2.coeffs), (G1.sdim, G2.sdim))
     return BSplineFunc(G1.kvs + G2.kvs, C1 * C2)
 
 def tensor_product(G1, G2, *Gs):

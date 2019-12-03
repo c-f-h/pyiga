@@ -239,6 +239,7 @@ def test_userfunction():
         w = 1 - (2 - np.sqrt(2)) * y * (1-y)
         return (r * (1 - y**2/w), r * (1 - (1-y)**2/w))
     F = UserFunction(f, [[0,1],[0,1]])
+    assert F.sdim == F.dim == 2
     assert geos_roughly_equal(F, quarter_annulus())
 
 def test_as_nurbs():

@@ -416,6 +416,13 @@ def _prepare_for_outer(G1, G2):
 
 def outer_sum(G1, G2):
     """Compute the outer sum of two :class:`.BSplineFunc` geometries.
+    This means that given two input functions
+
+    .. math:: G_1(y), G_2(x),
+
+    it returns a new function
+
+    .. math:: G(x,y) = G_1(y) + G_2(x).
 
     The resulting :class:`.BSplineFunc` will have source dimension
     (:attr:`.BSplineFunc.sdim`) equal to the sum of the source dimensions of
@@ -436,7 +443,15 @@ def outer_sum(G1, G2):
 
 def outer_product(G1, G2):
     """Compute the outer product of two :class:`.BSplineFunc` geometries.
+    This means that given two input functions
 
+    .. math:: G_1(y), G_2(x),
+
+    it returns a new function
+
+    .. math:: G(x,y) = G_1(y) G_2(x),
+
+    where the multiplication is componentwise in the case of vector functions.
     The resulting :class:`.BSplineFunc` will have source dimension
     (:attr:`.BSplineFunc.sdim`) equal to the sum of the source dimensions of
     the input functions.

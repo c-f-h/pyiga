@@ -149,13 +149,20 @@ def test_circle():
     assert abs(r - np.linalg.norm(v, axis=-1)).max() < 1e-12
 
 def test_outer():
-    G1 = outer_sum(line_segment([0,1],[0,2]), line_segment([2,0],[3,0]))
+    Gy, Gx = line_segment([0,1],[0,2]), line_segment([2,0],[3,0])
+    G1 = outer_sum(Gy, Gx)
     G2 = unit_square().translate((2,1))
     assert geos_roughly_equal(G1, G2)
+    Y, X = np.linspace(0, 1, 10), np.linspace(0, 1, 10)
+    assert np.allclose(G1.grid_eval((Y,X)),
+            Gy.grid_eval((Y,))[:, None, ...] + Gx.grid_eval((X,))[None, :, ...])
     ###
-    G1 = outer_product(line_segment([1,1],[1,2]), line_segment([3,1],[4,1]))
+    Gy, Gx = line_segment([1,1],[1,2]), line_segment([3,1],[4,1])
+    G1 = outer_product(Gy, Gx)
     G2 = unit_square().translate((3,1))
     assert geos_roughly_equal(G1, G2)
+    assert np.allclose(G1.grid_eval((Y,X)),
+            Gy.grid_eval((Y,))[:, None, ...] * Gx.grid_eval((X,))[None, :, ...])
 
 def test_translate():
     # translation of B-spline functions

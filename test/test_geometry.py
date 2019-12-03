@@ -149,6 +149,7 @@ def test_circle():
     assert abs(r - np.linalg.norm(v, axis=-1)).max() < 1e-12
 
 def test_outer():
+    ### outer_sum
     Gy, Gx = line_segment([0,1],[0,2]), line_segment([2,0],[3,0])
     G1 = outer_sum(Gy, Gx)
     G2 = unit_square().translate((2,1))
@@ -156,11 +157,24 @@ def test_outer():
     Y, X = np.linspace(0, 1, 10), np.linspace(0, 1, 10)
     assert np.allclose(G1.grid_eval((Y,X)),
             Gy.grid_eval((Y,))[:, None, ...] + Gx.grid_eval((X,))[None, :, ...])
-    ###
+    ### outer_product
     Gy, Gx = line_segment([1,1],[1,2]), line_segment([3,1],[4,1])
     G1 = outer_product(Gy, Gx)
     G2 = unit_square().translate((3,1))
     assert geos_roughly_equal(G1, G2)
+    assert np.allclose(G1.grid_eval((Y,X)),
+            Gy.grid_eval((Y,))[:, None, ...] * Gx.grid_eval((X,))[None, :, ...])
+    ### NURBS outer_sum
+    # create two circular arcs going from (0,0) to (0,1) and to (1,0), respectively
+    Gy = circular_arc(np.pi/3).translate((-1,0)).rotate_2d(-np.pi/6)
+    Gx = Gy.scale(-1).rotate_2d(np.pi/2)
+    G1 = outer_sum(Gy, Gx)
+    assert np.allclose(G1.grid_eval((Y,X)),
+            Gy.grid_eval((Y,))[:, None, ...] + Gx.grid_eval((X,))[None, :, ...])
+    ### NURBS outer_sum
+    Gy = Gy.translate((1,1))
+    Gx = Gx.translate((1,1))
+    G1 = outer_product(Gy, Gx)
     assert np.allclose(G1.grid_eval((Y,X)),
             Gy.grid_eval((Y,))[:, None, ...] * Gx.grid_eval((X,))[None, :, ...])
 

@@ -168,6 +168,9 @@ class NurbsFunc:
         ])
         return self.apply_matrix(R)
 
+    def as_nurbs(self):
+        return self
+
 
 class UserFunction:
     """A function (supporting the same basic protocol as :class:`.BSplineFunc`) which is given
@@ -407,14 +410,14 @@ def _prepare_for_outer(Cs, sdims):
     """Bring the coefficient arrays (C1,C2)=Cs with source dimensions as given
     into a suitable form to apply outer sum or outer product on them.
     """
-    SD1, SD2 = (np.atleast_1d(C.shape[:sdim]) for (C,sdim) in zip(Cs,sdims))
-    VD1, VD2 = (np.atleast_1d(C.shape[sdim:]) for (C,sdim) in zip(Cs,sdims))
+    SD1, SD2 = (np.atleast_1d(C.shape[:sdim]).astype(np.int_) for (C,sdim) in zip(Cs,sdims))
+    VD1, VD2 = (np.atleast_1d(C.shape[sdim:]).astype(np.int_) for (C,sdim) in zip(Cs,sdims))
     shape1 = np.concatenate((SD1, np.ones_like(SD2), VD1))
     shape2 = np.concatenate((np.ones_like(SD1), SD2, VD2))
     return np.reshape(Cs[0], shape1), np.reshape(Cs[1], shape2)
 
 def outer_sum(G1, G2):
-    """Compute the outer sum of two :class:`.BSplineFunc` geometries.
+    """Compute the outer sum of two :class:`.BSplineFunc` or :class:`.NurbsFunc` geometries.
     This means that given two input functions
 
     .. math:: G_1(y), G_2(x),
@@ -423,7 +426,8 @@ def outer_sum(G1, G2):
 
     .. math:: G(x,y) = G_1(y) + G_2(x).
 
-    The resulting :class:`.BSplineFunc` will have source dimension
+    The resulting function will be a :class:`.NurbsFunc` if either input is or
+    a :class:`.BSplineFunc` otherwise. It will have source dimension
     (:attr:`.BSplineFunc.sdim`) equal to the sum of the source dimensions of
     the input functions.
 
@@ -435,13 +439,21 @@ def outer_sum(G1, G2):
     The coefficients of the result are the pointwise sums of the coefficients of
     the input functions over a new tensor product spline space.
     """
-    assert isinstance(G1, BSplineFunc)
-    assert isinstance(G2, BSplineFunc)
-    C1, C2 = _prepare_for_outer((G1.coeffs, G2.coeffs), (G1.sdim, G2.sdim))
-    return BSplineFunc(G1.kvs + G2.kvs, C1 + C2)
+    if isinstance(G1, NurbsFunc) or isinstance(G2, NurbsFunc):
+        G1 = G1.as_nurbs()
+        G2 = G2.as_nurbs()
+        C1, W1 = G1.coeffs_weights()
+        C2, W2 = G2.coeffs_weights()
+        C1, C2 = _prepare_for_outer((C1, C2), (G1.sdim, G2.sdim))
+        W1, W2 = _prepare_for_outer((W1, W2), (G1.sdim, G2.sdim))
+        return NurbsFunc(G1.kvs + G2.kvs, C1 + C2, W1 * W2)
+    else:
+        assert isinstance(G1, BSplineFunc) and isinstance(G2, BSplineFunc)
+        C1, C2 = _prepare_for_outer((G1.coeffs, G2.coeffs), (G1.sdim, G2.sdim))
+        return BSplineFunc(G1.kvs + G2.kvs, C1 + C2)
 
 def outer_product(G1, G2):
-    """Compute the outer product of two :class:`.BSplineFunc` geometries.
+    """Compute the outer product of two :class:`.BSplineFunc` or :class:`.NurbsFunc` geometries.
     This means that given two input functions
 
     .. math:: G_1(y), G_2(x),
@@ -451,7 +463,8 @@ def outer_product(G1, G2):
     .. math:: G(x,y) = G_1(y) G_2(x),
 
     where the multiplication is componentwise in the case of vector functions.
-    The resulting :class:`.BSplineFunc` will have source dimension
+    The resulting function will be a :class:`.NurbsFunc` if either input is or
+    a :class:`.BSplineFunc` otherwise. It will have source dimension
     (:attr:`.BSplineFunc.sdim`) equal to the sum of the source dimensions of
     the input functions.
 
@@ -463,10 +476,18 @@ def outer_product(G1, G2):
     The coefficients of the result are the pointwise products of the coefficients of
     the input functions over a new tensor product spline space.
     """
-    assert isinstance(G1, BSplineFunc)
-    assert isinstance(G2, BSplineFunc)
-    C1, C2 = _prepare_for_outer((G1.coeffs, G2.coeffs), (G1.sdim, G2.sdim))
-    return BSplineFunc(G1.kvs + G2.kvs, C1 * C2)
+    if isinstance(G1, NurbsFunc) or isinstance(G2, NurbsFunc):
+        G1 = G1.as_nurbs()
+        G2 = G2.as_nurbs()
+        C1, W1 = G1.coeffs_weights()
+        C2, W2 = G2.coeffs_weights()
+        C1, C2 = _prepare_for_outer((C1, C2), (G1.sdim, G2.sdim))
+        W1, W2 = _prepare_for_outer((W1, W2), (G1.sdim, G2.sdim))
+        return NurbsFunc(G1.kvs + G2.kvs, C1 * C2, W1 * W2)
+    else:
+        assert isinstance(G1, BSplineFunc) and isinstance(G2, BSplineFunc)
+        C1, C2 = _prepare_for_outer((G1.coeffs, G2.coeffs), (G1.sdim, G2.sdim))
+        return BSplineFunc(G1.kvs + G2.kvs, C1 * C2)
 
 def tensor_product(G1, G2, *Gs):
     """Compute the tensor product of two or more :class:`.BSplineFunc` functions.

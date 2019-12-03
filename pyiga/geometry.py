@@ -42,6 +42,7 @@ class NurbsFunc:
         self.sdim = len(self.kvs)    # source dimension
 
         N = tuple(kv.numdofs for kv in self.kvs)
+        coeffs = np.asanyarray(coeffs)
         if coeffs.ndim == 1:
             assert coeffs.shape[0] == np.prod(N), "Wrong length of coefficient vector"
             coeffs = coeffs.reshape(N)
@@ -62,6 +63,7 @@ class NurbsFunc:
             assert self.dim > 1, 'Weights must be specified in the coeffs array'
             self.dim -= 1       # weights are already built into coeffs
         else:
+            weights = np.asanyarray(weights)
             assert weights.shape == N, 'Wrong shape of weights array'
             if self.coeffs.shape == N:  # no trailing dimensions
                 self.coeffs = np.stack((self.coeffs, weights), axis=-1)  # create new axis

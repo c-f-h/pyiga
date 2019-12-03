@@ -511,6 +511,7 @@ class BSplineFunc:
         self.sdim = len(kvs)    # source dimension
 
         N = tuple(kv.numdofs for kv in kvs)
+        coeffs = np.asanyarray(coeffs)
         if coeffs.ndim == 1:
             assert coeffs.shape[0] == np.prod(N), "Wrong length of coefficient vector"
             coeffs = coeffs.reshape(N)

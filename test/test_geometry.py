@@ -212,3 +212,9 @@ def test_userfunction():
         return (r * (1 - y**2/w), r * (1 - (1-y)**2/w))
     F = UserFunction(f, [[0,1],[0,1]])
     assert geos_roughly_equal(F, quarter_annulus())
+
+def test_as_nurbs():
+    G = bspline_quarter_annulus()
+    G2 = G.as_nurbs()
+    assert isinstance(G, BSplineFunc) and isinstance(G2, NurbsFunc)
+    assert geos_roughly_equal(G, G2)

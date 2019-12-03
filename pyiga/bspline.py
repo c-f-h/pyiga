@@ -670,6 +670,11 @@ class BSplineFunc:
         from .geometry import tensor_product, line_segment
         return tensor_product(line_segment(z0, z1, support=support), self)
 
+    def as_nurbs(self):
+        """Return a NURBS version of this function with constant weights equal to 1."""
+        from .geometry import NurbsFunc
+        return NurbsFunc(self.kvs, self.coeffs.copy(), np.ones(self.coeffs.shape[:self.sdim]))
+
 
 class PhysicalGradientFunc:
     """A class for function objects which evaluate physical (transformed) gradients of

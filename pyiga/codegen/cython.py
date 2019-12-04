@@ -881,8 +881,7 @@ def generate_generic(dim):
 
 def preamble():
     return \
-"""# cython: language_level=3
-# cython: profile=False
+"""# cython: profile=False
 # cython: linetrace=False
 # cython: binding=False
 

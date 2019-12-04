@@ -44,6 +44,7 @@ def _compile_cython_module_nocache(src, modname, verbose=False):
     build_extension = _get_build_extension()
     build_extension.extensions = cythonize([extension],
                                            include_path=cython_include_dirs,
+                                           compiler_directives={'language_level': 3},
                                            quiet=False)
     build_extension.build_temp = MODDIR
     build_extension.build_lib = MODDIR

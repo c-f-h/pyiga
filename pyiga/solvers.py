@@ -44,6 +44,56 @@ def fastdiag_solver(KM):
 
 ## Smoothers
 
+def gauss_seidel(A, x, b, iterations=1, indices=None, sweep='forward'):
+    """Perform Gauss-Seidel relaxation on the linear system `Ax=b`, updating `x` in place.
+
+    Args:
+        A: the matrix; either sparse or dense, but should be in CSR format if sparse
+        x: the current guess for the solution
+        b: the right-hand side
+        iterations: the number of iterations to perform
+        indices: if given, relaxation is only performed on this list of indices
+        sweep: the direction; either 'forward', 'backward', or 'symmetric'
+    """
+    if sweep == 'symmetric':
+        for i in range(iterations):
+            gauss_seidel(A, x, b, iterations=1, sweep='forward')
+            gauss_seidel(A, x, b, iterations=1, sweep='backward')
+        return
+
+    if sweep not in ('forward', 'backward'):
+        raise ValueError("valid sweep directions are 'forward', 'backward', and 'symmetric'")
+
+    if scipy.sparse.issparse(A):
+        from . import relaxation_cy
+        if not scipy.sparse.isspmatrix_csr(A):
+            A = scipy.sparse.csr_matrix(A)
+
+        if indices is not None:
+            indices = np.asanyarray(indices, dtype=np.intc)
+            reverse = (sweep == 'backward')
+            for i in range(iterations):
+                relaxation_cy.gauss_seidel_indexed(A.indptr, A.indices, A.data, x, b, indices, reverse)
+        else:
+            N = A.shape[0]
+            start,end,step = ((0,N,1) if sweep=='forward' else (N-1,-1,-1))
+            for i in range(iterations):
+                relaxation_cy.gauss_seidel(A.indptr, A.indices, A.data, x, b, start, end, step)
+
+    else:
+        if indices is None:
+            indices = range(A.shape[0])
+        if sweep == 'backward':
+            indices = list(reversed(indices))
+
+        for k in range(iterations):
+            for i in indices:
+                z = A[i].dot(x)
+                a = A[i,i]
+                z -= a * x[i]
+                x[i] = (b[i] - z) / a
+
+
 def OperatorSmoother(S):
     """A smoother which applies an arbitrary operator `S` to the residual
     and uses the result as an update, i.e.,
@@ -60,7 +110,6 @@ def GaussSeidelSmoother(iterations=1, sweep='forward'):
 
     By default, `iterations` is 1. The direction to be used is specified by
     `sweep` and may be either 'forward', 'backward', or 'symmetric'."""
-    from .relaxation import gauss_seidel
     def apply(A, u, f):
         gauss_seidel(A, u, f, iterations=iterations, sweep=sweep)
     return apply

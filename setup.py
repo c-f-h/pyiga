@@ -53,6 +53,10 @@ extensions = [
         language='c++',
         extra_compile_args=c_args,
     ),
+    Extension("pyiga.relaxation_cy",
+             ["pyiga/relaxation_cy.pyx"],
+        extra_compile_args=c_args,
+    ),
 ]
 
 

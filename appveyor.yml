@@ -20,7 +20,6 @@ install:
   - conda config --set always_yes yes --set changeps1 no
   - "conda create -q -n test-environment python=%PYTHON_VERSION% wheel setuptools Cython nose %MSVC_RUNTIME% numpy scipy"
   - activate test-environment
-  - pip install pyamg
 
 build: off
 

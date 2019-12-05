@@ -383,14 +383,12 @@ class AsmGenerator:
             numcomp = '(' + ', '.join(str(nc) for nc in numcomp) + ',)'
             self.put("self.numcomp[:] = " + numcomp)
 
-        for line in \
-"""assert geo.dim == {dim}, "Geometry has wrong dimension"
-
-# NB: we assume all kvs result in the same mesh
-gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
-self.gaussgrid = gaussgrid
-N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions""".splitlines():
-            self.putf(line)
+        self.putf('assert geo.dim == {dim}, "Geometry has wrong dimension"')
+        self.put('')
+        self.put('# NB: we assume all kvs result in the same mesh')
+        self.put('gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)')
+        self.put('self.gaussgrid = gaussgrid')
+        self.put('N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions')
         self.put('')
 
         for sp in (0,1):        # TODO: do this only for used_spaces? crashes currently

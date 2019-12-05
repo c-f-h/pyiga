@@ -24,6 +24,8 @@ def test_aca():
         X += np.outer(rand(n), rand(n))
     X_aca = aca(X, tol=0, maxiter=k, verbose=0)
     assert np.allclose(X, X_aca)
+    crosses = aca_lr(X, tol=0, maxiter=k, verbose=0)
+    assert len(crosses) == 3
 
 def test_aca3d():
     n,k = 10, 3

@@ -184,7 +184,7 @@ def aca(A, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2, startval=
             break
     return X
 
-def aca_lr(A, tol=1e-10, maxiter=100):
+def aca_lr(A, tol=1e-10, maxiter=100, verbose=2):
     """ACA which returns the crosses rather than the full matrix"""
     if not isinstance(A, MatrixGenerator):
         A = MatrixGenerator.from_array(A)  # assume it's an array
@@ -205,24 +205,28 @@ def aca_lr(A, tol=1e-10, maxiter=100):
         j0 = abs(err_i).argmax()
         e = abs(err_i[j0])
         if e < 1e-15:
-            print('skipping', i) #, '  error=', abs(err_i[j0]))
+            if verbose >= 2:
+                print('skipping', i) #, '  error=', abs(err_i[j0]))
             #i = (i + 1) % A.shape[0]
             i = np.random.randint(A.shape[0])
             skipcount += 1
             if skipcount >= max_skipcount:
-                print('maximum skip count reached; stopping (%d it.)' % k)
+                if verbose >= 1:
+                    print('maximum skip count reached; stopping (%d it.)' % k)
                 break
             else:
                 continue
         elif e < tol:
             tolcount += 1
             if tolcount >= max_tolcount:
-                print('desired tolerance reached', tolcount, 'times; stopping (%d it.)' % k)
+                if verbose >= 1:
+                    print('desired tolerance reached', tolcount, 'times; stopping (%d it.)' % k)
                 break
         else:   # error is large
             skipcount = tolcount = 0   # reset the counters
 
-        print(i, '\t', j0, '\t', e)
+        if verbose >= 2:
+            print(i, '\t', j0, '\t', e)
         c = (A.column(j0) - X_col(j0)) / err_i[j0]
         crosses.append((c, err_i))
         i = abs(c).argmax()

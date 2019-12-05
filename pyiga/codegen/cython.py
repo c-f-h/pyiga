@@ -70,18 +70,10 @@ class AsmGenerator:
         env.update(kwargs)
         self.code.putf(s, **env)
 
-    def dimrep(self, s, sep=', '):
-        return sep.join([s.format(k, **self.env) for k in range(self.dim)])
-
-    def extend_dim(self, i):
-        # ex.: dim = 3, i = 1  ->  'None,:,None'
-        slices = self.dim * ['None']
-        slices[i] = ':'
-        return ','.join(slices)
-
-    def tensorprod(self, var):
-        return ' * '.join(['{0}[{1}][{2}]'.format(var, k, self.extend_dim(k))
-            for k in range(self.dim)])
+    def dimrep(self, s, sep=', ', dims=None):
+        if dims is None:
+            dims = range(self.dim)
+        return sep.join([s.format(k, **self.env) for k in dims])
 
     def gen_pderiv(self, basisfun, D, idx='i'):
         """Generate code for computing parametric partial derivative of `basisfun` of order `D=(Dx1, ..., Dxd)`"""
@@ -114,6 +106,9 @@ class AsmGenerator:
         self.putf('cdef double {name}[{size}]', name=name, size=size)
 
     def gen_assign(self, var, expr):
+        """Assign the result of an expression into a local variable; may be scalar,
+        vector- or matrix-valued.
+        """
         if expr.is_vector():
             for k in range(expr.shape[0]):
                 self.putf('{name}[{k}] = {rhs}',
@@ -139,7 +134,8 @@ class AsmGenerator:
         self.put('@cython.initializedcheck(False)')
 
     def field_type(self, var):
-        return 'double[{X}:1]'.format(X=', '.join((self.dim + len(var.shape)) * ':'))
+        dim = self.dim if (var.depend_dims is None) else len(var.depend_dims)
+        return 'double[{X}:1]'.format(X=', '.join((dim + len(var.shape)) * ':'))
 
     def declare_var(self, var, ref=False):
         if ref:
@@ -161,27 +157,20 @@ class AsmGenerator:
 
     def declare_array_vars(self, vars):
         for var in vars:
-            self.putf('cdef double[{X}:1] {name}',
-                    X=', '.join((self.dim + len(var.shape)) * ':'),
-                    name=var.name)
+            self.putf('cdef {type} {name}', type=self.field_type(var), name=var.name)
 
-    def load_field_var(self, var, I, ref_only=False):
+    def load_field_var(self, var, idx, ref_only=False):
+        """Load the current entry of a field var into the corresponding local variable."""
         if var.is_scalar():
-            if not ref_only: self.putf('{name} = _{name}[{I}]', name=var.name, I=I)
-        elif var.is_vector():
-            self.putf('{name} = &_{name}[{I}, 0]', name=var.name, I=I)
-        elif var.is_matrix():
-            self.putf('{name} = &_{name}[{I}, 0, 0]', name=var.name, I=I)
+            if not ref_only:
+                self.putf('{name} = {entry}', name=var.name,
+                    entry=self.field_var_entry(var, idx))
+        elif var.is_vector() or var.is_matrix():
+            self.putf('{name} = &{entry}', name=var.name,
+                entry=self.field_var_entry(var, idx, first_entry=True))
 
     def start_loop_with_fields(self, fields_in, fields_out=[], local_vars=[]):
         fields = fields_in + fields_out
-
-        # get input size from an arbitrary field variable
-        for k in range(self.dim):
-            self.declare_index(
-                    'n%d' % k,
-                    '_{var}.shape[{k}]'.format(k=k, var=fields[0].name)
-            )
 
         # temp storage for local variables
         for var in local_vars:
@@ -201,12 +190,11 @@ class AsmGenerator:
             self.code.for_loop('i%d' % k, 'n%d' % k)
 
         # generate assignments for field variables
-        I = self.dimrep('i{}')  # current grid index
         for var in fields_in:
-            self.load_field_var(var, I)
+            self.load_field_var(var, 'i')
         for var in fields_out:
             # these have no values yet, only get a reference
-            self.load_field_var(var, I, ref_only=True)
+            self.load_field_var(var, 'i', ref_only=True)
         self.put('')
 
         # generate code for computing local variables
@@ -220,6 +208,8 @@ class AsmGenerator:
         rettype = 'void' if self.vec else 'double'
         self.putf('cdef {rettype} combine(', rettype=rettype)
         self.indent(2)
+        # dimension arguments
+        self.put(self.dimrep('size_t n{}') + ',')
 
         array_params = [var for var in self.vform.kernel_deps if var.is_array]
         local_vars   = [var for var in self.vform.kernel_deps if not var.is_array]
@@ -328,11 +318,14 @@ class AsmGenerator:
             self.putf('return {classname}.combine(', classname=self.classname)
         self.indent(2)
 
+        # generate dimension arguments
+        self.put(self.dimrep('g_end[{0}]-g_sta[{0}]') + ',')
+
         # generate array variable arguments
-        idx = self.dimrep('g_sta[{0}]:g_end[{0}]')
         for var in self.vform.kernel_deps:
             if var.is_array:
-                self.putf('self.{name} [ {idx} ],', name=var.name, idx=idx)
+                self.putf('self.{name} [ {idx} ],', name=var.name,
+                        idx=self.dimrep('g_sta[{0}]:g_end[{0}]', dims=var.depend_dims))
 
         # generate basis function value arguments
         for bfun in self.vform.basis_funs:
@@ -355,8 +348,8 @@ class AsmGenerator:
                 return 'np.ascontiguousarray(%s.grid_jacobian(self.gaussgrid))' % s.name
             else:
                 assert False, 'invalid derivative %s for input field %s' % (var.deriv, s.name)
-        elif s == '@GaussWeight':
-            return self.tensorprod('gaussweights')
+        elif s.startswith('@gaussweights'):
+            return s[1:]
         else:
             return s
 
@@ -423,6 +416,8 @@ class AsmGenerator:
             # call precompute function
             self.putf('{classname}.precompute_fields(', classname=self.classname)
             self.indent(2)
+            # generate size arguments
+            self.put(self.dimrep('gaussgrid[{}].shape[0]') + ',')
             # generate arguments for input and output fields
             for var in vf.precomp_deps + vf.precomp:
                 self.put(array_var_ref(var) + ',')
@@ -432,6 +427,13 @@ class AsmGenerator:
         self.initialize_custom_fields()
         self.end_function()
 
+    def field_var_entry(self, var, idx, first_entry=False):
+        """Generate a reference to the current entry in the given field variable."""
+        I = self.dimrep(idx + '{}', dims=var.depend_dims)
+        if first_entry:
+            I += (len(var.shape) * ', 0')
+        return '_%s[%s]' % (var.name, I)
+
     def generate_precomp(self):
         vf = self.vform
 
@@ -440,6 +442,8 @@ class AsmGenerator:
         self.put('@staticmethod')
         self.put('cdef void precompute_fields(')
         self.indent(2)
+        self.put('# dimensions')
+        self.put(self.dimrep('size_t n{}') + ',')
         self.put('# input')
         self.declare_params(vf.precomp_deps)
         self.put('# output')
@@ -451,13 +455,12 @@ class AsmGenerator:
         self.start_loop_with_fields(vf.precomp_deps, fields_out=vf.precomp, local_vars=vf.precomp_locals)
 
         # generate assignment statements
-        I = self.dimrep('i{}')  # current grid index
         for var in vf.precomp:
             self.gen_assign(var, var.expr)
             if var.is_scalar():
                 # for scalars, we need to explicitly copy the computed value into
                 # the field array; vectors and matrices use pointers directly
-                self.putf('_{name}[{I}] = {name}', name=var.name, I=I)
+                self.putf('{entry} = {name}', entry=self.field_var_entry(var, 'i'), name=var.name)
 
         # end main loop
         for _ in range(self.dim):

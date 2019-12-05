@@ -11,7 +11,7 @@ def set_union(sets):
     return reduce(operator.or_, sets, set())
 
 class AsmVar:
-    def __init__(self, name, src, shape, is_array=False, symmetric=False, deriv=None):
+    def __init__(self, name, src, shape, is_array=False, symmetric=False, deriv=None, depend_dims=None):
         self.name = name
         if isinstance(src, Expr):
             self.expr = src
@@ -26,6 +26,7 @@ class AsmVar:
         self.is_global = False  # is variable needed during assemble, or only setup?
         self.symmetric = (len(self.shape) == 2 and symmetric)
         self.deriv = deriv      # for input fields only
+        self.depend_dims = depend_dims  # for input fields only (which axes does it depend on)
         self.as_expr = make_var_expr(self)
 
     def __str__(self):
@@ -74,11 +75,20 @@ class VForm:
         self.predefined_vars = {
             'Jac':         lambda self: grad(self.Geo),
             'JacInv':      lambda self: inv(self.Jac),
-            'GaussWeight': lambda self: self.declare_sourced_var('GaussWeight', shape=(), src='@GaussWeight'),
+            'GaussWeight': lambda self: self._gaussweight(),
             'W':           lambda self: self.GaussWeight * abs(det(self.Jac)),
         }
         # default input field: geometry transform
         self.Geo = self.input('geo', shape=(dim,))
+
+    def _gaussweight(self):
+        gw = [
+            self.declare_sourced_var('gw%d' % i, shape=(), src='@gaussweights[%d]' % i,
+                depend_dims=[i])
+            for i in range(self.dim)
+        ]
+        return self.let('GaussWeight', reduce(operator.mul, gw))
+        #return self.declare_sourced_var('GaussWeight', shape=(), src='@GaussWeight')
 
     def basisfuns(self, parametric=False, components=(None,None), spaces=(0,0)):
         if not self.vec:
@@ -161,10 +171,10 @@ class VForm:
         """Define a variable with the given name which has the given expr as its value."""
         return self.set_var(name, AsmVar(name, expr, shape=None, symmetric=symmetric)).as_expr
 
-    def declare_sourced_var(self, name, shape, src, symmetric=False, deriv=0):
+    def declare_sourced_var(self, name, shape, src, symmetric=False, deriv=0, depend_dims=None):
         return self.set_var(name,
             AsmVar(name, src=src, shape=shape, is_array=True,
-                symmetric=symmetric, deriv=deriv)).as_expr
+                symmetric=symmetric, deriv=deriv, depend_dims=depend_dims)).as_expr
 
     def add(self, expr):
         if self.vec:

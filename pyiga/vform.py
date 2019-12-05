@@ -56,10 +56,10 @@ class InputField:
 
 class VForm:
     """Abstract representation of a variational form."""
-    def __init__(self, dim, arity=2, vec=False, spacetime=False):
+    def __init__(self, dim, arity=2, spacetime=False):
         self.dim = dim
         self.arity = arity
-        self.vec = vec
+        self.vec = False
         self.spacetime = bool(spacetime)
         if self.spacetime:
             self.spacedims = range(self.dim - 1)
@@ -67,6 +67,7 @@ class VForm:
         else:
             self.spacedims = range(self.dim)
 
+        self.basis_funs = None
         self.inputs = []
         self.vars = OrderedDict()
         self.exprs = []         # expressions to be added to the result
@@ -91,8 +92,9 @@ class VForm:
         #return self.declare_sourced_var('GaussWeight', shape=(), src='@GaussWeight')
 
     def basisfuns(self, parametric=False, components=(None,None), spaces=(0,0)):
-        if not self.vec:
-            assert all(nc is None for nc in components), 'need to set `vec` in constructor for vector assemblers'
+        if self.basis_funs is not None:
+            raise RuntimeError('basis functions have already been constructed')
+
         def make_bfun_expr(bf):
             if bf.numcomp is not None:
                 # return a vector which contains the components of the bfun
@@ -106,6 +108,10 @@ class VForm:
                 return self.basisval(bf, physical=not parametric)
 
         ar = self.arity
+        # determine output size for vector assembler if needed
+        if any(nc is not None for nc in components[:ar]):
+            self.vec = reduce(operator.mul, components[:ar], 1)
+
         names = ('u', 'v')
         self.basis_funs = tuple(
                 BasisFun(name, self, numcomp=nc, space=space)
@@ -1268,7 +1274,7 @@ def wave_st_vf(dim):
     return V
 
 def divdiv_vf(dim):
-    V = VForm(dim, vec=dim**2)
+    V = VForm(dim)
     u, v = V.basisfuns(components=(dim,dim))
     V.add(div(u) * div(v) * dx)
     return V

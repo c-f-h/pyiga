@@ -9,6 +9,14 @@ def my_stiffness_vf(dim):
     V.add(inner(grad(u), grad(v)) * dx)
     return V
 
+def vector_laplace_vf(dim):
+    from pyiga.vform import VForm, inner, grad, dx
+    V = VForm(dim, vec=dim**2)
+    u, v = V.basisfuns(components=(dim,dim))
+    V.add(inner(grad(u), grad(v)) * dx)
+    return V
+
+
 def test_codegen_poisson2d():
     code = codegen.CodeGen()
     vf = vform.stiffness_vf(2)
@@ -18,5 +26,11 @@ def test_codegen_poisson2d():
 def test_codegen_poisson3d():
     code = codegen.CodeGen()
     vf = my_stiffness_vf(3)
+    codegen.AsmGenerator(vf, 'TestAsm', code).generate()
+    code = codegen.preamble() + '\n' + code.result()
+
+def test_codegen_vectorlaplace2d():
+    code = codegen.CodeGen()
+    vf = vector_laplace_vf(2)
     codegen.AsmGenerator(vf, 'TestAsm', code).generate()
     code = codegen.preamble() + '\n' + code.result()

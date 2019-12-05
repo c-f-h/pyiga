@@ -548,19 +548,6 @@ def _tucker_sum(terms):
             A = A.compress()
     return A
 
-def _gauss_seidel_sweep(A, u, f, indices=None):
-    if indices is None:
-        indices = range(A.shape[0])
-    for i in indices:
-        x = A[i].dot(u)
-        a = A[i,i]
-        x -= a * u[i]
-        u[i] = (f[i] - x) / a
-
-def _gauss_seidel(A, u, f, iterations=1, indices=None):
-    for it in range(iterations):
-        _gauss_seidel_sweep(A, u, f, indices=indices)
-
 def gta_ls(A, F, R, tol=1e-12, verbose=0, gs=None, spd=False):
     """Greedy Tucker approximation of the solution of a linear system `A U = F`.
 
@@ -608,7 +595,8 @@ def gta_ls(A, F, R, tol=1e-12, verbose=0, gs=None, spd=False):
             # extend previous coefficients with 0 and do Gauss-Seidel iteration
             pad_size = tuple((0, U[k].shape[1] - X.shape[k]) for k in range(d))
             zz = np.pad(X, pad_size, 'constant').ravel()
-            _gauss_seidel(A_U, zz, F_U, iterations=gs)
+            from .solvers import gauss_seidel
+            gauss_seidel(A_U, zz, F_U, iterations=gs)
         else:
             # do a full direct solve
             zz = np.linalg.solve(A_U, F_U)

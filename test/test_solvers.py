@@ -45,3 +45,13 @@ def test_gauss_seidel_indexed():
         gauss_seidel(scipy.sparse.csr_matrix(A), x1, b, iterations=2, indices=indices, sweep=sweep)
         gauss_seidel(A, x2, b, iterations=2, indices=indices, sweep=sweep)
         assert abs(x1-x2).max() < 1e-12
+
+def test_twogrid():
+    kv_c = bspline.make_knots(3, 0.0, 1.0, 50)
+    kv = kv_c.refine()
+    P = bspline.prolongation(kv_c, kv)
+    A = assemble.mass(kv) + assemble.stiffness(kv)
+    f = bspline.load_vector(kv, lambda x: 1.0)
+    S = SequentialSmoother((GaussSeidelSmoother(), OperatorSmoother(1e-6*np.eye(len(f)))))
+    x = twogrid(A, f, P, S)
+    assert np.linalg.norm(f - A.dot(x)) < 1e-6

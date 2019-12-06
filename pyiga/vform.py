@@ -126,16 +126,26 @@ class VForm:
         return tuple(bf.numcomp for bf in self.basis_funs)
 
     def input(self, name, shape=(), updatable=False):
-        """Declare an input field with the given name and shape."""
+        """Declare an input field with the given name and shape and return an
+        expression representing it.
+
+        If `updatable` is `True`, the generated assembler will allow updating of this
+        field through an `update(name=value)' method.
+        """
         inp = InputField(name, shape, updatable)
         self.inputs.append(inp)
         return self._input_as_varexpr(inp)
 
     def _input_as_varexpr(self, inp, deriv=0):
+        """Return a VarExpr which refers to the given InputField with the desired derivative.
+
+        This checks if a suitable variable has already been defined and if not, defines one.
+        """
+        # try to find existing AsmVar for this input/deriv combination
         inpvar = [v for v in self.vars.values()
                 if not isinstance(v,str) and v.src==inp and v.deriv==deriv]
         if len(inpvar) == 0:
-            # no var defined yet
+            # no such var defined yet -- define it
             assert deriv <= 1, 'not implemented'
             deriv_tag = ('_grad') if deriv==1 else ''
             shape = inp.shape + ((self.dim,) if deriv==1 else ())

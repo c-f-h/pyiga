@@ -14,6 +14,7 @@ Welcome to pyiga's documentation!
    api/geometry
    api/approx
    api/assemble
+   guide/vforms
    Hierarchical <api/hierarchical>
    api/operators
    api/tensor

@@ -1,3 +1,5 @@
+"""Functions and classes for representing and manipulating variational forms in an abstract way.
+"""
 from collections import OrderedDict, defaultdict
 from functools import reduce
 import operator
@@ -92,6 +94,18 @@ class VForm:
         #return self.declare_sourced_var('GaussWeight', shape=(), src='@GaussWeight')
 
     def basisfuns(self, parametric=False, components=(None,None), spaces=(0,0)):
+        """Obtain expressions representing the basis functions for this vform.
+
+        Args:
+            parametric (bool): by default, basis functions live in the physical domain
+                (mapped by the geometry transform) and have their derivatives transformed
+                accordingly. If `parametric=True` is given, they live in the parameter
+                domain instead.
+            components: for vector-valued problems, specify the number of components
+                for each basis function here.
+            spaces: space indices for problems where the basis functions live in
+                different spaces.
+        """
         if self.basis_funs is not None:
             raise RuntimeError('basis functions have already been constructed')
 
@@ -130,7 +144,7 @@ class VForm:
         expression representing it.
 
         If `updatable` is `True`, the generated assembler will allow updating of this
-        field through an `update(name=value)' method.
+        field through an `update(name=value)` method.
         """
         inp = InputField(name, shape, updatable)
         self.inputs.append(inp)
@@ -193,6 +207,7 @@ class VForm:
                 symmetric=symmetric, deriv=deriv, depend_dims=depend_dims)).as_expr
 
     def add(self, expr):
+        """Add an expression to this VForm."""
         if self.vec:
             if expr.is_scalar():
                 expr = self.substitute_vec_components(expr)
@@ -500,6 +515,13 @@ class VForm:
 ################################################################################
 
 class Expr:
+    """Abstract base class which all expressions derive from.
+    
+    Attributes:
+        shape: the shape of the expression as a tuple, analogous to
+            :attr:`numpy.ndarray.shape`.
+            Scalar expressions have the empty tuple ``()`` as their shape.
+    """
     def __add__(self, other):  return OperExpr('+', self, other)
     def __radd__(self, other): return OperExpr('+', other, self)
 
@@ -530,15 +552,28 @@ class Expr:
 
     # convenience accessors for child nodes
     @property
-    def x(self): return self.children[0]
+    def x(self):
+        """Return the first child expression."""
+        return self.children[0]
     @property
-    def y(self): return self.children[1]
+    def y(self):
+        """Return the second child expression."""
+        return self.children[1]
     @property
-    def z(self): return self.children[2]
+    def z(self):
+        """Return the third child expression."""
+        return self.children[2]
 
-    def is_scalar(self):    return self.shape is ()
-    def is_vector(self):    return len(self.shape) == 1
-    def is_matrix(self):    return len(self.shape) == 2
+    def is_scalar(self):
+        """Returns True iff the expression is scalar."""
+        return self.shape is ()
+    def is_vector(self):
+        """Returns True iff the expression is vector-valued."""
+        return len(self.shape) == 1
+    def is_matrix(self):
+        """Returns True iff the expression is matrix-valued."""
+        return len(self.shape) == 2
+
     def depends(self):
         return set_union(x.depends() for x in self.children)
 
@@ -546,18 +581,26 @@ class Expr:
         return False
 
     def dx(self, k, times=1):
+        """Compute a partial derivative. Equivalent to :func:`Dx`."""
         return Dx(self, k, times)
+
     def dt(self, times=1):
         return Dt(self, times)
+
     def dot(self, x):
+        """Returns the dot product of this with `x`; see :func:`dot` for semantics."""
         return dot(self, x)
     __matmul__ = dot        # allow @ operator in Python 3.5+
+
     @property
     def T(self):
+        """For a matrix expression, return its transpose."""
         if not self.is_matrix():
             raise TypeError('can only transpose matrices')
         return TransposedMatrixExpr(self)
+
     def ravel(self):
+        """Ravel a matrix expression into a vector expression."""
         if not self.is_matrix():
             raise TypeError('can only ravel matrices')
         return LiteralVectorExpr(self[i,j] for i in range(self.shape[0])
@@ -1110,9 +1153,11 @@ def tree_print(expr, data=None, indent=''):
 # expression manipulation functions ############################################
 # notation is as close to UFL as possible
 
+#: A symbolic expression representing the integration weight stemming from the geometry map.
 dx = VolumeMeasureExpr()
 
 def Dx(expr, k, times=1):
+    """Partial derivative of `expr` along the `k`-th coordinate axis."""
     if expr.is_var_expr() and expr.var.expr:
         expr = expr.var.expr    # access underlying expression - mild hack
     if expr.is_vector():
@@ -1139,6 +1184,16 @@ def Dt(expr, times=1):
         return expr.dx(expr.basisfun.vform.timedim, times)
 
 def grad(expr, dims=None):
+    """Gradient of an expression.
+
+    If `expr` is scalar, results in a vector of all partial derivatives.
+
+    If `expr` is a vector, results in the Jacobian matrix whose rows are
+    the gradients of the individual components.
+
+    If `dims` is specified, it is a tuple of dimensions along which to take
+    the derivative. By default, all space dimensions are used.
+    """
     if expr.is_var_expr():
         if expr.var.expr:
             expr = expr.var.expr    # access underlying expression - mild hack
@@ -1157,11 +1212,13 @@ def grad(expr, dims=None):
     return LiteralVectorExpr(Dx(expr, k) for k in dims)
 
 def div(expr):
+    """The divergence of a vector-valued expressions, resulting in a scalar."""
     if not expr.is_vector():
         raise TypeError('can only compute divergence of vector expression')
     return tr(grad(expr))
 
 def as_expr(x):
+    """Interpret input as an expression; useful for constants."""
     if isinstance(x, Expr):
         return x
     elif isinstance(x, numbers.Real):
@@ -1169,10 +1226,15 @@ def as_expr(x):
     else:
         raise TypeError('cannot coerce %s to expression' % x)
 
-def as_vector(x): return LiteralVectorExpr(x)
-def as_matrix(x): return LiteralMatrixExpr(x)
+def as_vector(x):
+    """Convert a sequence of expressions to a vector expression."""
+    return LiteralVectorExpr(x)
+def as_matrix(x):
+    """Convert a sequence of sequence of expressions to a matrix expression."""
+    return LiteralMatrixExpr(x)
 
 def inner(x, y):
+    """The inner product of two vector or matrix expressions."""
     if not (x.is_vector() or x.is_matrix()):
         raise TypeError('inner() requires vector or matrix expressions')
     if not x.shape == y.shape:
@@ -1185,6 +1247,14 @@ def inner(x, y):
                                  for j in range(x.shape[1])))
 
 def dot(a, b):
+    """The dot product of two expressions.
+
+    Depending on the shapes of the arguments `a` and `b`, its semantics differ:
+
+    * vector, vector: inner product (see :func:`inner`)
+    * matrix, vector: matrix-vector product
+    * matrix, matrix: matrix-matrix product
+    """
     if a.is_vector() and b.is_vector():
         return inner(a, b)
     elif a.is_matrix() and b.is_vector():
@@ -1233,17 +1303,31 @@ def inv(A):
     return invdet * cofacs
 
 def cross(x, y):
+    """Cross product of two 3D vectors."""
     return VectorCrossExpr(x, y)
 
 def outer(x, y):
+    """Outer product of two vectors, resulting in a matrix."""
     return OuterProdExpr(x, y)
 
-def sqrt(x): return BuiltinFuncExpr('sqrt', x)
-def exp(x): return BuiltinFuncExpr('exp', x)
-def log(x): return BuiltinFuncExpr('log', x)
-def sin(x): return BuiltinFuncExpr('sin', x)
-def cos(x): return BuiltinFuncExpr('cos', x)
-def tan(x): return BuiltinFuncExpr('tan', x)
+def sqrt(x):
+    """Square root of an expression."""
+    return BuiltinFuncExpr('sqrt', x)
+def exp(x):
+    """Exponential of an expression."""
+    return BuiltinFuncExpr('exp', x)
+def log(x):
+    """Natural logarithm of an expression."""
+    return BuiltinFuncExpr('log', x)
+def sin(x):
+    """Sine of an expression."""
+    return BuiltinFuncExpr('sin', x)
+def cos(x):
+    """Cosine of an expression."""
+    return BuiltinFuncExpr('cos', x)
+def tan(x):
+    """Tangent of an expression."""
+    return BuiltinFuncExpr('tan', x)
 
 ################################################################################
 # concrete variational forms

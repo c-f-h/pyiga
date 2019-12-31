@@ -11,13 +11,13 @@ pyiga |travis| |appveyor| |codecov|
 
 ``pyiga`` is a Python research toolbox for Isogeometric Analysis. Its current highlights are:
 
-* Automatic generation of efficient matrix assembling code from a high-level, FEniCS_-like description of the bilinear form. See the bottom of `vform.py <pyiga/vform.py>`_ for some built-in examples as well as the Navier-Stokes example below.
+* Automatic generation of efficient matrix assembling code from a high-level, FEniCS_-like description of the bilinear form. See the section "Assembling custom forms" in the `Documentation`_  as well as the Navier-Stokes example below.
 * Fast assembling by a black-box low-rank assembling algorithm described in
   `this paper <http://dx.doi.org/10.1016/j.cma.2018.01.014>`_
   (or `this technical report <http://www.numa.uni-linz.ac.at/publications/List/2017/2017-02.pdf>`_).
 * Extensive support for fast tensor approximation methods for tensor product IgA.
 
-To find out more, have a look at the `API reference`_ and the examples below.
+To find out more, have a look at the `Documentation`_ and the examples below.
 
 Examples
 --------
@@ -82,12 +82,12 @@ After successful installation, you should be able to load the package. A simple 
     K = assemble.stiffness((kv,kv), geo=geo)    # assemble a stiffness matrix for the 2D tensor product
                                                 # B-spline basis over the quarter annulus
 
-There is an `API reference`_. Beyond that, look at the code,
+There is a relatively complete `Documentation`_. Beyond that, look at the code,
 the unit tests, and the `IPython notebooks`_ to learn more.
 
 
 .. _IPython notebooks: ./notebooks
-.. _API reference: http://pyiga.readthedocs.io/en/latest/
+.. _Documentation: http://pyiga.readthedocs.io/en/latest/
 .. _FEniCS: https://fenicsproject.org/
 .. _Anaconda: https://www.anaconda.com/distribution/
 

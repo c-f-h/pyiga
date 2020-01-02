@@ -303,6 +303,7 @@ The following functions and expressions are implemented in
 :func:`inv`
 :func:`cross`
 :func:`outer`
+:func:`abs`
 :func:`sqrt`
 :func:`exp`
 :func:`log`

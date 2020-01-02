@@ -276,19 +276,6 @@ class VForm:
     def basisval(self, basisfun, physical=False):
         return PartialDerivExpr(basisfun, self.dim * (0,), physical=physical)
 
-    def gradient(self, basisfun, dims=None, additional_derivs=None):
-        if dims is None:
-            dims = range(self.dim)
-        if additional_derivs is None:
-            additional_derivs = self.dim * [0]
-
-        entries = []
-        for k in dims:
-            D = list(additional_derivs)
-            D[k] += 1
-            entries.append(PartialDerivExpr(basisfun, D))
-        return LiteralVectorExpr(entries)
-
     # automatically produce caching getters for predefined on-demand local variables
     def __getattr__(self, name):
         if name in self.vars:

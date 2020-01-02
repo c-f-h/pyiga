@@ -294,6 +294,7 @@ The following functions and expressions are implemented in
 :func:`Dx`
 :func:`grad`
 :func:`div`
+:func:`curl`
 :func:`as_vector`
 :func:`as_matrix`
 :func:`inner`

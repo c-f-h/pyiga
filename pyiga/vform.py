@@ -503,7 +503,7 @@ class VForm:
 
 class Expr:
     """Abstract base class which all expressions derive from.
-    
+
     Attributes:
         shape: the shape of the expression as a tuple, analogous to
             :attr:`numpy.ndarray.shape`.
@@ -1203,6 +1203,16 @@ def div(expr):
     if not expr.is_vector():
         raise TypeError('can only compute divergence of vector expression')
     return tr(grad(expr))
+
+def curl(expr):
+    """The curl (or rot) of a 3D vector expression."""
+    if not (expr.is_vector() and len(expr) == 3):
+        raise TypeError('can only compute curl of 3D vector expression')
+    return as_vector((
+        expr.z.dx(1) - expr.y.dx(2),
+        expr.x.dx(2) - expr.z.dx(0),
+        expr.y.dx(0) - expr.x.dx(1),
+    ))
 
 def as_expr(x):
     """Interpret input as an expression; useful for constants."""

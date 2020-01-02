@@ -18,7 +18,7 @@ which describes the space dimension. For instance, to initialize a
 :class:`VForm` for a three-dimensional problem::
 
     from pyiga import vform
-    
+
     vf = vform.VForm(3)
 
 In order to create expressions for our form, we need objects which
@@ -157,7 +157,7 @@ Stokes-like problems::
 
     vf = vform.VForm(2)
     u, p = vf.basisfuns(components=(2,1))
-    
+
     vf.add(div(u) * p * dx)
 
 In this example, ``u`` is a vector-valued function and ``p`` is scalar-valued.
@@ -173,7 +173,7 @@ coefficient. A scalar input field is declared using the
 
     >>> vf = vform.VForm(2)
     >>> coeff = vf.input('coeff')
-    
+
     >>> coeff.shape
     ()
 
@@ -194,7 +194,7 @@ prescribing their shape::
 
     >>> vf = vform.VForm(2)
     >>> coeff = vf.input('coeff', shape=(2,2))
-    
+
     >>> coeff.shape
     (2, 2)
 
@@ -245,6 +245,14 @@ constant values using the :func:`as_expr`, :func:`as_vector`, and
 
 We can then work with these constants exactly as with any other expression.
 
+For constant scalar values, the coercion to expressions is performed
+implicitly, making :func:`as_expr` unnecessary. This means that we can directly
+write, e.g. ::
+
+    vf.add(inner(3 * grad(u), grad(v)) * dx)
+
+This example also shows that multiplication of a scalar with a vector works as
+expected, i.e., the vector is multiplied componentwise with the scalar.
 
 Defining linear (unary) forms
 -----------------------------
@@ -333,7 +341,7 @@ second time does not recompile the code.
 
 The functions used for compilation are contained in the
 :mod:`pyiga.compile` module, and the resulting matrices can be
-computed 
+computed
 using the :func:`pyiga.assemble.assemble` and :func:`pyiga.assemble.assemble_vector`
 functions for scalar- and vector-valued problems, respectively.
 **Note:** These interfaces are subject to change in the future.

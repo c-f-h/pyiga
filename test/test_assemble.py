@@ -223,6 +223,29 @@ def test_inner_products():
     assert np.allclose(inp, inp2)
 
 ################################################################################
+# Test boundary condition functions
+################################################################################
+
+def test_dirichlet_bc():
+    kvs = (bspline.make_knots(3, 0.0, 1.0, 5), bspline.make_knots(2, 0.0, 1.0, 3))
+    # dof indices are (0, ..., 7) x (0, ..., 4)
+    geo = geometry.identity(kvs)
+    def f(x,y): return 1.0
+    ny, nx = (kv.numdofs for kv in kvs)
+    indices, values = compute_dirichlet_bc(kvs, geo, (0,0), f)
+    assert np.array_equal(indices, range(nx))
+    assert np.allclose(values, np.ones(nx))
+    indices, values = compute_dirichlet_bc(kvs, geo, (0,1), f)
+    assert np.array_equal(indices, range((ny-1)*nx, ny*nx))
+    assert np.allclose(values, np.ones(nx))
+    indices, values = compute_dirichlet_bc(kvs, geo, (1,0), f)
+    assert np.array_equal(indices, range(0, ny*nx, nx))
+    assert np.allclose(values, np.ones(ny))
+    indices, values = compute_dirichlet_bc(kvs, geo, (1,1), f)
+    assert np.array_equal(indices, range(nx-1, nx-1+ny*nx, nx))
+    assert np.allclose(values, np.ones(ny))
+
+################################################################################
 # Test integrals
 ################################################################################
 

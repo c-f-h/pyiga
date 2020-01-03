@@ -331,14 +331,14 @@ class VForm:
             nodes -= networkx.descendants(dep_graph, var)
         return self.linearize_vars(nodes)
 
-    def dependency_analysis(self):
+    def dependency_analysis(self, do_precompute=True):
         dep_graph = self.dependency_graph()
         self.linear_deps = list(networkx.topological_sort(dep_graph))
         # virtual nodes which represent the basis functions
         bfuns = tuple('@' + bf.name for bf in self.basis_funs)
 
         # determine precomputable vars (no dependency on basis functions)
-        precomputable = self.vars_without_dep_on(dep_graph, bfuns)
+        precomputable = self.vars_without_dep_on(dep_graph, bfuns) if do_precompute else []
         # only expression-based vars can be precomputed
         self.precomp = [v for v in precomputable if v.expr]
         # find deps of precomp vars which are pre-given (have src)
@@ -473,7 +473,7 @@ class VForm:
                             for i in range(e.shape[0])])
         self.transform(expand)
 
-    def finalize(self):
+    def finalize(self, do_precompute=True):
         """Performs standard transforms and dependency analysis."""
         # replace "dx" by quadrature weight function
         self.transform(lambda e: self.W, type=VolumeMeasureExpr)
@@ -486,7 +486,7 @@ class VForm:
         # find common subexpressions and extract them into named variables
         self.extract_common_expressions()
         # perform dependency analysis for expressions and variables
-        self.dependency_analysis()
+        self.dependency_analysis(do_precompute=do_precompute)
 
     def find_max_deriv(self):
         #return max((max(e.D) for e in self.all_exprs(type=PartialDerivExpr)), default=0)

@@ -62,3 +62,25 @@ def multi_kron_sparse(As, format='csr'):
         return As[0].asformat(format, copy=True)
     else:
         return scipy.sparse.kron(As[0], multi_kron_sparse(As[1:], format=format), format=format)
+
+
+class LazyArray:
+    """An interface for lazily evaluating functions over a tensor product grid
+    with array slicing notation.
+    """
+    def __init__(self, f, grid, mode='eval'):
+        self.f = f
+        self.grid = grid
+        self.mode = mode
+
+    def __getitem__(self, I):
+        assert len(I) == len(self.grid), "Wrong number of indices"
+        localgrid = tuple(g[i] for (g,i) in zip(self.grid, I))
+        if self.mode == 'eval':
+            return grid_eval(self.f, localgrid)
+        elif self.mode == 'jac':
+            return self.f.grid_jacobian(localgrid)
+        else:
+            raise ValueError('invalid mode: ' + str(self.mode))
+
+

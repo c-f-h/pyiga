@@ -1,4 +1,5 @@
 from pyiga.lowrank import *
+from pyiga import tensor
 from numpy.random import rand
 
 def test_matrixgenerator():
@@ -24,8 +25,16 @@ def test_aca():
         X += np.outer(rand(n), rand(n))
     X_aca = aca(X, tol=0, maxiter=k, verbose=0)
     assert np.allclose(X, X_aca)
+    # compute approximation in low-rank form
     crosses = aca_lr(X, tol=0, maxiter=k, verbose=0)
     assert len(crosses) == 3
+    T = tensor.CanonicalTensor.from_terms(crosses)
+    assert np.allclose(X, T.asarray())
+    # check that approximation terminates correctly
+    crosses = aca_lr(X, tol=0, verbose=0)
+    assert len(crosses) <= 4    # due to rounding error, may require one more
+    T = tensor.CanonicalTensor.from_terms(crosses)
+    assert np.allclose(X, T.asarray())
 
 def test_aca3d():
     n,k = 10, 3
@@ -34,3 +43,6 @@ def test_aca3d():
         X += rand(n,1,1) * rand(1,n,1) * rand(1,1,n)
     X_aca = aca_3d(TensorGenerator.from_array(X), tol=0, maxiter=k, verbose=0)
     assert np.allclose(X, X_aca)
+    # test automatic termination and low-rank tensor output
+    X_aca_lr = aca_3d(TensorGenerator.from_array(X), tol=0, lr=True, verbose=0)
+    assert np.allclose(X, X_aca_lr.asarray())

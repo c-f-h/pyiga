@@ -19,6 +19,15 @@ def test_arithmetic():
     assert (3 * grad(u)).shape == (2,)
     assert (grad(v) / 3).shape == (2,)
 
+def test_vectorexpr():
+    vf = VForm(3)
+    u, v = vf.basisfuns(components=(3,3))
+    A = vf.input('A', shape=(3,3))
+    assert inner(u, v).shape == ()
+    assert cross(u, v).shape == (3,)
+    assert outer(u, v).shape == (3, 3)
+    assert A.dot(u).shape == (3,)
+
 def test_basisderivs():
     # scalar basis functions
     vf = VForm(3, arity=1)
@@ -28,5 +37,6 @@ def test_basisderivs():
     # vector basis functions
     vf = VForm(3, arity=1)
     u = vf.basisfuns(components=(3,))
+    assert grad(u).shape == (3,3)
     assert div(u).shape == ()
     assert curl(u).shape == (3,)

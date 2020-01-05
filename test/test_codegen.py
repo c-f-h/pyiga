@@ -16,6 +16,14 @@ def vector_laplace_vf(dim):
     V.add(inner(grad(u), grad(v)) * dx)
     return V
 
+def vector_L2functional_vf(dim):
+    from pyiga.vform import VForm, inner, dx
+    V = VForm(dim, arity=1)
+    u = V.basisfuns(components=(dim,))
+    f = V.input('f', shape=(dim,))
+    V.add(inner(u, f) * dx)
+    return V
+
 
 def test_codegen_poisson2d():
     code = codegen.CodeGen()
@@ -42,5 +50,12 @@ def test_codegen_functional():
     code = codegen.CodeGen()
     vf = vform.L2functional_vf(3)
     assert (not vf.vec) and vf.arity == 1
+    codegen.AsmGenerator(vf, 'TestAsm', code).generate()
+    code = codegen.preamble() + '\n' + code.result()
+
+def test_codegen_vecfunctional():
+    code = codegen.CodeGen()
+    vf = vector_L2functional_vf(3)
+    assert vf.vec == 3 and vf.arity == 1
     codegen.AsmGenerator(vf, 'TestAsm', code).generate()
     code = codegen.preamble() + '\n' + code.result()

@@ -18,7 +18,7 @@ They take one or two arguments:
   the matrix. One :class:`KnotVector` per coordinate direction.
   In the 1D case, a single :class:`.KnotVector` may be passed
   directly.
-- `geo` (:class:`.BSplinePatch`; optional):
+- `geo` (:class:`.BSplineFunc` or :class:`.NurbsFunc`; optional):
   Geometry transform, mapping from the parameter domain to the
   physical domain. If omitted, assume the identity map; a fast
   Kronecker product implementation is used in this case.
@@ -272,7 +272,7 @@ def inner_products(kvs, f, f_physical=False, geo=None):
         f: a function or :class:`.BSplineFunc` object
         f_physical (bool): whether `f` is given in physical coordinates.
             If `True`, `geo` must be passed as well.
-        geo: a :class:`.BSplinePatch` which describes
+        geo: a :class:`.BSplineFunc` or :class:`.NurbsFunc` which describes
             the integration domain; if not given, the integrals are
             computed in the parameter domain
 
@@ -343,7 +343,7 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
 
     Args:
         kvs: a tensor product B-spline basis
-        geo (:class:`.BSplinePatch`): the geometry transform
+        geo (:class:`.BSplineFunc` or :class:`.NurbsFunc`): the geometry transform
         bdspec: a pair `(axis, side)`. `axis` denotes the axis along
             which the boundary condition lies, and `side` is either
             0 for the "lower" boundary or 1 for the "upper" boundary.
@@ -398,7 +398,7 @@ def compute_initial_condition_01(kvs, geo, bdspec, g0, g1, physical=True):
 
     Args:
         kvs: a tensor product B-spline basis
-        geo (:class:`.BSplinePatch`): the geometry transform of
+        geo (:class:`.BSplineFunc` or :class:`.NurbsFunc`): the geometry transform of
             the space-time cylinder
         bdspec: a pair `(axis, side)`. `axis` denotes the time axis of `geo`,
             and `side` is either 0 for the "lower" boundary or 1 for the
@@ -563,7 +563,7 @@ def integrate(kvs, f, f_physical=False, geo=None):
         f: a function or :class:`.BSplineFunc` object
         f_physical (bool): whether `f` is given in physical coordinates.
             If `True`, `geo` must be passed as well.
-        geo: a :class:`.BSplinePatch` which describes
+        geo: a :class:`.BSplineFunc` or :class:`.NurbsFunc` which describes
             the integration domain; if not given, the integral is
             computed in the parameter domain
 

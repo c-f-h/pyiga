@@ -58,6 +58,16 @@ If you have Intel MKL installed on your machine, be sure to install the
 MKL PARDISO sparse direct solver instead of the internal scipy solver
 (typically SuperLU).
 
+Updating
+~~~~~~~~
+
+If you have already installed the package and want to update to the latest
+version, assuming that you have cloned it from Github, you can simply move to
+the project directory and execute ::
+
+    $ git pull
+    $ python setup.py install --user
+
 Running tests
 -------------
 

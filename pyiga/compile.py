@@ -73,19 +73,25 @@ def compile_cython_module(src, verbose=False):
 
 
 def generate(vf, classname='CustomAssembler'):
+    """Generate Cython code for an assembler class which implements the vform `vf`."""
     code = codegen.CodeGen()
     codegen.AsmGenerator(vf, classname, code).generate()
     return codegen.preamble() + '\n' + code.result()
 
 def compile_vform(vf, verbose=False):
+    """Compile the vform `vf` into an assembler class."""
     src = generate(vf)
     mod = compile_cython_module(src, verbose=verbose)
     return mod.CustomAssembler
 
 def compile_vforms(vfs, verbose=False):
+    """Compile a list of vforms into assembler classes.
+
+    This may be faster than compiling each vform individually since they are
+    all combined into one source file.
+    """
     vfs = tuple(vfs)
-    n = len(vfs)
-    names = tuple('CustomAssembler%d' % i for i in range(n))
+    names = tuple('CustomAssembler%d' % i for i in range(len(vfs)))
 
     code = codegen.CodeGen()
     for (name, vf) in zip(names, vfs):

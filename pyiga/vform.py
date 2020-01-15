@@ -671,6 +671,8 @@ class ConstExpr(Expr):
         return str(self.value)
     def is_constant(self, val):
         return abs(self.value - val) < 1e-15
+    def hash_key(self):
+        return (self.value,)
     def gencode(self):
         return repr(self.value)
     base_complexity = 0

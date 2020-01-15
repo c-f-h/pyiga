@@ -359,8 +359,8 @@ class AsmGenerator:
                 assert var.deriv in (0,1), \
                         'invalid derivative %s for input field %s' % (var.deriv, s.name)
                 # initialize lazy array for the input function
-                return 'LazyArray({}, self.gaussgrid, mode=\'{}\')'.format(
-                        s.name, 'eval' if var.deriv==0 else 'jac')
+                return 'LazyCachingArray({}, {}, self.gaussgrid, self.nqp, mode=\'{}\')'.format(
+                        s.name, var.shape, 'eval' if var.deriv==0 else 'jac')
             else:
                 # not on demand -- precompute complete input field
                 if var.deriv == 0:
@@ -927,6 +927,6 @@ from pyiga.assemble_tools_cy cimport (
     next_lexicographic2, next_lexicographic3,
 )
 from pyiga.assemble_tools_cy import compute_values_derivs
-from pyiga.utils import LazyArray, grid_eval
+from pyiga.utils import LazyCachingArray, grid_eval
 
 """

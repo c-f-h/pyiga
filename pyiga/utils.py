@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.sparse
 import scipy.sparse.linalg
+import itertools
 
 def _broadcast_to_grid(X, grid_shape):
     num_dims = len(grid_shape)
@@ -83,4 +84,46 @@ class LazyArray:
         else:
             raise ValueError('invalid mode: ' + str(self.mode))
 
+class LazyCachingArray:
+    """An interface for lazily evaluating functions over a tensor product grid
+    with array slicing notation. Already computed values are cached tile-wise.
 
+    .. warning::
+
+        Only works correctly if the output is requested in full consecutive tiles!
+    """
+    def __init__(self, f, outshape, grid, tilesize, mode='eval'):
+        self.f = f
+        self.outshape = outshape
+        self.grid = grid
+        self.mode = mode
+        self.ts = tilesize
+        self.tiles = {}
+
+    def get_tile(self, I):
+        """I is a tile index as a d-tuple."""
+        T = self.tiles.get(I)
+        if T is None:
+            ts = self.ts
+            localgrid = tuple(g[i*ts:(i+1)*ts] for (g,i) in zip(self.grid, I))
+            if self.mode == 'eval':
+                T = grid_eval(self.f, localgrid)
+            elif self.mode == 'jac':
+                T = self.f.grid_jacobian(localgrid)
+            else:
+                raise ValueError('invalid mode: ' + str(self.mode))
+            self.tiles[I] = T
+        return T
+
+    def __getitem__(self, I):
+        assert len(I) == len(self.grid), "Wrong number of indices"
+        idx = tuple(tuple(range(sl.start, sl.stop)) for sl in I)
+        N = tuple(len(gi) for gi in idx)  # size of output
+        output = np.empty(N + self.outshape)
+        ts = self.ts
+        tiles = tuple(range(gi[0]//ts, (gi[-1] + ts - 1) // ts) for gi in idx)
+        J0 = tuple(gi[0] // ts for gi in idx)   # index of first tile
+        for J in itertools.product(*tiles):
+            dest = tuple(slice((j-j0)*ts, (j-j0+1)*ts) for (j,j0) in zip(J,J0))
+            output[dest] = self.get_tile(J)
+        return output

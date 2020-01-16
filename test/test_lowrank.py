@@ -32,7 +32,7 @@ def test_aca():
     assert np.allclose(X, T.asarray())
     # check that approximation terminates correctly
     crosses = aca_lr(X, tol=0, verbose=0)
-    assert len(crosses) <= 4    # due to rounding error, may require one more
+    assert len(crosses) <= 5    # due to rounding error, may require some more
     T = tensor.CanonicalTensor.from_terms(crosses)
     assert np.allclose(X, T.asarray())
 

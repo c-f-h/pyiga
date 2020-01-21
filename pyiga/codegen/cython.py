@@ -158,7 +158,9 @@ class AsmGenerator:
 
     def declare_array_vars(self, vars):
         for var in vars:
-            if self.on_demand and var.name == 'geo_grad_a':
+            if self.on_demand and isinstance(var.src, vform.InputField):
+                # in an on demand assembler, input fields are represented
+                # using lazy array classes and evaluated on demand
                 typ = 'object'
             else:
                 typ = self.field_type(var)
@@ -317,6 +319,7 @@ class AsmGenerator:
         self.gen_entry_impl_header()
 
         if self.on_demand:
+            # in the on demand case, we have to query the lazy array Python object
             self.putf('with gil:')
             self.indent()
 

@@ -12,6 +12,20 @@ import numbers
 def set_union(sets):
     return reduce(operator.or_, sets, set())
 
+# Each AsmVar represents a named variable within the expression tree and has
+# either an Expr (`expr`) or a source (`src`) determining how it is defined.
+#
+# If an expression is given, this means that the variable is defined as an
+# expression in terms of other objects. In this case, the shape is determined
+# automatically.
+#
+# Otherwise, the var has a src which is either
+# - an InputField, which means that the variable is passed in as a function when
+#   the assembler is created and evaluated in each needed quadrature point, or
+# - a string prefixed with '@' which has a special meaning:
+#   '@u', '@v': the first and second (trial and test) basis functions
+#   '@gaussweights[i]', where i in range(0,d): the Gauss weight for the i-th coordinate axis
+
 class AsmVar:
     def __init__(self, name, src, shape, is_array=False, symmetric=False, deriv=None, depend_dims=None):
         self.name = name

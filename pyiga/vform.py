@@ -751,6 +751,11 @@ class LiteralVectorExpr(Expr):
 class LiteralMatrixExpr(Expr):
     """Matrix expression which is represented by a 2D array of individual expressions."""
     def __init__(self, entries):
+        if isinstance(entries, Expr):
+            if not entries.is_matrix():
+                raise TypeError('expression is not a matrix')
+            entries = [[entries[i,j] for j in range(0, entries.shape[1])]
+                       for i in range(0, entries.shape[0])]
         entries = np.array(entries, dtype=object)
         self.shape = entries.shape
         self.children = tuple(as_expr(e) for e in entries.flat)

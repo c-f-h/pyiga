@@ -37,6 +37,23 @@ def test_asmatrix():
     G = as_matrix(2 * grad(vf.Geo))
     assert G.shape == (2,2)
 
+def exprs_equal(expr1, expr2):
+    h1, h2 = exprhash(expr1), exprhash(expr2)
+    if h1 != h2:
+        print('Expression 1:')
+        tree_print(expr1)
+        print('Expression 2:')
+        tree_print(expr2)
+    assert h1 == h2
+
+def test_dx():
+    vf = VForm(2)
+    u, v = vf.basisfuns()
+    exprs_equal(u.dx(0).dx(1), u.dx(1).dx(0))
+    exprs_equal(vf.Geo.dx(1)[0], vf.Geo[0].dx(1))
+    G = vf.let('G', vf.Geo)
+    exprs_equal(G.dx(0)[1], vf.Geo[1].dx(0))
+
 def test_vectorexpr():
     vf = VForm(3)
     u, v = vf.basisfuns(components=(3,3))

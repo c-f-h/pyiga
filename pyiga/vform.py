@@ -586,7 +586,11 @@ class Expr:
 
     def dx(self, k, times=1):
         """Compute a partial derivative. Equivalent to :func:`Dx`."""
-        return Dx(self, k, times)
+        if hasattr(self, '_dx_impl'):
+            # expr classes can define _dx_impl to override default behavior
+            return self._dx_impl(k, times)
+        else:
+            return Dx(self, k, times)
 
     def dt(self, times=1):
         return Dt(self, times)
@@ -711,6 +715,18 @@ class ScalarVarExpr(VarExpr):
         self.var = var
         self.shape = ()
         self.children = ()
+    def _dx_impl(self, k, times):
+        if isinstance(self.var.src, InputField):
+            # for computing the derivative of an input field, we go through the
+            # gradient since input fields can only compute the full gradient at
+            # once
+            assert times == 1, 'only first derivative of input fields supported'
+            return grad(self)[k]
+        elif self.var.expr:
+            # in case of a variable, compute derivative of the underlying expression
+            return Dx(self.var.expr, k, times)
+        else:
+            raise TypeError('do now know how to compute derivative of %s' % self.var.name)
     def gencode(self):
         return self.var.name
 
@@ -776,6 +792,18 @@ class VectorEntryExpr(Expr):
         self.children = (x,)
     def __str__(self):
         return '%s[%i]' % (self.x.var.name, self.i)
+    def _dx_impl(self, k, times):
+        if isinstance(self.x.var.src, InputField):
+            # for computing the derivative of one component of an input
+            # field, we go through the gradient since input fields
+            # can only compute the full gradient at once
+            assert times == 1, 'only first derivative of input field components supported'
+            return grad(self.x)[self.i, k]
+        elif self.x.var.expr:
+            # in case of a variable, compute derivative of the underlying expression
+            return Dx(self.x.var.expr[self.i], k, times)
+        else:
+            raise TypeError('do now know how to compute derivative of %s' % self.x.var.name)
     def hash_key(self):
         return (self.i,)
     def gencode(self):
@@ -1006,7 +1034,7 @@ class PartialDerivExpr(Expr):
         if not self.physical: raise ValueError('derivative is already parametric')
         return PartialDerivExpr(self.basisfun, self.D, physical=False)
 
-    def dx(self, k, times=1):
+    def _dx_impl(self, k, times):
         Dnew = list(self.D)
         Dnew[k] += times
         return PartialDerivExpr(self.basisfun, Dnew, physical=self.physical)
@@ -1164,6 +1192,9 @@ def tree_print(expr, data=None, indent=''):
         for c in expr.children:
             tree_print(c, data, indent + '  ')
 
+def exprhash(expr):
+    return expr.hash(tuple(exprhash(c) for c in expr.children))
+
 # expression manipulation functions ############################################
 # notation is as close to UFL as possible
 
@@ -1172,16 +1203,14 @@ dx = VolumeMeasureExpr()
 
 def Dx(expr, k, times=1):
     """Partial derivative of `expr` along the `k`-th coordinate axis."""
-    if expr.is_var_expr() and expr.var.expr:
-        expr = expr.var.expr    # access underlying expression - mild hack
-    if expr.is_vector():
+    if hasattr(expr, '_dx_impl'):
+        return expr._dx_impl(k, times)
+    elif expr.is_vector():
         return LiteralVectorExpr(Dx(z, k, times) for z in expr)
     elif expr.is_matrix():
         raise NotImplementedError('derivative of matrix not implemented')
     else:   # scalar
-        if not isinstance(expr, PartialDerivExpr):
-            raise TypeError('can only compute derivatives of basis functions')
-        return expr.dx(k, times)
+        raise TypeError('do not know how to compute derivative of %s ' % type(expr))
 
 def Dt(expr, times=1):
     if expr.is_var_expr() and expr.var.expr:

@@ -12,6 +12,20 @@ import numbers
 def set_union(sets):
     return reduce(operator.or_, sets, set())
 
+# Each AsmVar represents a named variable within the expression tree and has
+# either an Expr (`expr`) or a source (`src`) determining how it is defined.
+#
+# If an expression is given, this means that the variable is defined as an
+# expression in terms of other objects. In this case, the shape is determined
+# automatically.
+#
+# Otherwise, the var has a src which is either
+# - an InputField, which means that the variable is passed in as a function when
+#   the assembler is created and evaluated in each needed quadrature point, or
+# - a string prefixed with '@' which has a special meaning:
+#   '@u', '@v': the first and second (trial and test) basis functions
+#   '@gaussweights[i]', where i in range(0,d): the Gauss weight for the i-th coordinate axis
+
 class AsmVar:
     def __init__(self, name, src, shape, is_array=False, symmetric=False, deriv=None, depend_dims=None):
         self.name = name
@@ -331,14 +345,14 @@ class VForm:
             nodes -= networkx.descendants(dep_graph, var)
         return self.linearize_vars(nodes)
 
-    def dependency_analysis(self):
+    def dependency_analysis(self, do_precompute=True):
         dep_graph = self.dependency_graph()
         self.linear_deps = list(networkx.topological_sort(dep_graph))
         # virtual nodes which represent the basis functions
         bfuns = tuple('@' + bf.name for bf in self.basis_funs)
 
         # determine precomputable vars (no dependency on basis functions)
-        precomputable = self.vars_without_dep_on(dep_graph, bfuns)
+        precomputable = self.vars_without_dep_on(dep_graph, bfuns) if do_precompute else []
         # only expression-based vars can be precomputed
         self.precomp = [v for v in precomputable if v.expr]
         # find deps of precomp vars which are pre-given (have src)
@@ -473,7 +487,7 @@ class VForm:
                             for i in range(e.shape[0])])
         self.transform(expand)
 
-    def finalize(self):
+    def finalize(self, do_precompute=True):
         """Performs standard transforms and dependency analysis."""
         # replace "dx" by quadrature weight function
         self.transform(lambda e: self.W, type=VolumeMeasureExpr)
@@ -486,7 +500,7 @@ class VForm:
         # find common subexpressions and extract them into named variables
         self.extract_common_expressions()
         # perform dependency analysis for expressions and variables
-        self.dependency_analysis()
+        self.dependency_analysis(do_precompute=do_precompute)
 
     def find_max_deriv(self):
         #return max((max(e.D) for e in self.all_exprs(type=PartialDerivExpr)), default=0)

@@ -41,10 +41,11 @@ class CodeGen:
 
 class AsmGenerator:
     """Generates a Cython assembler class from an abstract :class:`pyiga.vform.VForm`."""
-    def __init__(self, vform, classname, code):
+    def __init__(self, vform, classname, code, on_demand=False):
         self.vform = vform
         self.classname = classname
         self.code = code
+        self.on_demand = on_demand
         self.dim = self.vform.dim
         self.vec = self.vform.vec
         self.updatable = tuple(inp for inp in vform.inputs if inp.updatable)
@@ -157,7 +158,13 @@ class AsmGenerator:
 
     def declare_array_vars(self, vars):
         for var in vars:
-            self.putf('cdef {type} {name}', type=self.field_type(var), name=var.name)
+            if self.on_demand and isinstance(var.src, vform.InputField):
+                # in an on demand assembler, input fields are represented
+                # using lazy array classes and evaluated on demand
+                typ = 'object'
+            else:
+                typ = self.field_type(var)
+            self.putf('cdef {type} {name}', type=typ, name=var.name)
 
     def load_field_var(self, var, idx, ref_only=False):
         """Load the current entry of a field var into the corresponding local variable."""
@@ -311,6 +318,14 @@ class AsmGenerator:
     def generate_entry_impl(self):
         self.gen_entry_impl_header()
 
+        if self.on_demand:
+            # in the on demand case, we have to query the lazy array Python object
+            # TODO: currently, this means that on demand assemblers can't parallelize
+            # the kernel; would be better to have only the acquisition of the
+            # lazy array data in 'with gil' and release it again for the kernel
+            self.putf('with gil:')
+            self.indent()
+
         # generate call to assembler kernel
         if self.vec:
             self.putf('{classname}.combine(', classname=self.classname)
@@ -337,17 +352,29 @@ class AsmGenerator:
 
         self.dedent(2)
         self.put(')')
+
+        if self.on_demand:
+            self.dedent()       # end with gil
+
         self.end_function()
 
     def parse_src(self, var):
         s = var.src
         if isinstance(s, vform.InputField):
-            if var.deriv == 0:
-                return 'np.ascontiguousarray(grid_eval(%s, self.gaussgrid))' % s.name
-            elif var.deriv == 1:
-                return 'np.ascontiguousarray(%s.grid_jacobian(self.gaussgrid))' % s.name
+            if self.on_demand:
+                assert var.deriv in (0,1), \
+                        'invalid derivative %s for input field %s' % (var.deriv, s.name)
+                # initialize lazy array for the input function
+                return 'LazyCachingArray({}, {}, self.gaussgrid, self.nqp, mode=\'{}\')'.format(
+                        s.name, var.shape, 'eval' if var.deriv==0 else 'jac')
             else:
-                assert False, 'invalid derivative %s for input field %s' % (var.deriv, s.name)
+                # not on demand -- precompute complete input field
+                if var.deriv == 0:
+                    return 'np.ascontiguousarray(grid_eval(%s, self.gaussgrid))' % s.name
+                elif var.deriv == 1:
+                    return 'np.ascontiguousarray(%s.grid_jacobian(self.gaussgrid))' % s.name
+                else:
+                    assert False, 'invalid derivative %s for input field %s' % (var.deriv, s.name)
         elif s.startswith('@gaussweights'):
             return s[1:]
         else:
@@ -487,7 +514,7 @@ class AsmGenerator:
     # main code generation entry point
 
     def generate(self):
-        self.vform.finalize()
+        self.vform.finalize(do_precompute=not self.on_demand)
         self.numderiv = self.vform.find_max_deriv()
 
         self.env = {
@@ -906,6 +933,6 @@ from pyiga.assemble_tools_cy cimport (
     next_lexicographic2, next_lexicographic3,
 )
 from pyiga.assemble_tools_cy import compute_values_derivs
-from pyiga.utils import grid_eval
+from pyiga.utils import LazyCachingArray, grid_eval
 
 """

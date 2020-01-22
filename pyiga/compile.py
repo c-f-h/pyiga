@@ -72,15 +72,15 @@ def compile_cython_module(src, verbose=False):
     return mod
 
 
-def generate(vf, classname='CustomAssembler'):
+def generate(vf, classname='CustomAssembler', on_demand=False):
     """Generate Cython code for an assembler class which implements the vform `vf`."""
     code = codegen.CodeGen()
-    codegen.AsmGenerator(vf, classname, code).generate()
+    codegen.AsmGenerator(vf, classname, code, on_demand=on_demand).generate()
     return codegen.preamble() + '\n' + code.result()
 
-def compile_vform(vf, verbose=False):
+def compile_vform(vf, verbose=False, on_demand=False):
     """Compile the vform `vf` into an assembler class."""
-    src = generate(vf)
+    src = generate(vf, on_demand=on_demand)
     mod = compile_cython_module(src, verbose=verbose)
     return mod.CustomAssembler
 

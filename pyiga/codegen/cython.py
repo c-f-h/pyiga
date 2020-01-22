@@ -378,7 +378,7 @@ class AsmGenerator:
         elif s.startswith('@gaussweights'):
             return s[1:]
         else:
-            return s
+            assert False, 'invalid source %s for var %s' % (s, var.name)
 
     def generate_init(self):
         vf = self.vform

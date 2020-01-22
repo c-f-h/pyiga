@@ -944,6 +944,9 @@ class TensorOperExpr(Expr):
         return '%s(%s)' % (self.oper, ', '.join(str(c) for c in self.children))
 
     def at(self, *I):
+        if len(I) == 1:
+            # for vector indexing, we use only the index, not a 1-tuple
+            I = I[0]
         func = _oper_to_func[self.oper]
         return reduce(func, (z[I] for z in self.children))
 

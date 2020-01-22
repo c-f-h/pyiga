@@ -19,6 +19,24 @@ def test_arithmetic():
     assert (3 * grad(u)).shape == (2,)
     assert (grad(v) / 3).shape == (2,)
 
+def test_asvector():
+    vf = VForm(2)
+    G = as_vector([1,2,3])
+    assert G.shape == (3,)
+    G = as_vector(vf.Geo)
+    assert G.shape == (2,)
+    G = as_vector(2 * vf.Geo)
+    assert G.shape == (2,)
+
+def test_asmatrix():
+    vf = VForm(2)
+    G = as_matrix([[1,2,3],[4,5,6]])
+    assert G.shape == (2,3)
+    G = as_matrix(grad(vf.Geo))
+    assert G.shape == (2,2)
+    G = as_matrix(2 * grad(vf.Geo))
+    assert G.shape == (2,2)
+
 def test_vectorexpr():
     vf = VForm(3)
     u, v = vf.basisfuns(components=(3,3))

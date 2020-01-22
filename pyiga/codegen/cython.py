@@ -320,6 +320,9 @@ class AsmGenerator:
 
         if self.on_demand:
             # in the on demand case, we have to query the lazy array Python object
+            # TODO: currently, this means that on demand assemblers can't parallelize
+            # the kernel; would be better to have only the acquisition of the
+            # lazy array data in 'with gil' and release it again for the kernel
             self.putf('with gil:')
             self.indent()
 

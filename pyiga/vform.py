@@ -22,9 +22,14 @@ def set_union(sets):
 # Otherwise, the var has a src which is either
 # - an InputField, which means that the variable is passed in as a function when
 #   the assembler is created and evaluated in each needed quadrature point, or
-# - a string prefixed with '@' which has a special meaning:
-#   '@u', '@v': the first and second (trial and test) basis functions
-#   '@gaussweights[i]', where i in range(0,d): the Gauss weight for the i-th coordinate axis
+# - a string prefixed with '@' which has a special meaning. Currently there is
+#   only one such special var source:
+#   '@gaussweights[i]', where i in range(0,d): the Gauss quadrature weight for
+#       the i-th coordinate axis
+#
+# Note that basis functions (u, v) are not represented as AsmVars; instead,
+# their expressions have the type PartialDerivExpr and store a reference to a
+# BasisFun object.
 
 class AsmVar:
     def __init__(self, name, src, shape, is_array=False, symmetric=False, deriv=None, depend_dims=None):
@@ -170,8 +175,7 @@ class VForm:
         This checks if a suitable variable has already been defined and if not, defines one.
         """
         # try to find existing AsmVar for this input/deriv combination
-        inpvar = [v for v in self.vars.values()
-                if not isinstance(v,str) and v.src==inp and v.deriv==deriv]
+        inpvar = [v for v in self.vars.values() if v.src==inp and v.deriv==deriv]
         if len(inpvar) == 0:
             # no such var defined yet -- define it
             assert deriv <= 1, 'not implemented'
@@ -311,8 +315,8 @@ class VForm:
     def dependency_graph(self):
         """Compute a directed graph of the dependencies between all used variables."""
         G = networkx.DiGraph()
-        # make sure virtual basis function nodes are always in the graph
-        G.add_nodes_from('@' + bf.name for bf in self.basis_funs)
+        # add virtual basis function nodes to the graph
+        G.add_nodes_from(self.basis_funs)
 
         for e in self.all_exprs(type=VarExpr):
             var = e.var
@@ -348,11 +352,10 @@ class VForm:
     def dependency_analysis(self, do_precompute=True):
         dep_graph = self.dependency_graph()
         self.linear_deps = list(networkx.topological_sort(dep_graph))
-        # virtual nodes which represent the basis functions
-        bfuns = tuple('@' + bf.name for bf in self.basis_funs)
 
         # determine precomputable vars (no dependency on basis functions)
-        precomputable = self.vars_without_dep_on(dep_graph, bfuns) if do_precompute else []
+        precomputable = (self.vars_without_dep_on(dep_graph, self.basis_funs)
+                if do_precompute else [])
         # only expression-based vars can be precomputed
         self.precomp = [v for v in precomputable if v.expr]
         # find deps of precomp vars which are pre-given (have src)
@@ -367,7 +370,7 @@ class VForm:
         # compute linearized list of vars the kernel depends on
         kernel_deps = set_union(expr.depends() for expr in self.exprs)
         self.kernel_deps = self.transitive_closure(dep_graph, kernel_deps,
-                exclude=set(bfuns))
+                exclude=set(self.basis_funs))
 
         for var in self.kernel_deps:
             # ensure precomputed kernel deps get array storage
@@ -989,7 +992,7 @@ class PartialDerivExpr(Expr):
         assert not self.physical, 'cannot generate code for physical derivative'
         return self.basisfun.asmgen.gen_pderiv(self.basisfun, self.D)
     def depends(self):
-        return set(('@' + self.basisfun.name,))
+        return set((self.basisfun,))
 
     def make_parametric(self):
         if not self.physical: raise ValueError('derivative is already parametric')

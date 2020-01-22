@@ -431,8 +431,8 @@ class AsmGenerator:
 
         # declare/initialize array variables
         for var in vf.linear_deps:
-            # exclude virtual basis function nodes '@u', '@v'
-            if not isinstance(var, str) and var.is_array:
+            # exclude basis function nodes
+            if not isinstance(var, vform.BasisFun) and var.is_array:
                 arr = array_var_ref(var)
                 if var.src:
                     self.putf("{arr} = {src}", arr=arr, src=self.parse_src(var))
@@ -503,7 +503,7 @@ class AsmGenerator:
 
         # declare/initialize array variables
         for var in vf.linear_deps:
-            if not isinstance(var, str) and var.src in self.updatable:
+            if not isinstance(var, vform.BasisFun) and var.src in self.updatable:
                 assert var.is_array and var.is_global, 'only global array vars can be updated'
                 self.putf("if {name}:", name=var.src.name)
                 self.indent()

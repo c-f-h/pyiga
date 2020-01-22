@@ -22,7 +22,7 @@ from pyiga.assemble_tools_cy cimport (
     next_lexicographic2, next_lexicographic3,
 )
 from pyiga.assemble_tools_cy import compute_values_derivs
-from pyiga.utils import grid_eval
+from pyiga.utils import LazyCachingArray, grid_eval
 
 cdef class MassAssembler2D(BaseAssembler2D):
     cdef double[:, ::1] W

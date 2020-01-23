@@ -100,6 +100,7 @@ def test_input():
     exprs_equal(grad(f, dims=(1,2))[0], Dx(f, 1))
     assert grad(g, dims=(1,2)).shape == (3,2)
     exprs_equal(grad(g, dims=(1,2))[1,0], Dx(g[1], 1))
+    exprs_equal(grad(g)[1, :], grad(g[1]))
 
 def test_symderiv():
     vf = VForm(3, arity=1)

@@ -1251,18 +1251,17 @@ def Dx(expr, k, times=1):
         raise TypeError('do not know how to compute derivative of %s ' % type(expr))
 
 def Dt(expr, times=1):
-    if expr.is_var_expr() and expr.var.expr:
-        expr = expr.var.expr    # access underlying expression - mild hack
     if expr.is_vector():
         return LiteralVectorExpr(Dt(z, times) for z in expr)
     elif expr.is_matrix():
         raise NotImplementedError('time derivative of matrix not implemented')
     else:   # scalar
-        if not isinstance(expr, PartialDerivExpr):
-            raise TypeError('can only compute derivatives of basis functions')
-        if not expr.basisfun.vform.spacetime:
-            raise Exception('can only compute time derivatives in spacetime assemblers')
-        return expr.dx(expr.basisfun.vform.timedim, times)
+        vf = expr.find_vf()
+        if not vf:
+            raise ValueError('could not determine ambient VForm')
+        if not vf.spacetime:
+            raise TypeError('can only compute time derivatives in spacetime assemblers')
+        return Dx(expr, vf.timedim, times)
 
 def grad(expr, dims=None):
     """Gradient of an expression.

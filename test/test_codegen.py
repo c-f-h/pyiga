@@ -59,3 +59,10 @@ def test_codegen_vecfunctional():
     assert vf.vec == 3 and vf.arity == 1
     codegen.AsmGenerator(vf, 'TestAsm', code).generate()
     code = codegen.preamble() + '\n' + code.result()
+
+def test_codegen_wave_st2d():
+    code = codegen.CodeGen()
+    vf = vform.wave_st_vf(2)
+    assert (not vf.vec) and vf.arity == 2 and vf.spacetime
+    codegen.AsmGenerator(vf, 'TestAsm', code).generate()
+    code = codegen.preamble() + '\n' + code.result()

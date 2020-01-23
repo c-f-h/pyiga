@@ -70,9 +70,10 @@ class BasisFun:
         self.asmgen = None  # to be set to AsmGenerator for code generation
 
 class InputField:
-    def __init__(self, name, shape, updatable=False):
+    def __init__(self, name, shape, vf, updatable=False):
         self.name = name
         self.shape = shape
+        self.vf = vf
         self.updatable = updatable
 
 class VForm:
@@ -165,7 +166,7 @@ class VForm:
         If `updatable` is `True`, the generated assembler will allow updating of this
         field through an `update(name=value)` method.
         """
-        inp = InputField(name, shape, updatable)
+        inp = InputField(name, shape, self, updatable)
         self.inputs.append(inp)
         return self._input_as_varexpr(inp)
 
@@ -183,7 +184,6 @@ class VForm:
             shape = inp.shape + ((self.dim,) if deriv==1 else ())
             varexpr = self.declare_sourced_var(inp.name + deriv_tag + '_a',
                     shape=shape, src=inp, deriv=deriv)
-            varexpr.vf = self   # HACK to enable grad() to find the vf
             return varexpr
         elif len(inpvar) == 1:
             return inpvar[0].as_expr
@@ -583,6 +583,8 @@ class Expr:
 
     def is_var_expr(self):
         return False
+    def is_input_var_expr(self):
+        return False
 
     def dx(self, k, times=1):
         """Compute a partial derivative. Equivalent to :func:`Dx`."""
@@ -702,12 +704,19 @@ class VarExpr(Expr):
     """Abstract base class for exprs which refer to named variables."""
     def is_var_expr(self):
         return True
+    def is_input_var_expr(self):
+        return isinstance(self.var.src, InputField)
     def __str__(self):
         return self.var.name
     def depends(self):
         return set((self.var,))
     def hash_key(self):
         return (self.var.name,)
+    def _grad(self):
+        # generate a new VarExpr for the derivative - input vars only
+        assert self.is_input_var_expr(), '_grad only handles input fields'
+        vf = self.var.src.vf
+        return vf._input_as_varexpr(self.var.src, deriv=self.var.deriv+1)
     base_complexity = 0
 
 class ScalarVarExpr(VarExpr):
@@ -716,7 +725,7 @@ class ScalarVarExpr(VarExpr):
         self.shape = ()
         self.children = ()
     def _dx_impl(self, k, times):
-        if isinstance(self.var.src, InputField):
+        if self.is_input_var_expr():
             # for computing the derivative of an input field, we go through the
             # gradient since input fields can only compute the full gradient at
             # once
@@ -793,7 +802,7 @@ class VectorEntryExpr(Expr):
     def __str__(self):
         return '%s[%i]' % (self.x.var.name, self.i)
     def _dx_impl(self, k, times):
-        if isinstance(self.x.var.src, InputField):
+        if self.x.is_input_var_expr():
             # for computing the derivative of one component of an input
             # field, we go through the gradient since input fields
             # can only compute the full gradient at once
@@ -1237,22 +1246,24 @@ def grad(expr, dims=None):
     If `dims` is specified, it is a tuple of dimensions along which to take
     the derivative. By default, all space dimensions are used.
     """
-    if expr.is_var_expr():
-        if expr.var.expr:
-            expr = expr.var.expr    # access underlying expression - mild hack
-        if expr.var.src:
-            # gradient/Jacobian of an input field
-            s = expr.var.src
-            assert isinstance(s, InputField), 'can only compute gradients of input fields'
-            assert dims is None, 'can only compute full gradient'
-            return expr.vf._input_as_varexpr(s, deriv=expr.var.deriv+1)
-    if expr.is_vector():
+    if expr.is_input_var_expr():
+        G = expr._grad()
+        if dims is not None:
+            if G.is_vector():
+                G = G[dims]
+            elif G.is_matrix():
+                G = G[:, dims]
+            else:
+                raise TypeError('dims not supported for gradient of shape %s' % G.shape)
+        return G
+    elif expr.is_vector():
         return as_matrix([grad(z, dims=dims) for z in expr])  # compute Jacobian of vector expression
-    if not isinstance(expr, PartialDerivExpr):
-        raise TypeError('can only compute gradient of basis function')
-    if dims is None:
-        dims = expr.basisfun.vform.spacedims
-    return LiteralVectorExpr(Dx(expr, k) for k in dims)
+    else:
+        if not isinstance(expr, PartialDerivExpr):
+            raise TypeError('can only compute gradient of inputs or basis functions')
+        if dims is None:
+            dims = expr.basisfun.vform.spacedims
+        return LiteralVectorExpr(Dx(expr, k) for k in dims)
 
 def div(expr):
     """The divergence of a vector-valued expressions, resulting in a scalar."""

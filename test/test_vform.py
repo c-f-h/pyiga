@@ -37,7 +37,16 @@ def test_asmatrix():
     G = as_matrix(2 * grad(vf.Geo))
     assert G.shape == (2,2)
 
-def exprs_equal(expr1, expr2):
+def exprs_equal(expr1, expr2, simplify=False):
+    if simplify:
+        from pyiga.vform import _literalize_helper
+        def simpl(expr):
+            expr = transform_expr(expr, _literalize_helper)
+            expr = transform_expr(expr, lambda e: e.fold_constants())
+            return expr
+        expr1 = simpl(expr1)
+        expr2 = simpl(expr2)
+
     h1, h2 = exprhash(expr1), exprhash(expr2)
     if h1 != h2:
         print('Expression 1:')
@@ -91,3 +100,14 @@ def test_input():
     exprs_equal(grad(f, dims=(1,2))[0], Dx(f, 1))
     assert grad(g, dims=(1,2)).shape == (3,2)
     exprs_equal(grad(g, dims=(1,2))[1,0], Dx(g[1], 1))
+
+def test_symderiv():
+    vf = VForm(3, arity=1)
+    u = vf.basisfuns()
+    f = vf.input('f')
+    G = vf.input('G', shape=(3,))
+    exprs_equal(grad(2 * f), 2 * grad(f), simplify=True)
+    exprs_equal(div(G - 3), div(G), simplify=True)
+    exprs_equal((f * u).dx(0), f.dx(0)*u + f*u.dx(0))
+    exprs_equal((1 / f).dx(1), -f.dx(1) / (f*f), simplify=True)
+    exprs_equal(curl(2 + grad(u)), curl(grad(u)), simplify=True)

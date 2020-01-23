@@ -477,18 +477,7 @@ class VForm:
         return tmpidx[0] > 0    # did we do anything?
 
     def expand_mat_vec(self):
-        """Convert all matrix and vector expressions into literal expressions, i.e.,
-        into elementwise scalar expressions."""
-        def expand(e):
-            if e.is_var_expr():
-                return
-            if e.is_vector() and not isinstance(e, LiteralVectorExpr):
-                return LiteralVectorExpr(e)
-            if e.is_matrix() and not isinstance(e, LiteralMatrixExpr):
-                return LiteralMatrixExpr(
-                        [[e[i,j] for j in range(e.shape[1])]
-                            for i in range(e.shape[0])])
-        self.transform(expand)
+        self.transform(_literalize_helper)
 
     def finalize(self, do_precompute=True):
         """Performs standard transforms and dependency analysis."""
@@ -693,6 +682,7 @@ def make_var_expr(var):
         assert False, 'invalid shape'
 
 class ConstExpr(Expr):
+    """A constant scalar value."""
     def __init__(self, value):
         self.shape = ()
         self.value = float(value)
@@ -705,6 +695,8 @@ class ConstExpr(Expr):
         return (self.value,)
     def gencode(self):
         return repr(self.value)
+    def _dx_impl(self, k, times):
+        return as_expr(0) if times > 0 else self
     base_complexity = 0
 
 class VarExpr(Expr):
@@ -747,7 +739,7 @@ class ScalarVarExpr(VarExpr):
             # in case of a variable, compute derivative of the underlying expression
             return Dx(self.var.expr, k, times)
         else:
-            raise TypeError('do now know how to compute derivative of %s' % self.var.name)
+            raise TypeError('do not know how to compute derivative of %s' % self.var.name)
     def gencode(self):
         return self.var.name
 
@@ -824,7 +816,7 @@ class VectorEntryExpr(Expr):
             # in case of a variable, compute derivative of the underlying expression
             return Dx(self.x.var.expr[self.i], k, times)
         else:
-            raise TypeError('do now know how to compute derivative of %s' % self.x.var.name)
+            raise TypeError('do not know how to compute derivative of %s' % self.x.var.name)
     def hash_key(self):
         return (self.i,)
     def gencode(self):
@@ -970,6 +962,20 @@ class ScalarOperExpr(Expr):
             if self.y.is_zero():            # x / 0  -->  ERROR
                 raise ZeroDivisionError('division by zero in expr %s' % self)
         return self
+
+    def _dx_impl(self, k, times):
+        if self.oper == '+':
+            return Dx(self.x, k, times) + Dx(self.y, k, times)
+        elif self.oper == '-':
+            return Dx(self.x, k, times) - Dx(self.y, k, times)
+        elif self.oper == '*':
+            assert times==1, 'higher-order derivative rules not implemented'
+            return Dx(self.x, k, times) * self.y + self.x * Dx(self.y, k, times)
+        elif self.oper == '/':
+            assert times==1, 'higher-order derivative rules not implemented'
+            return (Dx(self.x, k, times) * self.y - self.x * Dx(self.y, k, times)) / (self.y * self.y)
+        else:
+            raise ValueError('do not know how to compute derivative for operation %s' % self.oper)
 
     def gencode(self):
         sep = ' ' + self.oper + ' '
@@ -1219,6 +1225,18 @@ def tree_print(expr, data=None, indent=''):
 def exprhash(expr):
     return expr.hash(tuple(exprhash(c) for c in expr.children))
 
+def _literalize_helper(e):
+    """Convert all matrix and vector expressions into literal expressions,
+    i.e., into elementwise scalar expressions."""
+    if e.is_var_expr():
+        return
+    if e.is_vector() and not isinstance(e, LiteralVectorExpr):
+        return LiteralVectorExpr(e)
+    if e.is_matrix() and not isinstance(e, LiteralMatrixExpr):
+        return LiteralMatrixExpr(
+                [[e[i,j] for j in range(e.shape[1])]
+                    for i in range(e.shape[0])])
+
 # expression manipulation functions ############################################
 # notation is as close to UFL as possible
 
@@ -1294,9 +1312,9 @@ def curl(expr):
     if not (expr.is_vector() and len(expr) == 3):
         raise TypeError('can only compute curl of 3D vector expression')
     return as_vector((
-        expr.z.dx(1) - expr.y.dx(2),
-        expr.x.dx(2) - expr.z.dx(0),
-        expr.y.dx(0) - expr.x.dx(1),
+        expr[2].dx(1) - expr[1].dx(2),
+        expr[0].dx(2) - expr[2].dx(0),
+        expr[1].dx(0) - expr[0].dx(1),
     ))
 
 def as_expr(x):

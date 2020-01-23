@@ -577,11 +577,7 @@ class Expr:
 
     def dx(self, k, times=1):
         """Compute a partial derivative. Equivalent to :func:`Dx`."""
-        if hasattr(self, '_dx_impl'):
-            # expr classes can define _dx_impl to override default behavior
-            return self._dx_impl(k, times)
-        else:
-            return Dx(self, k, times)
+        return Dx(self, k, times)
 
     def dt(self, times=1):
         return Dt(self, times)

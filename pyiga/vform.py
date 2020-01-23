@@ -70,10 +70,10 @@ class BasisFun:
         self.asmgen = None  # to be set to AsmGenerator for code generation
 
 class InputField:
-    def __init__(self, name, shape, vf, updatable=False):
+    def __init__(self, name, shape, vform, updatable=False):
         self.name = name
         self.shape = shape
-        self.vf = vf
+        self.vform = vform
         self.updatable = updatable
 
 class VForm:
@@ -661,6 +661,13 @@ class Expr:
     def fold_constants(self):
         return self
 
+    def find_vf(self):
+        """Attempt to determine the ambient VForm from the expression tree."""
+        for c in self.children:
+            vf = c.find_vf()
+            if vf:
+                return vf
+
     def __deepcopy__(self, memo):
         if self.children:
             new = copy.copy(self)
@@ -715,8 +722,13 @@ class VarExpr(Expr):
     def _grad(self):
         # generate a new VarExpr for the derivative - input vars only
         assert self.is_input_var_expr(), '_grad only handles input fields'
-        vf = self.var.src.vf
+        vf = self.var.src.vform
         return vf._input_as_varexpr(self.var.src, deriv=self.var.deriv+1)
+    def find_vf(self):
+        if self.is_input_var_expr():
+            return self.var.src.vform
+        elif self.var.expr:
+            return self.var.expr.find_vf()
     base_complexity = 0
 
 class ScalarVarExpr(VarExpr):
@@ -1048,6 +1060,9 @@ class PartialDerivExpr(Expr):
         Dnew[k] += times
         return PartialDerivExpr(self.basisfun, Dnew, physical=self.physical)
 
+    def find_vf(self):
+        return self.basisfun.vform
+
 
 def _indices_from_slice(sl, n):
     start = sl.start
@@ -1259,10 +1274,13 @@ def grad(expr, dims=None):
     elif expr.is_vector():
         return as_matrix([grad(z, dims=dims) for z in expr])  # compute Jacobian of vector expression
     else:
-        if not isinstance(expr, PartialDerivExpr):
-            raise TypeError('can only compute gradient of inputs or basis functions')
+        if not expr.is_scalar():
+            raise TypeError('cannot compute gradient for expr of shape %s' % expr.shape)
         if dims is None:
-            dims = expr.basisfun.vform.spacedims
+            vf = expr.find_vf()
+            if not vf:
+                raise ValueError('could not automatically determine dimensions - please specify dims')
+            dims = vf.spacedims
         return LiteralVectorExpr(Dx(expr, k) for k in dims)
 
 def div(expr):

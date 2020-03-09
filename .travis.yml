@@ -16,7 +16,7 @@ install:
   - bash miniconda.sh -b -p $HOME/miniconda
   - export PATH="$HOME/miniconda/bin:$PATH"
   - conda config --set always_yes yes --set changeps1 no
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION wheel setuptools Cython nose numpy scipy networkx coverage codecov
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION wheel setuptools Cython nose numpy scipy networkx jinja2 coverage codecov
   - source activate test-environment
   - python setup.py install
 

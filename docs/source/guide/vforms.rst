@@ -205,8 +205,14 @@ case differentiation is not supported) or instances of
 :class:`pyiga.bspline.BSplineFunc` or :class:`pyiga.geometry.NurbsFunc`. In fact,
 the predefined input ``geo`` for the geometry map is simply declared as
 a vector-valued input field.
-See the section `Compiling and assembling`_ for an example of how to
+See the section :ref:`sec-compiling` for an example of how to
 pass these functions.
+
+Currently, all input functions are considered to be defined in the
+parameter domain, and their derivatives are also computed with
+respect to the parametric coordinates. In contrast, derivatives of
+basis functions are computed in the physical space by default;
+but see :ref:`sec-parametric` below.
 
 For performance reasons, it is sometimes beneficial to be able to update
 a single input function without recreating the entire assembler class,
@@ -274,6 +280,8 @@ input function ``f``::
     vf.add(f * v * dx)
 
 
+.. _sec-parametric:
+
 Working with basis functions in the parameter domain
 ----------------------------------------------------
 
@@ -328,6 +336,7 @@ vector components, and :meth:`Expr.dot()` which is analogous to the global
 :func:`dot` function. Expressions can also be manipulated using the standard
 arithmetic operators ``+,-,*,/`` as shown above.
 
+.. _sec-compiling:
 
 Compiling and assembling
 ------------------------

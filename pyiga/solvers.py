@@ -57,8 +57,8 @@ def gauss_seidel(A, x, b, iterations=1, indices=None, sweep='forward'):
     """
     if sweep == 'symmetric':
         for i in range(iterations):
-            gauss_seidel(A, x, b, iterations=1, sweep='forward')
-            gauss_seidel(A, x, b, iterations=1, sweep='backward')
+            gauss_seidel(A, x, b, iterations=1, indices=indices, sweep='forward')
+            gauss_seidel(A, x, b, iterations=1, indices=indices, sweep='backward')
         return
 
     if sweep not in ('forward', 'backward'):

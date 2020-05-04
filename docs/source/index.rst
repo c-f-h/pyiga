@@ -7,20 +7,10 @@ Welcome to pyiga's documentation!
 =================================
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+   :maxdepth: 3
 
-   api/bspline
-   api/geometry
-   api/approx
-   api/assemble
-   guide/vforms
-   Hierarchical <api/hierarchical>
-   api/operators
-   api/tensor
-   api/solvers
-   api/vis
-
+   api/api
+   guide/guide
 
 
 Indices and tables

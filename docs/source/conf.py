@@ -19,7 +19,7 @@
 
 import os
 import sys
-sys.path.insert(0, os.path.abspath('..'))
+#sys.path.insert(0, os.path.abspath('..'))  # pyiga package should be installed
 
 
 # -- General configuration ------------------------------------------------
@@ -36,6 +36,7 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.mathjax',
     'sphinx.ext.intersphinx',
+    'nbsphinx'
 ]
 
 intersphinx_mapping = {
@@ -65,7 +66,8 @@ author = 'Clemens Hofreither'
 # built documents.
 #
 # The short X.Y version.
-version = '0.1.0'
+import pyiga
+version = pyiga.__version__
 # The full version, including alpha/beta/rc tags.
 release = version
 
@@ -168,6 +170,3 @@ texinfo_documents = [
      author, 'pyiga', 'One line description of project.',
      'Miscellaneous'),
 ]
-
-
-

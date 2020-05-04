@@ -112,3 +112,30 @@ def test_symderiv():
     exprs_equal((f * u).dx(0), f.dx(0)*u + f*u.dx(0))
     exprs_equal((1 / f).dx(1), -f.dx(1) / (f*f), simplify=True)
     exprs_equal(curl(2 + grad(u)), curl(grad(u)), simplify=True)
+
+def test_tostring():
+    vf = VForm(2)
+    u, v = vf.basisfuns()
+    f = vf.input('f')
+    g = vf.input('g', shape=(2,))
+    B = vf.input('B', shape=(2,2))
+    assert str(f) == 'f_a'  # implementation detail of current generators
+    assert str(-f) == '-f_a'
+    assert str(cos(f)) == 'cos(f_a)'
+    assert str(g[1]) == 'g_a[1]'
+    tmp = f + 1
+    assert str(tmp) == '+(f_a, 1.0)'
+    tmp1 = vf.let('tmp1', tmp)
+    assert str(tmp1) == 'tmp1'
+    vec = as_vector((2, 3))
+    assert str(vec) == '(2.0, 3.0)'
+    mat = as_matrix(((1,2),(3,4)))
+    assert str(mat) == '((1.0, 2.0),\n (3.0, 4.0))'
+    assert str(u) == 'u'
+    assert str(Dx(u, 1)) == 'u_01(phys)'
+    assert str(B[1,0]) == 'B_a[1,0]'
+    assert str(B.T) == 'transpose(B_a)'
+    assert str(B.dot(g)) == 'dot(B_a, g_a)'
+    assert str(B.dot(B)) == 'dot(B_a, B_a)'
+
+    tree_print(tmp)

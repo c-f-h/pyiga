@@ -878,7 +878,7 @@ class BuiltinFuncExpr(Expr):
         self.shape = ()
         self.children = (expr,)
     def __str__(self):
-        return 'abs(%s)' % str(self.x)
+        return '%s(%s)' % (self.funcname, str(self.x))
     def gencode(self):
         f = self.func_to_code.get(self.funcname, self.funcname)
         return '%s(%s)' % (f, self.x.gencode())

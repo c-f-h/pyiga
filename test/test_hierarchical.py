@@ -1,9 +1,12 @@
 from pyiga.hierarchical import *
 from pyiga import bspline, geometry, utils
 
+def _make_hs(p=3, n=3):
+    kv = bspline.make_knots(p, 0.0, 1.0, n)
+    return HSpace((kv, kv))
+
 def test_hspace():
-    kv = bspline.make_knots(3, 0.0, 1.0, 3)
-    hs = HSpace((kv, kv))
+    hs = _make_hs()
     assert hs.numlevels == 1
     assert tuple(len(a) for a in hs.actfun) == (36,)
     assert tuple(len(a) for a in hs.deactfun) == (0,)
@@ -24,3 +27,20 @@ def test_hspace():
     one_func = geometry.BSplineFunc(hs.mesh(-1).kvs, R.dot(np.ones(R.shape[1])))
     vals = utils.grid_eval(one_func, 2 * (np.linspace(0.0, 1.0, 10),))
     assert np.allclose(vals, np.ones((10, 10)))
+
+def test_cellextents():
+    hs = _make_hs(p=2, n=2)
+    hs.refine_region(0, lambda *X: True)    # refine globally
+    assert hs.numlevels == 2
+    assert np.array_equal(
+            hs.cell_extents(0, (1,0)),
+            ((0.5,1.0), (0.0, 0.5)))
+    assert np.array_equal(
+            hs.cell_extents(1, (2,1)),
+            ((0.5,0.75), (0.25, 0.5)))
+    assert np.array_equal(
+            hs.function_support(0, (0,0)),
+            ((0.0, 0.5), (0.0, 0.5)))
+    assert np.array_equal(
+            hs.function_support(1, (3,1)),
+            ((0.25, 1.0), (0.0, 0.5)))

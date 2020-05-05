@@ -98,3 +98,15 @@ def test_banded_sparsity():
                           compute_banded_sparsity(n, bw))
     assert np.array_equal(np.transpose(np.nonzero(X)),
                           compute_banded_sparsity_ij(n, bw))
+
+def test_reorder():
+    n1, n2 = 6, 7
+    A1 = _random_banded(n1, 3).A
+    A2 = _random_banded(n2, 4).A
+    A = np.kron(A1, A2)
+    AR = reorder(A, n1, n1)     # shape: (n1*n1) x (n2*n2)
+    print(AR.shape)
+    for i in range(n1*n1):
+        for j in range(n2*n2):
+            ii, jj = reindex_from_reordered(i, j, n1, n1, n2, n2)
+            assert AR[i, j] == A[ii, jj]

@@ -12,7 +12,7 @@ def test_poisson_2d():
     def f(x, y):    # right-hand side (-Laplace of g)
         return 2 * (np.cos(x + y) - np.exp(y - x))
 
-    dir_boundaries = [ (1,0), (1,1), (0,0), (0,1) ]    # entire boundary
+    dir_boundaries = [ 'left', 'right', 'top', 'bottom' ]    # entire boundary
 
     # compute Dirichlet values from function g
     bcs = assemble.combine_bcs(

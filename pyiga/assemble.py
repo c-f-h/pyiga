@@ -336,6 +336,27 @@ def slice_indices(ax, idx, shape, ravel=False):
         multi_indices = np.ravel_multi_index(multi_indices.T, shape)
     return multi_indices
 
+def _parse_bdspec(bdspec, dim):
+    if bdspec == 'left':
+        bd = (dim - 1, 0)
+    elif bdspec == 'right':
+        bd = (dim - 1, 1)
+    elif bdspec == 'bottom':
+        bd = (dim - 2, 0)
+    elif bdspec == 'top':
+        bd = (dim - 2, 1)
+    elif bdspec == 'front':
+        bd = (dim - 3, 0)
+    elif bdspec == 'back':
+        bd = (dim - 3, 1)
+    else:
+        bd = bdspec
+    if not (len(bd) == 2 and bd[1] in (0,1)):
+        raise ValueError('invalid bdspec ' + str(bd))
+    if bd[0] < 0 or bd[0] >= dim:
+        raise ValueError('invalid bdspec %s for space of dimension %d'
+                % (bdspec, dim))
+    return bd
 
 def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
     """Compute indices and values for a Dirichlet boundary condition using
@@ -347,6 +368,16 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
         bdspec: a pair `(axis, side)`. `axis` denotes the axis along
             which the boundary condition lies, and `side` is either
             0 for the "lower" boundary or 1 for the "upper" boundary.
+            Alternatively, one of the following six strings can be
+            used for `bdspec`:
+
+            =======================  ==================
+            `bdspec` value           Meaning
+            =======================  ==================
+            ``"left"``, ``"right"``  `x` low, high
+            ``"bottom"``, ``"top"``  `y` low, high
+            ``"front"``, ``"back"``  `z` low, high
+            =======================  ==================
         dir_func: a function which will be interpolated to obtain the
             Dirichlet boundary values. Assumed to be given in physical
             coordinates. If it is vector-valued, one Dirichlet dof is
@@ -358,7 +389,7 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
         dofs within the tensor product basis which lie along the Dirichlet
         boundary and their computed values, respectively.
     """
-    bdax, bdside = bdspec
+    bdax, bdside = _parse_bdspec(bdspec, len(kvs))
 
     # get basis for the boundary face
     bdbasis = list(kvs)
@@ -416,7 +447,7 @@ def compute_initial_condition_01(kvs, geo, bdspec, g0, g1, physical=True):
         dofs within the tensor product basis which lie along the initial face
         of the space-time cylinder and their computed values, respectively.
     """
-    bdax, bdside = bdspec
+    bdax, bdside = _parse_bdspec(bdspec, len(kvs))
 
     bdbasis = list(kvs)
     del bdbasis[bdax]

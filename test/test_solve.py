@@ -12,13 +12,8 @@ def test_poisson_2d():
     def f(x, y):    # right-hand side (-Laplace of g)
         return 2 * (np.cos(x + y) - np.exp(y - x))
 
-    dir_boundaries = [ 'left', 'right', 'top', 'bottom' ]    # entire boundary
-
-    # compute Dirichlet values from function g
-    bcs = assemble.combine_bcs(
-            assemble.compute_dirichlet_bc(kvs, geo, bcside, g)
-            for bcside in dir_boundaries
-    )
+    # pure Dirichlet boundary conditions
+    bcs = assemble.compute_dirichlet_bcs(kvs, geo, ('all', g))
 
     # compute right-hand side from function f
     rhs = assemble.inner_products(kvs, f, f_physical=True, geo=geo).ravel()

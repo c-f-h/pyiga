@@ -61,6 +61,7 @@ Right-hand sides
 Boundary and initial conditions
 -------------------------------
 
+.. autofunction:: compute_dirichlet_bcs
 .. autofunction:: compute_dirichlet_bc
 .. autofunction:: compute_initial_condition_01
 .. autofunction:: combine_bcs
@@ -418,6 +419,33 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
     else:
         raise ValueError('invalid dimension of Dirichlet coefficients: %s' % dircoeffs.shape)
 
+def compute_dirichlet_bcs(kvs, geo, bdconds):
+    """Compute indices and values for Dirichlet boundary conditions on
+    several boundaries at once.
+
+    Args:
+        kvs: a tensor product B-spline basis
+        geo (:class:`.BSplineFunc` or :class:`.NurbsFunc`): the geometry transform
+        bdconds: a list of `(bdspec, dir_func)` pairs, where `bdspec`
+            specifies the boundary to apply a Dirichlet boundary condition to
+            and `dir_func` is the function providing the Dirichlet values. For
+            the exact meaning, refer to :func:`compute_dirichlet_bc`.
+            As a shorthand, it is possible to pass a single pair ``("all",
+            dir_func)`` which applies Dirichlet boundary conditions to all
+            boundaries.
+    Returns:
+        A pair `(indices, values)` suitable for passing to
+        :class:`RestrictedLinearSystem`.
+    """
+    if len(bdconds) == 2 and bdconds[0] == 'all':
+        dir_func = bdconds[1]
+        bdconds = [((ax, bd), dir_func)
+                for ax in range(len(kvs))
+                for bd in (0,1)]
+    return combine_bcs(
+            compute_dirichlet_bc(kvs, geo, bdspec, g)
+            for (bdspec, g) in bdconds
+    )
 
 def compute_initial_condition_01(kvs, geo, bdspec, g0, g1, physical=True):
     r"""Compute indices and values for an initial condition including function

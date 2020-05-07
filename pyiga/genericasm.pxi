@@ -18,6 +18,7 @@ cdef class BaseAssembler2D:
     cdef ssize_t[:,::1] S1_meshsupp1
     cdef double[:, :, ::1] S1_C1
     cdef readonly tuple kvs
+    cdef object _geo
     cdef tuple gaussgrid
 
     cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
@@ -210,6 +211,7 @@ cdef class BaseVectorAssembler2D:
     cdef double[:, :, ::1] S1_C1
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
     cdef readonly tuple kvs
+    cdef object _geo
     cdef tuple gaussgrid
 
     def num_components(self):
@@ -350,6 +352,7 @@ cdef class BaseAssembler3D:
     cdef ssize_t[:,::1] S1_meshsupp2
     cdef double[:, :, ::1] S1_C2
     cdef readonly tuple kvs
+    cdef object _geo
     cdef tuple gaussgrid
 
     cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
@@ -556,6 +559,7 @@ cdef class BaseVectorAssembler3D:
     cdef double[:, :, ::1] S1_C2
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
     cdef readonly tuple kvs
+    cdef object _geo
     cdef tuple gaussgrid
 
     def num_components(self):

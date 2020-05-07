@@ -16,6 +16,7 @@ def generate(dim):
     gen(vform.wave_st_vf(dim), 'WaveAssembler_ST'+nD)
     gen(vform.divdiv_vf(dim), 'DivDivAssembler'+nD)
     gen(vform.L2functional_vf(dim), 'L2FunctionalAssembler'+nD)
+    gen(vform.L2functional_vf(dim, physical=True), 'L2FunctionalAssemblerPhys'+nD)
 
     return code.result()
 

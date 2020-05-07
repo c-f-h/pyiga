@@ -364,14 +364,19 @@ class AsmGenerator:
             if self.on_demand:
                 assert var.deriv in (0,1), \
                         'invalid derivative %s for input field %s' % (var.deriv, s.name)
+                assert not s.physical, 'physical on-demand input fields not implemented'
                 # initialize lazy array for the input function
                 return 'LazyCachingArray({}, {}, self.gaussgrid, self.nqp, mode=\'{}\')'.format(
                         s.name, var.shape, 'eval' if var.deriv==0 else 'jac')
             else:
                 # not on demand -- precompute complete input field
                 if var.deriv == 0:
-                    return 'np.ascontiguousarray(grid_eval(%s, self.gaussgrid))' % s.name
+                    if s.physical:
+                        return 'np.ascontiguousarray(grid_eval_transformed(%s, self.gaussgrid, self._geo))' % s.name
+                    else:
+                        return 'np.ascontiguousarray(grid_eval(%s, self.gaussgrid))' % s.name
                 elif var.deriv == 1:
+                    assert not s.physical, 'Jacobian of physical input field not implemented'
                     return 'np.ascontiguousarray(%s.grid_jacobian(self.gaussgrid))' % s.name
                 else:
                     assert False, 'invalid derivative %s for input field %s' % (var.deriv, s.name)
@@ -404,6 +409,7 @@ class AsmGenerator:
             self.put("self.numcomp[:] = " + numcomp)
 
         self.putf('assert geo.dim == {dim}, "Geometry has wrong dimension"')
+        self.put('self._geo = geo')
         self.put('')
         self.put('# NB: we assume all kvs result in the same mesh')
         self.put('gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)')
@@ -582,6 +588,7 @@ cdef class BaseAssembler{{DIM}}D:
     {%- endfor %}
     {%- endfor %}
     cdef readonly tuple kvs
+    cdef object _geo
     cdef tuple gaussgrid
 
     cdef double entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
@@ -772,6 +779,7 @@ cdef class BaseVectorAssembler{{DIM}}D:
     {%- endfor %}
     cdef size_t[2] numcomp  # number of vector components for trial and test functions
     cdef readonly tuple kvs
+    cdef object _geo
     cdef tuple gaussgrid
 
     def num_components(self):
@@ -933,6 +941,6 @@ from pyiga.assemble_tools_cy cimport (
     next_lexicographic2, next_lexicographic3,
 )
 from pyiga.assemble_tools_cy import compute_values_derivs
-from pyiga.utils import LazyCachingArray, grid_eval
+from pyiga.utils import LazyCachingArray, grid_eval, grid_eval_transformed
 
 """

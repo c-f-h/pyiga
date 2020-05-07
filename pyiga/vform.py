@@ -70,9 +70,10 @@ class BasisFun:
         self.asmgen = None  # to be set to AsmGenerator for code generation
 
 class InputField:
-    def __init__(self, name, shape, vform, updatable=False):
+    def __init__(self, name, shape, physical, vform, updatable=False):
         self.name = name
         self.shape = shape
+        self.physical = physical
         self.vform = vform
         self.updatable = updatable
 
@@ -159,14 +160,18 @@ class VForm:
         assert self.vec
         return tuple(bf.numcomp for bf in self.basis_funs)
 
-    def input(self, name, shape=(), updatable=False):
+    def input(self, name, shape=(), physical=False, updatable=False):
         """Declare an input field with the given name and shape and return an
         expression representing it.
+
+        By default, input fields are assumed to be given in parametric
+        coordinates. If the field is defined in physical geometry coordinates,
+        pass `physical=True`.
 
         If `updatable` is `True`, the generated assembler will allow updating of this
         field through an `update(name=value)` method.
         """
-        inp = InputField(name, shape, self, updatable)
+        inp = InputField(name, shape, physical, self, updatable)
         self.inputs.append(inp)
         return self._input_as_varexpr(inp)
 
@@ -1468,9 +1473,9 @@ def divdiv_vf(dim):
     V.add(div(u) * div(v) * dx)
     return V
 
-def L2functional_vf(dim):
+def L2functional_vf(dim, physical=False):
     V = VForm(dim, arity=1)
     u = V.basisfuns()
-    f = V.input('f', shape=(), updatable=True)
+    f = V.input('f', shape=(), physical=physical, updatable=True)
     V.add(f * u * dx)
     return V

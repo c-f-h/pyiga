@@ -131,16 +131,18 @@ class VForm:
             raise RuntimeError('basis functions have already been constructed')
 
         def make_bfun_expr(bf):
+            derivs = self.dim * (0,)
             if bf.numcomp is not None:
                 # return a vector which contains the components of the bfun
                 vv = LiteralVectorExpr(
-                    self.basisval(
+                    PartialDerivExpr(
                         BasisFun(bf.name, self, component=k),
+                        derivs,
                         physical=not parametric)
                     for k in range(bf.numcomp))
                 return vv[0] if len(vv) == 1 else vv    # TODO: unify with scalar case?
             else:
-                return self.basisval(bf, physical=not parametric)
+                return PartialDerivExpr(bf, derivs, physical=not parametric)
 
         ar = self.arity
         # determine output size for vector assembler if needed
@@ -295,9 +297,6 @@ class VForm:
             return as_matrix(result)
         else:
             assert False, 'invalid arity %d' % self.arity
-
-    def basisval(self, basisfun, physical=False):
-        return PartialDerivExpr(basisfun, self.dim * (0,), physical=physical)
 
     # automatically produce caching getters for predefined on-demand local variables
     def __getattr__(self, name):

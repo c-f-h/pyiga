@@ -208,11 +208,11 @@ a vector-valued input field.
 See the section :ref:`sec-compiling` for an example of how to
 pass these functions.
 
-Currently, all input functions are considered to be defined in the
-parameter domain, and their derivatives are also computed with
-respect to the parametric coordinates. In contrast, derivatives of
-basis functions are computed in the physical space by default;
-but see :ref:`sec-parametric` below.
+By default, input functions are considered to be defined in the coordinates of
+the parameter domain. If your input function is given in terms of physical
+coordinates, declare it as follows::
+
+    coeff = vf.input('coeff', physical=True)
 
 For performance reasons, it is sometimes beneficial to be able to update
 a single input function without recreating the entire assembler class,
@@ -282,17 +282,27 @@ input function ``f``::
 
 .. _sec-parametric:
 
-Working with basis functions in the parameter domain
-----------------------------------------------------
+Working with parametric derivatives
+-----------------------------------
 
 By default, a :class:`VForm` assumes that you will provide it with a geometry
-map and automatically transforms the derivatives of the functions ``u``
-and ``v`` accordingly. If you do not want this behavior and want to
-obtain untransformed derivatives in the parameter domain, simply pass
-``parametric=True`` to :meth:`VForm.basisfuns` like this::
+map under the input field name ``geo`` and automatically transforms the
+derivatives of the basis functions ``u`` and ``v``, as well as gradients of any
+input fields, accordingly.
+If for some reason you need to work with untransformed gradients with
+respect to parametric coordinates, you can simply pass the keyword
+argument ``parametric=True`` to the derivative functions such as :func:`grad`
+like this::
 
     vf = vform.VForm(2)
-    u, v = vf.basisfuns(parametric=True)
+    u, v = vf.basisfuns()
+    f = vf.input('f')
+    gu = grad(u, parametric=True)
+    gf = Dx(f, 1, parametric=True)
+
+You can compute both parametric and physical derivatives of basis functions as
+well as input fields given in parametric coordinates. An input field that is
+given in terms of physical coordinates only support physical derivatives.
 
 Note that the symbol :attr:`dx` still includes the geometry Jacobian, and
 therefore you should not multiply your expression with it if you want to

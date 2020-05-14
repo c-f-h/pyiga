@@ -1294,6 +1294,10 @@ def grad(expr, dims=None, parametric=False):
 
     If `dims` is specified, it is a tuple of dimensions along which to take
     the derivative. By default, all space dimensions are used.
+
+    If `parametric` is true, the gradient with respect to the coordinates in
+    the parameter domain is computed. By default, the gradient is computed in
+    physical coordinates (transformed by the geometry map).
     """
     if expr.is_input_var_expr():
         if parametric:

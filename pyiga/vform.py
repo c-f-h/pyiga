@@ -398,6 +398,14 @@ class VForm:
             if filter is None or filter(e):
                 yield e
 
+    def transform_gradient_to_physical(self, G):
+        if G.is_vector():   # gradient of a scalar function
+            return self.JacInv.T.dot(G)
+        elif G.is_matrix(): # Jacobian of a vector function
+            return (self.JacInv.T.dot(G.T)).T
+        else:
+            raise ValueError('invalid gradient of shape %s' % G.shape)
+
     def replace_physical_derivs(self, e):
         if not e.physical:
             return
@@ -732,8 +740,7 @@ class ScalarVarExpr(VarExpr):
             # for computing the derivative of an input field, we go through the
             # gradient since input fields can only compute the full gradient at
             # once
-            assert times == 1, 'only first derivative of input fields supported'
-            assert parametric, 'only parametric derivatives of input fields implemented'
+            assert self.var.deriv == 0 and times == 1, 'only first derivative of input fields supported'
             return grad(self, parametric=parametric)[k]
         elif self.var.expr:
             # in case of a variable, compute derivative of the underlying expression
@@ -1289,8 +1296,23 @@ def grad(expr, dims=None, parametric=False):
     the derivative. By default, all space dimensions are used.
     """
     if expr.is_input_var_expr():
-        assert parametric, 'only parametric derivatives implemented'
-        G = expr._para_grad()
+        if parametric:
+            if expr.var.src.physical:
+                raise RuntimeError('cannot compute parametric gradient of physical input field')
+            G = expr._para_grad()
+        else:   # physical gradient
+            if expr.var.src.physical:
+                G = expr._para_grad()   # function is already defined in physical coordinates
+            else:
+                # to support higher derivatives, we would have to do it like for BasisFuns:
+                # have a class like PartialDerivExpr (or use VarExpr for this? - currently
+                # the deriv is stored in the AsmVar!) which keeps track of the derivatives,
+                # and finally replace it with the proper expression in a transformation step
+                assert expr.var.deriv == 0, \
+                        'only first-order derivatives of transformed gradients implemented'
+                vf = expr.find_vf()
+                G = vf.transform_gradient_to_physical(expr._para_grad())
+
         if dims is not None:
             if G.is_vector():
                 G = G[dims]

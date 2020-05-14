@@ -94,6 +94,7 @@ def test_input():
     assert f.shape == ()
     assert g.shape == (3,)
     assert G.shape == (3,3)
+    # expressions with parametric derivatives
     assert grad(f, parametric=True).shape == (3,)
     assert grad(g, parametric=True).shape == (3,3)
     assert grad(f, dims=(1,2), parametric=True).shape == (2,)
@@ -101,6 +102,31 @@ def test_input():
     assert grad(g, dims=(1,2), parametric=True).shape == (3,2)
     exprs_equal(grad(g, dims=(1,2), parametric=True)[1,0], Dx(g[1], 1, parametric=True))
     exprs_equal(grad(g, parametric=True)[1, :], grad(g[1], parametric=True))
+    # expressions with physical derivatives
+    assert grad(f).shape == (3,)
+    assert grad(g).shape == (3,3)
+    assert grad(f, dims=(1,2)).shape == (2,)
+    exprs_equal(grad(f, dims=(1,2))[0], Dx(f, 1))
+    assert grad(g, dims=(1,2)).shape == (3,2)
+    exprs_equal(grad(g, dims=(1,2))[1,0], Dx(g[1], 1))
+    exprs_equal(grad(g)[1, :], grad(g[1]))
+
+def test_input_physical():
+    vf = VForm(3, arity=1)
+    f = vf.input('f', physical=True)
+    g = vf.input('g', shape=(3,), physical=True)
+    G = vf.input('G', shape=(3,3), physical=True)
+    assert f.shape == ()
+    assert g.shape == (3,)
+    assert G.shape == (3,3)
+    # expressions with physical derivatives
+    assert grad(f).shape == (3,)
+    assert grad(g).shape == (3,3)
+    assert grad(f, dims=(1,2)).shape == (2,)
+    exprs_equal(grad(f, dims=(1,2))[0], Dx(f, 1))
+    assert grad(g, dims=(1,2)).shape == (3,2)
+    exprs_equal(grad(g, dims=(1,2))[1,0], Dx(g[1], 1))
+    exprs_equal(grad(g)[1, :], grad(g[1]))
 
 def test_symderiv():
     vf = VForm(3, arity=1)

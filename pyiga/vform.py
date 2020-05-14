@@ -97,7 +97,7 @@ class VForm:
 
         # predefined local variables with their generators (created on demand)
         self.predefined_vars = {
-            'Jac':         lambda self: grad(self.Geo),
+            'Jac':         lambda self: grad(self.Geo, parametric=True),
             'JacInv':      lambda self: inv(self.Jac),
             'GaussWeight': lambda self: self._gaussweight(),
             'W':           lambda self: self.GaussWeight * abs(det(self.Jac)),
@@ -114,14 +114,10 @@ class VForm:
         return self.let('GaussWeight', reduce(operator.mul, gw))
         #return self.declare_sourced_var('GaussWeight', shape=(), src='@GaussWeight')
 
-    def basisfuns(self, parametric=False, components=(None,None), spaces=(0,0)):
+    def basisfuns(self, components=(None,None), spaces=(0,0)):
         """Obtain expressions representing the basis functions for this vform.
 
         Args:
-            parametric (bool): by default, basis functions live in the physical domain
-                (mapped by the geometry transform) and have their derivatives transformed
-                accordingly. If `parametric=True` is given, they live in the parameter
-                domain instead.
             components: for vector-valued problems, specify the number of components
                 for each basis function here.
             spaces: space indices for problems where the basis functions live in
@@ -137,12 +133,11 @@ class VForm:
                 vv = LiteralVectorExpr(
                     PartialDerivExpr(
                         BasisFun(bf.name, self, component=k),
-                        derivs,
-                        physical=not parametric)
+                        derivs)
                     for k in range(bf.numcomp))
                 return vv[0] if len(vv) == 1 else vv    # TODO: unify with scalar case?
             else:
-                return PartialDerivExpr(bf, derivs, physical=not parametric)
+                return PartialDerivExpr(bf, derivs)
 
         ar = self.arity
         # determine output size for vector assembler if needed
@@ -579,9 +574,9 @@ class Expr:
     def is_input_var_expr(self):
         return False
 
-    def dx(self, k, times=1):
+    def dx(self, k, times=1, parametric=False):
         """Compute a partial derivative. Equivalent to :func:`Dx`."""
-        return Dx(self, k, times)
+        return Dx(self, k, times, parametric=parametric)
 
     def dt(self, times=1):
         return Dt(self, times)
@@ -695,7 +690,7 @@ class ConstExpr(Expr):
         return (self.value,)
     def gencode(self):
         return repr(self.value)
-    def _dx_impl(self, k, times):
+    def _dx_impl(self, k, times, parametric):
         return as_expr(0) if times > 0 else self
     base_complexity = 0
 
@@ -711,9 +706,10 @@ class VarExpr(Expr):
         return set((self.var,))
     def hash_key(self):
         return (self.var.name,)
-    def _grad(self):
-        # generate a new VarExpr for the derivative - input vars only
-        assert self.is_input_var_expr(), '_grad only handles input fields'
+    def _para_grad(self):
+        # generate a new VarExpr for the parametric derivative
+        # (input vars only)
+        assert self.is_input_var_expr(), '_para_grad only handles input fields'
         vf = self.var.src.vform
         return vf._input_as_varexpr(self.var.src, deriv=self.var.deriv+1)
     def find_vf(self):
@@ -728,16 +724,17 @@ class ScalarVarExpr(VarExpr):
         self.var = var
         self.shape = ()
         self.children = ()
-    def _dx_impl(self, k, times):
+    def _dx_impl(self, k, times, parametric):
         if self.is_input_var_expr():
             # for computing the derivative of an input field, we go through the
             # gradient since input fields can only compute the full gradient at
             # once
             assert times == 1, 'only first derivative of input fields supported'
-            return grad(self)[k]
+            assert parametric, 'only parametric derivatives of input fields implemented'
+            return grad(self, parametric=parametric)[k]
         elif self.var.expr:
             # in case of a variable, compute derivative of the underlying expression
-            return Dx(self.var.expr, k, times)
+            return Dx(self.var.expr, k, times, parametric=parametric)
         else:
             raise TypeError('do not know how to compute derivative of %s' % self.var.name)
     def gencode(self):
@@ -805,16 +802,16 @@ class VectorEntryExpr(Expr):
         self.children = (x,)
     def __str__(self):
         return '%s[%i]' % (self.x.var.name, self.i)
-    def _dx_impl(self, k, times):
+    def _dx_impl(self, k, times, parametric):
         if self.x.is_input_var_expr():
             # for computing the derivative of one component of an input
             # field, we go through the gradient since input fields
             # can only compute the full gradient at once
             assert times == 1, 'only first derivative of input field components supported'
-            return grad(self.x)[self.i, k]
+            return grad(self.x, parametric=parametric)[self.i, k]
         elif self.x.var.expr:
             # in case of a variable, compute derivative of the underlying expression
-            return Dx(self.x.var.expr[self.i], k, times)
+            return Dx(self.x.var.expr[self.i], k, times, parametric=parametric)
         else:
             raise TypeError('do not know how to compute derivative of %s' % self.x.var.name)
     def hash_key(self):
@@ -963,17 +960,18 @@ class ScalarOperExpr(Expr):
                 raise ZeroDivisionError('division by zero in expr %s' % self)
         return self
 
-    def _dx_impl(self, k, times):
+    def _dx_impl(self, k, times, para):
         if self.oper == '+':
-            return Dx(self.x, k, times) + Dx(self.y, k, times)
+            return Dx(self.x, k, times, para) + Dx(self.y, k, times, para)
         elif self.oper == '-':
-            return Dx(self.x, k, times) - Dx(self.y, k, times)
+            return Dx(self.x, k, times, para) - Dx(self.y, k, times, para)
         elif self.oper == '*':
             assert times==1, 'higher-order derivative rules not implemented'
-            return Dx(self.x, k, times) * self.y + self.x * Dx(self.y, k, times)
+            return Dx(self.x, k, times, para) * self.y + self.x * Dx(self.y, k, times, para)
         elif self.oper == '/':
             assert times==1, 'higher-order derivative rules not implemented'
-            return (Dx(self.x, k, times) * self.y - self.x * Dx(self.y, k, times)) / (self.y * self.y)
+            return (Dx(self.x, k, times, para) * self.y -
+                    self.x * Dx(self.y, k, times, para)) / (self.y * self.y)
         else:
             raise ValueError('do not know how to compute derivative for operation %s' % self.oper)
 
@@ -1037,6 +1035,7 @@ class PartialDerivExpr(Expr):
         self.basisfun = basisfun
         self.D = tuple(D)
         self.children = ()
+        # NB: the `physical` argument is only meaningful if sum(D) > 0
         self.physical = bool(physical)
 
     def __str__(self):
@@ -1058,13 +1057,16 @@ class PartialDerivExpr(Expr):
         return set((self.basisfun,))
 
     def make_parametric(self):
-        if not self.physical: raise ValueError('derivative is already parametric')
+        assert self.physical, 'derivative is already parametric'
         return PartialDerivExpr(self.basisfun, self.D, physical=False)
 
-    def _dx_impl(self, k, times):
+    def _dx_impl(self, k, times, parametric):
         Dnew = list(self.D)
+        old_order = sum(Dnew)
+        if bool(parametric) != (not self.physical) and old_order != 0:
+            raise RuntimeError('cannot mix physical and parametric derivatives')
         Dnew[k] += times
-        return PartialDerivExpr(self.basisfun, Dnew, physical=self.physical)
+        return PartialDerivExpr(self.basisfun, Dnew, physical=not parametric)
 
     def find_vf(self):
         return self.basisfun.vform
@@ -1243,12 +1245,13 @@ def _literalize_helper(e):
 #: A symbolic expression representing the integration weight stemming from the geometry map.
 dx = VolumeMeasureExpr()
 
-def Dx(expr, k, times=1):
+def Dx(expr, k, times=1, parametric=False):
     """Partial derivative of `expr` along the `k`-th coordinate axis."""
     if hasattr(expr, '_dx_impl'):
-        return expr._dx_impl(k, times)
+        return expr._dx_impl(k, times, parametric)
     elif expr.is_vector():
-        return LiteralVectorExpr(Dx(z, k, times) for z in expr)
+        return LiteralVectorExpr(Dx(z, k, times, parametric=parametric)
+                for z in expr)
     elif expr.is_matrix():
         raise NotImplementedError('derivative of matrix not implemented')
     else:   # scalar
@@ -1267,7 +1270,7 @@ def Dt(expr, times=1):
             raise TypeError('can only compute time derivatives in spacetime assemblers')
         return Dx(expr, vf.timedim, times)
 
-def grad(expr, dims=None):
+def grad(expr, dims=None, parametric=False):
     """Gradient of an expression.
 
     If `expr` is scalar, results in a vector of all partial derivatives.
@@ -1279,7 +1282,8 @@ def grad(expr, dims=None):
     the derivative. By default, all space dimensions are used.
     """
     if expr.is_input_var_expr():
-        G = expr._grad()
+        assert parametric, 'only parametric derivatives implemented'
+        G = expr._para_grad()
         if dims is not None:
             if G.is_vector():
                 G = G[dims]
@@ -1289,7 +1293,8 @@ def grad(expr, dims=None):
                 raise TypeError('dims not supported for gradient of shape %s' % G.shape)
         return G
     elif expr.is_vector():
-        return as_matrix([grad(z, dims=dims) for z in expr])  # compute Jacobian of vector expression
+        return as_matrix([grad(z, dims=dims, parametric=parametric)
+            for z in expr])  # compute Jacobian of vector expression
     else:
         if not expr.is_scalar():
             raise TypeError('cannot compute gradient for expr of shape %s' % expr.shape)
@@ -1298,13 +1303,13 @@ def grad(expr, dims=None):
             if not vf:
                 raise ValueError('could not automatically determine dimensions - please specify dims')
             dims = vf.spacedims
-        return LiteralVectorExpr(Dx(expr, k) for k in dims)
+        return LiteralVectorExpr(Dx(expr, k, parametric=parametric) for k in dims)
 
-def div(expr):
+def div(expr, parametric=False):
     """The divergence of a vector-valued expressions, resulting in a scalar."""
     if not expr.is_vector():
         raise TypeError('can only compute divergence of vector expression')
-    return tr(grad(expr))
+    return tr(grad(expr, parametric=parametric))
 
 def curl(expr):
     """The curl (or rot) of a 3D vector expression."""
@@ -1440,9 +1445,9 @@ def mass_vf(dim):
 
 def stiffness_vf(dim):
     V = VForm(dim)
-    u, v = V.basisfuns(parametric=True)
+    u, v = V.basisfuns()
     B = V.let('B', V.W * dot(V.JacInv, V.JacInv.T), symmetric=True)
-    V.add(B.dot(grad(u)).dot(grad(v)))
+    V.add(B.dot(grad(u, parametric=True)).dot(grad(v, parametric=True)))
     return V
 
 ### slower:

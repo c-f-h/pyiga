@@ -32,9 +32,9 @@ def test_asmatrix():
     vf = VForm(2)
     G = as_matrix([[1,2,3],[4,5,6]])
     assert G.shape == (2,3)
-    G = as_matrix(grad(vf.Geo))
+    G = as_matrix(grad(vf.Geo, parametric=True))
     assert G.shape == (2,2)
-    G = as_matrix(2 * grad(vf.Geo))
+    G = as_matrix(2 * grad(vf.Geo, parametric=True))
     assert G.shape == (2,2)
 
 def exprs_equal(expr1, expr2, simplify=False):
@@ -59,9 +59,9 @@ def test_dx():
     vf = VForm(2)
     u, v = vf.basisfuns()
     exprs_equal(u.dx(0).dx(1), u.dx(1).dx(0))
-    exprs_equal(vf.Geo.dx(1)[0], vf.Geo[0].dx(1))
+    exprs_equal(vf.Geo.dx(1, parametric=True)[0], vf.Geo[0].dx(1, parametric=True))
     G = vf.let('G', vf.Geo)
-    exprs_equal(G.dx(0)[1], vf.Geo[1].dx(0))
+    exprs_equal(G.dx(0, parametric=True)[1], vf.Geo[1].dx(0, parametric=True))
 
 def test_vectorexpr():
     vf = VForm(3)
@@ -94,23 +94,23 @@ def test_input():
     assert f.shape == ()
     assert g.shape == (3,)
     assert G.shape == (3,3)
-    assert grad(f).shape == (3,)
-    assert grad(g).shape == (3,3)
-    assert grad(f, dims=(1,2)).shape == (2,)
-    exprs_equal(grad(f, dims=(1,2))[0], Dx(f, 1))
-    assert grad(g, dims=(1,2)).shape == (3,2)
-    exprs_equal(grad(g, dims=(1,2))[1,0], Dx(g[1], 1))
-    exprs_equal(grad(g)[1, :], grad(g[1]))
+    assert grad(f, parametric=True).shape == (3,)
+    assert grad(g, parametric=True).shape == (3,3)
+    assert grad(f, dims=(1,2), parametric=True).shape == (2,)
+    exprs_equal(grad(f, dims=(1,2), parametric=True)[0], Dx(f, 1, parametric=True))
+    assert grad(g, dims=(1,2), parametric=True).shape == (3,2)
+    exprs_equal(grad(g, dims=(1,2), parametric=True)[1,0], Dx(g[1], 1, parametric=True))
+    exprs_equal(grad(g, parametric=True)[1, :], grad(g[1], parametric=True))
 
 def test_symderiv():
     vf = VForm(3, arity=1)
     u = vf.basisfuns()
     f = vf.input('f')
     G = vf.input('G', shape=(3,))
-    exprs_equal(grad(2 * f), 2 * grad(f), simplify=True)
-    exprs_equal(div(G - 3), div(G), simplify=True)
-    exprs_equal((f * u).dx(0), f.dx(0)*u + f*u.dx(0))
-    exprs_equal((1 / f).dx(1), -f.dx(1) / (f*f), simplify=True)
+    exprs_equal(grad(2 * f, parametric=True), 2 * grad(f, parametric=True), simplify=True)
+    exprs_equal(div(G - 3, parametric=True), div(G, parametric=True), simplify=True)
+    exprs_equal((f * u).dx(0, parametric=True), f.dx(0, parametric=True)*u + f*u.dx(0, parametric=True))
+    exprs_equal((1 / f).dx(1, parametric=True), -f.dx(1, parametric=True) / (f*f), simplify=True)
     exprs_equal(curl(2 + grad(u)), curl(grad(u)), simplify=True)
 
 def test_tostring():

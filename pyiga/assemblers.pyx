@@ -260,8 +260,10 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         ) nogil:
         cdef double result = 0.0
 
-        cdef double _tmp4
-        cdef double _tmp3
+        cdef double _dv_01
+        cdef double _dv_10
+        cdef double _du_01
+        cdef double _du_10
         cdef double* B
         cdef size_t i0
         cdef size_t i1
@@ -270,9 +272,11 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
             for i1 in range(n1):
                 B = &_B[i0, i1, 0, 0]
 
-                _tmp4 = (VDu0[2*i0+1] * VDu1[2*i1+0])
-                _tmp3 = (VDu0[2*i0+0] * VDu1[2*i1+1])
-                result += ((((B[0] * _tmp3) + (B[1] * _tmp4)) * (VDv0[2*i0+0] * VDv1[2*i1+1])) + (((B[1] * _tmp3) + (B[3] * _tmp4)) * (VDv0[2*i0+1] * VDv1[2*i1+0])))
+                _dv_01 = (VDv0[2*i0+1] * VDv1[2*i1+0])
+                _dv_10 = (VDv0[2*i0+0] * VDv1[2*i1+1])
+                _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
+                _du_10 = (VDu0[2*i0+0] * VDu1[2*i1+1])
+                result += ((((B[0] * _du_10) + (B[1] * _du_01)) * _dv_10) + (((B[1] * _du_10) + (B[3] * _du_01)) * _dv_01))
         return result
 
     @cython.boundscheck(False)
@@ -1352,9 +1356,12 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         ) nogil:
         cdef double result = 0.0
 
-        cdef double _tmp8
-        cdef double _tmp7
-        cdef double _tmp6
+        cdef double _dv_001
+        cdef double _dv_010
+        cdef double _dv_100
+        cdef double _du_001
+        cdef double _du_010
+        cdef double _du_100
         cdef double* B
         cdef size_t i0
         cdef size_t i1
@@ -1365,10 +1372,13 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                 for i2 in range(n2):
                     B = &_B[i0, i1, i2, 0, 0]
 
-                    _tmp8 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
-                    _tmp7 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
-                    _tmp6 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
-                    result += ((((((B[0] * _tmp6) + (B[1] * _tmp7)) + (B[2] * _tmp8)) * (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])) + ((((B[1] * _tmp6) + (B[4] * _tmp7)) + (B[5] * _tmp8)) * (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0]))) + ((((B[2] * _tmp6) + (B[5] * _tmp7)) + (B[8] * _tmp8)) * (VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0])))
+                    _dv_001 = (VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0])
+                    _dv_010 = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
+                    _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
+                    _du_001 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
+                    _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
+                    _du_100 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
+                    result += ((((((B[0] * _du_100) + (B[1] * _du_010)) + (B[2] * _du_001)) * _dv_100) + ((((B[1] * _du_100) + (B[4] * _du_010)) + (B[5] * _du_001)) * _dv_010)) + ((((B[2] * _du_100) + (B[5] * _du_010)) + (B[8] * _du_001)) * _dv_001))
         return result
 
     @cython.boundscheck(False)

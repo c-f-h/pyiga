@@ -199,17 +199,13 @@ class VForm:
             D[i] += 1
         return tuple(D)
 
-    def get_pderiv(self, bfun, indices=None, D=None):
+    def pderiv_as_var(self, bfun, indices=None, D=None):
         if D is None:
             D = self.indices_to_D(indices)
         name = '_d%s_%s' % (bfun.name, ''.join(str(k) for k in D))
         if not name in self.vars:
             self.let(name, PartialDerivExpr(bfun, D, physical=False))
         return self.vars[name].as_expr
-
-    def get_pderivs(self, bfun, order):
-        assert order == 1, 'only first derivatives implemented'
-        return as_vector(self.get_pderiv(bfun, (i,)) for i in range(self.dim))
 
     def set_var(self, name, var):
         if name in self.vars:
@@ -391,11 +387,11 @@ class VForm:
         """
         return iterexprs(self.exprs, deep=True, type=type, once=once)
 
-    def transform(self, fun, type=None):
+    def transform(self, fun, type=None, deep=True):
         """Apply `fun` to all exprs (or all exprs of the given `type`). If `fun` returns
         an expr, replace the old expr by this new one.
         """
-        self.exprs = transform_exprs(self.exprs, fun, type=type, deep=True)
+        self.exprs = transform_exprs(self.exprs, fun, type=type, deep=deep)
 
     def collect(self, type=None, filter=None):
         for e in self.all_exprs(type=type):
@@ -414,20 +410,25 @@ class VForm:
             assert self.timedim == self.dim - 1 # to make sure the next line is correct
             D_x = e.D[:-1] + (0,)   # HACK: should be D[spacedims]; assume time is last
             if sum(D_x) == 0:
-                return self.get_pderiv(e.basisfun, D=e.D)   # time derivatives are parametric
+                return self.pderiv_as_var(e.basisfun, D=e.D)   # time derivatives are parametric
             elif sum(D_x) == 1:
                 k = D_x.index(1)
                 dts = e.D[-1] * (self.timedim,)
-                spacegrad = as_vector(self.get_pderiv(e.basisfun, (i,) + dts)
+                spacegrad = as_vector(self.pderiv_as_var(e.basisfun, indices=(i,) + dts)
                                       for i in self.spacedims)
                 return inner(self.JacInv[self.spacedims, k], spacegrad)
         else:
             order = sum(e.D)
             if order == 1:
                 k = e.D.index(1)    # get index of derivative direction
-                return inner(self.JacInv[:, k], self.get_pderivs(e.basisfun, 1))
+                assert e.is_scalar()
+                return inner(self.JacInv[:, k], grad(e.without_derivs(), parametric=True))
 
         assert False, 'higher order physical derivatives not implemented'
+
+    def para_derivs_to_vars(self, e):
+        if not e.physical and sum(e.D) > 0:
+            return self.pderiv_as_var(e.basisfun, D=e.D)
 
     def compute_recursive(self, func):
         values = {}
@@ -484,6 +485,8 @@ class VForm:
         self.transform(lambda e: self.W, type=VolumeMeasureExpr)
         # replace physical derivs by proper expressions in terms of parametric derivs
         self.transform(self.replace_physical_derivs, type=PartialDerivExpr)
+        # replace parametric derivs by named vars (for readability only)
+        self.transform(self.para_derivs_to_vars, type=PartialDerivExpr, deep=False)
         # convert all expressions to scalar form
         self.expand_mat_vec()
         # fold constants, eliminate zeros
@@ -1055,6 +1058,10 @@ class PartialDerivExpr(Expr):
         return self.basisfun.asmgen.gen_pderiv(self.basisfun, self.D)
     def depends(self):
         return set((self.basisfun,))
+
+    def without_derivs(self):
+        """Return the underlying basis function without derivatives."""
+        return PartialDerivExpr(self.basisfun, len(self.D) * (0,), physical=False)
 
     def make_parametric(self):
         assert self.physical, 'derivative is already parametric'

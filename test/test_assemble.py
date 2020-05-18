@@ -262,6 +262,37 @@ def test_dirichlet_bc():
     assert np.allclose(values, np.ones(ny))
 
 ################################################################################
+# Test assembling from VForms
+################################################################################
+
+def test_assemble_vf():
+    # set up vform
+    from pyiga.vform import VForm, grad, inner, dx
+    vf = VForm(2)
+    u, v = vf.basisfuns()
+    vf.add(inner(grad(u), grad(v)) * dx)
+
+    # set up space and geo
+    kvs = 2 * (bspline.make_knots(3, 0.0, 1.0, 10),)
+    geo = geometry.quarter_annulus()
+
+    # assemble
+    A = assemble_vf(vf, kvs, geo=geo)
+    A_ref = stiffness(kvs, geo)
+    assert np.allclose(A.A, A_ref.A)
+
+    # right-hand side vform
+    vf_f = VForm(2, arity=1)
+    f = vf_f.input('f')
+    v = vf_f.basisfuns()
+    vf_f.add(f * v * dx)
+
+    def f(x, y): return np.exp(x + y)
+    f1 = assemble_vf(vf_f, kvs, geo=geo, f=f)
+    f2 = inner_products(kvs, f, geo=geo)
+    assert np.allclose(f1, f2)
+
+################################################################################
 # Test integrals
 ################################################################################
 

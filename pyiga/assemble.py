@@ -26,6 +26,10 @@ They take one or two arguments:
 .. autofunction:: mass
 .. autofunction:: stiffness
 
+General variational forms can be assembled using the following function.
+See the section :doc:`/guide/vforms` for further details.
+
+.. autofunction:: assemble_vf
 
 .. _fast-asms:
 
@@ -695,6 +699,28 @@ def assemble_vector(asm, symmetric=False, format='csr', layout='blocked'):
         return X
     else:
         return X.asmatrix(format)
+
+def assemble_vf(vf, kvs, symmetric=False, format='csr', layout='blocked', **kwargs):
+    """Compile the given variational form (:class:`.VForm`) into a matrix or vector."""
+    from . import compile
+    Asm = compile.compile_vform(vf)   # compile assembler class
+
+    num_spaces = vf.num_spaces()
+    if num_spaces <= 1:
+        asm = Asm(kvs, **kwargs)
+    else:
+        assert num_spaces == 2, 'no more than two spaces allowed'
+        asm = Asm(kvs[0], kvs[1], **kwargs)
+
+    if vf.arity == 1:
+        return asm.assemble_vector()
+    elif vf.arity == 2:
+        if vf.vec:
+            return assemble_vector(asm, symmetric=symmetric, format=format, layout=layout)
+        else:
+            return assemble(asm, symmetric=symmetric, format=format)
+    else:
+        raise RuntimeError('invalid arity ' + str(vf.arity))
 
 ################################################################################
 # Convenience functions

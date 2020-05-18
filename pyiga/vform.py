@@ -157,6 +157,10 @@ class VForm:
         assert self.vec
         return tuple(bf.numcomp for bf in self.basis_funs)
 
+    def num_spaces(self):
+        """Return the number of different function spaces used in this VForm."""
+        return len(np.unique(tuple(bf.space for bf in self.basis_funs)))
+
     def input(self, name, shape=(), physical=False, updatable=False):
         """Declare an input field with the given name and shape and return an
         expression representing it.

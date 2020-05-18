@@ -358,15 +358,38 @@ the vform is translated into Cython code, compiled on the fly and loaded as a
 dynamic module. The compiled modules are cached so that compiling a given vform for a
 second time does not recompile the code.
 
-The functions used for compilation are contained in the
-:mod:`pyiga.compile` module, and the resulting matrices can be
-computed
-using the :func:`pyiga.assemble.assemble` and :func:`pyiga.assemble.assemble_vector`
-functions for scalar- and vector-valued problems, respectively.
-**Note:** These interfaces are subject to change in the future.
-
 Below is an example for assembling the Laplace variational form defined in
 the section `A simple example`_::
+
+    from pyiga import assemble, bspline, geometry
+
+    # define the trial space
+    kv = bspline.make_knots(3, 0.0, 1.0, 20)
+    kvs = (kv, kv)   # 2D tensor product spline space
+
+    # define the geometry map
+    geo = geometry.quarter_annulus()   # NURBS quarter annulus
+
+    A = assemble.assemble_vf(stiffness_vf(2), kvs, geo=geo, symmetric=True)
+
+Any further input functions the assembler requires can be passed as further
+keyword arguments in the call to :func:`.assemble_vf`. The function will
+automatically detect whether the VForm has arity 1 or 2 and generate a vector
+or a matrix correspondingly.
+
+Manual compilation of the variational form
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Sometimes it may be necessary to directly work with the assembler class that
+results from compiling a :class:`VForm`.  The functions used for compilation
+are contained in the :mod:`pyiga.compile` module, and the resulting matrices
+can be computed using the :func:`pyiga.assemble.assemble` and
+:func:`pyiga.assemble.assemble_vector` functions for scalar- and vector-valued
+problems, respectively.
+**Note:** These interfaces are subject to change in the future.
+
+Using these functions, the Laplace variational form defined above can be
+assembled as follows::
 
     from pyiga import compile, assemble, bspline, geometry
 

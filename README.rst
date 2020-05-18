@@ -34,9 +34,7 @@ The ``notebooks`` directory contains several examples of how to use ``pyiga``:
 Installation
 ------------
 
-``pyiga`` is compatible with Python 2.7 as well as Python 3.5 and higher.
-**NB:** Python 2 support is only provided for compatibility and is not
-well tested. Python 3 is recommended.
+``pyiga`` is compatible with Python 3.6 and higher.
 
 Before installing, make
 sure you have recent versions of **Numpy**, **Scipy** and **Cython** installed

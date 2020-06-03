@@ -124,6 +124,20 @@ class HSpaceVis:
             Rd = [self.cell_to_rect(lv, c) for c in self.hspace.deactivated_cells(lv)]
             ax.add_collection(PatchCollection(Rd, facecolor=color_deact, edgecolor='black'));
 
+    def plot_level_cells(self, cells, lv, color_act='steelblue', color_deact='white'):
+        ax = plt.gca()
+        ax.set_aspect('equal')
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        from matplotlib.collections import PatchCollection
+        if color_act is not None:
+            Ra = [self.cell_to_rect(lv, c) for c in self.hspace.active_cells(lv) if c in cells]
+            ax.add_collection(PatchCollection(Ra, facecolor=color_act, edgecolor='black'))
+        if color_deact is not None:
+            Rd = [self.cell_to_rect(lv, c) for c in self.hspace.active_cells(lv) if c not in cells]
+            ax.add_collection(PatchCollection(Rd, facecolor=color_deact, edgecolor='black'))
+
     def vis_function(self, lv, jj):
         r = self.vis_rect(self.hspace.function_support(lv, jj))
         r.set_fill(False)
@@ -152,3 +166,19 @@ def plot_hierarchical_mesh(hspace, levels='all', levelwise=False, color_act='ste
         if levelwise:
             plt.subplot(1, len(levels), j+1)
         V.plot_level(lv, color_act=color_act, color_deact=color_deact if levelwise else None)
+
+def plot_hierarchical_cells(hspace, cells, color_act='steelblue', color_deact='white'):
+    """Visualize cells of a 2D hierarchical spline space.
+
+    Args:
+        hspace (:class:`.HSpace`): the space to be plotted
+        cells: dict of sets of selected active cells
+        color_act: the color to use for the selected cells
+        color_deact: the color to use for the remaining cells
+    """
+    V = HSpaceVis(hspace)
+    hmesh = hspace.hmesh
+    levels = tuple(range(hspace.numlevels))
+
+    for lv in levels:
+        V.plot_level_cells(cells.get(lv, {}), lv, color_act=color_act, color_deact=color_deact)

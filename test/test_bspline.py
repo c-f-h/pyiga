@@ -70,3 +70,20 @@ def test_mesh_span_indices():
     assert np.array_equal(kv.mesh_span_indices(), [3, 4, 5, 6])
     kv = make_knots(3, 0.0, 1.0, 4, mult=3)
     assert np.array_equal(kv.mesh_span_indices(), [3, 6, 9, 12])
+
+def test_hessian():
+    from pyiga.approx import interpolate
+
+    # 2D test
+    kvs = 2 * (make_knots(3, 0.0, 1.0, 4),)
+    grid = 2 * (np.linspace(0, 1, 7),)
+    u = BSplineFunc(kvs, interpolate(kvs, lambda x,y: x**2 + 4*x*y + 3*y**2))
+    hess = u.grid_hessian(grid)
+    assert np.allclose(hess, [2.0, 4.0, 6.0])   # (xx, xy, yy)
+
+    # 3D test
+    kvs = 3 * (make_knots(3, 0.0, 1.0, 4),)
+    grid = 3 * (np.linspace(0, 1, 5),)
+    u = BSplineFunc(kvs, interpolate(kvs, lambda x,y,z: x**2 + 3*x*z + 2*y*z))
+    hess = u.grid_hessian(grid)
+    assert np.allclose(hess, [2.0, 0.0, 3.0, 0.0, 2.0, 0.0])   # (xx, xy, xz, yy, yz, zz)

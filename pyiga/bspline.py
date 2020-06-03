@@ -592,6 +592,40 @@ class BSplineFunc:
             grad_components.append(apply_tprod(ops, self.coeffs))   # shape: shape(grid) x self.dim
         return np.stack(grad_components, axis=-1)   # shape: shape(grid) x self.dim x self.sdim
 
+    def grid_hessian(self, gridaxes):
+        """Evaluate the Hessian matrix of a scalar function on a tensor product grid.
+
+        Args:
+            gridaxes (seq): list of 1D vectors describing the tensor product grid.
+
+        .. note::
+
+            The gridaxes should be given in reverse order, i.e.,
+            the x axis last.
+
+        Returns:
+            ndarray: array of the components of the Hessian; symmetric part
+            only, linearized. I.e., in 2D, it contains per grid point a
+            3-component vector corresponding to the derivatives `(d_xx, d_xy,
+            d_yy)`, and in 3D, a 6-component vector with the derivatives
+            `(d_xx, d_xy, d_xz, d_yy, d_yz, d_zz)`.
+        """
+        assert self.dim == 1, 'Hessian only implemented for scalar functions'
+        assert len(gridaxes) == self.sdim, "Input has wrong dimension"
+        colloc = [collocation_derivs(self.kvs[i], gridaxes[i], derivs=2) for i in range(self.sdim)]
+
+        hess_components = []
+        for i in reversed(range(self.sdim)):  # x-component is the last one
+            for j in reversed(range(i+1)):
+                # compute vector of derivative indices
+                D = self.sdim * [0]
+                D[i] += 1
+                D[j] += 1
+
+                ops = [colloc[j][D[j]] for j in range(self.sdim)] # deriv. in i-th direction
+                hess_components.append(apply_tprod(ops, self.coeffs))   # shape: shape(grid) x self.dim
+        return np.stack(hess_components, axis=-1)   # shape: shape(grid) x self.dim x n_hess
+
     def transformed_jacobian(self, geo):
         """Create a function which evaluates the physical (transformed) gradient of the current
         function after a geometry transform."""

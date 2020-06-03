@@ -350,6 +350,9 @@ class HSpace:
         self.deactfun = [set()]
         self.disparity = disparity
         self.bdspecs = bdspecs
+        self._clear_cache()
+
+    def _clear_cache(self):
         self.__index_dirichlet = None
         self.__index_free_actfun = None
         self.__index_free_deactfun = None
@@ -434,54 +437,6 @@ class HSpace:
             return self.hmesh.deactivated[lv]
         else:
             return [self.deactivated_cells(lv) for lv in range(self.numlevels)]
-
-    def function_supp_cells_old(self, lv=None):
-        """If `lv` is specified, return the set of FUNCTION_SUPP cells on that level.
-        Otherwise, return a list containing, for each level, the set of new cells.
-        """
-        assert 0 <= lv < self.numlevels, 'Invalid level.'
-        if lv is not None:
-            out = dict()
-            out[lv] = self.hmesh.meshes[lv].support(self.actfun[lv] | self.deactfun[lv])
-            for i in range(max(0, lv - self.disparity), lv):
-                aux = self.hmesh.meshes[i].support(set(self.hmesh.function_grandparents(lv, self.actfun[lv] | self.deactfun[lv], i)) & self.actfun[i])
-                out[i] = set(aux)# & self.hmesh.active[i]
-                #print("out[",i,"] = ",out[i])
-                #for j in range(i+1,lv):
-                #    if j not in out:
-                #        out[j] = set()
-                #    out[j] |= set(self.hmesh.cell_babys(i,aux,j)) & self.hmesh.active[j]
-            return self.get_virtual_space(lv).hmesh.HMesh_cells(out)
-        else:
-            return [self.function_supp_cells(lv) for lv in range(self.numlevels)]
-
-    def cell_supp_cells_old(self, lv=None):
-        """If `lv` is specified, return the set of CELL_SUPP cells on that level.
-        Otherwise, return a list containing, for each level, the set of new cells.
-        """
-        assert 0 <= lv < self.numlevels, 'Invalid level.'
-        if lv is not None:
-            out = dict()
-            out[lv] = self.hmesh.meshes[lv].support(self.actfun[lv] | self.deactfun[lv])
-            for i in range(max(0, lv - self.disparity), lv):
-                aux = self.hmesh.meshes[i].support(
-                    #set(self.hmesh.function_grandparents(lv, self.actfun[lv] | self.deactfun[lv], i)) & self.actfun[i]
-                    set(
-                        self.hmesh.meshes[i].supported_in(
-                            self.hmesh.cell_grandparent(
-                                lv,
-                                self.hmesh.meshes[lv].support(self.actfun[lv]),
-                                i))) & self.actfun[i]
-                )
-                out[i] = set(aux)# & self.hmesh.active[i]
-                #print("out[",i,"] = ",out[i])
-                #for j in range(i+1,lv):
-                #    if j not in out:
-                #        out[j] = set()
-                #    out[j] |= set(self.hmesh.cell_babys(i,aux,j)) & self.hmesh.active[j]
-            return self.get_virtual_space(lv).hmesh.HMesh_cells(out)
-        else:
-            return [self.function_supp_cells(lv) for lv in range(self.numlevels)]
 
     def cell_extents(self, lv, c):
         """Return the extents (as a tuple of min/max pairs) of the cell `c` on level `lv`."""
@@ -1092,25 +1047,20 @@ class HSpace:
             marked[l-self.disparity] = marked.get(l-self.disparity, set()) | neighbors
             self._mark_recursive(l-self.disparity, marked)
 
-    def refine(self, marked_in, truncate=False):
+    def refine(self, marked, truncate=False):
         """Refine the given cells; `marked` is a dictionary which has the
         levels as indices and the list of marked cells on that level as values.
 
         Refinement procedure preserving the mesh-level disparity `self.disparity` following [Bracco, Gianelli, Vazquez, 2018].
         """
-        self._ensure_levels(max(marked_in.keys()) + 2)
+        self._ensure_levels(max(marked.keys()) + 2)
 
-        #new_cells = self.hmesh.refine(marked_in)
-        if self.disparity == np.inf:
-            marked = marked_in
-            new_cells = self.hmesh.refine(marked)
-        else:
-            aux = marked_in.copy()
+        if self.disparity < np.inf:
+            marked = marked.copy()
             for l in range(self.numlevels):
-                self._mark_recursive(l, aux, truncate=truncate)
-            marked = aux
-            new_cells = self.hmesh.refine(marked)
+                self._mark_recursive(l, marked, truncate=truncate)
 
+        new_cells = self.hmesh.refine(marked)
         mf = self._functions_to_deactivate(marked)
 
         for lv in range(len(self.hmesh.meshes) - 1):
@@ -1131,38 +1081,7 @@ class HSpace:
             # activate them on the finer level
             self.actfun[lv+1] |= newfuncs
 
-        self.__index_dirichlet = None
-        self.__index_free_actfun = None
-        self.__index_free_deactfun = None
-        self.__index_new = None
-        self.__index_trunc = None
-        self.__index_func_supp = None
-        self.__index_cell_supp = None
-        self.__index_global = None
-        self.__ravel_actfun = None
-        self.__ravel_deactfun = None
-        self.__ravel_actdeactfun = None
-        self.__ravel_dirichlet = None
-        self.__ravel_free_actfun = None
-        self.__ravel_free_deactfun = None
-        self.__ravel_free_actdeactfun = None
-        self.__ravel_new = None
-        self.__ravel_trunc = None
-        self.__ravel_func_supp = None
-        self.__ravel_cell_supp = None
-        self.__ravel_global = None
-        self.__cell_dirichlet = None
-        self.__cell_new = None
-        self.__cell_trunc = None
-        self.__cell_func_supp = None
-        self.__cell_cell_supp = None
-        self.__cell_global = None
-        self.__smooth_dirichlet = None
-        self.__smooth_new = None
-        self.__smooth_trunc = None
-        self.__smooth_func_supp = None
-        self.__smooth_cell_supp = None
-        self.__smooth_global = None
+        self._clear_cache()
 
     def get_virtual_space(self, level):
         assert 0 <= level < self.numlevels, 'Invalid level.'

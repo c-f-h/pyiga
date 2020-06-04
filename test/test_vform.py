@@ -160,7 +160,6 @@ def test_tostring():
     assert str(u) == 'u'
     assert str(Dx(u, 1)) == 'u_01(phys)'
     assert str(B[1,0]) == 'B_a[1,0]'
-    assert str(B.T) == 'transpose(B_a)'
     assert str(B.dot(g)) == 'dot(B_a, g_a)'
     assert str(B.dot(B)) == 'dot(B_a, B_a)'
 

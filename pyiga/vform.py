@@ -606,7 +606,9 @@ class Expr:
         """For a matrix expression, return its transpose."""
         if not self.is_matrix():
             raise TypeError('can only transpose matrices')
-        return TransposedMatrixExpr(self)
+        return LiteralMatrixExpr(
+                [[self[j,i] for j in range(self.shape[0])]
+                            for i in range(self.shape[1])])
 
     def ravel(self):
         """Ravel a matrix expression into a vector expression."""
@@ -853,16 +855,6 @@ class MatrixEntryExpr(Expr):
         return '{name}[{k}]'.format(name=self.x.var.name,
                 k=self.to_seq(self.i, self.j))
     base_complexity = 0
-
-class TransposedMatrixExpr(Expr):
-    def __init__(self, mat):
-        if not mat.is_matrix(): raise TypeError('can only transpose matrices')
-        self.shape = (mat.shape[1], mat.shape[0])
-        self.children = (mat,)
-    def __str__(self):
-        return 'transpose(%s)' % self.x
-    def at(self, i, j):
-        return self.x[j, i]
 
 class BroadcastExpr(Expr):
     """Simple broadcasting from scalars to arbitrary shapes."""

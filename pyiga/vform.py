@@ -97,7 +97,8 @@ class VForm:
 
         # predefined local variables with their generators (created on demand)
         self.predefined_vars = {
-            'Jac':         lambda self: grad(self.Geo, parametric=True),
+            # for spacetime, Jac still refers to the full d+1 Jacobian
+            'Jac':         lambda self: grad(self.Geo, dims=range(self.dim) if self.spacetime else None, parametric=True),
             'JacInv':      lambda self: inv(self.Jac),
             'GaussWeight': lambda self: self._gaussweight(),
             'W':           lambda self: self.GaussWeight * abs(det(self.Jac)),

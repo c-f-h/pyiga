@@ -1221,6 +1221,8 @@ def tree_print(expr, data=None, indent=''):
         stop = True
     elif expr.is_var_expr() or isinstance(expr, VolumeMeasureExpr) or isinstance(expr, PartialDerivExpr) or isinstance(expr, ConstExpr):
         s = str(expr)
+    elif isinstance(expr, BuiltinFuncExpr):
+        s = expr.funcname
     else:
         s = type(expr).__name__
 

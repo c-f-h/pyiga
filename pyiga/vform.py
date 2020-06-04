@@ -856,15 +856,13 @@ class MatrixEntryExpr(Expr):
                 k=self.to_seq(self.i, self.j))
     base_complexity = 0
 
-class BroadcastExpr(Expr):
-    """Simple broadcasting from scalars to arbitrary shapes."""
-    def __init__(self, expr, shape):
-        self.shape = shape
-        self.children = (expr,)
-    def __str__(self):
-        return str(self.x)
-    def at(self, *I):
-        return self.x
+def broadcast_expr(expr, shape):
+    if len(shape) == 1:
+        return LiteralVectorExpr(shape[0] * [expr])
+    elif len(shape) == 2:
+        return LiteralMatrixExpr(shape[0] * [shape[1] * [expr]])
+    else:
+        raise ValueError('invalid shape %s in broadcast_expr' % shape)
 
 class NegExpr(Expr):
     def __init__(self, expr):
@@ -903,9 +901,9 @@ def OperExpr(oper, x, y):
     elif len(x.shape) == len(y.shape):      # vec.vec or mat.mat
         return TensorOperExpr(oper, x, y)
     elif x.is_scalar() and not y.is_scalar():
-        return OperExpr(oper, BroadcastExpr(x, y.shape), y)
+        return OperExpr(oper, broadcast_expr(x, y.shape), y)
     elif not x.is_scalar() and y.is_scalar():
-        return OperExpr(oper, x, BroadcastExpr(y, x.shape))
+        return OperExpr(oper, x, broadcast_expr(y, x.shape))
     else:
         raise TypeError('operation not implemented for shapes: {} {} {}'.format(oper, x.shape, y.shape))
 

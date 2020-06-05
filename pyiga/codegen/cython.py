@@ -378,6 +378,9 @@ class AsmGenerator:
                 elif var.deriv == 1:
                     assert not s.physical, 'Jacobian of physical input field not implemented'
                     return 'np.ascontiguousarray(%s.grid_jacobian(self.gaussgrid))' % s.name
+                elif var.deriv == 2:
+                    assert not s.physical, 'Hessian of physical input field not implemented'
+                    return 'np.ascontiguousarray(%s.grid_hessian(self.gaussgrid))' % s.name
                 else:
                     assert False, 'invalid derivative %s for input field %s' % (var.deriv, s.name)
         elif s.startswith('@gaussweights'):

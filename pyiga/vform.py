@@ -12,6 +12,26 @@ import numbers
 def set_union(sets):
     return reduce(operator.or_, sets, set())
 
+def _D_to_indices(D):
+    """For a derivative tuple D, return the corresponding indices of the derivatives."""
+    D = list(D)
+    indices = []
+    while sum(D) > 0:
+        i = np.flatnonzero(D)[0]
+        D[i] -= 1
+        indices.append(i)
+    return tuple(indices)
+
+def _hessian_index(n, i, j):
+    """Return the index for derivative d_xi_xj into the linearized Hessian vector."""
+    if i > j:
+        i, j = j, i
+    H = np.zeros((n,n), dtype=int)
+    I,J = np.triu_indices(n)
+    n_i = len(I)
+    H[I,J] = np.arange(n_i)
+    return H[i,j]
+
 # Each AsmVar represents a named variable within the expression tree and has
 # either an Expr (`expr`) or a source (`src`) determining how it is defined.
 #
@@ -185,9 +205,13 @@ class VForm:
         inpvar = [v for v in self.vars.values() if v.src==inp and v.deriv==deriv]
         if len(inpvar) == 0:
             # no such var defined yet -- define it
-            assert deriv <= 1, 'not implemented'
-            deriv_tag = ('_grad') if deriv==1 else ''
-            shape = inp.shape + ((self.dim,) if deriv==1 else ())
+            assert 0 <= deriv <= 2, 'not implemented'
+            if deriv == 2 and inp.shape != ():
+                raise RuntimeError('Hessian only implemented for scalar input functions')
+            deriv_tag = ['', '_grad', '_hess'][deriv]
+            d = self.dim
+            deriv_dim = [(), (d,), ((d+1)*d//2,)][deriv]        # Hessian stores the symmetric part only
+            shape = inp.shape + deriv_dim
             varexpr = self.declare_sourced_var(inp.name + deriv_tag + '_a',
                     shape=shape, src=inp, deriv=deriv)
             return varexpr
@@ -450,11 +474,17 @@ class VForm:
         assert bool(e.parametric) == (not e.var.src.physical)
 
         assert e.var.deriv == 0     # we always refer to the base var without derivs
-        assert sum(e.D) == 1, 'higher order physical derivatives not implemented'
 
-        G = e._para_grad()
-        k = e.D.index(1)
-        return G[k]
+        if sum(e.D) == 1:
+            G = e._para_grad()
+            (k,) = _D_to_indices(e.D)
+            return G[k]
+        elif sum(e.D) == 2:
+            H = e._para_hess()
+            i,j = _D_to_indices(e.D)
+            return H[_hessian_index(len(e.D), i, j)]
+        else:
+            assert sum(e.D) == 1, 'higher order physical derivatives not implemented'
 
     def para_derivs_to_vars(self, e):
         if not e.physical and sum(e.D) > 0:
@@ -839,6 +869,14 @@ class VarRefExpr(Expr):
             return self.vf._input_as_expr(self.var.src, deriv=self.var.deriv+1)[self.I[0], :]
         else:
             assert False, 'gradient of matrices not implemented'
+
+    def _para_hess(self):
+        # generate a new expr for the parametric Hessian matrix (input vars only)
+        assert self.is_input_var_expr(), '_para_hess only handles input fields'
+        assert self.I == (), 'Hessian only implemented for scalar variables'
+        assert self.var.deriv == 0
+        assert sum(self.D) == 2
+        return self.vf._input_as_expr(self.var.src, deriv=2)
 
     def is_physical_deriv(self):
         return (not self.parametric)

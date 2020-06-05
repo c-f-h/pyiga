@@ -39,9 +39,9 @@ def test_asmatrix():
 
 def exprs_equal(expr1, expr2, simplify=False):
     if simplify:
-        from pyiga.vform import _literalize_helper
+        from pyiga.vform import _to_literal_vec_mat
         def simpl(expr):
-            expr = transform_expr(expr, _literalize_helper)
+            expr = transform_expr(expr, _to_literal_vec_mat)
             expr = transform_expr(expr, lambda e: e.fold_constants())
             return expr
         expr1 = simpl(expr1)
@@ -61,7 +61,7 @@ def test_dx():
     exprs_equal(u.dx(0).dx(1), u.dx(1).dx(0))
     exprs_equal(vf.Geo.dx(1, parametric=True)[0], vf.Geo[0].dx(1, parametric=True))
     G = vf.let('G', vf.Geo)
-    exprs_equal(G.dx(0, parametric=True)[1], vf.Geo[1].dx(0, parametric=True))
+    exprs_equal(G.dx(0, parametric=True)[1], G[1].dx(0, parametric=True))
 
 def test_vectorexpr():
     vf = VForm(3)
@@ -160,7 +160,7 @@ def test_tostring():
     assert str(u) == 'u'
     assert str(Dx(u, 1)) == 'u_01(phys)'
     assert str(B[1,0]) == 'B_a[1,0]'
-    assert str(B.dot(g)) == 'dot(B_a, g_a)'
-    assert str(B.dot(B)) == 'dot(B_a, B_a)'
+    assert str(B.dot(g)) == 'dot(((B_a[0,0], B_a[0,1]),\n (B_a[1,0], B_a[1,1])), (g_a[0], g_a[1]))'
+    assert str(B.dot(B)) == 'dot(((B_a[0,0], B_a[0,1]),\n (B_a[1,0], B_a[1,1])), ((B_a[0,0], B_a[0,1]),\n (B_a[1,0], B_a[1,1])))'
 
     tree_print(tmp)

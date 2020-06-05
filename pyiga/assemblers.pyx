@@ -378,7 +378,6 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
             double[:, :, :, ::1] _JacInv,
         ) nogil:
         cdef double GaussWeight
-        cdef double Jac[4]
         cdef double _tmp2
         cdef double _tmp1
         cdef double gw1
@@ -397,18 +396,14 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
                 JacInv = &_JacInv[i0, i1, 0, 0]
 
                 GaussWeight = (gw0 * gw1)
-                Jac[0] = geo_grad_a[0]
-                Jac[1] = geo_grad_a[1]
-                Jac[2] = geo_grad_a[2]
-                Jac[3] = geo_grad_a[3]
-                _tmp2 = ((Jac[0] * Jac[3]) - (Jac[1] * Jac[2]))
+                _tmp2 = ((geo_grad_a[0] * geo_grad_a[3]) - (geo_grad_a[1] * geo_grad_a[2]))
                 _tmp1 = (1.0 / _tmp2)
                 W = (GaussWeight * fabs(_tmp2))
                 _W[i0, i1] = W
-                JacInv[0] = (_tmp1 * Jac[3])
-                JacInv[1] = (_tmp1 * -Jac[1])
-                JacInv[2] = (_tmp1 * -Jac[2])
-                JacInv[3] = (_tmp1 * Jac[0])
+                JacInv[0] = (_tmp1 * geo_grad_a[3])
+                JacInv[1] = (_tmp1 * -geo_grad_a[1])
+                JacInv[2] = (_tmp1 * -geo_grad_a[2])
+                JacInv[3] = (_tmp1 * geo_grad_a[0])
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -542,7 +537,6 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
             double[:, :, :, ::1] _JacInv,
         ) nogil:
         cdef double GaussWeight
-        cdef double Jac[4]
         cdef double _tmp2
         cdef double _tmp1
         cdef double gw1
@@ -561,18 +555,14 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
                 JacInv = &_JacInv[i0, i1, 0, 0]
 
                 GaussWeight = (gw0 * gw1)
-                Jac[0] = geo_grad_a[0]
-                Jac[1] = geo_grad_a[1]
-                Jac[2] = geo_grad_a[2]
-                Jac[3] = geo_grad_a[3]
-                _tmp2 = ((Jac[0] * Jac[3]) - (Jac[1] * Jac[2]))
+                _tmp2 = ((geo_grad_a[0] * geo_grad_a[3]) - (geo_grad_a[1] * geo_grad_a[2]))
                 _tmp1 = (1.0 / _tmp2)
                 W = (GaussWeight * fabs(_tmp2))
                 _W[i0, i1] = W
-                JacInv[0] = (_tmp1 * Jac[3])
-                JacInv[1] = (_tmp1 * -Jac[1])
-                JacInv[2] = (_tmp1 * -Jac[2])
-                JacInv[3] = (_tmp1 * Jac[0])
+                JacInv[0] = (_tmp1 * geo_grad_a[3])
+                JacInv[1] = (_tmp1 * -geo_grad_a[1])
+                JacInv[2] = (_tmp1 * -geo_grad_a[2])
+                JacInv[3] = (_tmp1 * geo_grad_a[0])
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1507,7 +1497,6 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
             double[:, :, :, :, ::1] _JacInv,
         ) nogil:
         cdef double GaussWeight
-        cdef double Jac[9]
         cdef double _tmp5
         cdef double _tmp4
         cdef double _tmp3
@@ -1533,31 +1522,22 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
                     JacInv = &_JacInv[i0, i1, i2, 0, 0]
 
                     GaussWeight = ((gw0 * gw1) * gw2)
-                    Jac[0] = geo_grad_a[0]
-                    Jac[1] = geo_grad_a[1]
-                    Jac[2] = geo_grad_a[2]
-                    Jac[3] = geo_grad_a[3]
-                    Jac[4] = geo_grad_a[4]
-                    Jac[5] = geo_grad_a[5]
-                    Jac[6] = geo_grad_a[6]
-                    Jac[7] = geo_grad_a[7]
-                    Jac[8] = geo_grad_a[8]
-                    _tmp5 = ((Jac[3] * Jac[7]) - (Jac[4] * Jac[6]))
-                    _tmp4 = ((Jac[3] * Jac[8]) - (Jac[5] * Jac[6]))
-                    _tmp3 = ((Jac[4] * Jac[8]) - (Jac[5] * Jac[7]))
-                    _tmp2 = (((Jac[0] * _tmp3) - (Jac[1] * _tmp4)) + (Jac[2] * _tmp5))
+                    _tmp5 = ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))
+                    _tmp4 = ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6]))
+                    _tmp3 = ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))
+                    _tmp2 = (((geo_grad_a[0] * _tmp3) - (geo_grad_a[1] * _tmp4)) + (geo_grad_a[2] * _tmp5))
                     _tmp1 = (1.0 / _tmp2)
                     W = (GaussWeight * fabs(_tmp2))
                     _W[i0, i1, i2] = W
                     JacInv[0] = (_tmp1 * _tmp3)
-                    JacInv[1] = (_tmp1 * -((Jac[1] * Jac[8]) - (Jac[2] * Jac[7])))
-                    JacInv[2] = (_tmp1 * ((Jac[1] * Jac[5]) - (Jac[2] * Jac[4])))
+                    JacInv[1] = (_tmp1 * -((geo_grad_a[1] * geo_grad_a[8]) - (geo_grad_a[2] * geo_grad_a[7])))
+                    JacInv[2] = (_tmp1 * ((geo_grad_a[1] * geo_grad_a[5]) - (geo_grad_a[2] * geo_grad_a[4])))
                     JacInv[3] = (_tmp1 * -_tmp4)
-                    JacInv[4] = (_tmp1 * ((Jac[0] * Jac[8]) - (Jac[2] * Jac[6])))
-                    JacInv[5] = (_tmp1 * -((Jac[0] * Jac[5]) - (Jac[2] * Jac[3])))
+                    JacInv[4] = (_tmp1 * ((geo_grad_a[0] * geo_grad_a[8]) - (geo_grad_a[2] * geo_grad_a[6])))
+                    JacInv[5] = (_tmp1 * -((geo_grad_a[0] * geo_grad_a[5]) - (geo_grad_a[2] * geo_grad_a[3])))
                     JacInv[6] = (_tmp1 * _tmp5)
-                    JacInv[7] = (_tmp1 * -((Jac[0] * Jac[7]) - (Jac[1] * Jac[6])))
-                    JacInv[8] = (_tmp1 * ((Jac[0] * Jac[4]) - (Jac[1] * Jac[3])))
+                    JacInv[7] = (_tmp1 * -((geo_grad_a[0] * geo_grad_a[7]) - (geo_grad_a[1] * geo_grad_a[6])))
+                    JacInv[8] = (_tmp1 * ((geo_grad_a[0] * geo_grad_a[4]) - (geo_grad_a[1] * geo_grad_a[3])))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1714,7 +1694,6 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
             double[:, :, :, :, ::1] _JacInv,
         ) nogil:
         cdef double GaussWeight
-        cdef double Jac[9]
         cdef double _tmp5
         cdef double _tmp4
         cdef double _tmp3
@@ -1740,31 +1719,22 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
                     JacInv = &_JacInv[i0, i1, i2, 0, 0]
 
                     GaussWeight = ((gw0 * gw1) * gw2)
-                    Jac[0] = geo_grad_a[0]
-                    Jac[1] = geo_grad_a[1]
-                    Jac[2] = geo_grad_a[2]
-                    Jac[3] = geo_grad_a[3]
-                    Jac[4] = geo_grad_a[4]
-                    Jac[5] = geo_grad_a[5]
-                    Jac[6] = geo_grad_a[6]
-                    Jac[7] = geo_grad_a[7]
-                    Jac[8] = geo_grad_a[8]
-                    _tmp5 = ((Jac[3] * Jac[7]) - (Jac[4] * Jac[6]))
-                    _tmp4 = ((Jac[3] * Jac[8]) - (Jac[5] * Jac[6]))
-                    _tmp3 = ((Jac[4] * Jac[8]) - (Jac[5] * Jac[7]))
-                    _tmp2 = (((Jac[0] * _tmp3) - (Jac[1] * _tmp4)) + (Jac[2] * _tmp5))
+                    _tmp5 = ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))
+                    _tmp4 = ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6]))
+                    _tmp3 = ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))
+                    _tmp2 = (((geo_grad_a[0] * _tmp3) - (geo_grad_a[1] * _tmp4)) + (geo_grad_a[2] * _tmp5))
                     _tmp1 = (1.0 / _tmp2)
                     W = (GaussWeight * fabs(_tmp2))
                     _W[i0, i1, i2] = W
                     JacInv[0] = (_tmp1 * _tmp3)
-                    JacInv[1] = (_tmp1 * -((Jac[1] * Jac[8]) - (Jac[2] * Jac[7])))
-                    JacInv[2] = (_tmp1 * ((Jac[1] * Jac[5]) - (Jac[2] * Jac[4])))
+                    JacInv[1] = (_tmp1 * -((geo_grad_a[1] * geo_grad_a[8]) - (geo_grad_a[2] * geo_grad_a[7])))
+                    JacInv[2] = (_tmp1 * ((geo_grad_a[1] * geo_grad_a[5]) - (geo_grad_a[2] * geo_grad_a[4])))
                     JacInv[3] = (_tmp1 * -_tmp4)
-                    JacInv[4] = (_tmp1 * ((Jac[0] * Jac[8]) - (Jac[2] * Jac[6])))
-                    JacInv[5] = (_tmp1 * -((Jac[0] * Jac[5]) - (Jac[2] * Jac[3])))
+                    JacInv[4] = (_tmp1 * ((geo_grad_a[0] * geo_grad_a[8]) - (geo_grad_a[2] * geo_grad_a[6])))
+                    JacInv[5] = (_tmp1 * -((geo_grad_a[0] * geo_grad_a[5]) - (geo_grad_a[2] * geo_grad_a[3])))
                     JacInv[6] = (_tmp1 * _tmp5)
-                    JacInv[7] = (_tmp1 * -((Jac[0] * Jac[7]) - (Jac[1] * Jac[6])))
-                    JacInv[8] = (_tmp1 * ((Jac[0] * Jac[4]) - (Jac[1] * Jac[3])))
+                    JacInv[7] = (_tmp1 * -((geo_grad_a[0] * geo_grad_a[7]) - (geo_grad_a[1] * geo_grad_a[6])))
+                    JacInv[8] = (_tmp1 * ((geo_grad_a[0] * geo_grad_a[4]) - (geo_grad_a[1] * geo_grad_a[3])))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)

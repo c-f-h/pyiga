@@ -32,7 +32,7 @@ def set_union(sets):
 # BasisFun object.
 
 class AsmVar:
-    def __init__(self, name, src, shape, is_array=False, symmetric=False, deriv=None, depend_dims=None):
+    def __init__(self, vf, name, src, shape, is_array=False, symmetric=False, deriv=None, depend_dims=None):
         self.name = name
         if isinstance(src, Expr):
             self.expr = src
@@ -48,7 +48,7 @@ class AsmVar:
         self.symmetric = (len(self.shape) == 2 and symmetric)
         self.deriv = deriv      # for input fields only
         self.depend_dims = depend_dims  # for input fields only (which axes does it depend on)
-        self.as_expr = make_var_expr(self)
+        self.as_expr = make_var_expr(vf, self)
 
     def __str__(self):
         return self.name
@@ -112,8 +112,7 @@ class VForm:
                 depend_dims=[i])
             for i in range(self.dim)
         ]
-        return self.let('GaussWeight', reduce(operator.mul, gw))
-        #return self.declare_sourced_var('GaussWeight', shape=(), src='@GaussWeight')
+        return reduce(operator.mul, gw)
 
     def basisfuns(self, components=(None,None), spaces=(0,0)):
         """Obtain expressions representing the basis functions for this vform.
@@ -175,10 +174,10 @@ class VForm:
         """
         inp = InputField(name, shape, physical, self, updatable)
         self.inputs.append(inp)
-        return self._input_as_varexpr(inp)
+        return self._input_as_expr(inp)
 
-    def _input_as_varexpr(self, inp, deriv=0):
-        """Return a VarExpr which refers to the given InputField with the desired derivative.
+    def _input_as_expr(self, inp, deriv=0):
+        """Return an expr which refers to the given InputField with the desired derivative.
 
         This checks if a suitable variable has already been defined and if not, defines one.
         """
@@ -220,11 +219,11 @@ class VForm:
 
     def let(self, name, expr, symmetric=False):
         """Define a variable with the given name which has the given expr as its value."""
-        return self.set_var(name, AsmVar(name, expr, shape=None, symmetric=symmetric)).as_expr
+        return self.set_var(name, AsmVar(self, name, expr, shape=None, symmetric=symmetric)).as_expr
 
     def declare_sourced_var(self, name, shape, src, symmetric=False, deriv=0, depend_dims=None):
         return self.set_var(name,
-            AsmVar(name, src=src, shape=shape, is_array=True,
+            AsmVar(self, name, src=src, shape=shape, is_array=True,
                 symmetric=symmetric, deriv=deriv, depend_dims=depend_dims)).as_expr
 
     def add(self, expr):
@@ -300,12 +299,8 @@ class VForm:
             return self.vars[name].as_expr
         elif name in self.predefined_vars:
             expr = self.predefined_vars[name](self)
-            if isinstance(expr, VarExpr):
-                # no point in defining a new name for what is already a var
-                return expr
-            else:
-                # define it as a new named variable and return it
-                return self.let(name, expr)
+            # define it as a new named variable and return it
+            return self.let(name, expr)
         else:
             msg = "'{0}' object has no attribute '{1}'"
             raise AttributeError(msg.format(type(self).__name__, name))
@@ -318,7 +313,7 @@ class VForm:
         # add virtual basis function nodes to the graph
         G.add_nodes_from(self.basis_funs)
 
-        for e in self.all_exprs(type=VarExpr):
+        for e in self.all_exprs(type=VarRefExpr):
             var = e.var
             G.add_node(var)
             if var.expr:
@@ -403,19 +398,25 @@ class VForm:
             if filter is None or filter(e):
                 yield e
 
-    def transform_gradient_to_physical(self, G):
-        if G.is_vector():   # gradient of a scalar function
-            return self.JacInv.T.dot(G)
-        elif G.is_matrix(): # Jacobian of a vector function
-            return (self.JacInv.T.dot(G.T)).T
-        else:
-            raise ValueError('invalid gradient of shape %s' % G.shape)
-
     def replace_physical_derivs(self, e):
-        if not e.physical:
-            return
         if sum(e.D) == 0:       # no derivatives?
             return e.make_parametric()
+
+        dst_phys = e.is_physical_deriv()
+        if isinstance(e, VarRefExpr):
+            src_phys = e.var.src.physical
+        else:
+            # derivative of input function - always defined in parametric coordinates
+            src_phys = False
+
+        if (not src_phys) and (not dst_phys):
+            return  # parametric derivative of parametric variable - no transformation
+        if src_phys and dst_phys:
+            return  # physical derivative of physical field - no transformation
+        if src_phys and (not dst_phys):
+            raise RuntimeError('cannot compute parametric derivative of physical input field')
+
+        # only remaining case: source parametric with physical derivative
 
         if self.spacetime:
             # the following assumes a space-time cylinder -- can keep time derivatives parametric,
@@ -438,6 +439,22 @@ class VForm:
                 return inner(self.JacInv[:, k], grad(e.without_derivs(), parametric=True))
 
         assert False, 'higher order physical derivatives not implemented'
+
+    def insert_input_field_derivs(self, e):
+        if sum(e.D) == 0:
+            return
+        assert e.is_input_var_expr()    # only those can have nonzero derivatives
+
+        # either parametric derivatives of parametric input field,
+        # or physical derivative of physical input field
+        assert bool(e.parametric) == (not e.var.src.physical)
+
+        assert e.var.deriv == 0     # we always refer to the base var without derivs
+        assert sum(e.D) == 1, 'higher order physical derivatives not implemented'
+
+        G = e._para_grad()
+        k = e.D.index(1)
+        return G[k]
 
     def para_derivs_to_vars(self, e):
         if not e.physical and sum(e.D) > 0:
@@ -462,7 +479,8 @@ class VForm:
             complexity = self.compute_recursive(lambda e, cc: e.base_complexity + sum(cc))
 
             # roots of expression trees for used variables and kernel expressions
-            all_root_exprs = [e.var.expr for e in self.collect(type=VarExpr, filter=lambda e: e.var.expr)] + list(self.exprs)
+            used_vars = set(e.var for e in self.collect(type=VarRefExpr, filter=lambda e: e.var.expr))
+            all_root_exprs = [var.expr for var in used_vars] + list(self.exprs)
 
             # Count occurrences of exprs according to their hashes.
             # Each var is visited once because of deep=False.
@@ -489,8 +507,11 @@ class VForm:
             self.transform(lambda e: var if hashes[e] == h else None)
         return tmpidx[0] > 0    # did we do anything?
 
-    def expand_mat_vec(self):
-        self.transform(_literalize_helper)
+    def replace_trivial_vars(self, e):
+        if e.var.expr:
+            inner_expr = e.get_underlying_expr()
+            if isinstance(inner_expr, VarRefExpr):
+                return inner_expr
 
     def finalize(self, do_precompute=True):
         """Performs standard transforms and dependency analysis."""
@@ -498,14 +519,19 @@ class VForm:
         self.transform(lambda e: self.W, type=VolumeMeasureExpr)
         # replace physical derivs by proper expressions in terms of parametric derivs
         self.transform(self.replace_physical_derivs, type=PartialDerivExpr)
+        self.transform(self.replace_physical_derivs, type=VarRefExpr)
+        # replace derivatives of input fields by the proper array variables
+        self.transform(self.insert_input_field_derivs, type=VarRefExpr)
         # replace parametric derivs by named vars (for readability only)
         self.transform(self.para_derivs_to_vars, type=PartialDerivExpr, deep=False)
         # convert all expressions to scalar form
-        self.expand_mat_vec()
+        self.transform(_to_literal_vec_mat)
         # fold constants, eliminate zeros
         self.transform(lambda e: e.fold_constants())
         # find common subexpressions and extract them into named variables
         self.extract_common_expressions()
+        # eliminate variables which directly refer to other variables
+        self.transform(self.replace_trivial_vars, type=VarRefExpr)
         # perform dependency analysis for expressions and variables
         self.dependency_analysis(do_precompute=do_precompute)
 
@@ -677,20 +703,24 @@ class Expr:
             return new
         else:
             # we only care about reproducing the tree structure --
-            # make sure we don't clone VarExprs etc which depend on identity
+            # make sure we don't clone exprs which depend on identity
+            # (are any such left? VarExpr no longer exists)
             return self
 
     base_complexity = 1
 
-def make_var_expr(var):
+def make_var_expr(vf, var):
     """Create an expression of the proper shape which refers to the variable `var`."""
     shape = var.shape
     if shape is ():
-        return ScalarVarExpr(var)
+        return VarRefExpr(var, (), vf)
     elif len(shape) == 1:
-        return VectorVarExpr(var)
+        return LiteralVectorExpr(
+                [VarRefExpr(var, (i,), vf) for i in range(shape[0])])
     elif len(shape) == 2:
-        return MatrixVarExpr(var)
+        return LiteralMatrixExpr(
+                [[VarRefExpr(var, (i,j), vf) for j in range(shape[1])]
+                                             for i in range(shape[0])])
     else:
         assert False, 'invalid shape'
 
@@ -711,71 +741,6 @@ class ConstExpr(Expr):
     def _dx_impl(self, k, times, parametric):
         return as_expr(0) if times > 0 else self
     base_complexity = 0
-
-class VarExpr(Expr):
-    """Abstract base class for exprs which refer to named variables."""
-    def is_var_expr(self):
-        return True
-    def is_input_var_expr(self):
-        return isinstance(self.var.src, InputField)
-    def __str__(self):
-        return self.var.name
-    def depends(self):
-        return set((self.var,))
-    def hash_key(self):
-        return (self.var.name,)
-    def _para_grad(self):
-        # generate a new VarExpr for the parametric derivative
-        # (input vars only)
-        assert self.is_input_var_expr(), '_para_grad only handles input fields'
-        vf = self.var.src.vform
-        return vf._input_as_varexpr(self.var.src, deriv=self.var.deriv+1)
-    def find_vf(self):
-        if self.is_input_var_expr():
-            return self.var.src.vform
-        elif self.var.expr:
-            return self.var.expr.find_vf()
-    base_complexity = 0
-
-class ScalarVarExpr(VarExpr):
-    def __init__(self, var):
-        self.var = var
-        self.shape = ()
-        self.children = ()
-    def _dx_impl(self, k, times, parametric):
-        if self.is_input_var_expr():
-            # for computing the derivative of an input field, we go through the
-            # gradient since input fields can only compute the full gradient at
-            # once
-            assert self.var.deriv == 0 and times == 1, 'only first derivative of input fields supported'
-            return grad(self, parametric=parametric)[k]
-        elif self.var.expr:
-            # in case of a variable, compute derivative of the underlying expression
-            return Dx(self.var.expr, k, times, parametric=parametric)
-        else:
-            raise TypeError('do not know how to compute derivative of %s' % self.var.name)
-    def gencode(self):
-        return self.var.name
-
-class VectorVarExpr(VarExpr):
-    def __init__(self, var):
-        self.var = var
-        self.shape = var.shape
-        assert len(self.shape) == 1
-        self.children = ()
-    def at(self, i):
-        return VectorEntryExpr(self, i)
-
-class MatrixVarExpr(VarExpr):
-    """Matrix expression which is represented by a matrix reference and shape."""
-    def __init__(self, var):
-        self.var = var
-        self.shape = tuple(var.shape)
-        assert len(self.shape) == 2
-        self.symmetric = var.symmetric
-        self.children = ()
-    def at(self, i, j):
-        return MatrixEntryExpr(self, i, j)
 
 class LiteralVectorExpr(Expr):
     """Vector expression which is represented by a list of individual expressions."""
@@ -810,51 +775,113 @@ class LiteralMatrixExpr(Expr):
         return self.children[i * self.shape[1] + j]
     base_complexity = 0
 
-class VectorEntryExpr(Expr):
-    def __init__(self, x, i):
-        assert isinstance(x, VectorVarExpr)   # can only index named vectors
+class VarRefExpr(Expr):
+    """A scalar expression which refers to an entry of a variable or a derivative thereof."""
+    def __init__(self, var, I, vf, D=None, parametric=False):
+        assert isinstance(var, AsmVar)
+        I = tuple(I)
+        assert len(I) == len(var.shape)
         self.shape = ()
-        assert x.is_vector(), 'indexed expression is not a vector'
-        self.i = int(i)
-        self.children = (x,)
+        self.var = var
+        self.I = I
+        self.children = ()
+        self.vf = vf
+        if D is None:
+            D = vf.dim * (0,)
+        self.D = tuple(D)
+        assert sum(self.D) == 0 or self.is_input_var_expr(),\
+                'derivatives only valid for input vars'
+        self.parametric = parametric
+
+    def depends(self):
+        return set((self.var,))
+
     def __str__(self):
-        return '%s[%i]' % (self.x.var.name, self.i)
+        if len(self.I) > 0:
+            join_I = ','.join(str(i) for i in self.I)
+            s = '%s[%s]' % (self.var.name, join_I)
+        else:
+            s = self.var.name
+        if sum(self.D) != 0:
+            s += '_' + ''.join(str(k) for k in self.D)
+            s += '(para)' if self.parametric else '(phys)'
+        return s
+
+    def hash_key(self):
+        return (self.var.name, self.I, self.D, self.parametric)
+
+    def to_seq(self):
+        if len(self.I) == 1:
+            return self.I[0]
+        else:
+            i, j = self.I
+            if self.var.symmetric and i > j:
+                i, j = j, i
+            return i * self.var.shape[0] + j
+
+    def gencode(self):
+        if self.I == ():
+            return self.var.name
+        else:
+            return '{x}[{i}]'.format(x=self.var.name, i=self.to_seq())
+
+    def is_var_expr(self):
+        return True
+    def is_input_var_expr(self):
+        return isinstance(self.var.src, InputField)
+
+    def _para_grad(self):
+        # generate a new expr for the parametric gradient (input vars only)
+        assert self.is_input_var_expr(), '_para_grad only handles input fields'
+        if len(self.I) == 0:
+            return self.vf._input_as_expr(self.var.src, deriv=self.var.deriv+1)
+        elif len(self.I) == 1:
+            return self.vf._input_as_expr(self.var.src, deriv=self.var.deriv+1)[self.I[0], :]
+        else:
+            assert False, 'gradient of matrices not implemented'
+
+    def is_physical_deriv(self):
+        return (not self.parametric)
+
+    def make_parametric(self):
+        if self.parametric:
+            return self
+        else:
+            return VarRefExpr(self.var, self.I, self.vf, self.D, parametric=True)
+
+    def without_derivs(self):
+        """Return a reference to the underlying variable without derivatives."""
+        return VarRefExpr(self.var, self.I, self.vf, len(self.D) * (0,), parametric=True)
+
+    def get_underlying_expr(self):
+        # for a var defined using an expr, get the corresponding scalar expr
+        assert self.var.expr, 'only valid for expr-based vars'
+        if self.I == ():
+            return self.var.expr
+        elif len(self.I) == 1:
+            return self.var.expr[self.I[0]]
+        else:
+            return self.var.expr[self.I]
+
     def _dx_impl(self, k, times, parametric):
-        if self.x.is_input_var_expr():
-            # for computing the derivative of one component of an input
-            # field, we go through the gradient since input fields
-            # can only compute the full gradient at once
-            assert times == 1, 'only first derivative of input field components supported'
-            return grad(self.x, parametric=parametric)[self.i, k]
-        elif self.x.var.expr:
+        if not (parametric == self.parametric or sum(self.D) == 0):
+            raise RuntimeError('cannot mix physical and parametric derivatives')
+        if self.is_input_var_expr():
+            # For input vars, simply create a symbolic reference to the partial
+            # derivative.  Actual derivatives will be substituted in a
+            # transformation step.
+            Dnew = list(self.D)
+            Dnew[k] += times
+            return VarRefExpr(self.var, self.I, self.vf, Dnew, parametric)
+        elif self.var.expr:
             # in case of a variable, compute derivative of the underlying expression
-            return Dx(self.x.var.expr[self.i], k, times, parametric=parametric)
+            return Dx(self.get_underlying_expr(), k, times, parametric=parametric)
         else:
             raise TypeError('do not know how to compute derivative of %s' % self.x.var.name)
-    def hash_key(self):
-        return (self.i,)
-    def gencode(self):
-        return '{x}[{i}]'.format(x=self.x.var.name, i=self.i)
-    base_complexity = 0
 
-class MatrixEntryExpr(Expr):
-    def __init__(self, mat, i, j):
-        assert isinstance(mat, MatrixVarExpr)
-        self.shape = ()
-        self.i = i
-        self.j = j
-        self.children = (mat,)
-    def __str__(self):
-        return '%s[%i,%i]' % (self.x.var.name, self.i, self.j)
-    def to_seq(self, i, j):
-        if self.x.symmetric and i > j:
-            i, j = j, i
-        return i * self.x.shape[0] + j
-    def hash_key(self):
-        return (self.i, self.j)
-    def gencode(self):
-        return '{name}[{k}]'.format(name=self.x.var.name,
-                k=self.to_seq(self.i, self.j))
+    def find_vf(self):
+        return self.vf
+
     base_complexity = 0
 
 def broadcast_expr(expr, shape):
@@ -1065,9 +1092,14 @@ class PartialDerivExpr(Expr):
         """Return the underlying basis function without derivatives."""
         return PartialDerivExpr(self.basisfun, len(self.D) * (0,), physical=False)
 
+    def is_physical_deriv(self):
+        return self.physical
+
     def make_parametric(self):
-        assert self.physical, 'derivative is already parametric'
-        return PartialDerivExpr(self.basisfun, self.D, physical=False)
+        if self.physical:
+            return PartialDerivExpr(self.basisfun, self.D, physical=False)
+        else:
+            return self
 
     def _dx_impl(self, k, times, parametric):
         Dnew = list(self.D)
@@ -1191,7 +1223,7 @@ def mapexprs(exprs, fun, deep=False):
                 var = e.var
                 recurse_children(var.expr)
                 var.expr = fun(var.expr)
-                result.append(e)
+                result.append(fun(e))
             else:
                 recurse_children(e)
                 result.append(fun(e))
@@ -1214,12 +1246,8 @@ def transform_expr(expr, fun, type=None, deep=False):
     return transform_exprs((expr,), fun, type=type, deep=deep)[0]
 
 def tree_print(expr, data=None, indent=''):
-    stop = False
     if hasattr(expr, 'oper'):
         s = '(%s)' % expr.oper
-    elif isinstance(expr, VectorEntryExpr) or isinstance(expr, MatrixEntryExpr):
-        s = str(expr)
-        stop = True
     elif expr.is_var_expr() or isinstance(expr, VolumeMeasureExpr) or isinstance(expr, PartialDerivExpr) or isinstance(expr, ConstExpr):
         s = str(expr)
     elif isinstance(expr, BuiltinFuncExpr):
@@ -1231,14 +1259,14 @@ def tree_print(expr, data=None, indent=''):
         print(indent + s)
     else:
         print(indent + s + ' (%s)' % data[expr])
-    if not stop:
-        for c in expr.children:
-            tree_print(c, data, indent + '  ')
+
+    for c in expr.children:
+        tree_print(c, data, indent + '  ')
 
 def exprhash(expr):
     return expr.hash(tuple(exprhash(c) for c in expr.children))
 
-def _literalize_helper(e):
+def _to_literal_vec_mat(e):
     """Convert all matrix and vector expressions into literal expressions,
     i.e., into elementwise scalar expressions."""
     if e.is_var_expr():
@@ -1296,44 +1324,18 @@ def grad(expr, dims=None, parametric=False):
     the parameter domain is computed. By default, the gradient is computed in
     physical coordinates (transformed by the geometry map).
     """
-    if expr.is_input_var_expr():
-        if parametric:
-            if expr.var.src.physical:
-                raise RuntimeError('cannot compute parametric gradient of physical input field')
-            G = expr._para_grad()
-        else:   # physical gradient
-            if expr.var.src.physical:
-                G = expr._para_grad()   # function is already defined in physical coordinates
-            else:
-                # to support higher derivatives, we would have to do it like for BasisFuns:
-                # have a class like PartialDerivExpr (or use VarExpr for this? - currently
-                # the deriv is stored in the AsmVar!) which keeps track of the derivatives,
-                # and finally replace it with the proper expression in a transformation step
-                assert expr.var.deriv == 0, \
-                        'only first-order derivatives of transformed gradients implemented'
-                vf = expr.find_vf()
-                G = vf.transform_gradient_to_physical(expr._para_grad())
-
-        if dims is not None:
-            if G.is_vector():
-                G = G[dims]
-            elif G.is_matrix():
-                G = G[:, dims]
-            else:
-                raise TypeError('dims not supported for gradient of shape %s' % G.shape)
-        return G
-    elif expr.is_vector():
-        return as_matrix([grad(z, dims=dims, parametric=parametric)
-            for z in expr])  # compute Jacobian of vector expression
-    else:
-        if not expr.is_scalar():
-            raise TypeError('cannot compute gradient for expr of shape %s' % expr.shape)
+    if expr.is_scalar():
         if dims is None:
             vf = expr.find_vf()
             if not vf:
                 raise ValueError('could not automatically determine dimensions - please specify dims')
             dims = vf.spacedims
-        return LiteralVectorExpr(Dx(expr, k, parametric=parametric) for k in dims)
+        return as_vector(Dx(expr, k, parametric=parametric) for k in dims)
+    elif expr.is_vector():
+        # compute Jacobian of vector expression
+        return as_matrix([grad(z, dims=dims, parametric=parametric) for z in expr])
+    else:
+        raise TypeError('cannot compute gradient for expr of shape %s' % expr.shape)
 
 def div(expr, parametric=False):
     """The divergence of a vector-valued expressions, resulting in a scalar."""

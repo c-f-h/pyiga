@@ -18,6 +18,13 @@ def test_arithmetic():
     assert (3 / g).shape == ()
     assert (3 * grad(u)).shape == (2,)
     assert (grad(v) / 3).shape == (2,)
+    exprs_equal(f**1, f)
+    exprs_equal(f**2, f*f)
+    exprs_equal(f**as_expr(3), f*f*f)
+    exprs_equal(f**0, as_expr(1))
+    exprs_equal(f**-1, 1.0 / f)
+    exprs_equal(f**-2, 1.0 / (f*f))
+
 
 def test_asvector():
     vf = VForm(2)

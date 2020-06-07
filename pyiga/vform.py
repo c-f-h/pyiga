@@ -32,6 +32,16 @@ def _hessian_index(n, i, j):
     H[I,J] = np.arange(n_i)
     return H[i,j]
 
+def _integer_power(x, y):
+    if y < 0:
+        return 1.0 / _integer_power(x, -y)
+    elif y == 0:
+        return 1.0
+    elif y == 1:
+        return x
+    else:
+        return _integer_power(x, y-1) * x
+
 # Each AsmVar represents a named variable within the expression tree and has
 # either an Expr (`expr`) or a source (`src`) determining how it is defined.
 #
@@ -604,6 +614,18 @@ class Expr:
     def __pos__(self):  return self
     def __neg__(self):  return NegExpr(self)
     def __abs__(self):  return BuiltinFuncExpr('abs', self)
+
+    def __pow__(self, z):
+        if not self.is_scalar():
+            raise TypeError('cannot take power of non-scalar expression')
+        if isinstance(z, ConstExpr):
+            y = int(z.value)
+            if y != z.value:
+                raise TypeError('only integer powers implemented')
+            z = y
+        if not isinstance(z, numbers.Integral):
+            raise TypeError('only integer powers implemented')
+        return as_expr(_integer_power(self, z))
 
     def __bool__(self):  return True
     __nonzero__ = __bool__  # Python 2 compatibility

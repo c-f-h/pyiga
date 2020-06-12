@@ -593,7 +593,7 @@ class BSplineFunc:
         return np.stack(grad_components, axis=-1)   # shape: shape(grid) x self.dim x self.sdim
 
     def grid_hessian(self, gridaxes):
-        """Evaluate the Hessian matrix of a scalar function on a tensor product grid.
+        """Evaluate the Hessian matrix of a scalar or vector function on a tensor product grid.
 
         Args:
             gridaxes (seq): list of 1D vectors describing the tensor product grid.
@@ -608,23 +608,48 @@ class BSplineFunc:
             only, linearized. I.e., in 2D, it contains per grid point a
             3-component vector corresponding to the derivatives `(d_xx, d_xy,
             d_yy)`, and in 3D, a 6-component vector with the derivatives
-            `(d_xx, d_xy, d_xz, d_yy, d_yz, d_zz)`.
+            `(d_xx, d_xy, d_xz, d_yy, d_yz, d_zz)`. If the input function is
+            vector-valued, one such Hessian vector is computed per component
+            of the function.
+
+            Thus, the output is an array of shape `grid_shape x num_comp x num_hess`,
+            where `grid_shape` is the shape of the tensor grid described by the
+            `gridaxes`, `num_comp` is the number of components of the function,
+            and `num_hess` is the number of entries in the symmetric part of the
+            Hessian as described above. The axis corresponding to `num_comp` is
+            elided if the input function is scalar.
         """
-        assert self.dim == 1, 'Hessian only implemented for scalar functions'
+        assert np.isscalar(self.dim), 'Hessian only implemented for scalar and vector functions'
         assert len(gridaxes) == self.sdim, "Input has wrong dimension"
         colloc = [collocation_derivs(self.kvs[i], gridaxes[i], derivs=2) for i in range(self.sdim)]
 
-        hess_components = []
+        d = self.sdim
+        n_hess = ((d+1)*d) // 2         # number of components in symmetric part of Hessian
+        N = tuple(len(g) for g in gridaxes)     # shape of tensor grid
+
+        # determine size of output array
+        if self.dim == 1:
+            out_shape = N + (n_hess,)
+        else:
+            out_shape = N + (self.dim, n_hess)
+        hess = np.empty(out_shape, dtype=self.coeffs.dtype)
+
+        i_hess = 0
         for i in reversed(range(self.sdim)):  # x-component is the last one
             for j in reversed(range(i+1)):
                 # compute vector of derivative indices
                 D = self.sdim * [0]
                 D[i] += 1
                 D[j] += 1
+                ops = [colloc[k][D[k]] for k in range(self.sdim)] # derivatives in directions i,j
 
-                ops = [colloc[j][D[j]] for j in range(self.sdim)] # deriv. in i-th direction
-                hess_components.append(apply_tprod(ops, self.coeffs))   # shape: shape(grid) x self.dim
-        return np.stack(hess_components, axis=-1)   # shape: shape(grid) x self.dim x n_hess
+                if self.dim == 1:   # scalar function
+                    hess[..., i_hess] = apply_tprod(ops, self.coeffs) # D_i D_j (self)
+                else:               # vector function
+                    for k in range(self.dim):
+                        hess[..., k, i_hess] = apply_tprod(ops, self.coeffs[..., k])    # D_i D_j (self[k])
+                i_hess += 1
+        return hess   # shape: shape(grid) x self.dim x n_hess
 
     def transformed_jacobian(self, geo):
         """Create a function which evaluates the physical (transformed) gradient of the current

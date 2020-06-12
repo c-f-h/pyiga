@@ -869,7 +869,7 @@ class VarRefExpr(Expr):
             i, j = self.I
             if self.var.symmetric and i > j:
                 i, j = j, i
-            return i * self.var.shape[0] + j
+            return i * self.var.shape[1] + j
 
     def gencode(self):
         if self.I == ():

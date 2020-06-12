@@ -216,8 +216,8 @@ class VForm:
         if len(inpvar) == 0:
             # no such var defined yet -- define it
             assert 0 <= deriv <= 2, 'not implemented'
-            if deriv == 2 and inp.shape != ():
-                raise RuntimeError('Hessian only implemented for scalar input functions')
+            if deriv == 2 and len(inp.shape) > 1:
+                raise RuntimeError('Hessian only implemented for scalar and vector input functions')
             deriv_tag = ['', '_grad', '_hess'][deriv]
             d = self.dim
             deriv_dim = [(), (d,), ((d+1)*d//2,)][deriv]        # Hessian stores the symmetric part only
@@ -468,11 +468,36 @@ class VForm:
         else:
             order = sum(e.D)
             if order == 1:
-                k = e.D.index(1)    # get index of derivative direction
+                (k,) = _D_to_indices(e.D)    # get index of derivative direction
                 assert e.is_scalar()
                 return inner(self.JacInv[:, k], grad(e.without_derivs(), parametric=True))
+            elif order == 2:
+                i,j = _D_to_indices(e.D)
+                assert e.is_scalar()
+                Hp = hess(e.without_derivs(), parametric=True)
+                gp = grad(e.without_derivs(), parametric=True)
+
+                # transform the parametric Hessian
+                # H_ij = self.JacInv.T.dot(Hp.dot(self.JacInv))[i,j]    # equivalent:
+                H_ij = self.JacInv[:,i].dot(Hp.dot(self.JacInv[:,j]))
+                # add the contributions from the geometry Hessian
+                for k in range(self.dim):
+                    H_ij = H_ij + gp[k] * self._geo_hess_trf(k, i, j)
+                return H_ij
 
         assert False, 'higher order physical derivatives not implemented'
+
+    def _geo_hess_trf(self, a, i, j):
+        # implements formula (A.12) for the (i,j)-th entry of the physical
+        # Hessian of the a-th component of the inverse geometry transform from:
+        #   L. Dalcin, N. Collier, P. Vignal, A.M.A. Côrtes, V.M. Calo:
+        #   PetIGA: A framework for high-performance isogeometric analysis,
+        #   https://doi.org/10.1016/j.cma.2016.05.011.
+        # BUT NOTE: there is a sign error in the paper!
+        d = self.dim
+        J = self.JacInv
+        return -sum(hess(self.Geo[m], parametric=True)[e,u] * J[a,m] * J[e,i] * J[u,j]
+                    for m in range(d) for e in range(d) for u in range(d))
 
     def insert_input_field_derivs(self, e):
         if sum(e.D) == 0:
@@ -494,7 +519,7 @@ class VForm:
             i,j = _D_to_indices(e.D)
             return H[_hessian_index(len(e.D), i, j)]
         else:
-            assert sum(e.D) == 1, 'higher order physical derivatives not implemented'
+            assert False, 'higher order physical derivatives not implemented'
 
     def para_derivs_to_vars(self, e):
         if not e.physical and sum(e.D) > 0:
@@ -895,10 +920,16 @@ class VarRefExpr(Expr):
     def _para_hess(self):
         # generate a new expr for the parametric Hessian matrix (input vars only)
         assert self.is_input_var_expr(), '_para_hess only handles input fields'
-        assert self.I == (), 'Hessian only implemented for scalar variables'
+        assert self.is_scalar(), 'can only compute Hessian of scalars'
         assert self.var.deriv == 0
         assert sum(self.D) == 2
-        return self.vf._input_as_expr(self.var.src, deriv=2)
+        H = self.vf._input_as_expr(self.var.src, deriv=2)
+        if self.I == ():
+            return H
+        elif len(self.I) == 1:
+            return H[self.I[0], :]      # Hessian components corresponding to the i-th component
+        else:
+            raise RuntimeError('Hessian only implemented for scalar and vector input variables')
 
     def is_physical_deriv(self):
         return (not self.parametric)

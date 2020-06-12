@@ -1397,6 +1397,18 @@ def grad(expr, dims=None, parametric=False):
     else:
         raise TypeError('cannot compute gradient for expr of shape %s' % expr.shape)
 
+def hess(expr, parametric=False):
+    """Hessian matrix of a scalar expression.
+
+    If `parametric` is true, the Hessian with respect to the coordinates in
+    the parameter domain is computed. By default, the Hessian is computed in
+    physical coordinates (transformed by the geometry map).
+    """
+    if expr.is_scalar():
+        return grad(grad(expr, parametric=parametric), parametric=parametric)
+    else:
+        raise TypeError('cannot compute Hessian for expr of shape %s' % expr.shape)
+
 def div(expr, parametric=False):
     """The divergence of a vector-valued expressions, resulting in a scalar."""
     if not expr.is_vector():

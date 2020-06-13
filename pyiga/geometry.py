@@ -12,7 +12,7 @@ import functools
 
 
 class NurbsFunc:
-    """Any function that is given in terms of a tensor product NURBS basis with
+    r"""Any function that is given in terms of a tensor product NURBS basis with
     coefficients and weights.
 
     Arguments:
@@ -81,7 +81,10 @@ class NurbsFunc:
 
     def eval(self, *x):
         coords = tuple(np.asarray([t]) for t in reversed(x))
-        return self.grid_eval(coords)
+        y = self.grid_eval(coords).squeeze(axis=tuple(range(self.sdim)))
+        if y.shape == ():
+            y = y.item()
+        return y
 
     def grid_eval(self, gridaxes):
         assert len(gridaxes) == self.sdim, "Input has wrong dimension"
@@ -103,6 +106,30 @@ class NurbsFunc:
         Vjac = jac[..., :-1, :]
         Wjac = jac[..., -1:, :]
         return (Vjac * W - V * Wjac) / (W**2)   # use quotient rule for (V/W)'
+
+    def grid_hessian(self, gridaxes):
+        bsp = BSplineFunc(self.kvs, self.coeffs)
+        val = bsp.grid_eval(gridaxes)
+        V = val[..., :-1, None]             # shape(grid) x dim x 1
+        W = val[..., -1:, None]             # shape(grid) x  1  x 1
+        jac = bsp.grid_jacobian(gridaxes)   # shape(grid) x (dim+1) x sdim
+        Vjac = jac[..., :-1, :]             # shape(grid) x dim x sdim
+        Wjac = jac[..., -1:, :]             # shape(grid) x  1  x sdim
+        # compute Jacobian of NURBS as above
+        Njac = (Vjac * W - V * Wjac) / (W**2)   # shape(grid) x dim x sdim
+
+        hess = bsp.grid_hessian(gridaxes)   # shape(grid) x (dim+1) x num_hess
+        Vhess = hess[..., :-1, :]           # shape(grid) x dim x num_hess
+        Whess = hess[..., -1:, :]           # shape(grid) x  1  x num_hess
+
+        # first part of Hessian, already in linearized format
+        Nhess1 = Vhess / W - (V * Whess) / (W**2)
+
+        # second part of Hessian, in matrix format
+        mat = (Njac[..., None, :] * Wjac[..., :, None]) / W[..., None]     # shape(grid) x dim x sdim x sdim
+        mat += mat.swapaxes(-1, -2)             # symmetrize
+        I,J = np.triu_indices(mat.shape[-1])    # indices for upper triangular part
+        return Nhess1 - mat[..., I, J]          # linearize the symmetric part
 
     def boundary(self, axis, side):
         """Return one side of the boundary as a :class:`NurbsFunc`.

@@ -541,7 +541,10 @@ class BSplineFunc:
             *x: the point at which to evaluate the function, in xyz order
         """
         coords = tuple(np.asarray([t]) for t in reversed(x))
-        return self.grid_eval(coords)
+        y = self.grid_eval(coords).squeeze(axis=tuple(range(self.sdim)))
+        if y.shape == ():
+            y = y.item()
+        return y
 
     def grid_eval(self, gridaxes):
         """Evaluate the function on a tensor product grid.

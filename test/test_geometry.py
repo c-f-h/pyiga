@@ -127,6 +127,19 @@ def _num_hess(f, x, h=1e-3):
               - f(delta(i,h, j,-h)) - f(delta(i,-h, j,h))) / (4*h**2)
     return np.array([pd2(0,0), pd2(1,0), pd2(1,1)])
 
+def test_bspline_hessian():
+    geo = bspline_quarter_annulus()
+    def f1(xy): return geo.eval(*xy)[0]
+    def f2(xy): return geo.eval(*xy)[1]
+    X = np.linspace(0, 1, 4)[1:-1]
+    H = geo.grid_hessian((X,X))
+    H_num = np.array([[
+            [_num_hess(f1, (X[i],X[j])),
+             _num_hess(f2, (X[i],X[j]))]
+            for i in range(len(X))]
+            for j in range(len(X))])
+    assert np.allclose(H, H_num)
+
 def test_nurbs_hessian():
     geo = quarter_annulus()
     def f1(xy): return geo.eval(*xy)[0]

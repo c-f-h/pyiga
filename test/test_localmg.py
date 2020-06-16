@@ -5,7 +5,21 @@ import numpy as np
 import scipy.linalg
 from pyiga import bspline, assemble, hierarchical, solvers, vis
 
-def virtual_hierarchy_prolongators(hs, Ps, IA, ID, IR, na, nd, nr):
+def virtual_hierarchy_prolongators(hs):
+    # compute tensor product prolongators
+    Ps = tuple(hs.tp_prolongation(lv, kron=True) for lv in range(hs.numlevels-1))
+
+    # indices of active and deactivated basis functions per level
+    IA = hs.ravel_actfun#hs.active_indices()
+    ID = hs.ravel_deactfun#hs.deactivated_indices()
+    # indices of all functions in the refinement region per level
+    IR = tuple(np.concatenate((iA,iD)) for (iA,iD) in zip(IA,ID))
+
+    # number of active and deactivated dofs per level
+    na = tuple(len(ii) for ii in IA)
+    nd = tuple(len(ii) for ii in ID)
+    nr = tuple(len(ii) for ii in IR)
+
     prolongators = []
     prolongators_THB = []
     for lv in range(hs.numlevels - 1):
@@ -116,17 +130,6 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
     # refine level 2
     hs.refine_region(2, lambda *X: min(X) > 1 - delta**3)
 
-    # indices of active and deactivated basis functions per level
-    IA = hs.ravel_actfun#hs.active_indices()
-    ID = hs.ravel_deactfun#hs.deactivated_indices()
-    # indices of all functions in the refinement region per level
-    IR = tuple(np.concatenate((iA,iD)) for (iA,iD) in zip(IA,ID))
-
-    # number of active and deactivated dofs per level
-    na = tuple(len(ii) for ii in IA)
-    nd = tuple(len(ii) for ii in ID)
-    nr = tuple(len(ii) for ii in IR)
-
     # assemble full tensor-product linear system on each level for simplicity
     kvs = tuple(hs.knotvectors(lv) for lv in range(hs.numlevels))
     #As = [assemble.stiffness(kv)+assemble.mass(kv) for kv in kvs]
@@ -136,13 +139,8 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
         return 1.0
 
     fs = [assemble.inner_products(kv, rhs).ravel() for kv in kvs]
-    Ps = tuple(hs.tp_prolongation(lv, kron=True) for lv in range(hs.numlevels-1))
-
-    prolongators, prolongators_THB, T_h2t = virtual_hierarchy_prolongators(hs, Ps, IA, ID, IR, na, nd, nr)
+    prolongators, prolongators_THB, T_h2t = virtual_hierarchy_prolongators(hs)
     
-    # number of dofs in the underlying tensor product spaces
-    n_tp = tuple(bspline.numdofs(kv) for kv in kvs)
-
     # assemble and solve the HB-spline problem
 
     # I_hb: maps HB-coefficients to fine coefficients

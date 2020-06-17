@@ -17,7 +17,6 @@ def virtual_hierarchy_prolongators(hs):
 
     # number of active and deactivated dofs per level
     na = tuple(len(ii) for ii in IA)
-    nd = tuple(len(ii) for ii in ID)
     nr = tuple(len(ii) for ii in IR)
 
     prolongators = []
@@ -47,7 +46,7 @@ def virtual_hierarchy_prolongators(hs):
         P_thb = T_h2t @ P_hb
         prolongators_THB.append(P_thb)
 
-    return prolongators, prolongators_THB, T_h2t
+    return prolongators, prolongators_THB
 
 def local_mg_step(hs, A, f_in, Ps, lv_inds, smoother='symmetric_gs'):
     assert smoother in ("forward_gs", "backward_gs", "symmetric_gs", "exact"), "Invalid smoother."
@@ -139,7 +138,7 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
         return 1.0
 
     fs = [assemble.inner_products(kv, rhs).ravel() for kv in kvs]
-    prolongators, prolongators_THB, T_h2t = virtual_hierarchy_prolongators(hs)
+    prolongators, prolongators_THB = virtual_hierarchy_prolongators(hs)
     
     # assemble and solve the HB-spline problem
 

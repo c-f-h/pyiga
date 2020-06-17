@@ -516,10 +516,9 @@ class HSpace:
             out_index.append(aux)
 
         # deactivated boundary ravel
-        ravel_bddeact = list()
-        for lv in range(self.numlevels):
-            ravel_bddeact.append(self.deactfun[lv] & TPbindices[lv])
-        ravel_bddeact = self._ravel_indices(ravel_bddeact)
+        ravel_bddeact = self._ravel_indices(
+            {lv: self.deactfun[lv] & TPbindices[lv]
+                for lv in range(self.numlevels)})
 
         # insertion of deactivated functions
         for lv in range(self.numlevels):

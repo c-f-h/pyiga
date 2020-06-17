@@ -174,6 +174,7 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
     winner = "HB" if (spek_hb <= spek_thb) else "THB"
     linestr = f'{strategy} ({smoother}) '.ljust(2*22)
     print(linestr + f'{spek_hb:5}    {spek_thb:5}    {winner:6}')
+    return (spek_hb, spek_thb)
 
 def num_iterations(step, sol, tol=1e-8):
     x = np.zeros_like(sol)
@@ -200,9 +201,25 @@ def test_localmg():
 
     p = 3
 
+    results = dict()
     for disparity in (np.inf, 1):
+        results[disparity] = []
         linestr = ("[p = " +str(p)+ " disparity = " +str(disparity)+"]").ljust(2*22)
         print(linestr + "{:8s} {:8s} {:8s}".format("HB", "THB", "Winner"))
         # available strategies: "new", "trunc", "func_supp", "cell_supp", "global"
-        for strategy in ("func_supp", "cell_supp"):
-            run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol)
+        for strategy in ("new", "trunc", "func_supp", "cell_supp"):
+            results[disparity].append(
+                    run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol)
+            )
+
+    assert np.array_equal(results[np.inf],
+            [ ( 107, 118 ),
+              (  49,  19 ),
+              (  49,  15 ),
+              (  41,  15 ) ])
+
+    assert np.array_equal(results[1],
+            [ ( 105, 104 ),
+              (  59,  23 ),
+              (  59,  23 ),
+              (  61,  22 ) ])

@@ -244,11 +244,7 @@ class HMesh:
     @staticmethod
     def _clean_Hmesh_cells(cells):
         """Returns `cells` with empty levels removed"""
-        clean_cells = cells.copy()
-        for lv in cells:
-            if clean_cells[lv] == set():
-                clean_cells.pop(lv)
-        return clean_cells
+        return {lv: c for (lv, c) in cells.items() if c}
 
     def HMesh_cells(self, marked):
         """Returns the smallest dictionary of (active) hierarchical cells containing

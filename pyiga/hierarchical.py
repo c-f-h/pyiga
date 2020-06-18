@@ -807,25 +807,18 @@ class HSpace:
     def cell_supp_indices(self):
         """Return a tuple which contains tuples which contain, per level, the raveled
         (sequential) indices of CELL_SUPP basis functions in the VIRTUAL HIERARCHY per level."""
-        out_index = []
+        indices = self.new_indices()        # start with only the newly added indices
         for lv in range(self.numlevels):    # loop over virtual hierarchy levels
-            aux = []
             for i in range(self.numlevels):
-                if i == lv:
-                    aux.append(sorted(self.actfun[i] - self.index_dirichlet[lv][i])
-                             + sorted(self.deactfun[i] - self.index_dirichlet[lv][i]))
-                elif lv - self.disparity <= i < lv:
+                if lv - self.disparity <= i < lv:
                     funcs = set(
                             self.hmesh.meshes[i].supported_in(
                                 self.hmesh.cell_grandparent(
                                     lv,
                                     self.hmesh.meshes[lv].support(self.actfun[lv]),
                                     i))) & self.actfun[i]
-                    aux.append(sorted(funcs - self.index_dirichlet[lv][i]))
-                else:
-                    aux.append([])
-            out_index.append(aux)
-        return tuple(out_index)
+                    indices[lv][i] = sorted(funcs - self.index_dirichlet[lv][i])
+        return indices
 
     def global_indices(self):
         """Return a tuple which contains tuples which contain, per level, the raveled

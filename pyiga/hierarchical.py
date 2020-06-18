@@ -359,7 +359,6 @@ class HSpace:
         self.__index_new = None
         self.__index_trunc = None
         self.__index_func_supp = None
-        self.__index_cell_supp = None
         self.__index_global = None
         self.__ravel_actfun = None
         self.__ravel_deactfun = None
@@ -371,7 +370,6 @@ class HSpace:
         self.__ravel_new = None
         self.__ravel_trunc = None
         self.__ravel_func_supp = None
-        self.__ravel_cell_supp = None
         self.__ravel_global = None
         self.__cell_dirichlet = None
         self.__cell_new = None
@@ -567,9 +565,7 @@ class HSpace:
 
     @property
     def index_cell_supp(self):
-        if not self.__index_cell_supp:
-            self.cell_supp_indices()
-        return self.__index_cell_supp
+        return self.cell_supp_indices()
 
     @property
     def index_global(self):
@@ -639,9 +635,8 @@ class HSpace:
 
     @property
     def ravel_cell_supp(self):
-        if not self.__ravel_cell_supp:
-            self.cell_supp_indices()
-        return self.__ravel_cell_supp
+        indices = self.cell_supp_indices()
+        return [self._ravel_indices(idx) for idx in indices]
 
     @property
     def ravel_global(self):
@@ -858,11 +853,7 @@ class HSpace:
                 else:
                     aux.append([])
             out_index.append(aux)
-
-        out = [list(self._ravel_indices(idx)) for idx in out_index]
-        self.__ravel_cell_supp = tuple(out)
-        self.__index_cell_supp = tuple(out_index)
-        return tuple(out)
+        return tuple(out_index)
 
     def global_indices(self):
         """Return a tuple which contains tuples which contain, per level, the raveled

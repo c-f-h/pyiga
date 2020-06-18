@@ -350,17 +350,8 @@ class HSpace:
 
     def _clear_cache(self):
         self.__index_dirichlet = None
-        self.__index_free_actfun = None
-        self.__index_free_deactfun = None
-        self.__index_global = None
-        self.__ravel_actfun = None
-        self.__ravel_deactfun = None
-        self.__ravel_actdeactfun = None
-        self.__ravel_dirichlet = None
-        self.__ravel_free_actfun = None
-        self.__ravel_free_deactfun = None
-        self.__ravel_free_actdeactfun = None
         self.__ravel_global = None
+        self.__ravel_dirichlet = None
         self.__cell_dirichlet = None
         self.__cell_new = None
         self.__cell_trunc = None
@@ -448,26 +439,6 @@ class HSpace:
         self.__ravel_deactfun = self._ravel_indices(self.deactfun)
         return self.__ravel_deactfun
 
-    def free_active_indices(self):
-        """Return a tuple which contains, per level, the raveled (sequential) indices of
-        active basis functions, which do not contribute to the Dirichlet boundary.
-        """
-        out = list()
-        for lv in range(self.numlevels):
-            out.append(self.actfun[lv]-self.index_dirichlet[lv][lv])
-        self.__index_free_actfun = out
-        self.__ravel_free_actfun = self._ravel_indices(out)
-
-    def free_deactivated_indices(self):
-        """Return a tuple which contains, per level, the raveled (sequential) indices of
-        deactivated basis functions, which do not contribute to the Dirichlet boundary.
-        """
-        out = list()
-        for lv in range(self.numlevels):
-            out.append(self.deactfun[lv]-self.index_dirichlet[lv][lv])
-        self.__index_free_deactfun = out
-        self.__ravel_free_deactfun = self._ravel_indices(out)
-
     def _compute_single_axis_single_level_dirichlet_indices(self, lv, bdspec):
         assert 0 <= lv < self.numlevels, 'Invalid level.'
         bdax, bdside = bdspec
@@ -519,18 +490,6 @@ class HSpace:
         return self.__index_dirichlet
 
     @property
-    def index_free_actfun(self):
-        if not self.__index_free_actfun:
-            self.free_active_indices()
-        return self.__index_free_actfun
-
-    @property
-    def index_free_deactfun(self):
-        if not self.__index_free_deactfun:
-            self.free_deactivated_indices()
-        return self.__index_free_deactfun
-
-    @property
     def index_new(self):
         return self.new_indices()
 
@@ -548,9 +507,7 @@ class HSpace:
 
     @property
     def index_global(self):
-        if not self.__index_global:
-            self.global_indices()
-        return self.__index_global
+        return self.global_indices()
 
     @property
     def ravel_actfun(self):
@@ -577,24 +534,6 @@ class HSpace:
         return self.__ravel_dirichlet
 
     @property
-    def ravel_free_actfun(self):
-        if not self.__ravel_free_actfun:
-            self.free_active_indices()
-        return self.__ravel_free_actfun
-
-    @property
-    def ravel_free_deactfun(self):
-        if not self.__ravel_free_deactfun:
-            self.free_deactivated_indices()
-        return self.__ravel_free_deactfun
-
-    @property
-    def ravel_free_actdeactfun(self):
-        if not self.__ravel_free_actdeactfun:
-            self.__ravel_free_actdeactfun = tuple(np.concatenate((iA,iD)) for (iA,iD) in zip(self.ravel_free_actfun,self.ravel_free_deactfun))
-        return self.__ravel_free_actdeactfun
-
-    @property
     def ravel_new(self):
         indices = self.new_indices()
         return [self._ravel_indices(idx) for idx in indices]
@@ -617,7 +556,8 @@ class HSpace:
     @property
     def ravel_global(self):
         if not self.__ravel_global:
-            self.global_indices()
+            indices = self.global_indices()
+            self.__ravel_global = [self._ravel_indices(idx) for idx in indices]
         return self.__ravel_global
 
     @property
@@ -749,31 +689,14 @@ class HSpace:
     def global_indices(self):
         """Return a tuple which contains tuples which contain, per level, the raveled
         (sequential) indices of GLOBAL basis functions in the VIRTUAL HIERARCHY per level."""
-        out = list()
-        out_index = list()
+        indices = [ [[] for i in range(self.numlevels)] for j in range(self.numlevels) ]
         for lv in range(self.numlevels):
-            aux = list()
             for i in range(self.numlevels):
                 if i == lv:
-                    aux.append(self.actfun[i] | self.deactfun[i])
-                elif 0 <= i < lv:
-                    aux.append(self.actfun[i])
-                else:
-                    aux.append(set())
-            out.append(list(self._ravel_indices(aux)))
-            out_index.append(aux)
-
-        # insertion of deactivated functions
-        #for lv in range(self.numlevels):
-        #    out_index[lv][lv] |= self.deactfun[lv]
-        #    out[lv][lv] = np.concatenate((out[lv][lv], self.ravel_deactfun[lv]))
-
-        for lv in range(self.numlevels):
-            out[lv][lv] = self.ravel_actdeactfun[lv]
-
-        self.__ravel_global = tuple(out)
-        self.__index_global = tuple(out_index)
-        return tuple(out)
+                    indices[lv][i] = sorted(self.actfun[i]) + sorted(self.deactfun[i])
+                elif i < lv:
+                    indices[lv][i] = sorted(self.actfun[i])
+        return indices
 
     def indices_to_smooth(self, strategy='func_supp'):
         assert strategy in ("dirichlet", "new", "trunc", "func_supp", "cell_supp", "global"), "Invalid smoothing strategy"

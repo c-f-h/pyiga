@@ -10,8 +10,8 @@ def virtual_hierarchy_prolongators(hs):
     Ps = tuple(hs.tp_prolongation(lv, kron=True) for lv in range(hs.numlevels-1))
 
     # indices of active and deactivated basis functions per level
-    IA = hs.ravel_actfun#hs.active_indices()
-    ID = hs.ravel_deactfun#hs.deactivated_indices()
+    IA = hs.active_indices()
+    ID = hs.deactivated_indices()
     # indices of all functions in the refinement region per level
     IR = tuple(np.concatenate((iA,iD)) for (iA,iD) in zip(IA,ID))
 

@@ -357,7 +357,6 @@ class HSpace:
         self.__index_free_actfun = None
         self.__index_free_deactfun = None
         self.__index_trunc = None
-        self.__index_func_supp = None
         self.__index_global = None
         self.__ravel_actfun = None
         self.__ravel_deactfun = None
@@ -367,7 +366,6 @@ class HSpace:
         self.__ravel_free_deactfun = None
         self.__ravel_free_actdeactfun = None
         self.__ravel_trunc = None
-        self.__ravel_func_supp = None
         self.__ravel_global = None
         self.__cell_dirichlet = None
         self.__cell_new = None
@@ -377,7 +375,6 @@ class HSpace:
         self.__cell_global = None
         self.__smooth_dirichlet = None
         self.__smooth_trunc = None
-        self.__smooth_func_supp = None
         self.__smooth_global = None
 
     def _add_level(self):
@@ -553,9 +550,7 @@ class HSpace:
 
     @property
     def index_func_supp(self):
-        if not self.__index_func_supp:
-            self.function_supp_indices()
-        return self.__index_func_supp
+        return self.func_supp_indices()
 
     @property
     def index_cell_supp(self):
@@ -622,9 +617,8 @@ class HSpace:
 
     @property
     def ravel_func_supp(self):
-        if not self.__ravel_func_supp:
-            self.function_supp_indices()
-        return self.__ravel_func_supp
+        indices = self.func_supp_indices()
+        return [self._ravel_indices(idx) for idx in indices]
 
     @property
     def ravel_cell_supp(self):
@@ -691,9 +685,7 @@ class HSpace:
 
     @property
     def smooth_func_supp(self):
-        if not self.__smooth_func_supp:
-            self.function_supp_smooth()
-        return self.__smooth_func_supp
+        return self.indices_to_smooth("func_supp")
 
     @property
     def smooth_cell_supp(self):
@@ -768,41 +760,17 @@ class HSpace:
         self.__index_trunc = tuple(out_index)
         self.__ravel_trunc = tuple(out)
 
-    def function_supp_indices(self):
+    def func_supp_indices(self):
         """Return a tuple which contains tuples which contain, per level, the raveled
-        (sequential) indices of FUNCTION_SUPP basis functions in the VIRTUAL HIERARCHY per level."""
-        out = list()
-        out_index = list()
+        (sequential) indices of FUNC_SUPP basis functions in the VIRTUAL HIERARCHY per level."""
+        indices = self.new_indices()        # start with only the newly added indices
         for lv in range(self.numlevels):
-            aux = list()
             for i in range(self.numlevels):
-                if i == lv:
-                    aux.append(self.actfun[i] | self.deactfun[i])
-                elif max(0,lv - self.disparity) <= i < lv:
-                    aux.append(set(self.hmesh.function_grandparents(lv, self.actfun[lv], i)) & self.actfun[i])
-                else:
-                    aux.append(set())
-            # remove Dirichlet indices
-            self.remove_indices(aux, self.index_dirichlet[lv])
-            out.append(list(self._ravel_indices(aux)))
-            out_index.append(aux)
+                if lv - self.disparity <= i < lv:
+                    funcs = set(self.hmesh.function_grandparents(lv, self.actfun[lv], i)) & self.actfun[i]
+                    indices[lv][i] = sorted(funcs - self.index_dirichlet[lv][i])
 
-        # prepare insertion of deactivated functions
-        #deact_aux = list()
-        #for lv in range(self.numlevels):
-        #    deact_aux.append(self.deactfun[lv] - self.index_dirichlet[lv][lv])
-
-        # insertion of deactivated functions
-        #deact_ravel_aux = self._ravel_indices(deact_aux)
-        #for lv in range(self.numlevels):
-        #    out_index[lv][lv] |= deact_aux[lv]
-        #    out[lv][lv] = np.concatenate((out[lv][lv], deact_ravel_aux[lv]))
-
-        for lv in range(self.numlevels):
-            out[lv][lv] = self.ravel_free_actdeactfun[lv]
-
-        self.__ravel_func_supp = tuple(out)
-        self.__index_func_supp = tuple(out_index)
+        return indices
 
     def cell_supp_indices(self):
         """Return a tuple which contains tuples which contain, per level, the raveled
@@ -918,9 +886,6 @@ class HSpace:
 
     def trunc_smooth(self):
         self.__smooth_trunc = self.indices_to_smooth("trunc")
-
-    def function_supp_smooth(self):
-        self.__smooth_func_supp = self.indices_to_smooth("func_supp")
 
     def global_smooth(self):
         self.__smooth_global = self.indices_to_smooth("global")

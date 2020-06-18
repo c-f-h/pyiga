@@ -114,20 +114,19 @@ def local_mg_step(hs, A, f_in, Ps, lv_inds, smoother='symmetric_gs'):
             return x1
     return lambda x: step(hs.numlevels-1, x, f_in)
 
-
-def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
+def create_example_hspace(p, dim, n0, disparity, num_levels=3):
     hs = hierarchical.HSpace(dim * (bspline.make_knots(p, 0.0, 1.0, n0),))
     hs.disparity = disparity
     #hs.bdspecs = []
     hs.bdspecs = [(0,0), (0,1), (1,0), (1,1)] if dim==2 else [(0,0),(0,1)]
     # perform local refinement
     delta = 0.5
-    # refine level 0: interval (0.5, 1)
-    hs.refine_region(0, lambda *X: min(X) > 1 - delta**1)
-    # refine level 1: interval (0.75, 1)
-    hs.refine_region(1, lambda *X: min(X) > 1 - delta**2)
-    # refine level 2
-    hs.refine_region(2, lambda *X: min(X) > 1 - delta**3)
+    for lv in range(num_levels):
+        hs.refine_region(lv, lambda *X: min(X) > 1 - delta**(lv+1))
+    return hs
+
+def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
+    hs = create_example_hspace(p, dim, n0, disparity, num_levels=3)
 
     # assemble full tensor-product linear system on each level for simplicity
     kvs = tuple(hs.knotvectors(lv) for lv in range(hs.numlevels))
@@ -204,7 +203,7 @@ def test_localmg():
     results = dict()
     for disparity in (np.inf, 1):
         results[disparity] = []
-        linestr = ("[p = " +str(p)+ " disparity = " +str(disparity)+"]").ljust(2*22)
+        linestr = (f"[p = {p} disparity = {disparity}]").ljust(2*22)
         print(linestr + "{:8s} {:8s} {:8s}".format("HB", "THB", "Winner"))
         # available strategies: "new", "trunc", "func_supp", "cell_supp", "global"
         for strategy in ("new", "trunc", "func_supp", "cell_supp"):

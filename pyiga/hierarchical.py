@@ -727,7 +727,10 @@ class HSpace:
     def new_indices(self):
         """Return a tuple which contains tuples which contain, per level, the raveled
         (sequential) indices of newly added basis functions in the VIRTUAL HIERARCHY per level."""
-        self.__index_new = tuple(list(self.actfun[i] | self.deactfun[i] if i == lv else set() for i in range(self.numlevels)) for lv in range(self.numlevels))
+        self.__index_new = tuple(
+                list(self.actfun[i] | self.deactfun[i] if i == lv else set()
+                    for i in range(self.numlevels))
+                for lv in range(self.numlevels))
 
         # remove Dirichlet indices
         for lv in range(self.numlevels):
@@ -742,7 +745,9 @@ class HSpace:
         #    aux_deact[lv] = list(self._ravel_indices(aux_deact[lv]))
         #    aux_act[lv][lv] = np.concatenate((aux_act[lv][lv], aux_deact[lv][lv]))
 
-        self.__ravel_new = tuple(list(self._ravel_indices(self.__index_new[lv])) for lv in range(self.numlevels))
+        self.__ravel_new = tuple(
+                list(self._ravel_indices(self.__index_new[lv]))
+                for lv in range(self.numlevels))
         for lv in range(self.numlevels):
             self.__ravel_new[lv][lv] = self.ravel_free_actdeactfun[lv]
         #self.__ravel_new = tuple(aux_act)

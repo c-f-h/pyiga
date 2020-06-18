@@ -381,7 +381,6 @@ class HSpace:
         self.__smooth_new = None
         self.__smooth_trunc = None
         self.__smooth_func_supp = None
-        self.__smooth_cell_supp = None
         self.__smooth_global = None
 
     def _add_level(self):
@@ -706,9 +705,7 @@ class HSpace:
 
     @property
     def smooth_cell_supp(self):
-        if not self.__smooth_cell_supp:
-            self.cell_supp_smooth()
-        return self.__smooth_cell_supp
+        return self.indices_to_smooth("cell_supp")
 
     @property
     def smooth_global(self):
@@ -965,9 +962,6 @@ class HSpace:
 
     def function_supp_smooth(self):
         self.__smooth_func_supp = self.indices_to_smooth("func_supp")
-
-    def cell_supp_smooth(self):
-        self.__smooth_cell_supp = self.indices_to_smooth("cell_supp")
 
     def global_smooth(self):
         self.__smooth_global = self.indices_to_smooth("global")

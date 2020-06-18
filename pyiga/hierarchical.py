@@ -356,7 +356,6 @@ class HSpace:
         self.__index_dirichlet = None
         self.__index_free_actfun = None
         self.__index_free_deactfun = None
-        self.__index_new = None
         self.__index_trunc = None
         self.__index_func_supp = None
         self.__index_global = None
@@ -367,7 +366,6 @@ class HSpace:
         self.__ravel_free_actfun = None
         self.__ravel_free_deactfun = None
         self.__ravel_free_actdeactfun = None
-        self.__ravel_new = None
         self.__ravel_trunc = None
         self.__ravel_func_supp = None
         self.__ravel_global = None
@@ -378,7 +376,6 @@ class HSpace:
         self.__cell_cell_supp = None
         self.__cell_global = None
         self.__smooth_dirichlet = None
-        self.__smooth_new = None
         self.__smooth_trunc = None
         self.__smooth_func_supp = None
         self.__smooth_global = None
@@ -546,9 +543,7 @@ class HSpace:
 
     @property
     def index_new(self):
-        if not self.__index_new:
-            self.new_indices()
-        return self.__index_new
+        return self.new_indices()
 
     @property
     def index_trunc(self):
@@ -616,9 +611,8 @@ class HSpace:
 
     @property
     def ravel_new(self):
-        if not self.__ravel_new:
-            self.new_indices()
-        return self.__ravel_new
+        indices = self.new_indices()
+        return [self._ravel_indices(idx) for idx in indices]
 
     @property
     def ravel_trunc(self):
@@ -687,9 +681,7 @@ class HSpace:
 
     @property
     def smooth_new(self):
-        if not self.__smooth_new:
-            self.new_smooth()
-        return self.__smooth_new
+        return self.indices_to_smooth("new")
 
     @property
     def smooth_trunc(self):
@@ -720,30 +712,13 @@ class HSpace:
     def new_indices(self):
         """Return a tuple which contains tuples which contain, per level, the raveled
         (sequential) indices of newly added basis functions in the VIRTUAL HIERARCHY per level."""
-        self.__index_new = tuple(
-                list(self.actfun[i] | self.deactfun[i] if i == lv else set()
-                    for i in range(self.numlevels))
-                for lv in range(self.numlevels))
-
-        # remove Dirichlet indices
-        for lv in range(self.numlevels):
-            self.remove_indices(self.__index_new[lv], self.index_dirichlet[lv])
-
-        # prepare raveled active and deactive functions (without Dirichlet)
-        #aux_act = list(list(self.actfun[i] - self.index_dirichlet[lv][lv] if i == lv else set() for i in range(self.numlevels)) for lv in range(self.numlevels))
-        #aux_deact = list(list(self.deactfun[i] - self.index_dirichlet[lv][lv] if i == lv else set() for i in range(self.numlevels)) for lv in range(self.numlevels))
-
-        #for lv in range(self.numlevels):
-        #    aux_act[lv] = list(self._ravel_indices(aux_act[lv]))
-        #    aux_deact[lv] = list(self._ravel_indices(aux_deact[lv]))
-        #    aux_act[lv][lv] = np.concatenate((aux_act[lv][lv], aux_deact[lv][lv]))
-
-        self.__ravel_new = tuple(
-                list(self._ravel_indices(self.__index_new[lv]))
-                for lv in range(self.numlevels))
-        for lv in range(self.numlevels):
-            self.__ravel_new[lv][lv] = self.ravel_free_actdeactfun[lv]
-        #self.__ravel_new = tuple(aux_act)
+        return [
+                [ ( sorted(self.actfun[i] - self.index_dirichlet[lv][i])
+                  + sorted(self.deactfun[i] - self.index_dirichlet[lv][i]))
+                    if i == lv
+                    else []
+                    for i in range(self.numlevels)]
+                for lv in range(self.numlevels)]
 
     def trunc_indices(self):
         """Return a tuple which contains tuples which contain, per level, the raveled
@@ -947,9 +922,6 @@ class HSpace:
 
     def dirichlet_smooth(self):
         self.__smooth_dirichlet = self.indices_to_smooth("dirichlet")
-
-    def new_smooth(self):
-        self.__smooth_new = self.indices_to_smooth("new")
 
     def trunc_smooth(self):
         self.__smooth_trunc = self.indices_to_smooth("trunc")

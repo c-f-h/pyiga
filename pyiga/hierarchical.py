@@ -920,17 +920,11 @@ class HSpace:
 
     def compute_cells(self, tuplelistset):
         out = list()
-        lv = 0
-        for single_index in tuplelistset:
-            aux = list()
-            l = 0
-            for funcs in single_index:
-                aux.append(set(self.hmesh.meshes[l].support(funcs)))
-                l += 1
-            #print("self.list_to_dict(aux) = ", self.list_to_dict(aux))
+        for (lv, single_index) in enumerate(tuplelistset):
+            aux = [set(self.hmesh.meshes[l].support(funcs))
+                    for (l, funcs) in enumerate(single_index)]
             out.append(
                 self.get_virtual_space(lv).hmesh.HMesh_cells(self.list_to_dict(aux)))
-            lv += 1
         return tuple(out)
 
     def dirichlet_cells(self):

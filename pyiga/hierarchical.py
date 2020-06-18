@@ -372,7 +372,6 @@ class HSpace:
         self.__cell_cell_supp = None
         self.__cell_global = None
         self.__smooth_dirichlet = None
-        self.__smooth_global = None
 
     def _add_level(self):
         self.hmesh.add_level()
@@ -683,12 +682,6 @@ class HSpace:
     def smooth_cell_supp(self):
         return self.indices_to_smooth("cell_supp")
 
-    @property
-    def smooth_global(self):
-        if not self.__smooth_global:
-            self.global_smooth()
-        return self.__smooth_global
-
     def remove_indices(self, listsetA, listsetB):
         for lv in range(self.numlevels):
             listsetA[lv] -= listsetB[lv]
@@ -852,9 +845,6 @@ class HSpace:
 
     def dirichlet_smooth(self):
         self.__smooth_dirichlet = self.indices_to_smooth("dirichlet")
-
-    def global_smooth(self):
-        self.__smooth_global = self.indices_to_smooth("global")
 
     def function_support(self, lv, jj):
         """Return the support (as a tuple of pairs) of the function on level `lv` with index `jj`."""

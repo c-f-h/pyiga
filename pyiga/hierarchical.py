@@ -443,8 +443,9 @@ class HSpace:
         return self.hmesh.meshes[lv].cell_extents(c)
 
     def _ravel_indices(self, indexsets):
+        indices = [sorted(ix) if isinstance(ix, set) else ix for ix in indexsets]
         return tuple(
-            (np.ravel_multi_index(np.array(sorted(indexsets[lv])).T, self.mesh(lv).numdofs, order='C')
+            (np.ravel_multi_index(np.array(indices[lv]).T, self.mesh(lv).numdofs, order='C')
                 if len(indexsets[lv])
                 else np.arange(0))
             for lv in range(self.numlevels)
@@ -517,8 +518,8 @@ class HSpace:
 
         # deactivated boundary ravel
         ravel_bddeact = self._ravel_indices(
-            {lv: self.deactfun[lv] & TPbindices[lv]
-                for lv in range(self.numlevels)})
+            [self.deactfun[lv] & TPbindices[lv]
+                for lv in range(self.numlevels)])
 
         # insertion of deactivated functions
         for lv in range(self.numlevels):
@@ -839,42 +840,26 @@ class HSpace:
     def cell_supp_indices(self):
         """Return a tuple which contains tuples which contain, per level, the raveled
         (sequential) indices of CELL_SUPP basis functions in the VIRTUAL HIERARCHY per level."""
-        out = list()
-        out_index = list()
-        for lv in range(self.numlevels):
-            aux = list()
+        out_index = []
+        for lv in range(self.numlevels):    # loop over virtual hierarchy levels
+            aux = []
             for i in range(self.numlevels):
                 if i == lv:
-                    aux.append(self.actfun[i] | self.deactfun[i])
-                elif max(0,lv - self.disparity) <= i < lv:
-                    aux.append(set(
-                        self.hmesh.meshes[i].supported_in(
-                            self.hmesh.cell_grandparent(
-                                lv,
-                                self.hmesh.meshes[lv].support(self.actfun[lv]),
-                                i))) & self.actfun[i]
-                              )
+                    aux.append(sorted(self.actfun[i] - self.index_dirichlet[lv][i])
+                             + sorted(self.deactfun[i] - self.index_dirichlet[lv][i]))
+                elif lv - self.disparity <= i < lv:
+                    funcs = set(
+                            self.hmesh.meshes[i].supported_in(
+                                self.hmesh.cell_grandparent(
+                                    lv,
+                                    self.hmesh.meshes[lv].support(self.actfun[lv]),
+                                    i))) & self.actfun[i]
+                    aux.append(sorted(funcs - self.index_dirichlet[lv][i]))
                 else:
-                    aux.append(set())
-            # remove Dirichlet indices
-            self.remove_indices(aux, self.index_dirichlet[lv])
-            out.append(list(self._ravel_indices(aux)))
+                    aux.append([])
             out_index.append(aux)
 
-        # prepare insertion of deactivated functions
-        #deact_aux = list()
-        #for lv in range(self.numlevels):
-        #    deact_aux.append(self.deactfun[lv] - self.index_dirichlet[lv][lv])
-
-        # insertion of deactivated functions
-        #deact_ravel_aux = self._ravel_indices(deact_aux)
-        #for lv in range(self.numlevels):
-        #    out_index[lv][lv] |= deact_aux[lv]
-        #    out[lv][lv] = np.concatenate((out[lv][lv], deact_ravel_aux[lv]))
-
-        for lv in range(self.numlevels):
-            out[lv][lv] = self.ravel_free_actdeactfun[lv]
-
+        out = [list(self._ravel_indices(idx)) for idx in out_index]
         self.__ravel_cell_supp = tuple(out)
         self.__index_cell_supp = tuple(out_index)
         return tuple(out)

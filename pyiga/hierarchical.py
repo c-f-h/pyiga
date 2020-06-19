@@ -352,12 +352,6 @@ class HSpace:
         self.__index_dirichlet = None
         self.__ravel_global = None
         self.__ravel_dirichlet = None
-        self.__cell_dirichlet = None
-        self.__cell_new = None
-        self.__cell_trunc = None
-        self.__cell_func_supp = None
-        self.__cell_cell_supp = None
-        self.__cell_global = None
         self.__smooth_dirichlet = None
 
     def _add_level(self):
@@ -542,39 +536,27 @@ class HSpace:
 
     @property
     def cell_dirichlet(self):
-        if not self.__cell_dirichlet:
-            self.dirichlet_cells()
-        return self.__cell_dirichlet
+        return self.compute_cells(self.index_dirichlet)
 
     @property
     def cell_new(self):
-        if not self.__cell_new:
-            self.new_cells()
-        return self.__cell_new
+        return self.compute_cells(self.new_indices())
 
     @property
     def cell_trunc(self):
-        if not self.__cell_trunc:
-            self.trunc_cells()
-        return self.__cell_trunc
+        return self.compute_cells(self.trunc_indices())
 
     @property
     def cell_func_supp(self):
-        if not self.__cell_func_supp:
-            self.function_supp_cells()
-        return self.__cell_func_supp
+        return self.compute_cells(self.func_supp_indices())
 
     @property
     def cell_cell_supp(self):
-        if not self.__cell_cell_supp:
-            self.cell_supp_cells()
-        return self.__cell_cell_supp
+        return self.compute_cells(self.cell_supp_indices())
 
     @property
     def cell_global(self):
-        if not self.__cell_global:
-            self.global_cells()
-        return self.__cell_global
+        return self.compute_cells(self.global_indices())
 
     @property
     def smooth_dirichlet(self):
@@ -723,24 +705,6 @@ class HSpace:
             out.append(
                 self.get_virtual_space(lv).hmesh.HMesh_cells(self.list_to_dict(aux)))
         return tuple(out)
-
-    def dirichlet_cells(self):
-        self.__cell_dirichlet = self.compute_cells(self.index_dirichlet)
-
-    def new_cells(self):
-        self.__cell_new = self.compute_cells(self.new_indices())
-
-    def trunc_cells(self):
-        self.__cell_trunc = self.compute_cells(self.trunc_indices())
-
-    def function_supp_cells(self):
-        self.__cell_func_supp = self.compute_cells(self.func_supp_indices())
-
-    def cell_supp_cells(self):
-        self.__cell_cell_supp = self.compute_cells(self.cell_supp_indices())
-
-    def global_cells(self):
-        self.__cell_global = self.compute_cells(self.global_indices())
 
     def function_support(self, lv, jj):
         """Return the support (as a tuple of pairs) of the function on level `lv` with index `jj`."""

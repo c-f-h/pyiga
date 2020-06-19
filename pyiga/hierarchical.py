@@ -599,7 +599,7 @@ class HSpace:
     @property
     def smooth_dirichlet(self):
         if not self.__smooth_dirichlet:
-            self.dirichlet_smooth()
+            self.__smooth_dirichlet = self.indices_to_smooth("dirichlet")
         return self.__smooth_dirichlet
 
     @property
@@ -761,9 +761,6 @@ class HSpace:
 
     def global_cells(self):
         self.__cell_global = self.compute_cells(self.index_global)
-
-    def dirichlet_smooth(self):
-        self.__smooth_dirichlet = self.indices_to_smooth("dirichlet")
 
     def function_support(self, lv, jj):
         """Return the support (as a tuple of pairs) of the function on level `lv` with index `jj`."""

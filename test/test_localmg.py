@@ -3,7 +3,7 @@
 
 import numpy as np
 import scipy.linalg
-from pyiga import bspline, assemble, hierarchical, solvers, vis
+from pyiga import bspline, assemble, hierarchical, solvers
 
 def virtual_hierarchy_prolongators(hs):
     # compute tensor product prolongators

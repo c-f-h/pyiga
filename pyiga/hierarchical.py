@@ -349,8 +349,8 @@ class HSpace:
         self._clear_cache()
 
     def _clear_cache(self):
-        self.__index_dirichlet = None
         self.__ravel_global = None
+        self.__index_dirichlet = None
         self.__ravel_dirichlet = None
         self.__smooth_dirichlet = None
 
@@ -488,26 +488,6 @@ class HSpace:
         return self.__ravel_dirichlet
 
     @property
-    def ravel_new(self):
-        indices = self.new_indices()
-        return [self._ravel_indices(idx) for idx in indices]
-
-    @property
-    def ravel_trunc(self):
-        indices = self.trunc_indices()
-        return [self._ravel_indices(idx) for idx in indices]
-
-    @property
-    def ravel_func_supp(self):
-        indices = self.func_supp_indices()
-        return [self._ravel_indices(idx) for idx in indices]
-
-    @property
-    def ravel_cell_supp(self):
-        indices = self.cell_supp_indices()
-        return [self._ravel_indices(idx) for idx in indices]
-
-    @property
     def ravel_global(self):
         if not self.__ravel_global:
             indices = self.global_indices()
@@ -541,7 +521,7 @@ class HSpace:
     @property
     def smooth_dirichlet(self):
         if not self.__smooth_dirichlet:
-            self.__smooth_dirichlet = self.indices_to_smooth("dirichlet")
+            self.__smooth_dirichlet = self.raveled_to_virtual_matrix_indices(self.ravel_dirichlet)
         return self.__smooth_dirichlet
 
     @property
@@ -641,15 +621,24 @@ class HSpace:
         return indices
 
     def indices_to_smooth(self, strategy='func_supp'):
-        assert strategy in ("dirichlet", "new", "trunc", "func_supp", "cell_supp", "global"), "Invalid smoothing strategy"
-        choosen_indices = eval("self.ravel_" + strategy)
+        assert strategy in ("new", "trunc", "func_supp", "cell_supp"), "Invalid smoothing strategy"
+        # get smoothing indices in TP form
+        chosen_indices = getattr(self, strategy + '_indices')()
+        # convert them to raveled form
+        chosen_indices = [self._ravel_indices(idx) for idx in chosen_indices]
+        # convert them to matrix indices
+        return self.raveled_to_virtual_matrix_indices(chosen_indices)
+
+    def raveled_to_virtual_matrix_indices(self, indices):
+        # convert indices from levelwise raveled TP indices to matrix indices within the
+        # stiffness matrix on the corresponding virtual multigrid hierarchy level
         available_indices = self.ravel_global
         out = list()
         for lv in range(self.numlevels):
             aux = list()
             n_lv = 0
             for l in range(self.numlevels):
-                aux += list(n_lv + self._position_index(list(available_indices[lv][l]), choosen_indices[lv][l]))
+                aux += list(n_lv + self._position_index(list(available_indices[lv][l]), indices[lv][l]))
                 n_lv += len(available_indices[lv][l])
             out.append(np.array(aux))
         return out

@@ -423,15 +423,13 @@ class HSpace:
         """Return a tuple which contains, per level, the raveled (sequential) indices of
         active basis functions.
         """
-        self.__ravel_actfun = self._ravel_indices(self.actfun)
-        return self.__ravel_actfun
+        return self._ravel_indices(self.actfun)
 
     def deactivated_indices(self):
         """Return a tuple which contains, per level, the raveled (sequential) indices of
         deactivated basis functions.
         """
-        self.__ravel_deactfun = self._ravel_indices(self.deactfun)
-        return self.__ravel_deactfun
+        return self._ravel_indices(self.deactfun)
 
     def _compute_single_axis_single_level_dirichlet_indices(self, lv, bdspec):
         assert 0 <= lv < self.numlevels, 'Invalid level.'
@@ -482,24 +480,6 @@ class HSpace:
         if not self.__index_dirichlet:
             self.dirichlet_indices()
         return self.__index_dirichlet
-
-    @property
-    def ravel_actfun(self):
-        if not self.__ravel_actfun:
-            self.active_indices()
-        return self.__ravel_actfun
-
-    @property
-    def ravel_deactfun(self):
-        if not self.__ravel_deactfun:
-            self.deactivated_indices()
-        return self.__ravel_deactfun
-
-    @property
-    def ravel_actdeactfun(self):
-        if not self.__ravel_actdeactfun:
-            self.__ravel_actdeactfun = tuple(np.concatenate((iA,iD)) for (iA,iD) in zip(self.ravel_actfun,self.ravel_deactfun))
-        return self.__ravel_actdeactfun
 
     @property
     def ravel_dirichlet(self):

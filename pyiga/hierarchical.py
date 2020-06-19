@@ -490,26 +490,6 @@ class HSpace:
         return self.__index_dirichlet
 
     @property
-    def index_new(self):
-        return self.new_indices()
-
-    @property
-    def index_trunc(self):
-        return self.trunc_indices()
-
-    @property
-    def index_func_supp(self):
-        return self.func_supp_indices()
-
-    @property
-    def index_cell_supp(self):
-        return self.cell_supp_indices()
-
-    @property
-    def index_global(self):
-        return self.global_indices()
-
-    @property
     def ravel_actfun(self):
         if not self.__ravel_actfun:
             self.active_indices()
@@ -748,19 +728,19 @@ class HSpace:
         self.__cell_dirichlet = self.compute_cells(self.index_dirichlet)
 
     def new_cells(self):
-        self.__cell_new = self.compute_cells(self.index_new)
+        self.__cell_new = self.compute_cells(self.new_indices())
 
     def trunc_cells(self):
-        self.__cell_trunc = self.compute_cells(self.index_trunc)
+        self.__cell_trunc = self.compute_cells(self.trunc_indices())
 
     def function_supp_cells(self):
-        self.__cell_func_supp = self.compute_cells(self.index_func_supp)
+        self.__cell_func_supp = self.compute_cells(self.func_supp_indices())
 
     def cell_supp_cells(self):
-        self.__cell_cell_supp = self.compute_cells(self.index_cell_supp)
+        self.__cell_cell_supp = self.compute_cells(self.cell_supp_indices())
 
     def global_cells(self):
-        self.__cell_global = self.compute_cells(self.index_global)
+        self.__cell_global = self.compute_cells(self.global_indices())
 
     def function_support(self, lv, jj):
         """Return the support (as a tuple of pairs) of the function on level `lv` with index `jj`."""

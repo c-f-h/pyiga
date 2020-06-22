@@ -524,22 +524,6 @@ class HSpace:
             self.__smooth_dirichlet = self.raveled_to_virtual_matrix_indices(self.ravel_dirichlet)
         return self.__smooth_dirichlet
 
-    @property
-    def smooth_new(self):
-        return self.indices_to_smooth("new")
-
-    @property
-    def smooth_trunc(self):
-        return self.indices_to_smooth("trunc")
-
-    @property
-    def smooth_func_supp(self):
-        return self.indices_to_smooth("func_supp")
-
-    @property
-    def smooth_cell_supp(self):
-        return self.indices_to_smooth("cell_supp")
-
     def remove_indices(self, listsetA, listsetB):
         for lv in range(self.numlevels):
             listsetA[lv] -= listsetB[lv]

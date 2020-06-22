@@ -166,7 +166,7 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
     u_thb0 = LS_thb.complete(u_thb)
 
     # iteration numbers of the local MG method in the (T)HB basis
-    inds = eval("hs.smooth_" + strategy)
+    inds = hs.indices_to_smooth(strategy)
     spek_hb  = num_iterations(local_mg_step(hs, A_hb, f_hb, prolongators, inds, smoother), u_hb0, tol=tol)
     spek_thb = num_iterations(local_mg_step(hs, A_thb, f_thb, prolongators_THB, inds, smoother), u_thb0, tol=tol)
 

@@ -44,3 +44,31 @@ def test_cellextents():
     assert np.array_equal(
             hs.function_support(1, (3,1)),
             ((0.25, 1.0), (0.0, 0.5)))
+
+def test_incidence():
+    kv = bspline.make_knots(2, 0.0, 1.0, 4)
+    hs = HSpace((kv,))
+    hs.refine_region(0, lambda x: 1./4 < x < 3./4)
+    hs.refine_region(1, lambda x: 3./8 < x < 5./8)
+
+    Z = hs.incidence_matrix().A
+
+    naf = tuple(len(A) for A in hs.active_indices())    # (6, 2, 2)
+    nac = tuple(len(A) for A in hs.active_cells())      # (2, 2, 4)
+    assert Z.shape == (sum(naf), sum(nac))
+
+    # rows: functions, columns: cells
+    assert np.array_equal(Z,
+             ###################### level 0
+            [[1,0,  0,0,  0,0,0,0],
+             [1,0,  1,0,  1,1,0,0],
+             [1,0,  1,1,  1,1,1,1],
+             [0,1,  1,1,  1,1,1,1],
+             [0,1,  0,1,  0,0,1,1],
+             [0,1,  0,0,  0,0,0,0],
+             ###################### level 1
+             [0,0,  1,0,  1,1,1,1],
+             [0,0,  0,1,  1,1,1,1],
+             ###################### level 2
+             [0,0,  0,0,  1,1,1,0],
+             [0,0,  0,0,  0,1,1,1]])

@@ -837,3 +837,65 @@ class HSpace:
         """
         Ps = self.hmesh.P[lv]
         return utils.multi_kron_sparse(Ps) if kron else Ps
+
+    def incidence_matrix(self):
+        """Compute the incidence matrix which contains one row per active basis
+        function and one column per active cell in the hierarchical mesh. An
+        entry `(i,j)` is 1 if the function `i` is nonzero in the cell `j`, and 0
+        otherwise.
+        """
+        naf = tuple(len(ii) for ii in self.actfun)
+        nac = tuple(len(ii) for ii in self.hmesh.active)
+        ndc = tuple(len(ii) for ii in self.hmesh.deactivated)
+
+        L = self.numlevels
+
+        # data structure which maps cell multi-indices to sequential ones;
+        # on each level, we first number the active and then the deactivated cells
+        cell_index = [
+                utils.BijectiveIndex(sorted(self.hmesh.active[k])
+                                   + sorted(self.hmesh.deactivated[k]))
+                for k in range(L)
+        ]
+
+        def incidence_1level(k):
+            # Compute the incidence matrix for functions/cells on a single level.
+            # Size: naf[k] x (nac[:k] + nac[k] + ndc[k])
+            n0 = sum(nac[:k])
+            Z = scipy.sparse.lil_matrix((naf[k], n0 + nac[k] + ndc[k]), dtype=int)
+
+            for (i, f) in enumerate(sorted(self.actfun[k])):
+                cells = self.hmesh.meshes[k].support([f])
+                for c in cells:
+                    Z[i, n0 + cell_index[k].index(c)] = 1
+            return Z.tocsr()
+
+        def cell_prolongation(k):
+            # Matrix which "prolongs" deactivated cells on level k to the next
+            # finer level.
+            # Size: (nac[:k+1] + nac[k+1] + ndc[k+1]) x (nac[:k+1] + ndc[k])
+
+            # P is the matrix which prolongs deactive cells on k to cells on k+1
+            P = scipy.sparse.lil_matrix((nac[k+1] + ndc[k+1], ndc[k]), dtype=int)
+            for i in range(ndc[k]):
+                I = cell_index[k][nac[k] + i]
+                children = self.hmesh.cell_children(k, [I])
+                for c in children:
+                    P[cell_index[k+1].index(c), i] = 1
+
+            # extend P to preserve active cells on all earlier levels
+            I_k = scipy.sparse.eye(sum(nac[:k+1]), dtype=int)
+            return scipy.sparse.bmat(
+                    [[ I_k,  None ],
+                     [ None, P    ]], format='csr')
+
+        # start with the one-level incidence matrices
+        # initially, the k-th matrix has size naf[k] x (nac[:k+1] + ndc[k])
+        result = [ incidence_1level(k) for k in range(L) ]
+
+        # prolong the deactivated cells on each level
+        for k in range(L - 1):
+            P = cell_prolongation(k)
+            for j in range(k+1):    # only levels j with j <= k need prolongation
+                result[j] = result[j].dot(P.T)
+        return scipy.sparse.vstack(result, format='csr')

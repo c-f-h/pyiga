@@ -127,3 +127,22 @@ class LazyCachingArray:
             dest = tuple(slice((j-j0)*ts, (j-j0+1)*ts) for (j,j0) in zip(J,J0))
             output[dest] = self.get_tile(J)
         return output
+
+class BijectiveIndex:
+    """Maps a list of values to consecutive indices in the range `0, ..., len(values) - 1`
+    and allows reverse lookup of the index.
+    """
+    def __init__(self, values):
+        self.values = values
+        self._index = dict()
+        for (i, v) in enumerate(self.values):
+            self._index[v] = i
+
+    def __len__(self):
+        return len(self.values)
+
+    def __getitem__(self, i):
+        return self.values[i]
+
+    def index(self, v):
+        return self._index[v]

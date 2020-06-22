@@ -23,3 +23,9 @@ def test_lazy():
     assert np.allclose(F[2:4, 2:6, 6:8], LF2[2:4, 2:6, 6:8])
     # try again to test the caching behavior
     assert np.allclose(F[2:4, 2:6, 6:8], LF2[2:4, 2:6, 6:8])
+
+def test_BijectiveIndex():
+    I = BijectiveIndex([ (1,2), (3,4), (2,7) ])
+    assert len(I) == 3
+    assert I[1] == (3,4)
+    assert I.index((2,7)) == 2

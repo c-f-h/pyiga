@@ -624,7 +624,7 @@ class HSpace:
             for l in range(self.numlevels):
                 aux += list(n_lv + self._position_index(list(available_indices[lv][l]), indices[lv][l]))
                 n_lv += len(available_indices[lv][l])
-            out.append(np.array(aux))
+            out.append(np.array(aux, dtype=int))
         return out
 
     @staticmethod

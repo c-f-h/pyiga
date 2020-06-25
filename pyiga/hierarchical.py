@@ -576,7 +576,7 @@ class HSpace:
 
         return indices
 
-    def cell_supp_indices(self):
+    def cell_supp_indices(self, remove_dirichlet=True):
         """Return a tuple which contains tuples which contain, per level, the raveled
         (sequential) indices of CELL_SUPP basis functions in the VIRTUAL HIERARCHY per level."""
         indices = self.new_indices()        # start with only the newly added indices
@@ -589,7 +589,10 @@ class HSpace:
                                     lv,
                                     self.hmesh.meshes[lv].support(self.actfun[lv]),
                                     i))) & self.actfun[i]
-                    indices[lv][i] = sorted(funcs - self.index_dirichlet[lv][i])
+                    if remove_dirichlet:
+                        indices[lv][i] = sorted(funcs - self.index_dirichlet[lv][i])
+                    else:
+                        indices[lv][i] = sorted(funcs)
         return indices
 
     def global_indices(self):
@@ -771,39 +774,42 @@ class HSpace:
             lv: tuple(c for c in self.active_cells(lv) if region_function(*cell_center(c)))
         })
 
-    def represent_fine(self, truncate=False):
-        """Compute a matrix which represents all active HB-spline basis functions on the fine level.
+    def represent_fine(self, lv=None, truncate=False):
+        """Compute a matrix which represents HB- or THB-spline basis functions in terms of
+        their coefficients in the finest tensor product spline space.
 
-        The returned matrix has size `N_fine × N_act`, where `N_fine` is the
-        number of degrees of freedom in the finest tensor product mesh and
-        `N_act` = :attr:`numdofs` is the total number of active basis functions
-        across all levels.
+        By default, all active HB-spline functions are represented on the finest tensor
+        product mesh. The returned matrix has size `N_fine × N_act`, where `N_fine` is
+        the number of degrees of freedom in the tensor product mesh of the finest level
+        and `N_act` = :attr:`numdofs` is the total number of active basis functions.
 
-        If `truncate` is True, the representation of the THB-spline (truncated) basis functions
-        is computed instead.
+        If `lv` is specified, only active functions up to level `lv` are represented in terms
+        of their coefficients on level `lv`.
 
-        .. note::
-            This method is inherently inefficient since it deals with the full
-            fine-level tensor product space.
+        If `truncate` is True, the representation of the THB-spline (truncated) basis
+        functions is computed instead of that of the HB-splines.
         """
-        # raveled indices for active functions per level
-        act_indices = self.active_indices()
+        if lv == None:
+            lv = self.numlevels - 1
+        assert 0 <= lv < self.numlevels, "Invalid level."
+        act_indices = list(self.active_indices()[:lv+1])
+        deact_indices = self.deactivated_indices()[lv]
+        # generate list of raveled active indices of virtual level lv
+        act_indices[lv] = np.concatenate((act_indices[lv],deact_indices))
+
         blocks = []
+        for k in reversed(range(lv+1)):
+            Nj = self.mesh(k).numbf
 
-        for lv in reversed(range(self.numlevels)):
-            Nj = self.mesh(lv).numbf
-
-            if lv == self.numlevels - 1:
-                P = scipy.sparse.eye(Nj)
+            if k == lv:
+                P = scipy.sparse.eye(Nj, format='csc')
             else:
-                Pj = utils.multi_kron_sparse(self.hmesh.P[lv], format='lil')
+                Pj = utils.multi_kron_sparse(self.hmesh.P[k], format='lil')
                 if truncate:
-                    Pj[act_indices[lv+1], :] = 0
+                    Pj[act_indices[k+1], :] = 0
                 P = P.dot(Pj)
 
-            act_to_all = scipy.sparse.eye(Nj, format='csr')[:, act_indices[lv]]
-
-            blocks.append(P.dot(act_to_all))
+            blocks.append(P[:, act_indices[k]])
 
         blocks.reverse()
         return scipy.sparse.bmat([blocks], format='csr')

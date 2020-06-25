@@ -72,3 +72,71 @@ def test_incidence():
              ###################### level 2
              [0,0,  0,0,  1,1,1,0],
              [0,0,  0,0,  0,1,1,1]])
+
+
+def run_hierarchical_assemble(p, dim, n0, disparity):
+    from .test_localmg import create_example_hspace
+    hs = create_example_hspace(p, dim, n0, disparity, num_levels=3)
+
+    # assemble full tensor-product linear system on each level for simplicity
+    kvs = tuple(hs.knotvectors(lv) for lv in range(hs.numlevels))
+    As = [assemble.stiffness(kv) for kv in kvs]
+
+    # number of active and deactivated dofs per level
+    na = tuple(len(ii) for ii in hs.active_indices())
+
+    # I_hb[k]: maps HB-coefficients to TP coefficients on level k
+    I_hb = [hs.represent_fine(lv=k) for k in range(hs.numlevels)]
+
+    # compute dofs interacting with active dofs on each level
+    neighbors = hs.cell_supp_indices(remove_dirichlet=False)
+    # interactions on the same level are handled separately, so remove them
+    for k in range(hs.numlevels):
+        neighbors[k][k] = []
+
+    # dofs to be assembled for interlevel contributions - all level k dofs which
+    # are required to represent the coarse functions which interact with level k
+    to_assemble = []
+    for k in range(hs.numlevels):
+        to_assemble.append(set())
+        for lv in range(max(0, k - hs.disparity), k):
+            to_assemble[-1] |= set(hs.hmesh.function_babys(lv, neighbors[k][lv], k))
+    # convert them to raveled form
+    to_assemble = hs._ravel_indices(to_assemble)
+
+    # compute neighbors as matrix indices
+    neighbors = [hs._ravel_indices(idx) for idx in neighbors]
+    neighbors = hs.raveled_to_virtual_matrix_indices(neighbors)
+
+    # new indices per level as local tensor product indices
+    new_loc = hs.active_indices()
+    # new indices per level as global matrix indices
+    new = [np.arange(sum(na[:k]), sum(na[:k+1])) for k in range(hs.numlevels)]
+
+    # the diagonal block consisting of interactions on the same level
+    A_hb_new = [As[k][new_loc[k]][:,new_loc[k]]
+            for k in range(hs.numlevels)]
+    # the off-diagonal blocks which describe interactions with coarser levels
+    A_hb_interlevel = [(I_hb[k][to_assemble[k]][:, neighbors[k]].T
+                        @ As[k][to_assemble[k]][:, new_loc[k]]
+                        @ I_hb[k][new_loc[k]][:, new[k]])
+                       for k in range(hs.numlevels)]
+    #A_hb_interlevel = [(I_hb[k][:, neighbors[k]].T @ As[k] @ I_hb[k][:, new[k]])
+    #        for k in range(hs.numlevels)]
+
+    # assemble the matrix from the levelwise contributions
+    A = scipy.sparse.lil_matrix((hs.numdofs, hs.numdofs))
+
+    for k in range(hs.numlevels):
+        # store the k-th diagonal block
+        A[np.ix_(new[k], new[k])] = A_hb_new[k]
+        A[np.ix_(neighbors[k], new[k])] = A_hb_interlevel[k]
+        A[np.ix_(new[k], neighbors[k])] = A_hb_interlevel[k].T
+
+    # compute matrix on the finest level for comparison
+    A_hb = (I_hb[-1].T @ As[-1] @ I_hb[-1])
+    return scipy.linalg.norm((A - A_hb).A)
+
+def test_hierarchical_assemble():
+    error = run_hierarchical_assemble(p=4, dim=2, n0=4, disparity=1)
+    assert error < 1e-12

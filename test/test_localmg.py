@@ -55,7 +55,7 @@ def local_mg_step(hs, A, f_in, Ps, lv_inds, smoother='symmetric_gs'):
         As.append(P.T.dot(As[-1]).dot(P).tocsr())
     As.reverse()
     Rs = [P.T for P in Ps]
-    
+
     Bs = [] # exact solvers
 
     for lv in range(hs.numlevels):
@@ -95,7 +95,7 @@ def local_mg_step(hs, A, f_in, Ps, lv_inds, smoother='symmetric_gs'):
             r_c = Rs[lv-1].dot(r)
             aux = step(lv-1, np.zeros_like(r_c), r_c)
             x1 += P.dot(aux)
-            
+
             # post-smoothing
             if smoother == "forward_gs":
                 # Gauss-Seidel smoothing
@@ -133,12 +133,12 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
     #As = [assemble.stiffness(kv)+assemble.mass(kv) for kv in kvs]
     As = [assemble.stiffness(kv) for kv in kvs]
 
-    def rhs(*x): 
+    def rhs(*x):
         return 1.0
 
     fs = [assemble.inner_products(kv, rhs).ravel() for kv in kvs]
     prolongators, prolongators_THB = virtual_hierarchy_prolongators(hs)
-    
+
     # assemble and solve the HB-spline problem
 
     # I_hb: maps HB-coefficients to fine coefficients
@@ -151,7 +151,7 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
     A_hb_D = LS_hb.A.A
     u_hb = scipy.linalg.solve(A_hb_D, LS_hb.b)
     u_hb0 = LS_hb.complete(u_hb)
-    
+
     # compute THB-stiffness matrix
 
     # I_thb: maps THB coeffs to fine coeffs

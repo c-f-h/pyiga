@@ -129,43 +129,32 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
     hs = create_example_hspace(p, dim, n0, disparity, num_levels=3)
 
     # assemble full tensor-product linear system on each level for simplicity
-    kvs = tuple(hs.knotvectors(lv) for lv in range(hs.numlevels))
-    #As = [assemble.stiffness(kv)+assemble.mass(kv) for kv in kvs]
-    As = [assemble.stiffness(kv) for kv in kvs]
 
     def rhs(*x):
         return 1.0
 
-    fs = [assemble.inner_products(kv, rhs).ravel() for kv in kvs]
-    prolongators, prolongators_THB = virtual_hierarchy_prolongators(hs)
-
     # assemble and solve the HB-spline problem
+    hdiscr = hierarchical.HDiscretization(hs)
+    A_hb = hdiscr.assemble_matrix()
+    f_hb = hdiscr.assemble_rhs(rhs)
 
-    # I_hb: maps HB-coefficients to fine coefficients
-    I_hb = hs.represent_fine()
-
-    A_hb = (I_hb.T @ As[-1] @ I_hb).tocsr()
-    f_hb = I_hb.T @ fs[-1]
-
-    LS_hb = assemble.RestrictedLinearSystem(A_hb, f_hb, (hs.smooth_dirichlet[-1], np.zeros_like(hs.smooth_dirichlet[-1])))
-    A_hb_D = LS_hb.A.A
-    u_hb = scipy.linalg.solve(A_hb_D, LS_hb.b)
+    LS_hb = assemble.RestrictedLinearSystem(A_hb, f_hb,
+            (hs.smooth_dirichlet[-1], np.zeros_like(hs.smooth_dirichlet[-1])))
+    u_hb = scipy.sparse.linalg.spsolve(LS_hb.A, LS_hb.b)
     u_hb0 = LS_hb.complete(u_hb)
 
-    # compute THB-stiffness matrix
+    # assemble and solve the THB-spline problem
+    hdiscr = hierarchical.HDiscretization(hs, truncate=True)
+    A_thb = hdiscr.assemble_matrix()
+    f_thb = hdiscr.assemble_rhs(rhs)
 
-    # I_thb: maps THB coeffs to fine coeffs
-    I_thb = hs.represent_fine(truncate=True)
-
-    A_thb = I_thb.T @ As[-1] @ I_thb
-    f_thb = I_thb.T @ fs[-1]
-
-    LS_thb = assemble.RestrictedLinearSystem(A_thb, f_thb, (hs.smooth_dirichlet[-1], np.zeros_like(hs.smooth_dirichlet[-1])))
-    A_thb_D = LS_thb.A.A
-    u_thb = scipy.linalg.solve(A_thb_D, LS_thb.b)
+    LS_thb = assemble.RestrictedLinearSystem(A_thb, f_thb,
+            (hs.smooth_dirichlet[-1], np.zeros_like(hs.smooth_dirichlet[-1])))
+    u_thb = scipy.sparse.linalg.spsolve(LS_thb.A, LS_thb.b)
     u_thb0 = LS_thb.complete(u_thb)
 
     # iteration numbers of the local MG method in the (T)HB basis
+    prolongators, prolongators_THB = virtual_hierarchy_prolongators(hs)
     inds = hs.indices_to_smooth(strategy)
     spek_hb  = num_iterations(local_mg_step(hs, A_hb, f_hb, prolongators, inds, smoother), u_hb0, tol=tol)
     spek_thb = num_iterations(local_mg_step(hs, A_thb, f_thb, prolongators_THB, inds, smoother), u_thb0, tol=tol)

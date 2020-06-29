@@ -23,6 +23,7 @@ import scipy.sparse
 import itertools
 
 from . import bspline, utils, assemble
+from ._hdiscr import HDiscretization
 
 def _make_unique(L):
     """Return a list which contains the entries of `L` with consecutive duplicates removed."""

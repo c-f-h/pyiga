@@ -4,6 +4,13 @@ from numpy.random import rand
 def _random_banded(n, bw):
     return scipy.sparse.spdiags(rand(2*bw+1, n), np.arange(-bw,bw+1), n, n)
 
+def test_mlstructure():
+    bs, bw = (5,5), (2,2)
+    S = MLStructure.multi_banded(bs, bw)
+    A = _random_banded(bs[0], bw[0])
+    A2 = scipy.sparse.kron(A, A)
+    assert np.array_equal(S.nonzero(), A2.nonzero())
+
 def test_mlbanded_1d():
     bs = (20,)
     bw = (3,)

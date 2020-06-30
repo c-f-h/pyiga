@@ -78,6 +78,25 @@ class MLStructure:
         """
         return MLMatrix(structure=self, data=data, matrix=matrix)
 
+    def nonzero(self, lower_tri=False):
+        """
+        Return a tuple of arrays `(row,col)` containing the indices of
+        the non-zero elements of the matrix.
+
+        If `lower_tri` is ``True``, return only the indices for the
+        lower triangular part.
+        """
+        if self.L == 1:
+            assert not lower_tri, 'Lower triangular part not implemented in 1D'
+            IJ = self.bidx[0].T.copy()
+        elif self.L == 2:
+            IJ = ml_nonzero_2d(self.bidx, self._bs_arr, lower_tri=lower_tri)
+        elif self.L == 3:
+            IJ = ml_nonzero_3d(self.bidx, self._bs_arr, lower_tri=lower_tri)
+        else:
+            assert False, 'dimension %d not implemented' % self.L
+        return IJ[0,:], IJ[1,:]
+
     def sequential_bidx(self):
         # returns a version of bidx with ravelled indices
         return [ self.bs[j][0] * self.bidx[j][:,0] + self.bidx[j][:,1]
@@ -180,16 +199,7 @@ class MLMatrix(scipy.sparse.linalg.LinearOperator):
         If `lower_tri` is ``True``, return only the indices for the
         lower triangular part.
         """
-        if self.L == 1:
-            assert not lower_tri, 'Lower triangular part not implemented in 1D'
-            IJ = self.structure.bidx[0].T.copy()
-        elif self.L == 2:
-            IJ = ml_nonzero_2d(self.structure.bidx, self.structure._bs_arr, lower_tri=lower_tri)
-        elif self.L == 3:
-            IJ = ml_nonzero_3d(self.structure.bidx, self.structure._bs_arr, lower_tri=lower_tri)
-        else:
-            assert False, 'dimension %d not implemented' % self.L
-        return IJ[0,:], IJ[1,:]
+        return self.structure.nonzero(lower_tri=lower_tri)
 
     def reorder(self, axes):
         """Permute the levels of the matrix according to `axes`."""

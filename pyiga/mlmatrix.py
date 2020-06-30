@@ -52,6 +52,26 @@ class MLStructure:
         bidx = tuple(compute_sparsity_ij(kv0, kv1) for (kv0,kv1) in zip(kvs0,kvs1))
         return MLStructure(bs, bidx)
 
+    @staticmethod
+    def from_matrix(A):
+        """Create a one-level matrix structure which has the same sparsity
+        pattern as `A`.
+        """
+        bs = (tuple(A.shape),)
+        I, J = A.nonzero()
+        bidx = (np.column_stack((I, J)).astype(np.uint32),)
+        return MLStructure(bs, bidx)
+
+    @staticmethod
+    def from_kronecker(As):
+        """Create a matrix structure which represents the sparsity pattern of
+        the Kronecker product of the tuple of matrices `As`.
+        """
+        S = MLStructure.from_matrix(As[0])
+        for A in As[1:]:
+            S = S.join(MLStructure.from_matrix(A))
+        return S
+
     def join(self, other):
         """Append the given other structure and return the result."""
         return MLStructure(self.bs + other.bs, self.bidx + other.bidx)

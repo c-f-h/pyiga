@@ -7,8 +7,14 @@ def _random_banded(n, bw):
 def test_mlstructure():
     bs, bw = (5,5), (2,2)
     S = MLStructure.multi_banded(bs, bw)
-    A = _random_banded(bs[0], bw[0])
+    A = _random_banded(bs[0], bw[0]).tocsr()
     A2 = scipy.sparse.kron(A, A)
+    assert np.array_equal(S.nonzero(), A2.nonzero())
+    ##
+    S = MLStructure.from_matrix(A)
+    assert np.array_equal(S.nonzero(), A.nonzero())
+    ##
+    S = MLStructure.from_kronecker((A, A))
     assert np.array_equal(S.nonzero(), A2.nonzero())
 
 def test_mlbanded_1d():
@@ -112,7 +118,6 @@ def test_reorder():
     A2 = _random_banded(n2, 4).A
     A = np.kron(A1, A2)
     AR = reorder(A, n1, n1)     # shape: (n1*n1) x (n2*n2)
-    print(AR.shape)
     for i in range(n1*n1):
         for j in range(n2*n2):
             ii, jj = reindex_from_reordered(i, j, n1, n1, n2, n2)

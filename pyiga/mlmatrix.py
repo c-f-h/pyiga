@@ -117,6 +117,13 @@ class MLStructure:
             assert False, 'dimension %d not implemented' % self.L
         return IJ[0,:], IJ[1,:]
 
+    def transpose(self):
+        """Return the structure for the transpose of this one."""
+        bs = tuple((b[1], b[0]) for b in self.bs)
+        ix = np.array([1,0])    # indices for swapping i and j
+        bidx = tuple(np.ascontiguousarray(bx[:, ix]) for bx in self.bidx)
+        return MLStructure(bs, bidx)
+
     def sequential_bidx(self):
         # returns a version of bidx with ravelled indices
         return [ self.bs[j][0] * self.bidx[j][:,0] + self.bidx[j][:,1]

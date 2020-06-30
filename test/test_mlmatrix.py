@@ -16,6 +16,16 @@ def test_mlstructure():
     ##
     S = MLStructure.from_kronecker((A, A))
     assert np.array_equal(S.nonzero(), A2.nonzero())
+    ##
+    B = scipy.sparse.random(8, 20, density=0.1)
+    S = MLStructure.from_matrix(B)
+    assert np.array_equal(S.transpose().nonzero(), B.T.nonzero())
+    #
+    C = scipy.sparse.random(17, 9, density=0.1)
+    A2 = scipy.sparse.kron(B, C)
+    S = MLStructure.from_kronecker((B, C))
+    assert np.array_equal(S.nonzero(), A2.nonzero())
+    assert np.array_equal(S.transpose().nonzero(), A2.T.nonzero())
 
 def test_mlbanded_1d():
     bs = (20,)

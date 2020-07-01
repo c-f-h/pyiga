@@ -1,5 +1,5 @@
 from pyiga.hierarchical import *
-from pyiga import bspline, geometry, utils
+from pyiga import bspline, geometry, utils, vform, geometry
 
 def _make_hs(p=3, n=3):
     kv = bspline.make_knots(p, 0.0, 1.0, n)
@@ -77,7 +77,7 @@ def test_incidence():
 def test_hierarchical_assemble():
     from .test_localmg import create_example_hspace
     hs = create_example_hspace(p=4, dim=2, n0=4, disparity=1, num_levels=3)
-    hdiscr = HDiscretization(hs)
+    hdiscr = HDiscretization(hs, vform.stiffness_vf(dim=2), {'geo': geometry.unit_square()})
     A = hdiscr.assemble_matrix()
     # compute matrix on the finest level for comparison
     A_fine = assemble.stiffness(hs.knotvectors(-1))

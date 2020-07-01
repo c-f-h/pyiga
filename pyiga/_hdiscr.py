@@ -1,18 +1,23 @@
 import numpy as np
 import scipy.sparse
-from . import assemble
+from . import assemble, compile
 
 class HDiscretization:
-    def __init__(self, hspace, truncate=False):
+    def __init__(self, hspace, vform, asm_args, truncate=False):
         self.hs = hspace
         self._I_hb = hspace.represent_fine(truncate=truncate)
         self.truncate = truncate
+        self.asm_class = compile.compile_vform(vform, on_demand=True)
+        self.asm_args = asm_args
+
+    def _assemble_level(self, k):
+        asm = self.asm_class(self.hs.knotvectors(k), **self.asm_args)
+        return assemble.assemble(asm, symmetric=True)
 
     def assemble_matrix(self):
         if self.truncate:
             # levelwise assembling not implemented for THBs
-            kvs_fine = self.hs.knotvectors(-1)
-            A_fine = assemble.stiffness(kvs_fine)
+            A_fine = self._assemble_level(-1)
             return (self._I_hb.T @ A_fine @ self._I_hb).tocsr()
         else:
             hs = self.hs
@@ -43,7 +48,7 @@ class HDiscretization:
             new = [np.arange(sum(na[:k]), sum(na[:k+1])) for k in range(hs.numlevels)]
 
             kvs = tuple(hs.knotvectors(lv) for lv in range(hs.numlevels))
-            As = [assemble.stiffness(kv) for kv in kvs]
+            As = [self._assemble_level(k) for k in range(hs.numlevels)]
             # I_hb[k]: maps HB-coefficients to TP coefficients on level k
             I_hb = [hs.represent_fine(lv=k) for k in range(hs.numlevels)]
 

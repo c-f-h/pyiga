@@ -3,7 +3,7 @@
 
 import numpy as np
 import scipy.linalg
-from pyiga import bspline, assemble, hierarchical, solvers
+from pyiga import bspline, assemble, hierarchical, solvers, vform, geometry
 
 def virtual_hierarchy_prolongators(hs):
     # compute tensor product prolongators
@@ -134,7 +134,7 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
         return 1.0
 
     # assemble and solve the HB-spline problem
-    hdiscr = hierarchical.HDiscretization(hs)
+    hdiscr = hierarchical.HDiscretization(hs, vform.stiffness_vf(dim=2), {'geo': geometry.unit_square()})
     A_hb = hdiscr.assemble_matrix()
     f_hb = hdiscr.assemble_rhs(rhs)
 
@@ -144,7 +144,8 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
     u_hb0 = LS_hb.complete(u_hb)
 
     # assemble and solve the THB-spline problem
-    hdiscr = hierarchical.HDiscretization(hs, truncate=True)
+    hdiscr = hierarchical.HDiscretization(hs, vform.stiffness_vf(dim=2), {'geo': geometry.unit_square()},
+            truncate=True)
     A_thb = hdiscr.assemble_matrix()
     f_thb = hdiscr.assemble_rhs(rhs)
 

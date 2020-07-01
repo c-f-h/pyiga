@@ -5,6 +5,7 @@
 
 import numpy as np
 import scipy.sparse.linalg
+import itertools
 
 from . import lowrank
 
@@ -16,12 +17,25 @@ from . import lowrank
 class MLStructure:
     """Class representing the structure of a multi-level block-structured
     sparse matrix.
+
+    This means that it represents the sparsity structure of the Kronecker
+    product of `L` sparse matrices, where `L` is the number of levels.
+    The k-th Kronecker factor has size `m_k x n_k` and `nnz_k` nonzeros.
+
+    Args:
+        bs: the tuple of the block sizes ((m_1, n_1), ..., (m_L, n_L))
+        bidx: for each level, contains an nnz_k x 2 array with the (i,j)
+            indices of the nonzero locations of the k-th factor matrix
+
+    .. note::
+        The most convenient way to create instances of this class is through
+        the static methods defined below for various types of matrices.
     """
     def __init__(self, bs, bidx):
-        self.bs = tuple(bs)
-        self._bs_arr = np.array(self.bs)
+        self.bs = tuple(bs)                 # layout: ((m_1, n_1), ..., (m_L, n_L))
+        self._bs_arr = np.array(self.bs)    # shape: L x 2
         assert self._bs_arr.shape[1] == 2, 'invalid block sizes'
-        self.bidx = tuple(bidx)
+        self.bidx = tuple(bidx)             # for each level k, contains an nnz_k x 2 array with (i,j) indices
         assert len(self.bs) == len(self.bidx)
         self.L = len(self.bs)
         M = np.prod(tuple(b[0] for b in self.bs))
@@ -52,6 +66,26 @@ class MLStructure:
         bidx = tuple(compute_sparsity_ij(kv0, kv1) for (kv0,kv1) in zip(kvs0,kvs1))
         return MLStructure(bs, bidx)
 
+    @staticmethod
+    def from_matrix(A):
+        """Create a one-level matrix structure which has the same sparsity
+        pattern as `A`.
+        """
+        bs = (tuple(A.shape),)
+        I, J = A.nonzero()
+        bidx = (np.column_stack((I, J)).astype(np.uint32),)
+        return MLStructure(bs, bidx)
+
+    @staticmethod
+    def from_kronecker(As):
+        """Create a matrix structure which represents the sparsity pattern of
+        the Kronecker product of the tuple of matrices `As`.
+        """
+        S = MLStructure.from_matrix(As[0])
+        for A in As[1:]:
+            S = S.join(MLStructure.from_matrix(A))
+        return S
+
     def join(self, other):
         """Append the given other structure and return the result."""
         return MLStructure(self.bs + other.bs, self.bidx + other.bidx)
@@ -78,6 +112,74 @@ class MLStructure:
         """
         return MLMatrix(structure=self, data=data, matrix=matrix)
 
+    def nonzero(self, lower_tri=False):
+        """
+        Return a tuple of arrays `(row,col)` containing the indices of
+        the non-zero elements of the matrix.
+
+        If `lower_tri` is ``True``, return only the indices for the
+        lower triangular part.
+        """
+        if self.L == 1:
+            assert not lower_tri, 'Lower triangular part not implemented in 1D'
+            IJ = self.bidx[0].T.copy()
+        elif self.L == 2:
+            IJ = ml_nonzero_2d(self.bidx, self._bs_arr, lower_tri=lower_tri)
+        elif self.L == 3:
+            IJ = ml_nonzero_3d(self.bidx, self._bs_arr, lower_tri=lower_tri)
+        else:
+            assert False, 'dimension %d not implemented' % self.L
+        return IJ[0,:], IJ[1,:]
+
+    def transpose(self):
+        """Return the structure for the transpose of this one."""
+        bs = tuple((b[1], b[0]) for b in self.bs)
+        ix = np.array([1,0])    # indices for swapping i and j
+        bidx = tuple(np.ascontiguousarray(bx[:, ix]) for bx in self.bidx)
+        return MLStructure(bs, bidx)
+
+    def _level_rowwise_interactions(self, k):
+        # return a list which contains, for each row index, a list of the
+        # column indices that row interacts with on matrix level k
+        num_rows = self.bs[k][0]
+        bx = self.bidx[k]
+        nnz = bx.shape[0]
+        result = [[] for i in range(num_rows)]
+        for s in range(nnz):
+            result[bx[s, 0]].append(bx[s, 1])
+        return result
+
+    def nonzeros_for_rows(self, row_indices):
+        """For each (sequential) row index in the list `row_indices`, compute
+        the list of (sequential) column indices that that row interacts with.
+
+        I.e., this function computes the nonzeros for a subset of the rows of
+        the matrix.
+        """
+        L = self.L
+        lvia = tuple(self._level_rowwise_interactions(k) for k in range(L))
+        N = len(row_indices)
+        bs_I = tuple(self.bs[k][0] for k in range(L))
+        bs_J = tuple(self.bs[k][1] for k in range(L))
+        ix = np.unravel_index(row_indices, bs_I)
+        result = []         # multi-indices of interactions
+        for i in range(N):
+            I = tuple(ix[k][i] for k in range(L))   # multiindex for row[i]
+            # obtain the levelwise interactions for each index i_k
+            ia_k = tuple(lvia[k][I[k]] for k in range(L))
+            # compute global interactions by taking the Cartesian product
+            result.append([to_seq(J, bs_J) for J in itertools.product(*ia_k)])
+        return result
+
+    def nonzeros_for_columns(self, col_indices):
+        """For each (sequential) column index in the list `row_indices`, compute
+        the list of (sequential) row indices that that column interacts with.
+
+        I.e., this function computes the nonzeros for a subset of the columns of
+        the matrix.
+        """
+        return self.transpose().nonzeros_for_rows(col_indices)
+
     def sequential_bidx(self):
         # returns a version of bidx with ravelled indices
         return [ self.bs[j][0] * self.bidx[j][:,0] + self.bidx[j][:,1]
@@ -97,7 +199,7 @@ class MLMatrix(scipy.sparse.linalg.LinearOperator):
     where each level has an arbitrary sparsity pattern.
 
     Args:
-        bs (:class:`MLStructure`): the multi-level structure of the matrix to create
+        structure (:class:`MLStructure`): the multi-level structure of the matrix to create
         matrix: a dense or sparse matrix with the proper multi-level
             banded structure used as initializer
         data (ndarray): alternatively, the compact data array for the matrix
@@ -180,16 +282,7 @@ class MLMatrix(scipy.sparse.linalg.LinearOperator):
         If `lower_tri` is ``True``, return only the indices for the
         lower triangular part.
         """
-        if self.L == 1:
-            assert not lower_tri, 'Lower triangular part not implemented in 1D'
-            IJ = self.structure.bidx[0].T.copy()
-        elif self.L == 2:
-            IJ = ml_nonzero_2d(self.structure.bidx, self.structure._bs_arr, lower_tri=lower_tri)
-        elif self.L == 3:
-            IJ = ml_nonzero_3d(self.structure.bidx, self.structure._bs_arr, lower_tri=lower_tri)
-        else:
-            assert False, 'dimension %d not implemented' % self.L
-        return IJ[0,:], IJ[1,:]
+        return self.structure.nonzero(lower_tri=lower_tri)
 
     def reorder(self, axes):
         """Permute the levels of the matrix according to `axes`."""

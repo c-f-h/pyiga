@@ -4,6 +4,50 @@ from numpy.random import rand
 def _random_banded(n, bw):
     return scipy.sparse.spdiags(rand(2*bw+1, n), np.arange(-bw,bw+1), n, n)
 
+def test_mlstructure():
+    bs, bw = (5,5), (2,2)
+    S = MLStructure.multi_banded(bs, bw)
+    A = _random_banded(bs[0], bw[0]).tocsr()
+    A2 = scipy.sparse.kron(A, A)
+    assert np.array_equal(S.nonzero(), A2.nonzero())
+    ##
+    S = MLStructure.from_matrix(A)
+    assert np.array_equal(S.nonzero(), A.nonzero())
+    ##
+    S = MLStructure.from_kronecker((A, A))
+    assert np.array_equal(S.nonzero(), A2.nonzero())
+    ##
+    B = scipy.sparse.random(8, 20, density=0.1)
+    S = MLStructure.from_matrix(B)
+    assert np.array_equal(S.transpose().nonzero(), B.T.nonzero())
+    #
+    C = scipy.sparse.random(17, 9, density=0.1)
+    A2 = scipy.sparse.kron(B, C)
+    S = MLStructure.from_kronecker((B, C))
+    assert np.array_equal(S.nonzero(), A2.nonzero())
+    assert np.array_equal(S.transpose().nonzero(), A2.T.nonzero())
+
+def test_nonzeros_for_rows():
+    A = np.array(
+            [[0,2,0],
+             [3,0,1],
+             [0,7,0]])
+    B = np.array(
+            [[2,9,0,0],
+             [0,2,9,0],
+             [0,0,2,9]])
+    X = np.kron(A, B)
+    S = MLStructure.from_kronecker((A, B))
+    m, n = X.shape
+
+    nz_i = S.nonzeros_for_rows(list(range(m)))
+    for i in range(m):
+        assert np.array_equal(nz_i[i], X[i,:].nonzero()[0])
+
+    nz_j = S.nonzeros_for_columns(list(range(n)))
+    for j in range(n):
+        assert np.array_equal(nz_j[j], X[:,j].nonzero()[0])
+
 def test_mlbanded_1d():
     bs = (20,)
     bw = (3,)
@@ -105,7 +149,6 @@ def test_reorder():
     A2 = _random_banded(n2, 4).A
     A = np.kron(A1, A2)
     AR = reorder(A, n1, n1)     # shape: (n1*n1) x (n2*n2)
-    print(AR.shape)
     for i in range(n1*n1):
         for j in range(n2*n2):
             ii, jj = reindex_from_reordered(i, j, n1, n1, n2, n2)

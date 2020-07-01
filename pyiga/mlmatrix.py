@@ -5,6 +5,7 @@
 
 import numpy as np
 import scipy.sparse.linalg
+import itertools
 
 from . import lowrank
 
@@ -16,12 +17,25 @@ from . import lowrank
 class MLStructure:
     """Class representing the structure of a multi-level block-structured
     sparse matrix.
+
+    This means that it represents the sparsity structure of the Kronecker
+    product of `L` sparse matrices, where `L` is the number of levels.
+    The k-th Kronecker factor has size `m_k x n_k` and `nnz_k` nonzeros.
+
+    Args:
+        bs: the tuple of the block sizes ((m_1, n_1), ..., (m_L, n_L))
+        bidx: for each level, contains an nnz_k x 2 array with the (i,j)
+            indices of the nonzero locations of the k-th factor matrix
+
+    .. note::
+        The most convenient way to create instances of this class is through
+        the static methods defined below for various types of matrices.
     """
     def __init__(self, bs, bidx):
-        self.bs = tuple(bs)
-        self._bs_arr = np.array(self.bs)
+        self.bs = tuple(bs)                 # layout: ((m_1, n_1), ..., (m_L, n_L))
+        self._bs_arr = np.array(self.bs)    # shape: L x 2
         assert self._bs_arr.shape[1] == 2, 'invalid block sizes'
-        self.bidx = tuple(bidx)
+        self.bidx = tuple(bidx)             # for each level k, contains an nnz_k x 2 array with (i,j) indices
         assert len(self.bs) == len(self.bidx)
         self.L = len(self.bs)
         M = np.prod(tuple(b[0] for b in self.bs))
@@ -124,6 +138,48 @@ class MLStructure:
         bidx = tuple(np.ascontiguousarray(bx[:, ix]) for bx in self.bidx)
         return MLStructure(bs, bidx)
 
+    def _level_rowwise_interactions(self, k):
+        # return a list which contains, for each row index, a list of the
+        # column indices that row interacts with on matrix level k
+        num_rows = self.bs[k][0]
+        bx = self.bidx[k]
+        nnz = bx.shape[0]
+        result = [[] for i in range(num_rows)]
+        for s in range(nnz):
+            result[bx[s, 0]].append(bx[s, 1])
+        return result
+
+    def nonzeros_for_rows(self, row_indices):
+        """For each (sequential) row index in the list `row_indices`, compute
+        the list of (sequential) column indices that that row interacts with.
+
+        I.e., this function computes the nonzeros for a subset of the rows of
+        the matrix.
+        """
+        L = self.L
+        lvia = tuple(self._level_rowwise_interactions(k) for k in range(L))
+        N = len(row_indices)
+        bs_I = tuple(self.bs[k][0] for k in range(L))
+        bs_J = tuple(self.bs[k][1] for k in range(L))
+        ix = np.unravel_index(row_indices, bs_I)
+        result = []         # multi-indices of interactions
+        for i in range(N):
+            I = tuple(ix[k][i] for k in range(L))   # multiindex for row[i]
+            # obtain the levelwise interactions for each index i_k
+            ia_k = tuple(lvia[k][I[k]] for k in range(L))
+            # compute global interactions by taking the Cartesian product
+            result.append([to_seq(J, bs_J) for J in itertools.product(*ia_k)])
+        return result
+
+    def nonzeros_for_columns(self, col_indices):
+        """For each (sequential) column index in the list `row_indices`, compute
+        the list of (sequential) row indices that that column interacts with.
+
+        I.e., this function computes the nonzeros for a subset of the columns of
+        the matrix.
+        """
+        return self.transpose().nonzeros_for_rows(col_indices)
+
     def sequential_bidx(self):
         # returns a version of bidx with ravelled indices
         return [ self.bs[j][0] * self.bidx[j][:,0] + self.bidx[j][:,1]
@@ -143,7 +199,7 @@ class MLMatrix(scipy.sparse.linalg.LinearOperator):
     where each level has an arbitrary sparsity pattern.
 
     Args:
-        bs (:class:`MLStructure`): the multi-level structure of the matrix to create
+        structure (:class:`MLStructure`): the multi-level structure of the matrix to create
         matrix: a dense or sparse matrix with the proper multi-level
             banded structure used as initializer
         data (ndarray): alternatively, the compact data array for the matrix

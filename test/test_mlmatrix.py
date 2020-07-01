@@ -27,6 +27,27 @@ def test_mlstructure():
     assert np.array_equal(S.nonzero(), A2.nonzero())
     assert np.array_equal(S.transpose().nonzero(), A2.T.nonzero())
 
+def test_nonzeros_for_rows():
+    A = np.array(
+            [[0,2,0],
+             [3,0,1],
+             [0,7,0]])
+    B = np.array(
+            [[2,9,0,0],
+             [0,2,9,0],
+             [0,0,2,9]])
+    X = np.kron(A, B)
+    S = MLStructure.from_kronecker((A, B))
+    m, n = X.shape
+
+    nz_i = S.nonzeros_for_rows(list(range(m)))
+    for i in range(m):
+        assert np.array_equal(nz_i[i], X[i,:].nonzero()[0])
+
+    nz_j = S.nonzeros_for_columns(list(range(n)))
+    for j in range(n):
+        assert np.array_equal(nz_j[j], X[:,j].nonzero()[0])
+
 def test_mlbanded_1d():
     bs = (20,)
     bw = (3,)

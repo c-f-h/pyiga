@@ -775,7 +775,7 @@ class HSpace:
             lv: tuple(c for c in self.active_cells(lv) if region_function(*cell_center(c)))
         })
 
-    def represent_fine(self, lv=None, truncate=False):
+    def represent_fine(self, lv=None, truncate=False, rows=None):
         """Compute a matrix which represents HB- or THB-spline basis functions in terms of
         their coefficients in the finest tensor product spline space.
 
@@ -789,6 +789,10 @@ class HSpace:
 
         If `truncate` is True, the representation of the THB-spline (truncated) basis
         functions is computed instead of that of the HB-splines.
+
+        If `rows` is given, only those rows are kept in the output. In other
+        words, only the representation with respect to these tensor product
+        basis functions on the fine level is computed.
         """
         if lv == None:
             lv = self.numlevels - 1
@@ -804,6 +808,8 @@ class HSpace:
 
             if k == lv:
                 P = scipy.sparse.eye(Nj, format='csc')
+                if rows is not None:
+                    P = P[rows]
             else:
                 Pj = utils.multi_kron_sparse(self.hmesh.P[k], format='lil')
                 if truncate:
@@ -827,7 +833,7 @@ class HSpace:
         def trunc(k):
             # compute the matrix which realizes truncation from level k to k+1
             T = scipy.sparse.eye(nt[-1], format='lil')
-            A = self.represent_fine(lv=k+1)[actidx[k+1]]    # rep act(0..k+1) as act(k+1)
+            A = self.represent_fine(lv=k+1, rows=actidx[k+1])    # rep act(0..k+1) as act(k+1)
             # truncation: subtract the components of the coarse functions which can
             # be represented by the active functions on level k+1
             T[nt[k]:nt[k+1], 0:nt[k]] = -A[:, 0:nt[k]]

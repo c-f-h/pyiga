@@ -64,6 +64,16 @@ def multi_kron_sparse(As, format='csr'):
     else:
         return scipy.sparse.kron(As[0], multi_kron_sparse(As[1:], format=format), format=format)
 
+def cartesian_product(arrays):
+    """Compute the Cartesian product of any number of input arrays."""
+    # source: https://stackoverflow.com/a/11146645/2929337
+    L = len(arrays)
+    dtype = np.result_type(*arrays)
+    arr = np.empty([len(a) for a in arrays] + [L], dtype=dtype)
+    for i, a in enumerate(np.ix_(*arrays)):
+        arr[...,i] = a
+    return arr.reshape(-1, L)
+
 
 class LazyArray:
     """An interface for lazily evaluating functions over a tensor product grid

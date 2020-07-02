@@ -5,10 +5,8 @@
 
 import numpy as np
 import scipy.sparse.linalg
-import itertools
 
-from . import lowrank
-
+from . import lowrank, utils
 
 ################################################################################
 # Multi-level banded matrix class
@@ -147,38 +145,40 @@ class MLStructure:
         result = [[] for i in range(num_rows)]
         for s in range(nnz):
             result[bx[s, 0]].append(bx[s, 1])
-        return result
+        return [np.array(r, dtype=np.int) for r in result]
 
     def nonzeros_for_rows(self, row_indices):
         """Compute a pair of index arrays `(I,J)` specifying the locations of
         nonzeros (just like :func:`nonzero`), but containing only those
         nonzeros which lie in the given rows.
         """
+        if len(row_indices) == 0:
+            return np.empty(0, dtype=np.int), np.empty(0, dtype=np.int)
         L = self.L
         lvia = tuple(self._level_rowwise_interactions(k) for k in range(L))
-        N = len(row_indices)
         bs_I = tuple(self.bs[k][0] for k in range(L))
         bs_J = tuple(self.bs[k][1] for k in range(L))
         ix = np.unravel_index(row_indices, bs_I)
 
-        Is, Js = [], []
-        for i in range(N):
+        counts, Js = [], []
+        for i in range(len(row_indices)):
             I = tuple(ix[k][i] for k in range(L))   # multiindex for row[i]
             # obtain the levelwise interactions for each index i_k
             ia_k = tuple(lvia[k][I[k]] for k in range(L))
-
             # compute global interactions by taking the Cartesian product
-            for J in itertools.product(*ia_k):
-                Is.append(row_indices[i])
-                Js.append(J)
+            Js.append(utils.cartesian_product(ia_k))
+            counts.append(Js[-1].shape[0])
+
+        Is = np.repeat(row_indices, counts)
+        Js = np.concatenate(Js)
 
         if len(Js) > 0:
-            Js = np.atleast_2d(np.array(Js, dtype=np.int))
+            # convert from multi-index to raveled format
             Js = np.ravel_multi_index(tuple(Js[:,k] for k in range(L)), bs_J)
         else:
-            Js = np.zeros(0, dtype=np.int)
+            Js = np.empty(0, dtype=np.int)
 
-        return np.array(Is, dtype=np.int), Js
+        return Is, Js
 
     def nonzeros_for_columns(self, col_indices):
         """Compute a pair of index arrays `(I,J)` specifying the locations of

@@ -15,7 +15,7 @@ class HDiscretization:
         self.hs = hspace
         self._I_hb = hspace.represent_fine(truncate=truncate)
         self.truncate = truncate
-        self.asm_class = compile.compile_vform(vform, on_demand=True)
+        self.asm_class = compile.compile_vform(vform, on_demand=False)
         self.asm_args = asm_args
 
     def _assemble_level(self, k, rows=None):

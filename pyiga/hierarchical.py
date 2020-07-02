@@ -775,7 +775,7 @@ class HSpace:
             lv: tuple(c for c in self.active_cells(lv) if region_function(*cell_center(c)))
         })
 
-    def represent_fine(self, lv=None, truncate=False, rows=None):
+    def represent_fine(self, lv=None, truncate=False, rows=None, restrict=False):
         """Compute a matrix which represents HB- or THB-spline basis functions in terms of
         their coefficients in the finest tensor product spline space.
 
@@ -792,7 +792,10 @@ class HSpace:
 
         If `rows` is given, only those rows are kept in the output. In other
         words, only the representation with respect to these tensor product
-        basis functions on the fine level is computed.
+        basis functions on the fine level is computed. If `restrict=False`,
+        then the shape of the matrix is not changed, but only the corresponding
+        rows are filled.  If `restrict=True`, the matrix is restricted to the
+        submatrix having only these rows.
         """
         if lv == None:
             lv = self.numlevels - 1
@@ -807,9 +810,21 @@ class HSpace:
             Nj = self.mesh(k).numbf
 
             if k == lv:
-                P = scipy.sparse.eye(Nj, format='csc')
-                if rows is not None:
-                    P = P[rows]
+                if rows is None:
+                    P = scipy.sparse.eye(Nj, format='csc')
+                else:
+                    if restrict:
+                        # construct restricted slice of identity matrix
+                        n = len(rows)
+                        P = scipy.sparse.coo_matrix(
+                                (np.ones(n), (np.arange(n), rows)),
+                                shape=(n, Nj)).tocsc()
+                    else:
+                        # construct partial identity matrix which is 1 only on the given rows
+                        n = len(rows)
+                        P = scipy.sparse.coo_matrix(
+                                (np.ones(n), (rows, rows)),
+                                shape=(Nj, Nj)).tocsc()
             else:
                 Pj = utils.multi_kron_sparse(self.hmesh.P[k], format='lil')
                 if truncate:
@@ -833,7 +848,7 @@ class HSpace:
         def trunc(k):
             # compute the matrix which realizes truncation from level k to k+1
             T = scipy.sparse.eye(nt[-1], format='lil')
-            A = self.represent_fine(lv=k+1, rows=actidx[k+1])    # rep act(0..k+1) as act(k+1)
+            A = self.represent_fine(lv=k+1, rows=actidx[k+1], restrict=True)    # rep act(0..k+1) as act(k+1)
             # truncation: subtract the components of the coarse functions which can
             # be represented by the active functions on level k+1
             T[nt[k]:nt[k+1], 0:nt[k]] = -A[:, 0:nt[k]]

@@ -73,7 +73,7 @@ class HDiscretization:
             kvs = tuple(hs.knotvectors(lv) for lv in range(hs.numlevels))
             As = [self._assemble_level(k, rows=to_assemble[k]) for k in range(hs.numlevels)]
             # I_hb[k]: maps HB-coefficients to TP coefficients on level k
-            I_hb = [hs.represent_fine(lv=k) for k in range(hs.numlevels)]
+            I_hb = [hs.represent_fine(lv=k, rows=to_assemble[k]) for k in range(hs.numlevels)]
 
             # the diagonal block consisting of interactions on the same level
             A_hb_new = [As[k][new_loc[k]][:,new_loc[k]]

@@ -30,9 +30,15 @@ class HDiscretization:
 
     def assemble_matrix(self):
         if self.truncate:
-            # levelwise assembling not implemented for THBs
-            A_fine = self._assemble_level(-1)
-            return (self._I_hb.T @ A_fine @ self._I_hb).tocsr()
+            # compute HB version and transform it
+            # HACK - overwrite truncate flag and replace it afterwards
+            try:
+                self.truncate = False
+                A_hb = self.assemble_matrix()
+            finally:
+                self.truncate = True
+            T = self.hs.thb_to_hb()
+            return T.T @ A_hb @ T
         else:
             hs = self.hs
             # compute dofs interacting with active dofs on each level

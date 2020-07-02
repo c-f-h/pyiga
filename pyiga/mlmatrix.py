@@ -149,7 +149,7 @@ class MLStructure:
             result[bx[s, 0]].append(bx[s, 1])
         return result
 
-    def nonzeros_for_rows(self, row_indices, as_IJ=True):
+    def nonzeros_for_rows(self, row_indices):
         """Compute a pair of index arrays `(I,J)` specifying the locations of
         nonzeros (just like :func:`nonzero`), but containing only those
         nonzeros which lie in the given rows.
@@ -160,37 +160,33 @@ class MLStructure:
         bs_I = tuple(self.bs[k][0] for k in range(L))
         bs_J = tuple(self.bs[k][1] for k in range(L))
         ix = np.unravel_index(row_indices, bs_I)
-        result = []         # multi-indices of interactions
+
+        Is, Js = [], []
         for i in range(N):
             I = tuple(ix[k][i] for k in range(L))   # multiindex for row[i]
             # obtain the levelwise interactions for each index i_k
             ia_k = tuple(lvia[k][I[k]] for k in range(L))
+
             # compute global interactions by taking the Cartesian product
-            result.append([to_seq(J, bs_J) for J in itertools.product(*ia_k)])
+            for J in itertools.product(*ia_k):
+                Is.append(row_indices[i])
+                Js.append(J)
 
-        if as_IJ:
-            nnz = tuple(len(ci) for ci in result)
-            IJ = np.empty((2, sum(nnz)), dtype=int)
-            k = 0
-            for (i, ci) in zip(row_indices, result):
-                n = len(ci)
-                IJ[0, k:k+n] = i    # row index
-                IJ[1, k:k+n] = ci   # column indices
-                k += n
-            return IJ[0,:], IJ[1,:]
+        if len(Js) > 0:
+            Js = np.atleast_2d(np.array(Js, dtype=np.int))
+            Js = np.ravel_multi_index(tuple(Js[:,k] for k in range(L)), bs_J)
         else:
-            return result
+            Js = np.zeros(0, dtype=np.int)
 
-    def nonzeros_for_columns(self, col_indices, as_IJ=True):
+        return np.array(Is, dtype=np.int), Js
+
+    def nonzeros_for_columns(self, col_indices):
         """Compute a pair of index arrays `(I,J)` specifying the locations of
         nonzeros (just like :func:`nonzero`), but containing only those
         nonzeros which lie in the given columns.
         """
-        result = self.transpose().nonzeros_for_rows(col_indices, as_IJ=as_IJ)
-        if as_IJ:
-            return result[1], result[0]     # swap I and J because of transpose
-        else:
-            return result
+        J, I = self.transpose().nonzeros_for_rows(col_indices)
+        return I, J     # swap I and J because of transpose
 
     def sequential_bidx(self):
         # returns a version of bidx with ravelled indices

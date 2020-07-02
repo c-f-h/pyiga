@@ -40,13 +40,21 @@ def test_nonzeros_for_rows():
     S = MLStructure.from_kronecker((A, B))
     m, n = X.shape
 
-    nz_i = S.nonzeros_for_rows(list(range(m)), as_IJ=False)
-    for i in range(m):
-        assert np.array_equal(nz_i[i], X[i,:].nonzero()[0])
+    I, J = S.nonzeros_for_rows([4,5,6,7])
+    IX, JX = X[4:8, :].nonzero()
+    assert np.array_equal(I, IX+4)
+    assert np.array_equal(J, JX)
 
-    nz_j = S.nonzeros_for_columns(list(range(n)), as_IJ=False)
-    for j in range(n):
-        assert np.array_equal(nz_j[j], X[:,j].nonzero()[0])
+    I, J = S.nonzeros_for_columns([1,2,7])
+    for j in range(X.shape[1]): # zero the remaining columns
+        if j not in (1,2,7):
+            X[:,j] = 0
+    IX, JX = X.nonzero()
+    IJ = np.column_stack((I, J))
+    IJ_X = np.column_stack((IX, JX))
+    assert np.array_equal(
+            np.unique(IJ, axis=0),      # sorted lexocigraphically since order differs
+            np.unique(IJ_X, axis=0))
 
 def test_mlbanded_1d():
     bs = (20,)

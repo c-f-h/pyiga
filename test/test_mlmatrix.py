@@ -40,11 +40,11 @@ def test_nonzeros_for_rows():
     S = MLStructure.from_kronecker((A, B))
     m, n = X.shape
 
-    nz_i = S.nonzeros_for_rows(list(range(m)))
+    nz_i = S.nonzeros_for_rows(list(range(m)), as_IJ=False)
     for i in range(m):
         assert np.array_equal(nz_i[i], X[i,:].nonzero()[0])
 
-    nz_j = S.nonzeros_for_columns(list(range(n)))
+    nz_j = S.nonzeros_for_columns(list(range(n)), as_IJ=False)
     for j in range(n):
         assert np.array_equal(nz_j[j], X[:,j].nonzero()[0])
 

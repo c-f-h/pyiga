@@ -6,12 +6,9 @@ def _assemble_partial_rows(asm, row_indices):
     """Assemble a submatrix which contains only the given rows."""
     kvs0, kvs1 = asm.kvs
     S = mlmatrix.MLStructure.from_kvs(kvs0, kvs1)
-    A = scipy.sparse.lil_matrix(S.shape)
-    cols = S.nonzeros_for_rows(row_indices)     # per row, the nonzero column indices
-    for (i, cols_i) in zip(row_indices, cols):
-        for j in cols_i:
-            A[i, j] = asm.entry(i, j)
-    return A.tocsr()
+    I, J = S.nonzeros_for_rows(row_indices)     # the nonzero indices in the given rows
+    data = [asm.entry(i, j) for (i,j) in zip(I,J)]
+    return scipy.sparse.coo_matrix((data, (I,J)), shape=S.shape).tocsr()
 
 class HDiscretization:
     def __init__(self, hspace, vform, asm_args, truncate=False):

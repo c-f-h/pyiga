@@ -149,12 +149,10 @@ class MLStructure:
             result[bx[s, 0]].append(bx[s, 1])
         return result
 
-    def nonzeros_for_rows(self, row_indices):
-        """For each (sequential) row index in the list `row_indices`, compute
-        the list of (sequential) column indices that that row interacts with.
-
-        I.e., this function computes the nonzeros for a subset of the rows of
-        the matrix.
+    def nonzeros_for_rows(self, row_indices, as_IJ=True):
+        """Compute a pair of index arrays `(I,J)` specifying the locations of
+        nonzeros (just like :func:`nonzero`), but containing only those
+        nonzeros which lie in the given rows.
         """
         L = self.L
         lvia = tuple(self._level_rowwise_interactions(k) for k in range(L))
@@ -169,16 +167,30 @@ class MLStructure:
             ia_k = tuple(lvia[k][I[k]] for k in range(L))
             # compute global interactions by taking the Cartesian product
             result.append([to_seq(J, bs_J) for J in itertools.product(*ia_k)])
-        return result
 
-    def nonzeros_for_columns(self, col_indices):
-        """For each (sequential) column index in the list `row_indices`, compute
-        the list of (sequential) row indices that that column interacts with.
+        if as_IJ:
+            nnz = tuple(len(ci) for ci in result)
+            IJ = np.empty((2, sum(nnz)), dtype=int)
+            k = 0
+            for (i, ci) in zip(row_indices, result):
+                n = len(ci)
+                IJ[0, k:k+n] = i    # row index
+                IJ[1, k:k+n] = ci   # column indices
+                k += n
+            return IJ[0,:], IJ[1,:]
+        else:
+            return result
 
-        I.e., this function computes the nonzeros for a subset of the columns of
-        the matrix.
+    def nonzeros_for_columns(self, col_indices, as_IJ=True):
+        """Compute a pair of index arrays `(I,J)` specifying the locations of
+        nonzeros (just like :func:`nonzero`), but containing only those
+        nonzeros which lie in the given columns.
         """
-        return self.transpose().nonzeros_for_rows(col_indices)
+        result = self.transpose().nonzeros_for_rows(col_indices, as_IJ=as_IJ)
+        if as_IJ:
+            return result[1], result[0]     # swap I and J because of transpose
+        else:
+            return result
 
     def sequential_bidx(self):
         # returns a version of bidx with ravelled indices

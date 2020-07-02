@@ -28,6 +28,15 @@ def test_hspace():
     vals = utils.grid_eval(one_func, 2 * (np.linspace(0.0, 1.0, 10),))
     assert np.allclose(vals, np.ones((10, 10)))
 
+def test_thb_to_hb():
+    from .test_localmg import create_example_hspace
+    hs = create_example_hspace(p=3, dim=2, n0=4, disparity=np.inf, num_levels=3)
+
+    T = hs.thb_to_hb()
+    I_hb = hs.represent_fine()
+    I_thb = hs.represent_fine(truncate=True)
+    assert np.allclose((I_hb @ T).A, I_thb.A)
+
 def test_cellextents():
     hs = _make_hs(p=2, n=2)
     hs.refine_region(0, lambda *X: True)    # refine globally

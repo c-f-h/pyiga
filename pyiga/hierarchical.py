@@ -815,6 +815,32 @@ class HSpace:
         blocks.reverse()
         return scipy.sparse.bmat([blocks], format='csr')
 
+    def thb_to_hb(self):
+        """Return a sparse square matrix of size :attr:`numdofs` which
+        transforms THB-spline coefficients into the corresponding HB-spline
+        coefficients.
+        """
+        na = self.numactive     # na[k]: num active dofs on level k
+        nt = np.cumsum(na)      # nt[k]: total active dofs up to level k
+        actidx = self.active_indices()  # TP indices of active functions per level
+
+        def trunc(k):
+            # compute the matrix which realizes truncation from level k to k+1
+            T = scipy.sparse.eye(nt[-1], format='lil')
+            A = self.represent_fine(lv=k+1)[actidx[k+1]]    # rep act(0..k+1) as act(k+1)
+            # truncation: subtract the components of the coarse functions which can
+            # be represented by the active functions on level k+1
+            T[nt[k]:nt[k+1], 0:nt[k]] = -A[:, 0:nt[k]]
+            return T.tocsr()
+
+        if self.numlevels == 1:
+            return scipy.sparse.eye(nt[-1], format='csr')
+        else:
+            T = trunc(0)
+            for k in range(1, self.numlevels - 1):
+                T = trunc(k) @ T
+            return T
+
     def split_coeffs(self, x):
         """Given a coefficient vector `x` of length :attr:`numdofs`, split it
         into :attr:`numlevels` vectors which contain the contributions from

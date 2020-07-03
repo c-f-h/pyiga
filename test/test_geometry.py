@@ -237,7 +237,7 @@ def test_translate():
             tensor_product(line_segment(3,4), line_segment(2,3), line_segment(1,2)))
     # translation of NURBS patch
     G = quarter_annulus().translate((1,2))
-    values = G.grid_eval((np.linspace(0,1,20), [0]))
+    values = G.grid_eval((np.linspace(0,1,20), [0.]))
     assert np.allclose(np.linalg.norm(values - (1,2), axis=-1), 1.0)
 
 def test_scale():
@@ -263,7 +263,7 @@ def test_rotation():
                       line_segment([0,0], [2*d,2*d])))
     # rotation of NURBS patch
     G = quarter_annulus().rotate_2d(np.pi / 4)
-    values = G.grid_eval((np.linspace(0,1,20), [0,1]))
+    values = G.grid_eval((np.linspace(0,1,20), [0.,1.]))
     assert np.allclose(np.linalg.norm(values[:,0], axis=-1), 1.0) # inner arc r=1
     assert np.allclose(np.linalg.norm(values[:,1], axis=-1), 2.0) # outer arc r=2
     assert np.allclose(values[0,0],  (d,d))      # check that the 4 corners are correct

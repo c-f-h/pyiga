@@ -34,7 +34,7 @@ class HDiscretization:
             finally:
                 self.truncate = True
             T = self.hs.thb_to_hb()
-            return T.T @ A_hb @ T
+            return (T.T @ A_hb @ T).tocsr()
         else:
             hs = self.hs
             # compute dofs interacting with active dofs on each level
@@ -91,7 +91,7 @@ class HDiscretization:
                 A[np.ix_(new[k], new[k])] = A_hb_new[k]
                 A[np.ix_(neighbors[k], new[k])] = A_hb_interlevel[k]
                 A[np.ix_(new[k], neighbors[k])] = A_hb_interlevel[k].T
-            return A
+            return A.tocsr()
 
     def assemble_rhs(self, f):
         geo = self.asm_args.get('geo', None)

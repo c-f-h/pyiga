@@ -56,6 +56,26 @@ cdef class BaseAssembler2D:
             from_seq2(idx_arr[k,1], self.S0_ndofs, J)
             out[k] = self.entry_impl(I, J)
 
+    def multi_entries1(self, indices):
+        """Compute all entries given by `indices`.
+
+        Args:
+            indices: a sequence or `ndarray` of vector indices to compute
+        """
+        if self.arity != 1:
+            return None
+        cdef size_t[::1] idx_arr
+        if isinstance(indices, np.ndarray):
+            idx_arr = np.asarray(indices, order='C', dtype=np.uintp)
+        else:   # possibly given as iterator
+            idx_arr = np.array(list(indices), dtype=np.uintp)
+
+        cdef double[::1] result = np.empty(idx_arr.shape[0])
+        cdef int i
+        for i in range(idx_arr.shape[0]):
+            result[i] = self.entry1(idx_arr[i])
+        return result
+
     def multi_entries(self, indices):
         """Compute all entries given by `indices`.
 
@@ -63,7 +83,9 @@ cdef class BaseAssembler2D:
             indices: a sequence of `(i,j)` pairs or an `ndarray`
             of size `N x 2`.
         """
-        if self.arity != 2:
+        if self.arity == 1:
+            return self.multi_entries1(indices)
+        elif self.arity != 2:
             return None
         cdef size_t[:,::1] idx_arr
         if isinstance(indices, np.ndarray):
@@ -390,6 +412,26 @@ cdef class BaseAssembler3D:
             from_seq3(idx_arr[k,1], self.S0_ndofs, J)
             out[k] = self.entry_impl(I, J)
 
+    def multi_entries1(self, indices):
+        """Compute all entries given by `indices`.
+
+        Args:
+            indices: a sequence or `ndarray` of vector indices to compute
+        """
+        if self.arity != 1:
+            return None
+        cdef size_t[::1] idx_arr
+        if isinstance(indices, np.ndarray):
+            idx_arr = np.asarray(indices, order='C', dtype=np.uintp)
+        else:   # possibly given as iterator
+            idx_arr = np.array(list(indices), dtype=np.uintp)
+
+        cdef double[::1] result = np.empty(idx_arr.shape[0])
+        cdef int i
+        for i in range(idx_arr.shape[0]):
+            result[i] = self.entry1(idx_arr[i])
+        return result
+
     def multi_entries(self, indices):
         """Compute all entries given by `indices`.
 
@@ -397,7 +439,9 @@ cdef class BaseAssembler3D:
             indices: a sequence of `(i,j)` pairs or an `ndarray`
             of size `N x 2`.
         """
-        if self.arity != 2:
+        if self.arity == 1:
+            return self.multi_entries1(indices)
+        elif self.arity != 2:
             return None
         cdef size_t[:,::1] idx_arr
         if isinstance(indices, np.ndarray):

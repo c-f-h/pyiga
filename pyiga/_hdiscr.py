@@ -7,7 +7,7 @@ def _assemble_partial_rows(asm, row_indices):
     kvs0, kvs1 = asm.kvs
     S = mlmatrix.MLStructure.from_kvs(kvs0, kvs1)
     I, J = S.nonzeros_for_rows(row_indices)     # the nonzero indices in the given rows
-    data = [asm.entry(i, j) for (i,j) in zip(I,J)]
+    data = asm.multi_entries(np.column_stack((I,J)))
     return scipy.sparse.coo_matrix((data, (I,J)), shape=S.shape).tocsr()
 
 class HDiscretization:
@@ -104,10 +104,7 @@ class HDiscretization:
         def asm_rhs_level(k, rows):
             kvs = self.hs.knotvectors(k)
             asm = RhsAsm(kvs, geo, f=f)
-            result = np.empty(len(rows))
-            for m, i in enumerate(rows):
-                result[m] = asm.entry1(i)
-            return result
+            return asm.multi_entries(rows)
 
         act = self.hs.active_indices()
         na = tuple(len(ii) for ii in act)

@@ -805,6 +805,16 @@ class HSpace:
         # generate list of raveled active indices of virtual level lv
         act_indices[lv] = np.concatenate((act_indices[lv],deact_indices))
 
+        # Intermediate matrix format; if truncating, we need a format which
+        # allows efficient changing of the sparsity structure due to setting
+        # some rows to 0.
+        fmt = 'lil' if truncate else 'csr'
+
+        # In every iteration, needed_rows keeps track of the rows which are
+        # needed from the prolongation matrix of the next coarser level. This
+        # is purely an optimization so that not the complete tensor product
+        # prolongation matrix has to be assembled.
+
         blocks = []
         for k in reversed(range(lv+1)):
             Nj = self.mesh(k).numbf
@@ -812,6 +822,7 @@ class HSpace:
             if k == lv:
                 if rows is None:
                     P = scipy.sparse.eye(Nj, format='csc')
+                    needed_rows = None
                 else:
                     if restrict:
                         # construct restricted slice of identity matrix
@@ -825,11 +836,25 @@ class HSpace:
                         P = scipy.sparse.coo_matrix(
                                 (np.ones(n), (rows, rows)),
                                 shape=(Nj, Nj)).tocsc()
+                    needed_rows = rows
             else:
-                Pj = utils.multi_kron_sparse(self.hmesh.P[k], format='lil')
+                # check what percentage of rows we need from the prolongator
+                if needed_rows is not None:
+                    if len(needed_rows) / P.shape[1] > 0.5:
+                        # use the more efficient full Kronecker product if we need most rows
+                        needed_rows = None
+
+                if needed_rows is None:
+                    Pj = utils.multi_kron_sparse(self.hmesh.P[k], format=fmt)
+                else:
+                    Pj = utils.kron_partial(self.hmesh.P[k], needed_rows, format=fmt)
                 if truncate:
                     Pj[act_indices[k+1], :] = 0
                 P = P.dot(Pj)
+
+                # determine needed rows for the next step from the nonzero columns of P
+                nnz_per_col = P.getnnz(axis=0)              # count nnz_j per column
+                needed_rows = nnz_per_col.nonzero()[0]      # find columns with nnz_j > 0
 
             blocks.append(P[:, act_indices[k]])
 

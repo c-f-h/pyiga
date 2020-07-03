@@ -66,7 +66,7 @@ def multi_kron_sparse(As, format='csr'):
     else:
         return scipy.sparse.kron(As[0], multi_kron_sparse(As[1:], format=format), format=format)
 
-def kron_partial(As, rows):
+def kron_partial(As, rows, format='csr'):
     """Compute a partial Kronecker product between the sparse matrices
     `As = (A_1, ..., A_k)`, filling only the given `rows` in the output matrix.
     """
@@ -87,7 +87,7 @@ def kron_partial(As, rows):
     values = tuple(As[k][I_ix[k], J_ix[k]].A1 for k in range(S.L))
     # compute the Kronecker product as the product of the factors
     entries = functools.reduce(operator.mul, values)
-    return scipy.sparse.csr_matrix((entries, (I,J)), shape=S.shape)
+    return scipy.sparse.coo_matrix((entries, (I,J)), shape=S.shape).asformat(format)
 
 def cartesian_product(arrays):
     """Compute the Cartesian product of any number of input arrays."""

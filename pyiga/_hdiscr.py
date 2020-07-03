@@ -13,7 +13,6 @@ def _assemble_partial_rows(asm, row_indices):
 class HDiscretization:
     def __init__(self, hspace, vform, asm_args, truncate=False):
         self.hs = hspace
-        self._I_hb = hspace.represent_fine(truncate=truncate)
         self.truncate = truncate
         self.asm_class = compile.compile_vform(vform, on_demand=False)
         self.asm_args = asm_args
@@ -95,6 +94,18 @@ class HDiscretization:
             return A
 
     def assemble_rhs(self, f):
-        kvs_fine = self.hs.knotvectors(-1)
-        f_fine = assemble.inner_products(kvs_fine, f).ravel()
-        return self._I_hb.T @ f_fine
+        geo = self.asm_args.get('geo', None)
+        act = self.hs.active_indices()
+        na = tuple(len(ii) for ii in act)
+        rhs = np.zeros(self.hs.numdofs)
+        i = 0
+        # collect the contributions from the active functions per level
+        for k, na_k in enumerate(na):
+            f_k = assemble.inner_products(self.hs.knotvectors(k), f, geo=geo).ravel()
+            rhs[i:i+na_k] = f_k[act[k]]
+            i += na_k
+
+        # if using THBs, apply the transformation matrix
+        if self.truncate:
+            rhs = self.hs.thb_to_hb().T @ rhs
+        return rhs

@@ -1,5 +1,9 @@
 from pyiga.utils import *
 import numpy as np
+from numpy.random import rand
+
+def _random_banded(n, bw):
+    return scipy.sparse.spdiags(rand(2*bw+1, n), np.arange(-bw,bw+1), n, n).tocsr()
 
 def test_lazy():
     def f(x, y, z):
@@ -29,3 +33,11 @@ def test_BijectiveIndex():
     assert len(I) == 3
     assert I[1] == (3,4)
     assert I.index((2,7)) == 2
+
+def test_kron_partial():
+    As = (_random_banded(5, 1), _random_banded(4, 2), _random_banded(6, 3))
+    X = multi_kron_sparse(As)
+    X_partial = kron_partial(As, rows=list(range(17, 25)))
+    assert np.allclose(X[17:25].A, X_partial[17:25].A)
+    assert X_partial[:17].nnz == 0
+    assert X_partial[25:(5*4*6)].nnz == 0

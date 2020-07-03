@@ -2,6 +2,8 @@ import numpy as np
 import scipy.sparse
 import scipy.sparse.linalg
 import itertools
+import functools
+import operator
 
 def _broadcast_to_grid(X, grid_shape):
     num_dims = len(grid_shape)
@@ -63,6 +65,29 @@ def multi_kron_sparse(As, format='csr'):
         return As[0].asformat(format, copy=True)
     else:
         return scipy.sparse.kron(As[0], multi_kron_sparse(As[1:], format=format), format=format)
+
+def kron_partial(As, rows):
+    """Compute a partial Kronecker product between the sparse matrices
+    `As = (A_1, ..., A_k)`, filling only the given `rows` in the output matrix.
+    """
+    from .mlmatrix import MLStructure
+    # determine the I,J indices of the nonzeros in the given rows
+    S = MLStructure.from_kronecker(As)
+    I, J = S.nonzeros_for_rows(rows)
+    if len(I) == 0:     # no nonzeros? return zero matrix
+        return scipy.sparse.csr_matrix(S.shape)
+
+    # block sizes for unraveling the row and column indices
+    bs_I = tuple(S.bs[k][0] for k in range(S.L))
+    bs_J = tuple(S.bs[k][1] for k in range(S.L))
+    # unravel the indices to refer to the individual blocks A_k
+    I_ix = np.unravel_index(I, bs_I)
+    J_ix = np.unravel_index(J, bs_J)
+    # compute the values of the individual factor matrices
+    values = tuple(As[k][I_ix[k], J_ix[k]].A1 for k in range(S.L))
+    # compute the Kronecker product as the product of the factors
+    entries = functools.reduce(operator.mul, values)
+    return scipy.sparse.csr_matrix((entries, (I,J)), shape=S.shape)
 
 def cartesian_product(arrays):
     """Compute the Cartesian product of any number of input arrays."""

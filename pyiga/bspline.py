@@ -112,10 +112,11 @@ class KnotVector:
         """Returns an index i such that
          kv[i] <= u < kv[i+1]     (except for the boundary, where u <= kv[m-p] is allowed)
          and p <= i < len(kv) - 1 - p"""
-        if u >= self.kv[-self.p-1]:
-            return self.kv.size - self.p - 2  # last interval
-        else:
-            return np.searchsorted(self.kv, u, side='right') - 1
+        #if u >= self.kv[-self.p-1]:
+        #    return self.kv.size - self.p - 2  # last interval
+        #else:
+        #    return self.kv.searchsorted(u, side='right') - 1
+        return pyx_findspan(self.kv, self.p, u)
 
     def first_active(self, k):
         """Index of first active basis function in interval (kv[k], kv[k+1])"""
@@ -395,7 +396,8 @@ def collocation(kv, nodes):
     p = kv.p
     I, J, V = [], [], []
     values = active_ev(kv, nodes) # (p+1) x n
-    indices = [kv.first_active_at(u) for u in nodes]
+    #indices = [kv.first_active_at(u) for u in nodes]
+    indices = pyx_findspans(kv.kv, p, nodes) - p        # faster version
     for k in range(m):
         V.extend(values[:, k])
         I.extend( (p+1) * [k] )
@@ -414,7 +416,8 @@ def collocation_derivs(kv, nodes, derivs=1):
     I, J = [], []
     V = [[] for _ in range(derivs+1)]
     values = active_deriv(kv, nodes, derivs) # (derivs+1) x (p+1) x n
-    indices = [kv.first_active_at(u) for u in nodes]
+    #indices = [kv.first_active_at(u) for u in nodes]
+    indices = pyx_findspans(kv.kv, p, nodes) - p        # faster version
     for k in range(m):
         for d in range(derivs+1):
             V[d].extend(values[d, :, k])
@@ -540,7 +543,7 @@ class BSplineFunc:
         Args:
             *x: the point at which to evaluate the function, in xyz order
         """
-        coords = tuple(np.asarray([t]) for t in reversed(x))
+        coords = tuple(np.asarray([t], dtype=float) for t in reversed(x))
         y = self.grid_eval(coords).squeeze(axis=tuple(range(self.sdim)))
         if y.shape == ():
             y = y.item()

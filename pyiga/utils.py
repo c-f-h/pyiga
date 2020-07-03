@@ -91,13 +91,16 @@ def kron_partial(As, rows, format='csr'):
 
 def cartesian_product(arrays):
     """Compute the Cartesian product of any number of input arrays."""
-    # source: https://stackoverflow.com/a/11146645/2929337
     L = len(arrays)
-    dtype = np.result_type(*arrays)
-    arr = np.empty([len(a) for a in arrays] + [L], dtype=dtype)
-    for i, a in enumerate(np.ix_(*arrays)):
-        arr[...,i] = a
-    return arr.reshape(-1, L)
+    shp = tuple(len(a) for a in arrays)
+    arr = np.empty(shp + (L,), dtype=arrays[0].dtype)
+    for i in range(L):
+        # broadcast the i-th array along all but the i-th axis
+        ix = L * [np.newaxis]
+        ix[i] = slice(len(arrays[i]))
+        arr[..., i] = arrays[i][tuple(ix)]
+    arr.shape = (-1, L)
+    return arr
 
 
 class LazyArray:

@@ -566,7 +566,7 @@ class BSplineFunc:
             gridaxes = tuple(np.squeeze(ax) for ax in gridaxes)
             assert all(ax.ndim == 1 for ax in gridaxes), \
                 "Grid axes should be one-dimensional"
-        colloc = [collocation(self.kvs[i], gridaxes[i]).A for i in range(self.sdim)]
+        colloc = [collocation(self.kvs[i], gridaxes[i]) for i in range(self.sdim)]
         return apply_tprod(colloc, self.coeffs)
 
     def grid_jacobian(self, gridaxes):
@@ -587,7 +587,6 @@ class BSplineFunc:
         """
         assert len(gridaxes) == self.sdim, "Input has wrong dimension"
         colloc = [collocation_derivs(self.kvs[i], gridaxes[i], derivs=1) for i in range(self.sdim)]
-        colloc = [(C.A, Cd.A) for (C,Cd) in colloc]
 
         grad_components = []
         for i in reversed(range(self.sdim)):  # x-component is the last one

@@ -93,7 +93,7 @@ class NurbsFunc:
             gridaxes = tuple(np.squeeze(ax) for ax in gridaxes)
             assert all(ax.ndim == 1 for ax in gridaxes), \
                 "Grid axes should be one-dimensional"
-        colloc = [bspline.collocation(self.kvs[i], gridaxes[i]).A for i in range(self.sdim)]
+        colloc = [bspline.collocation(self.kvs[i], gridaxes[i]) for i in range(self.sdim)]
         vals = apply_tprod(colloc, self.coeffs)
         return vals[..., :-1] / vals[..., -1:]       # divide by weight function
 

@@ -10,10 +10,39 @@ cimport numpy as np
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
+cpdef int pyx_findspan(double[::1] kv, int p, double u) nogil:
+    cdef int n = kv.shape[0]
+
+    if u >= kv[n - p - 1]:
+        return n - p - 2  # last interval
+
+    cdef int a = 0, b = n - 1, c
+
+    while b - a > 1:
+        c = a + (b - a) // 2
+        if kv[c] > u:
+            b = c
+        else:
+            a = c
+    return a
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef object pyx_findspans(double[::1] kv, int p, double[::1] u):
+    out = np.empty(u.shape[0], dtype=long)
+    cdef long[::1] result = out
+    cdef int i
+    for i in range(u.shape[0]):
+        result[i] = pyx_findspan(kv, p, u[i])
+    return out
+
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cdef double[:,:] bspline_active_deriv_single(object knotvec, double u, int numderiv, double[:,:] result=None):
     """Evaluate all active B-spline basis functions and their derivatives
     up to `numderiv` at a single point `u`"""
-    cdef double[:] kv
+    cdef double[::1] kv
     cdef int p, j, r, k, span, rk, pk, fac, j1, j2
     cdef double[:,::1] NDU
     cdef double saved, temp, d
@@ -30,7 +59,7 @@ cdef double[:,:] bspline_active_deriv_single(object knotvec, double u, int numde
     else:
         assert result.shape[0] is numderiv+1 and result.shape[1] is p+1
 
-    span = knotvec.findspan(u)
+    span = pyx_findspan(kv, p, u)
 
     NDU[0,0] = 1.0
 

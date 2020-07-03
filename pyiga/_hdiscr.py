@@ -94,15 +94,28 @@ class HDiscretization:
             return A.tocsr()
 
     def assemble_rhs(self, f):
-        geo = self.asm_args.get('geo', None)
+        geo = self.asm_args['geo']
+
+        from .vform import L2functional_vf
+        RhsAsm = compile.compile_vform(
+                L2functional_vf(dim=self.hs.dim, physical=True),
+                on_demand=False)
+
+        def asm_rhs_level(k, rows):
+            kvs = self.hs.knotvectors(k)
+            asm = RhsAsm(kvs, geo, f=f)
+            result = np.empty(len(rows))
+            for m, i in enumerate(rows):
+                result[m] = asm.entry1(i)
+            return result
+
         act = self.hs.active_indices()
         na = tuple(len(ii) for ii in act)
         rhs = np.zeros(self.hs.numdofs)
         i = 0
         # collect the contributions from the active functions per level
         for k, na_k in enumerate(na):
-            f_k = assemble.inner_products(self.hs.knotvectors(k), f, geo=geo).ravel()
-            rhs[i:i+na_k] = f_k[act[k]]
+            rhs[i:i+na_k] = asm_rhs_level(k, act[k])
             i += na_k
 
         # if using THBs, apply the transformation matrix

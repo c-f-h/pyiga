@@ -154,6 +154,66 @@ class LazyArray:
         else:
             raise ValueError('invalid mode: ' + str(self.mode))
 
+class TileCachingArray:
+    def __init__(self, arr, tilesize):
+        self.arr = arr
+        griddim = len(arr.grid)
+        self.outshape = arr.shape[griddim:]
+        self.ts = tilesize
+        self.tiles = {}
+
+    def get_tile(self, I):
+        """I is a tile index as a d-tuple."""
+        T = self.tiles.get(I)
+        if T is None:
+            ts = self.ts
+            slices = tuple(slice(i*ts, (i+1)*ts) for i in I)
+            T = self.arr[slices]
+            self.tiles[I] = T
+        return T
+
+    def __getitem__(self, I):
+        assert len(I) == len(self.arr.grid), "Wrong number of indices"
+        idx = tuple((sl.start, sl.stop) for sl in I)
+        N = tuple(gi[1] - gi[0] for gi in idx)  # size of output
+        ts = self.ts
+        tiles = tuple(range(gi[0]//ts, (gi[1] + ts - 1) // ts) for gi in idx)
+        J0 = tuple(gi[0] // ts for gi in idx)   # index of first tile
+        output = np.empty(N + self.outshape)
+        for J in itertools.product(*tiles):
+            dest = tuple(slice((j-j0)*ts, (j-j0+1)*ts) for (j,j0) in zip(J,J0))
+            output[dest] = self.get_tile(J)
+        return output
+
+class TileCachingArray2:
+    def __init__(self, arr, tilesize):
+        self.arr = arr
+        griddim = len(arr.grid)
+        self.inshape = arr.shape[:griddim]
+        self.outshape = arr.shape[griddim:]
+        self.ts = tilesize
+        self.cache = np.empty(arr.shape)
+        num_tiles = tuple((m + self.ts - 1) // self.ts for m in self.inshape)
+        self.computed = np.zeros(num_tiles, dtype=bool)
+
+    def compute_tile(self, I):
+        """I is a tile index as a d-tuple."""
+        if not self.computed[I]:
+            ts = self.ts
+            slices = tuple(slice(i*ts, min((i+1)*ts, max_k))
+                    for i, max_k in zip(I, self.inshape))
+            #self.cache[slices] = self.arr[slices]
+            self.arr.compute(slices, self.cache[slices])
+            self.computed[I] = True
+
+    def __getitem__(self, I):
+        #assert len(I) == len(self.arr.grid), "Wrong number of indices"
+        ts = self.ts
+        tiles = tuple(range(sl.start // ts, (sl.stop + ts - 1) // ts) for sl in I)
+        for J in itertools.product(*tiles):
+            self.compute_tile(J)
+        return self.cache[I]
+
 class LazyCachingArray:
     """An interface for lazily evaluating functions over a tensor product grid
     with array slicing notation. Already computed values are cached tile-wise.

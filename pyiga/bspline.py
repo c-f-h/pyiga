@@ -9,6 +9,7 @@ import scipy.sparse.linalg
 import scipy.interpolate
 
 from .tensor import apply_tprod
+from . import utils
 
 class KnotVector:
     """Represents an open B-spline knot vector together with a spline degree.
@@ -757,6 +758,42 @@ class PhysicalGradientFunc:
 
         u_grad = self.func.grid_jacobian(gridaxes)
         return np.matmul(geojacinvT, u_grad[..., None])[..., 0]
+
+
+class LazyBSplineJacobianArray:
+    """An interface for lazily evaluating the Jacobian of a
+    :class:`BSplineFunc` over a tensor product grid with array slicing
+    notation.
+    """
+    def __init__(self, f, grid):
+        self.f = f
+        self.grid = grid
+        self.shape = tuple(len(ax) for ax in grid) + (f.dim, f.sdim)
+        assert len(grid) == f.sdim
+        self.colloc = [
+                collocation_derivs(self.f.kvs[i], grid[i], derivs=1)
+                for i in range(len(grid))]
+
+    def __getitem__(self, I):
+        return self.compute(I, None)
+
+    def compute(self, I, out=None):
+        d = len(self.grid)
+        assert len(I) == d, "Wrong number of indices"
+        idx = tuple((sl.start, sl.stop) for sl in I)
+
+        shp = tuple(i[1] - i[0] for i in idx) + (self.f.dim, self.f.sdim)
+        if out is None:
+            out = np.empty(shp)
+        else:
+            assert out.shape == shp
+
+        for i in reversed(range(d)):  # x-component is the last one
+            ops = [ # deriv. in i-th direction
+                    utils.CSRRowSlice(self.colloc[j][1 if j==i else 0], (idx[j][0], idx[j][1]))
+                    for j in range(d)]
+            out[..., d - i - 1] = apply_tprod(ops, self.f.coeffs)   # shape: shape(grid) x self.dim
+        return out
 
 ################################################################################
 

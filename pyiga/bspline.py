@@ -572,7 +572,7 @@ class BSplineFunc:
         colloc = [collocation(self.kvs[i], gridaxes[i]) for i in range(self.sdim)]
         return apply_tprod(colloc, self.coeffs)
 
-    def grid_jacobian(self, gridaxes):
+    def grid_jacobian(self, gridaxes, bbox=None):
         """Evaluate the Jacobian on a tensor product grid.
 
         Args:
@@ -589,13 +589,26 @@ class BSplineFunc:
             vector of length :attr:`sdim` (the gradient) per grid point.
         """
         assert len(gridaxes) == self.sdim, "Input has wrong dimension"
-        colloc = [collocation_derivs(self.kvs[i], gridaxes[i], derivs=1) for i in range(self.sdim)]
+
+        if bbox:
+            slices = tuple(slice(bb[0], bb[1]) for bb in bbox)
+        else:
+            slices = tuple(slice(len(ga)) for ga in gridaxes)
+        colloc = [collocation_derivs(self.kvs[i], gridaxes[i][slices[i]], derivs=1) for i in range(self.sdim)]
 
         grad_components = []
         for i in reversed(range(self.sdim)):  # x-component is the last one
             ops = [colloc[j][1 if j==i else 0] for j in range(self.sdim)] # deriv. in i-th direction
             grad_components.append(apply_tprod(ops, self.coeffs))   # shape: shape(grid) x self.dim
-        return np.stack(grad_components, axis=-1)   # shape: shape(grid) x self.dim x self.sdim
+        grad = np.stack(grad_components, axis=-1)   # shape: shape(grid) x self.dim x self.sdim
+
+        if bbox:        # construct complete array and fill gradient at the proper place
+            N = tuple(len(ga) for ga in gridaxes) + grad.shape[-2:]
+            result = np.zeros(N)
+            result[slices] = grad
+            return result
+        else:
+            return grad
 
     def grid_hessian(self, gridaxes):
         """Evaluate the Hessian matrix of a scalar or vector function on a tensor product grid.

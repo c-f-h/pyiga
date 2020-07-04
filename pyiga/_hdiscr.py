@@ -14,11 +14,11 @@ class HDiscretization:
     def __init__(self, hspace, vform, asm_args, truncate=False):
         self.hs = hspace
         self.truncate = truncate
-        self.asm_class = compile.compile_vform(vform, on_demand=False)
+        self.asm_class = compile.compile_vform(vform, on_demand=True)
         self.asm_args = asm_args
 
-    def _assemble_level(self, k, rows=None):
-        asm = self.asm_class(self.hs.knotvectors(k), **self.asm_args)
+    def _assemble_level(self, k, rows=None, bbox=None):
+        asm = self.asm_class(self.hs.knotvectors(k), bbox=bbox, **self.asm_args)
         if rows is None:
             return assemble.assemble(asm, symmetric=True)
         else:
@@ -48,12 +48,22 @@ class HDiscretization:
             #    to represent the coarse functions which interact with level k
             # 2. all active dofs on level k
             to_assemble, interlevel_ix = [], []
+            bboxes = []
             for k in range(hs.numlevels):
                 indices = set()
                 for lv in range(max(0, k - hs.disparity), k):
                     indices |= set(hs.hmesh.function_babys(lv, neighbors[k][lv], k))
                 interlevel_ix.append(indices)
                 to_assemble.append(indices | hs.actfun[k])
+
+                # compute a bounding box for the supports of all functions to be assembled
+                supp_cells = np.array(self.hs.hmesh.meshes[k].support(to_assemble[-1]))
+                if len(supp_cells) == 0:
+                    bboxes.append(tuple((0,0) for j in range(self.hs.dim)))
+                else:
+                    bboxes.append(tuple(
+                            (supp_cells[:,j].min(), supp_cells[:,j].max() + 1)  # upper limit is exclusive
+                            for j in range(supp_cells.shape[1])))
 
             # convert them to raveled form
             to_assemble = hs._ravel_indices(to_assemble)
@@ -70,7 +80,8 @@ class HDiscretization:
             new = [np.arange(sum(na[:k]), sum(na[:k+1])) for k in range(hs.numlevels)]
 
             kvs = tuple(hs.knotvectors(lv) for lv in range(hs.numlevels))
-            As = [self._assemble_level(k, rows=to_assemble[k]) for k in range(hs.numlevels)]
+            As = [self._assemble_level(k, rows=to_assemble[k], bbox=bboxes[k])
+                    for k in range(hs.numlevels)]
             # I_hb[k]: maps HB-coefficients to TP coefficients on level k
             I_hb = [hs.represent_fine(lv=k, rows=to_assemble[k]) for k in range(hs.numlevels)]
 

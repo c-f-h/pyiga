@@ -102,6 +102,38 @@ def cartesian_product(arrays):
     arr.shape = (-1, L)
     return arr
 
+class CSRRowSlice:
+    """A simple class which allows quickly applying a row slice of a CSR matrix
+    to dense matrices.
+
+    This is required since creating submatrices of scipy sparse matrices is a
+    very heavyweight operation.
+    """
+    def __init__(self, A, row_bounds):
+        assert isinstance(A, scipy.sparse.csr_matrix)
+        self.A = A
+        assert 0 <= row_bounds[0] <= row_bounds[1] <= A.shape[0], 'invalid row bounds'
+        self.slc = row_bounds
+        self.shape = (row_bounds[1] - row_bounds[0], A.shape[1])
+        self.dtype = A.dtype
+
+    def _matmat(self, other):
+        # adapted from _mul_multivector in scipy's compressed.py
+        M, N = self.shape
+        i0, i1 = self.slc
+
+        n_vecs = other.shape[1]  # number of column vectors
+        result = np.zeros((M, n_vecs), dtype=self.dtype)
+
+        scipy.sparse._sparsetools.csr_matvecs(M, N, n_vecs,
+                self.A.indptr[i0:i1], self.A.indices, self.A.data,
+                   other.ravel(), result.ravel())
+
+        return result
+
+    __mul__ = _matmat
+    dot = _matmat
+
 
 class LazyArray:
     """An interface for lazily evaluating functions over a tensor product grid

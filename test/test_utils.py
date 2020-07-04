@@ -41,3 +41,8 @@ def test_kron_partial():
     assert np.allclose(X[17:25].A, X_partial[17:25].A)
     assert X_partial[:17].nnz == 0
     assert X_partial[25:(5*4*6)].nnz == 0
+
+def test_CSRRowSlice():
+    A = scipy.sparse.rand(100, 100, density=0.05, format='csr')
+    x = rand(100, 7)
+    assert np.allclose((A @ x)[12:23], CSRRowSlice(A, (12, 23)).dot(x))

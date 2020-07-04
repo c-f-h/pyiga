@@ -134,9 +134,10 @@ class AsmGenerator:
         self.put('@cython.wraparound(False)')
         self.put('@cython.initializedcheck(False)')
 
-    def field_type(self, var):
+    def field_type(self, var, contiguous=True):
         dim = self.dim if (var.depend_dims is None) else len(var.depend_dims)
-        return 'double[{X}:1]'.format(X=', '.join((dim + len(var.shape)) * ':'))
+        s = 'double[{X}:1]' if contiguous else 'double[{X}]'
+        return s.format(X=', '.join((dim + len(var.shape)) * ':'))
 
     def declare_var(self, var, ref=False):
         if ref:
@@ -152,9 +153,9 @@ class AsmGenerator:
             else:
                 self.declare_scalar(var.name)
 
-    def declare_params(self, params):
+    def declare_params(self, params, contiguous=True):
         for var in params:
-            self.putf('{type} _{name},', type=self.field_type(var), name=var.name)
+            self.putf('{type} _{name},', type=self.field_type(var, contiguous=contiguous), name=var.name)
 
     def declare_array_vars(self, vars):
         for var in vars:
@@ -222,7 +223,8 @@ class AsmGenerator:
         local_vars   = [var for var in self.vform.kernel_deps if not var.is_array]
 
         # parameters
-        self.declare_params(array_params)
+        # We will usually get slices of arrays which are therefore not contiguous.
+        self.declare_params(array_params, contiguous=False)
 
         # arrays for basis function values/derivatives
         for bfun in self.vform.basis_funs:

@@ -106,7 +106,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
     @staticmethod
     cdef double combine(
             size_t n0, size_t n1,
-            double[:, ::1] _W,
+            double[:, :] _W,
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
         ) nogil:
@@ -254,7 +254,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
     @staticmethod
     cdef double combine(
             size_t n0, size_t n1,
-            double[:, :, :, ::1] _B,
+            double[:, :, :, :] _B,
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
         ) nogil:
@@ -411,8 +411,8 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
     @staticmethod
     cdef double combine(
             size_t n0, size_t n1,
-            double[:, ::1] _W,
-            double[:, :, :, ::1] _JacInv,
+            double[:, :] _W,
+            double[:, :, :, :] _JacInv,
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
         ) nogil:
@@ -570,8 +570,8 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
     @staticmethod
     cdef double combine(
             size_t n0, size_t n1,
-            double[:, ::1] _W,
-            double[:, :, :, ::1] _JacInv,
+            double[:, :] _W,
+            double[:, :, :, :] _JacInv,
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
         ) nogil:
@@ -732,8 +732,8 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     @staticmethod
     cdef void combine(
             size_t n0, size_t n1,
-            double[:, ::1] _W,
-            double[:, :, :, ::1] _JacInv,
+            double[:, :] _W,
+            double[:, :, :, :] _JacInv,
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
             double result[]
@@ -892,8 +892,8 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
     @staticmethod
     cdef double combine(
             size_t n0, size_t n1,
-            double[:, ::1] _W,
-            double[:, ::1] _f_a,
+            double[:, :] _W,
+            double[:, :] _f_a,
             double* VDu0, double* VDu1,
         ) nogil:
         cdef double result = 0.0
@@ -1024,8 +1024,8 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
     @staticmethod
     cdef double combine(
             size_t n0, size_t n1,
-            double[:, ::1] _W,
-            double[:, ::1] _f_a,
+            double[:, :] _W,
+            double[:, :] _f_a,
             double* VDu0, double* VDu1,
         ) nogil:
         cdef double result = 0.0
@@ -1165,7 +1165,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
     @staticmethod
     cdef double combine(
             size_t n0, size_t n1, size_t n2,
-            double[:, :, ::1] _W,
+            double[:, :, :] _W,
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
         ) nogil:
@@ -1350,7 +1350,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
     @staticmethod
     cdef double combine(
             size_t n0, size_t n1, size_t n2,
-            double[:, :, :, :, ::1] _B,
+            double[:, :, :, :, :] _B,
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
         ) nogil:
@@ -1545,8 +1545,8 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
     @staticmethod
     cdef double combine(
             size_t n0, size_t n1, size_t n2,
-            double[:, :, ::1] _W,
-            double[:, :, :, :, ::1] _JacInv,
+            double[:, :, :] _W,
+            double[:, :, :, :, :] _JacInv,
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
         ) nogil:
@@ -1742,8 +1742,8 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
     @staticmethod
     cdef double combine(
             size_t n0, size_t n1, size_t n2,
-            double[:, :, ::1] _W,
-            double[:, :, :, :, ::1] _JacInv,
+            double[:, :, :] _W,
+            double[:, :, :, :, :] _JacInv,
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
         ) nogil:
@@ -1942,8 +1942,8 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     @staticmethod
     cdef void combine(
             size_t n0, size_t n1, size_t n2,
-            double[:, :, ::1] _W,
-            double[:, :, :, :, ::1] _JacInv,
+            double[:, :, :] _W,
+            double[:, :, :, :, :] _JacInv,
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
             double result[]
@@ -2138,8 +2138,8 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
     @staticmethod
     cdef double combine(
             size_t n0, size_t n1, size_t n2,
-            double[:, :, ::1] _W,
-            double[:, :, ::1] _f_a,
+            double[:, :, :] _W,
+            double[:, :, :] _f_a,
             double* VDu0, double* VDu1, double* VDu2,
         ) nogil:
         cdef double result = 0.0
@@ -2288,8 +2288,8 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
     @staticmethod
     cdef double combine(
             size_t n0, size_t n1, size_t n2,
-            double[:, :, ::1] _W,
-            double[:, :, ::1] _f_a,
+            double[:, :, :] _W,
+            double[:, :, :] _f_a,
             double* VDu0, double* VDu1, double* VDu2,
         ) nogil:
         cdef double result = 0.0

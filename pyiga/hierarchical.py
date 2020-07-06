@@ -261,7 +261,10 @@ class HMesh:
 
     def _function_children_1d(self, lv, dim, j):
         assert 0 <= lv < len(self.meshes) - 1, 'Invalid level'
-        return list(self.P[lv][dim].getcol(j).nonzero()[0])
+        #return list(self.P[lv][dim].getcol(j).nonzero()[0])
+        # access CSC datastructure directly for speed
+        P = self.P[lv][dim]
+        return P.indices[P.indptr[j]:P.indptr[j+1]]
 
     def _function_parents_1d(self, lv, dim, j):
         assert 0 < lv < len(self.meshes), 'Invalid level'

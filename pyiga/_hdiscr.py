@@ -116,11 +116,20 @@ class HDiscretization:
         from .vform import L2functional_vf
         RhsAsm = compile.compile_vform(
                 L2functional_vf(dim=self.hs.dim, physical=True),
-                on_demand=False)
+                on_demand=True)
 
         def asm_rhs_level(k, rows):
+            if len(rows) == 0:
+                return np.zeros(0)
+
+            # determine bounding box for active functions
+            supp_cells = np.array(self.hs.hmesh.meshes[k].support(self.hs.actfun[k]))
+            bbox = tuple(
+                    (supp_cells[:,j].min(), supp_cells[:,j].max() + 1)  # upper limit is exclusive
+                    for j in range(supp_cells.shape[1]))
+
             kvs = self.hs.knotvectors(k)
-            asm = RhsAsm(kvs, geo, f=f)
+            asm = RhsAsm(kvs, geo, f=f, bbox=bbox)
             return asm.multi_entries(rows)
 
         act = self.hs.active_indices()

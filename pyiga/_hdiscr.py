@@ -18,6 +18,12 @@ class HDiscretization:
         self.asm_args = asm_args
 
     def _assemble_level(self, k, rows=None, bbox=None):
+        if rows is not None and len(rows) == 0:
+            # work around a Cython bug with contiguity of 0-sized arrays:
+            # https://github.com/cython/cython/issues/2093
+            n = np.product(self.hs.mesh(k).numdofs)
+            return scipy.sparse.csr_matrix((n,n))
+
         asm = self.asm_class(self.hs.knotvectors(k), bbox=bbox, **self.asm_args)
         if rows is None:
             return assemble.assemble(asm, symmetric=True)

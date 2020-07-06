@@ -20,6 +20,7 @@ cdef class BaseAssembler2D:
     cdef readonly tuple kvs
     cdef object _geo
     cdef tuple gaussgrid
+    cdef size_t[2] bbox_ofs
 
     cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
         return -9999.99  # Not implemented
@@ -376,6 +377,7 @@ cdef class BaseAssembler3D:
     cdef readonly tuple kvs
     cdef object _geo
     cdef tuple gaussgrid
+    cdef size_t[3] bbox_ofs
 
     cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
         return -9999.99  # Not implemented

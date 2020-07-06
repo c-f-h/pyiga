@@ -301,8 +301,12 @@ class AsmGenerator:
                 self.put(')')
                 self.put('if intv.a >= intv.b: return ' + zeroret + '  # no intersection of support')
 
-            self.putf('g_sta[{k}] = self.nqp * intv.a    # start of Gauss nodes', k=k)
-            self.putf('g_end[{k}] = self.nqp * intv.b    # end of Gauss nodes', k=k)
+            if self.on_demand:
+                self.putf('g_sta[{k}] = self.nqp * intv.a - self.bbox_ofs[{k}]    # start of Gauss nodes', k=k)
+                self.putf('g_end[{k}] = self.nqp * intv.b - self.bbox_ofs[{k}]    # end of Gauss nodes', k=k)
+            else:
+                self.putf('g_sta[{k}] = self.nqp * intv.a    # start of Gauss nodes', k=k)
+                self.putf('g_end[{k}] = self.nqp * intv.b    # end of Gauss nodes', k=k)
 
             # a_ij = a(phi_j, phi_i)  -- second index (j) corresponds to first (trial) function
             for idx,bfun in idx_bfun:
@@ -346,7 +350,6 @@ class AsmGenerator:
     def parse_src(self, var):
         s = var.src
         if isinstance(s, vform.InputField):
-            _bbox = ', bbox=bbox_mesh' if self.on_demand else ''
             if var.deriv == 0:
                 if s.physical:
                     return 'np.ascontiguousarray(grid_eval_transformed(%s, self.gaussgrid, self._geo))' % s.name
@@ -354,7 +357,7 @@ class AsmGenerator:
                     return 'np.ascontiguousarray(grid_eval(%s, self.gaussgrid))' % s.name
             elif var.deriv == 1:
                 assert not s.physical, 'Jacobian of physical input field not implemented'
-                return 'np.ascontiguousarray(%s.grid_jacobian(self.gaussgrid%s))' % (s.name, _bbox)
+                return 'np.ascontiguousarray(%s.grid_jacobian(self.gaussgrid))' % s.name
             elif var.deriv == 2:
                 assert not s.physical, 'Hessian of physical input field not implemented'
                 return 'np.ascontiguousarray(%s.grid_hessian(self.gaussgrid))' % s.name
@@ -394,9 +397,22 @@ class AsmGenerator:
         self.put('self._geo = geo')
         self.put('')
         self.put('# NB: we assume all kvs result in the same mesh')
-        self.put('gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)')
+
+        if self.on_demand:
+            # NB: bb[1] is the exclusive upper cell index; i.e., the last cell is bb[1]-1
+            # kv.mesh[k] is the starting point of cell k or the end point of cell k-1
+            # kv.mesh[bb[1]] is the end point of cell bb[1]-1;
+            # we need to INCLUDE that end point!
+            self.put('gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh[bb[0]:bb[1]+1] for (kv,bb) in zip(kvs0,bbox)], self.nqp)')
+        else:
+            self.put('gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)')
+
         self.put('self.gaussgrid = gaussgrid')
         self.put('N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions')
+
+        if self.on_demand:
+            self.put('self.bbox_ofs[:] = tuple(bb[0] * self.nqp for bb in bbox)')
+
         self.put('')
 
         for sp in (0,1):        # TODO: do this only for used_spaces? crashes currently
@@ -408,10 +424,6 @@ class AsmGenerator:
                 self.putf('self.S{sp}_C{k} = compute_values_derivs(kvs{sp}[{k}], gaussgrid[{k}], derivs={maxderiv})',
                         k=k, sp=sp)
         self.put('')
-
-        if self.on_demand:
-            # convert bbox from tile indices to quadrature mesh indices
-            self.putf('bbox_mesh = tuple((bb[0] * self.nqp, bb[1] * self.nqp) for bb in bbox)')
 
         # declare array storage for non-global variables
         self.declare_array_vars(var for var in self.vform.precomp_deps
@@ -576,6 +588,7 @@ cdef class BaseAssembler{{DIM}}D:
     cdef readonly tuple kvs
     cdef object _geo
     cdef tuple gaussgrid
+    cdef size_t[{{DIM}}] bbox_ofs
 
     cdef double entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
         return -9999.99  # Not implemented
@@ -948,7 +961,7 @@ from pyiga.assemble_tools_cy cimport (
     IntInterval, make_intv, intersect_intervals,
     next_lexicographic2, next_lexicographic3,
 )
-from pyiga.assemble_tools_cy import compute_values_derivs
+from pyiga.assemble_tools import compute_values_derivs
 from pyiga.utils import LazyCachingArray, grid_eval, grid_eval_transformed
 
 """

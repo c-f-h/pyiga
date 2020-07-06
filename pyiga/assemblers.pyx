@@ -21,7 +21,7 @@ from pyiga.assemble_tools_cy cimport (
     IntInterval, make_intv, intersect_intervals,
     next_lexicographic2, next_lexicographic3,
 )
-from pyiga.assemble_tools_cy import compute_values_derivs
+from pyiga.assemble_tools import compute_values_derivs
 from pyiga.utils import LazyCachingArray, grid_eval, grid_eval_transformed
 
 cdef class MassAssembler2D(BaseAssembler2D):

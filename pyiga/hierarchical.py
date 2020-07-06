@@ -864,30 +864,34 @@ class HSpace:
         blocks.reverse()
         return scipy.sparse.bmat([blocks], format='csr')
 
+    def truncate_one_level(self, k, num_rows=None, inverse=False):
+        """Compute the matrix which realizes truncation from level `k` to `k+1`."""
+        nt = np.cumsum(self.numactive)  # nt[k]: total active dofs up to level k
+        actidx = self.active_indices()  # TP indices of active functions per level
+
+        if num_rows is None:
+            num_rows = nt[-1]
+        T = scipy.sparse.eye(num_rows, format='lil')
+        A = self.represent_fine(lv=k+1, rows=actidx[k+1], restrict=True)    # rep act(0..k+1) as act(k+1)
+        # truncation: subtract the components of the coarse functions which can
+        # be represented by the active functions on level k+1
+        if inverse:
+            T[nt[k]:nt[k+1], 0:nt[k]] = A[:, 0:nt[k]]
+        else:
+            T[nt[k]:nt[k+1], 0:nt[k]] = -A[:, 0:nt[k]]
+        return T.tocsr()
+
     def thb_to_hb(self):
         """Return a sparse square matrix of size :attr:`numdofs` which
         transforms THB-spline coefficients into the corresponding HB-spline
         coefficients.
         """
-        na = self.numactive     # na[k]: num active dofs on level k
-        nt = np.cumsum(na)      # nt[k]: total active dofs up to level k
-        actidx = self.active_indices()  # TP indices of active functions per level
-
-        def trunc(k):
-            # compute the matrix which realizes truncation from level k to k+1
-            T = scipy.sparse.eye(nt[-1], format='lil')
-            A = self.represent_fine(lv=k+1, rows=actidx[k+1], restrict=True)    # rep act(0..k+1) as act(k+1)
-            # truncation: subtract the components of the coarse functions which can
-            # be represented by the active functions on level k+1
-            T[nt[k]:nt[k+1], 0:nt[k]] = -A[:, 0:nt[k]]
-            return T.tocsr()
-
         if self.numlevels == 1:
-            return scipy.sparse.eye(nt[-1], format='csr')
+            return scipy.sparse.eye(self.numdofs, format='csr')
         else:
-            T = trunc(0)
+            T = self.truncate_one_level(0)
             for k in range(1, self.numlevels - 1):
-                T = trunc(k) @ T
+                T = self.truncate_one_level(k) @ T
             return T
 
     def split_coeffs(self, x):
@@ -981,3 +985,26 @@ class HSpace:
             for j in range(k+1):    # only levels j with j <= k need prolongation
                 result[j] = result[j].dot(P.T)
         return scipy.sparse.vstack(result, format='csr')
+
+    def virtual_hierarchy_prolongators(self):
+        # compute tensor product prolongators
+        Ps = tuple(self.tp_prolongation(lv, kron=False) for lv in range(self.numlevels-1))
+
+        # indices of active and deactivated basis functions per level
+        IA = self.active_indices()
+        ID = self.deactivated_indices()
+        # indices of all functions in the refinement region per level
+        IR = tuple(np.concatenate((iA,iD)) for (iA,iD) in zip(IA,ID))
+
+        # total number of active dofs up to a given level
+        nt = np.cumsum(tuple(len(ii) for ii in IA))
+
+        prolongators = []
+        for lv in range(self.numlevels - 1):
+            P_rd = utils.kron_partial(Ps[lv], rows=IR[lv+1], restrict=True)[:, ID[lv]]
+            P_hb = scipy.sparse.bmat((
+              (scipy.sparse.eye(nt[lv]), None),
+              (None,                     P_rd)
+            ), format='csc')
+            prolongators.append(P_hb)
+        return prolongators

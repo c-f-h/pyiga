@@ -147,7 +147,7 @@ class MLStructure:
             result[bx[s, 0]].append(bx[s, 1])
         return [np.array(r, dtype=np.int) for r in result]
 
-    def nonzeros_for_rows(self, row_indices):
+    def nonzeros_for_rows(self, row_indices, renumber_rows=False):
         """Compute a pair of index arrays `(I,J)` specifying the locations of
         nonzeros (just like :func:`nonzero`), but containing only those
         nonzeros which lie in the given rows.
@@ -178,7 +178,10 @@ class MLStructure:
         else:
             Js = np.empty(0, dtype=np.int)
 
-        return Is, Js
+        if renumber_rows:
+            return Is, Js, np.repeat(np.arange(len(row_indices)), counts)
+        else:
+            return Is, Js
 
     def nonzeros_for_columns(self, col_indices):
         """Compute a pair of index arrays `(I,J)` specifying the locations of

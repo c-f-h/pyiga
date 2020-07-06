@@ -3,50 +3,7 @@
 
 import numpy as np
 import scipy.linalg
-from pyiga import bspline, assemble, hierarchical, solvers, vform, geometry
-
-def virtual_hierarchy_prolongators(hs):
-    # compute tensor product prolongators
-    Ps = tuple(hs.tp_prolongation(lv, kron=True) for lv in range(hs.numlevels-1))
-
-    # indices of active and deactivated basis functions per level
-    IA = hs.active_indices()
-    ID = hs.deactivated_indices()
-    # indices of all functions in the refinement region per level
-    IR = tuple(np.concatenate((iA,iD)) for (iA,iD) in zip(IA,ID))
-
-    # number of active and deactivated dofs per level
-    na = tuple(len(ii) for ii in IA)
-    nr = tuple(len(ii) for ii in IR)
-
-    prolongators = []
-    prolongators_THB = []
-    for lv in range(hs.numlevels - 1):
-        n_coarse = sum(na[:lv+1])
-        P_hb = scipy.sparse.bmat((
-          (scipy.sparse.eye(n_coarse), None),
-          (None,                       Ps[lv][IR[lv+1]][:, ID[lv]])
-        ), format='csc')
-        prolongators.append(P_hb)
-
-        # map HB-coefficients to THB-coefficients 0:na[0]->n_coarse, IA[0]-> 1:na[1]->nr[lv+1], IA[1]->IR[lv+1]
-        if lv > 0:
-            P = scipy.sparse.bmat([
-                [Ps[lv] @ P, Ps[lv][:, IA[lv]]]
-            ], format='csc')
-        else:
-            P = Ps[lv][:, IA[lv]]
-
-        T_h2t = scipy.sparse.bmat([
-            [scipy.sparse.eye(n_coarse), None],
-            [P[IR[lv+1]],      scipy.sparse.eye(nr[lv+1])]
-        ], format='csc')
-
-        # P_thb: maps coarse coefficients to THB coefficients
-        P_thb = T_h2t @ P_hb
-        prolongators_THB.append(P_thb)
-
-    return prolongators, prolongators_THB
+from pyiga import bspline, assemble, hierarchical, solvers, vform, geometry, utils
 
 def local_mg_step(hs, A, f_in, Ps, lv_inds, smoother='symmetric_gs'):
     assert smoother in ("forward_gs", "backward_gs", "symmetric_gs", "exact"), "Invalid smoother."
@@ -155,10 +112,13 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
     u_thb0 = LS_thb.complete(u_thb)
 
     # iteration numbers of the local MG method in the (T)HB basis
-    prolongators, prolongators_THB = virtual_hierarchy_prolongators(hs)
+    P_hb = hs.virtual_hierarchy_prolongators()
+    P_thb = [
+            hs.truncate_one_level(k, num_rows=P_hb[k].shape[0], inverse=True) @ P_hb[k]
+            for k in range(hs.numlevels - 1)]
     inds = hs.indices_to_smooth(strategy)
-    spek_hb  = num_iterations(local_mg_step(hs, A_hb, f_hb, prolongators, inds, smoother), u_hb0, tol=tol)
-    spek_thb = num_iterations(local_mg_step(hs, A_thb, f_thb, prolongators_THB, inds, smoother), u_thb0, tol=tol)
+    spek_hb  = num_iterations(local_mg_step(hs, A_hb, f_hb, P_hb, inds, smoother), u_hb0, tol=tol)
+    spek_thb = num_iterations(local_mg_step(hs, A_thb, f_thb, P_thb, inds, smoother), u_thb0, tol=tol)
 
     winner = "HB" if (spek_hb <= spek_thb) else "THB"
     linestr = f'{strategy} ({smoother}) '.ljust(2*22)

@@ -66,14 +66,21 @@ def multi_kron_sparse(As, format='csr'):
     else:
         return scipy.sparse.kron(As[0], multi_kron_sparse(As[1:], format=format), format=format)
 
-def kron_partial(As, rows, format='csr'):
+def kron_partial(As, rows, restrict=False, format='csr'):
     """Compute a partial Kronecker product between the sparse matrices
     `As = (A_1, ..., A_k)`, filling only the given `rows` in the output matrix.
+
+    If `restrict=True`, a smaller matrix is returned which contains only the
+    given rows of the original matrix. Otherwise, a matrix with the same shape
+    as the full Kronecker product is returned.
     """
     from .mlmatrix import MLStructure
     # determine the I,J indices of the nonzeros in the given rows
     S = MLStructure.from_kronecker(As)
-    I, J = S.nonzeros_for_rows(rows)
+    if restrict:
+        I, J, I_idx = S.nonzeros_for_rows(rows, renumber_rows=True)
+    else:
+        I, J = S.nonzeros_for_rows(rows)
     if len(I) == 0:     # no nonzeros? return zero matrix
         return scipy.sparse.csr_matrix(S.shape)
 
@@ -87,7 +94,12 @@ def kron_partial(As, rows, format='csr'):
     values = tuple(As[k][I_ix[k], J_ix[k]].A1 for k in range(S.L))
     # compute the Kronecker product as the product of the factors
     entries = functools.reduce(operator.mul, values)
-    return scipy.sparse.coo_matrix((entries, (I,J)), shape=S.shape).asformat(format)
+    if restrict:
+        I = I_idx
+        shape = (len(rows), S.shape[1])
+    else:
+        shape = S.shape
+    return scipy.sparse.coo_matrix((entries, (I,J)), shape=shape).asformat(format)
 
 def cartesian_product(arrays):
     """Compute the Cartesian product of any number of input arrays."""

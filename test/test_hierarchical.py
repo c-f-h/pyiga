@@ -46,6 +46,21 @@ def test_thb_to_hb():
     I_thb = hs.represent_fine(truncate=True)
     assert np.allclose((I_hb @ T).A, I_thb.A)
 
+def test_hb_to_thb():
+    hs = create_example_hspace(p=4, dim=2, n0=4, disparity=np.inf, num_levels=3)
+    T = hs.thb_to_hb()
+    T_inv = hs.hb_to_thb()
+    assert np.allclose((T_inv @ T).A, np.eye(hs.numdofs))
+
+def test_truncate():
+    hs = create_example_hspace(p=4, dim=2, n0=4, disparity=np.inf, num_levels=3)
+    for k in range(hs.numlevels - 1):
+        # check that truncation and inverse truncation are inverse to each other
+        Tk = hs.truncate_one_level(k)
+        Tk_inv = hs.truncate_one_level(k, inverse=True)
+        X = Tk_inv @ Tk
+        assert np.allclose(X.A, np.eye(X.shape[0]))
+
 def test_cellextents():
     hs = _make_hs(p=2, n=2)
     hs.refine_region(0, lambda *X: True)    # refine globally

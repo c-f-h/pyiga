@@ -894,6 +894,19 @@ class HSpace:
                 T = self.truncate_one_level(k) @ T
             return T
 
+    def hb_to_thb(self):
+        """Return a sparse square matrix of size :attr:`numdofs` which
+        transforms HB-spline coefficients into the corresponding THB-spline
+        coefficients.
+        """
+        if self.numlevels == 1:
+            return scipy.sparse.eye(self.numdofs, format='csr')
+        else:
+            T = self.truncate_one_level(0, inverse=True)
+            for k in range(1, self.numlevels - 1):
+                T = T @ self.truncate_one_level(k, inverse=True)
+            return T
+
     def split_coeffs(self, x):
         """Given a coefficient vector `x` of length :attr:`numdofs`, split it
         into :attr:`numlevels` vectors which contain the contributions from

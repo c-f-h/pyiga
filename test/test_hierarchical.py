@@ -5,6 +5,16 @@ def _make_hs(p=3, n=3):
     kv = bspline.make_knots(p, 0.0, 1.0, n)
     return HSpace((kv, kv))
 
+def create_example_hspace(p, dim, n0, disparity, num_levels=3):
+    hs = HSpace(dim * (bspline.make_knots(p, 0.0, 1.0, n0),))
+    hs.disparity = disparity
+    hs.bdspecs = [(0,0), (0,1), (1,0), (1,1)] if dim==2 else [(0,0),(0,1)]
+    # perform local refinement
+    delta = 0.5
+    for lv in range(num_levels):
+        hs.refine_region(lv, lambda *X: min(X) > 1 - delta**(lv+1))
+    return hs
+
 def test_hspace():
     hs = _make_hs()
     assert hs.numlevels == 1
@@ -29,7 +39,6 @@ def test_hspace():
     assert np.allclose(vals, np.ones((10, 10)))
 
 def test_thb_to_hb():
-    from .test_localmg import create_example_hspace
     hs = create_example_hspace(p=3, dim=2, n0=4, disparity=np.inf, num_levels=3)
 
     T = hs.thb_to_hb()
@@ -84,7 +93,6 @@ def test_incidence():
 
 
 def test_hierarchical_assemble():
-    from .test_localmg import create_example_hspace
     hs = create_example_hspace(p=4, dim=2, n0=4, disparity=1, num_levels=3)
     hdiscr = HDiscretization(hs, vform.stiffness_vf(dim=2), {'geo': geometry.unit_square()})
     A = hdiscr.assemble_matrix()

@@ -71,16 +71,7 @@ def local_mg_step(hs, A, f_in, Ps, lv_inds, smoother='symmetric_gs'):
             return x1
     return lambda x: step(hs.numlevels-1, x, f_in)
 
-def create_example_hspace(p, dim, n0, disparity, num_levels=3):
-    hs = hierarchical.HSpace(dim * (bspline.make_knots(p, 0.0, 1.0, n0),))
-    hs.disparity = disparity
-    #hs.bdspecs = []
-    hs.bdspecs = [(0,0), (0,1), (1,0), (1,1)] if dim==2 else [(0,0),(0,1)]
-    # perform local refinement
-    delta = 0.5
-    for lv in range(num_levels):
-        hs.refine_region(lv, lambda *X: min(X) > 1 - delta**(lv+1))
-    return hs
+from .test_hierarchical import create_example_hspace
 
 def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
     hs = create_example_hspace(p, dim, n0, disparity, num_levels=3)

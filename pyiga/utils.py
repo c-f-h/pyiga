@@ -77,12 +77,14 @@ def kron_partial(As, rows, restrict=False, format='csr'):
     from .mlmatrix import MLStructure
     # determine the I,J indices of the nonzeros in the given rows
     S = MLStructure.from_kronecker(As)
+    out_shape = (len(rows), S.shape[1]) if restrict else S.shape
+
     if restrict:
         I, J, I_idx = S.nonzeros_for_rows(rows, renumber_rows=True)
     else:
         I, J = S.nonzeros_for_rows(rows)
     if len(I) == 0:     # no nonzeros? return zero matrix
-        return scipy.sparse.csr_matrix(S.shape)
+        return scipy.sparse.csr_matrix(out_shape)
 
     # block sizes for unraveling the row and column indices
     bs_I = tuple(S.bs[k][0] for k in range(S.L))
@@ -96,10 +98,7 @@ def kron_partial(As, rows, restrict=False, format='csr'):
     entries = functools.reduce(operator.mul, values)
     if restrict:
         I = I_idx
-        shape = (len(rows), S.shape[1])
-    else:
-        shape = S.shape
-    return scipy.sparse.coo_matrix((entries, (I,J)), shape=shape).asformat(format)
+    return scipy.sparse.coo_matrix((entries, (I,J)), shape=out_shape).asformat(format)
 
 def cartesian_product(arrays):
     """Compute the Cartesian product of any number of input arrays."""

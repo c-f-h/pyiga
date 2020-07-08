@@ -1021,3 +1021,24 @@ class HSpace:
             ), format='csc')
             prolongators.append(P_hb)
         return prolongators
+
+    def grid_eval(self, coeffs, gridaxes):
+        """Evaluate an HB-spline function with the given coefficients over a
+        tensor product grid.
+        """
+        def reindex(n, Idx, u):
+            """Functionally identical to eye(n)[:, Idx].dot(u)."""
+            result = np.zeros(n, dtype=u.dtype)
+            result[Idx] = u
+            return result
+
+        # construct the level-wise B-spline functions
+        u_lv = self.split_coeffs(coeffs)
+        n_tp = tuple(self.mesh(k).numbf for k in range(self.numlevels))
+        IA = self.active_indices()
+        funcs = tuple(
+                bspline.BSplineFunc(self.knotvectors(lv), reindex(n_tp[lv], IA[lv], uj))
+                for (lv,uj) in enumerate(u_lv)
+                )
+        # evaluate them and sum the result
+        return sum(f.grid_eval(gridaxes) for f in funcs)

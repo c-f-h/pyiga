@@ -1,11 +1,13 @@
 from pyiga.hierarchical import *
 from pyiga import bspline, geometry, utils, vform, geometry
 
+from numpy.random import rand
+
 def _make_hs(p=3, n=3):
     kv = bspline.make_knots(p, 0.0, 1.0, n)
     return HSpace((kv, kv))
 
-def create_example_hspace(p, dim, n0, disparity, num_levels=3):
+def create_example_hspace(p, dim, n0, disparity=np.inf, num_levels=3):
     hs = HSpace(dim * (bspline.make_knots(p, 0.0, 1.0, n0),))
     hs.disparity = disparity
     hs.bdspecs = [(0,0), (0,1), (1,0), (1,1)] if dim==2 else [(0,0),(0,1)]
@@ -117,3 +119,12 @@ def test_hierarchical_assemble():
     A_hb = (I_hb.T @ A_fine @ I_hb)
     error = abs(A - A_hb).max()
     assert error < 1e-14
+
+def test_grid_eval():
+    hs = create_example_hspace(p=3, dim=2, n0=6, num_levels=3)
+    u = rand(hs.numdofs)
+    grid = 2 * (np.linspace(0, 1, 50),)
+    f1 = hs.grid_eval(u, grid)
+    u_fine = hs.represent_fine() @ u
+    f2 = bspline.BSplineFunc(hs.knotvectors(-1), u_fine).grid_eval(grid)
+    assert np.allclose(f1, f2)

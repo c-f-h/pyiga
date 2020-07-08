@@ -128,3 +128,7 @@ def test_grid_eval():
     u_fine = hs.represent_fine() @ u
     f2 = bspline.BSplineFunc(hs.knotvectors(-1), u_fine).grid_eval(grid)
     assert np.allclose(f1, f2)
+    hsf = HSplineFunc(hs, u)
+    assert hsf.dim == 1 and hsf.sdim == 2
+    f3 = hsf.grid_eval(grid)
+    assert np.allclose(f2, f3)

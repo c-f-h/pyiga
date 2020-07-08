@@ -53,6 +53,12 @@ def _compute_supported_functions(kv, meshsupp):
     sf[:,1] += 1
     return sf
 
+def _reindex(n, Idx, u):
+    """Functionally identical to eye(n)[:, Idx].dot(u)."""
+    result = np.zeros(n, dtype=u.dtype)
+    result[Idx] = u
+    return result
+
 class TPMesh:
     """A tensor product mesh described by a sequence of knot vectors."""
     def __init__(self, kvs):
@@ -1026,19 +1032,29 @@ class HSpace:
         """Evaluate an HB-spline function with the given coefficients over a
         tensor product grid.
         """
-        def reindex(n, Idx, u):
-            """Functionally identical to eye(n)[:, Idx].dot(u)."""
-            result = np.zeros(n, dtype=u.dtype)
-            result[Idx] = u
-            return result
-
+        assert len(gridaxes) == self.dim, "Input has wrong dimension"
         # construct the level-wise B-spline functions
         u_lv = self.split_coeffs(coeffs)
         n_tp = tuple(self.mesh(k).numbf for k in range(self.numlevels))
         IA = self.active_indices()
         funcs = tuple(
-                bspline.BSplineFunc(self.knotvectors(lv), reindex(n_tp[lv], IA[lv], uj))
+                bspline.BSplineFunc(self.knotvectors(lv), _reindex(n_tp[lv], IA[lv], uj))
                 for (lv,uj) in enumerate(u_lv)
                 )
         # evaluate them and sum the result
         return sum(f.grid_eval(gridaxes) for f in funcs)
+
+class HSplineFunc:
+    """A function libing in a hierarchical spline space."""
+    def __init__(self, hspace, u):
+        self.hs = hspace
+        self.coeffs = u
+        self.sdim = hspace.dim
+        self.dim = 1        # for now only scalar functions
+
+    def grid_eval(self, gridaxes):
+        """Evaluate the function on a tensor product grid.
+
+        See :func:`BSplineFunc.grid_eval` for details.
+        """
+        return self.hs.grid_eval(self.coeffs, gridaxes)

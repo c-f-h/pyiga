@@ -153,7 +153,10 @@ class MLStructure:
         nonzeros which lie in the given rows.
         """
         if len(row_indices) == 0:
-            return np.empty(0, dtype=np.int), np.empty(0, dtype=np.int)
+            if renumber_rows:
+                return np.empty(0, dtype=np.int), np.empty(0, dtype=np.int), np.empty(0, dtype=np.int)
+            else:
+                return np.empty(0, dtype=np.int), np.empty(0, dtype=np.int)
         L = self.L
         lvia = tuple(self._level_rowwise_interactions(k) for k in range(L))
         bs_I = tuple(self.bs[k][0] for k in range(L))

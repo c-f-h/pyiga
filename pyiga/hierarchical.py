@@ -362,7 +362,6 @@ class HSpace:
         self.__ravel_global = None
         self.__index_dirichlet = None
         self.__ravel_dirichlet = None
-        self.__smooth_dirichlet = None
 
     def _add_level(self):
         self.hmesh.add_level()
@@ -447,7 +446,7 @@ class HSpace:
         N = tuple(kv.numdofs for kv in self.hmesh.meshes[lv].kvs)
         return set(tuple(iter) for iter in assemble.slice_indices(bdax, 0 if bdside==0 else -1, N, ravel=False))
 
-    def dirichlet_indices(self):
+    def _dirichlet_indices(self):
         # Compute tensor product boundary indices (specified by self.bdspecs)
         TPbindices = list()
         for lv in range(self.numlevels):
@@ -488,13 +487,13 @@ class HSpace:
     @property
     def index_dirichlet(self):
         if not self.__index_dirichlet:
-            self.dirichlet_indices()
+            self._dirichlet_indices()
         return self.__index_dirichlet
 
     @property
     def ravel_dirichlet(self):
         if not self.__ravel_dirichlet:
-            self.dirichlet_indices()
+            self._dirichlet_indices()
         return self.__ravel_dirichlet
 
     @property
@@ -528,11 +527,15 @@ class HSpace:
     def cell_global(self):
         return self.compute_cells(self.global_indices())
 
-    @property
-    def smooth_dirichlet(self):
-        if not self.__smooth_dirichlet:
-            self.__smooth_dirichlet = self.raveled_to_virtual_matrix_indices(self.ravel_dirichlet)
-        return self.__smooth_dirichlet
+    def dirichlet_dofs(self, lv=None):
+        """Matrix indices which lie on the specified Dirichlet boundaries."""
+        if lv is None:
+            lv = self.numlevels - 1
+        return self.raveled_to_virtual_matrix_indices(lv, self.ravel_dirichlet[lv])
+
+    def non_dirichlet_dofs(self):
+        """Matrix indices which do not lie on the specified Dirichlet boundaries."""
+        return sorted(set(range(self.numdofs)) - set(self.dirichlet_dofs()))
 
     def remove_indices(self, listsetA, listsetB):
         for lv in range(self.numlevels):
@@ -624,21 +627,19 @@ class HSpace:
         # convert them to raveled form
         chosen_indices = [self._ravel_indices(idx) for idx in chosen_indices]
         # convert them to matrix indices
-        return self.raveled_to_virtual_matrix_indices(chosen_indices)
+        return [self.raveled_to_virtual_matrix_indices(lv, chosen_indices[lv])
+                for lv in range(self.numlevels)]
 
-    def raveled_to_virtual_matrix_indices(self, indices):
+    def raveled_to_virtual_matrix_indices(self, lv, indices):
         # convert indices from levelwise raveled TP indices to matrix indices within the
         # stiffness matrix on the corresponding virtual multigrid hierarchy level
         available_indices = self.ravel_global
-        out = list()
-        for lv in range(self.numlevels):
-            aux = list()
-            n_lv = 0
-            for l in range(self.numlevels):
-                aux += list(n_lv + self._position_index(list(available_indices[lv][l]), indices[lv][l]))
-                n_lv += len(available_indices[lv][l])
-            out.append(np.array(aux, dtype=int))
-        return out
+        out = []
+        n_lv = 0
+        for l in range(self.numlevels):
+            out += list(n_lv + self._position_index(list(available_indices[lv][l]), indices[l]))
+            n_lv += len(available_indices[lv][l])
+        return np.array(out, dtype=int)
 
     @staticmethod
     def _position_index(suplist, sublist):

@@ -75,6 +75,7 @@ from .test_hierarchical import create_example_hspace
 
 def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
     hs = create_example_hspace(p, dim, n0, disparity, num_levels=3)
+    dir_dofs = hs.dirichlet_dofs()
 
     # assemble full tensor-product linear system on each level for simplicity
 
@@ -87,7 +88,7 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
     f_hb = hdiscr.assemble_rhs(rhs)
 
     LS_hb = assemble.RestrictedLinearSystem(A_hb, f_hb,
-            (hs.smooth_dirichlet[-1], np.zeros_like(hs.smooth_dirichlet[-1])))
+            (dir_dofs, np.zeros_like(dir_dofs)))
     u_hb = scipy.sparse.linalg.spsolve(LS_hb.A, LS_hb.b)
     u_hb0 = LS_hb.complete(u_hb)
 
@@ -98,7 +99,7 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
     f_thb = hdiscr.assemble_rhs(rhs)
 
     LS_thb = assemble.RestrictedLinearSystem(A_thb, f_thb,
-            (hs.smooth_dirichlet[-1], np.zeros_like(hs.smooth_dirichlet[-1])))
+            (dir_dofs, np.zeros_like(dir_dofs)))
     u_thb = scipy.sparse.linalg.spsolve(LS_thb.A, LS_thb.b)
     u_thb0 = LS_thb.complete(u_thb)
 

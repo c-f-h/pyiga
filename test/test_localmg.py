@@ -17,9 +17,10 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
         return 1.0
 
     # assemble and solve the HB-spline problem
-    hdiscr = hierarchical.HDiscretization(hs, vform.stiffness_vf(dim=2), {'geo': geometry.unit_square()})
+    hdiscr = hierarchical.HDiscretization(hs, vform.stiffness_vf(dim=2),
+            {'geo': geometry.unit_square(), 'f': rhs})
     A_hb = hdiscr.assemble_matrix()
-    f_hb = hdiscr.assemble_rhs(rhs)
+    f_hb = hdiscr.assemble_rhs()
 
     LS_hb = assemble.RestrictedLinearSystem(A_hb, f_hb,
             (dir_dofs, np.zeros_like(dir_dofs)))
@@ -27,10 +28,11 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
     u_hb0 = LS_hb.complete(u_hb)
 
     # assemble and solve the THB-spline problem
-    hdiscr = hierarchical.HDiscretization(hs, vform.stiffness_vf(dim=2), {'geo': geometry.unit_square()},
+    hdiscr = hierarchical.HDiscretization(hs, vform.stiffness_vf(dim=2),
+            {'geo': geometry.unit_square(), 'f': rhs},
             truncate=True)
     A_thb = hdiscr.assemble_matrix()
-    f_thb = hdiscr.assemble_rhs(rhs)
+    f_thb = hdiscr.assemble_rhs()
 
     LS_thb = assemble.RestrictedLinearSystem(A_thb, f_thb,
             (dir_dofs, np.zeros_like(dir_dofs)))

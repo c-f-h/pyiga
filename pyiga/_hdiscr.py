@@ -14,8 +14,9 @@ class HDiscretization:
     def __init__(self, hspace, vform, asm_args, truncate=False):
         self.hs = hspace
         self.truncate = truncate
-        self.asm_class = compile.compile_vform(vform, on_demand=True)
+        self.vf = vform
         self.asm_args = asm_args
+        self.asm_class = None
 
     def _assemble_level(self, k, rows=None, bbox=None):
         if rows is not None and len(rows) == 0:
@@ -24,7 +25,14 @@ class HDiscretization:
             n = np.product(self.hs.mesh(k).numdofs)
             return scipy.sparse.csr_matrix((n,n))
 
-        asm = self.asm_class(self.hs.knotvectors(k), bbox=bbox, **self.asm_args)
+        # get needed assembler arguments
+        asm_args = { inp.name: self.asm_args[inp.name]
+                for inp in self.vf.inputs}
+        asm_args['bbox'] = bbox
+
+        if not self.asm_class:
+            self.asm_class = compile.compile_vform(self.vf, on_demand=True)
+        asm = self.asm_class(self.hs.knotvectors(k), **asm_args)
         if rows is None:
             return assemble.assemble(asm, symmetric=True)
         else:
@@ -110,13 +118,15 @@ class HDiscretization:
                 A[np.ix_(new[k], neighbors[k])] = A_hb_interlevel[k].T
             return A.tocsr()
 
-    def assemble_rhs(self, f):
-        geo = self.asm_args['geo']
+    def assemble_rhs(self, vf=None):
+        if vf is None:
+            from .vform import L2functional_vf
+            vf = L2functional_vf(dim=self.hs.dim, physical=True)
+        RhsAsm = compile.compile_vform(vf, on_demand=True)
 
-        from .vform import L2functional_vf
-        RhsAsm = compile.compile_vform(
-                L2functional_vf(dim=self.hs.dim, physical=True),
-                on_demand=True)
+        # get needed assembler arguments
+        asm_args = { inp.name: self.asm_args[inp.name]
+                for inp in vf.inputs}
 
         def asm_rhs_level(k, rows):
             if len(rows) == 0:
@@ -129,7 +139,8 @@ class HDiscretization:
                     for j in range(supp_cells.shape[1]))
 
             kvs = self.hs.knotvectors(k)
-            asm = RhsAsm(kvs, geo, f=f, bbox=bbox)
+            asm_args['bbox'] = bbox
+            asm = RhsAsm(kvs, **asm_args)
             return asm.multi_entries(rows)
 
         act = self.hs.active_indices()

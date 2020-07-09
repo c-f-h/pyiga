@@ -31,6 +31,7 @@ def test_hspace():
     assert tuple(len(a) for a in hs.deactfun) == (8, 5, 0)
     assert hs.numactive == (28, 21, 20)
     assert hs.numdofs == 28 + 21 + 20
+    assert hs.total_active_cells == 39
 
     # representation of THB-splines on the fine level
     R = hs.represent_fine(truncate=True)

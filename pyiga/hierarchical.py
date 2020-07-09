@@ -406,6 +406,10 @@ class HSpace:
         else:
             return [self.active_cells(lv) for lv in range(self.numlevels)]
 
+    @property
+    def total_active_cells(self):
+        return sum(len(ac) for ac in self.active_cells())
+
     def deactivated_cells(self, lv=None):
         """If `lv` is specified, return the set of deactivated cells on that level.
         Otherwise, return a list containing, for each level, the set of deactivated cells.

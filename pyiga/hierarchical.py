@@ -397,14 +397,22 @@ class HSpace:
         """Return the tuple of knot vectors for the tensor product space on level `lv`."""
         return self.hmesh.meshes[lv].kvs
 
-    def active_cells(self, lv=None):
+    def active_cells(self, lv=None, flat=False):
         """If `lv` is specified, return the set of active cells on that level.
         Otherwise, return a list containing, for each level, the set of active cells.
+
+        If `lv=None` and `flat=True`, return a flat list of `(lv, cellidx)`
+        pairs of all active cells in canonical order.
         """
         if lv is not None:
             return self.hmesh.active[lv]
         else:
-            return [self.active_cells(lv) for lv in range(self.numlevels)]
+            if flat:
+                return [(l, ac)
+                        for l in range(self.numlevels)
+                        for ac in sorted(self.active_cells(l))]
+            else:
+                return [self.active_cells(lv) for lv in range(self.numlevels)]
 
     @property
     def total_active_cells(self):

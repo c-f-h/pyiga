@@ -5,72 +5,6 @@ import numpy as np
 import scipy.linalg
 from pyiga import bspline, assemble, hierarchical, solvers, vform, geometry, utils
 
-def local_mg_step(hs, A, f_in, Ps, lv_inds, smoother='symmetric_gs'):
-    assert smoother in ("forward_gs", "backward_gs", "symmetric_gs", "exact"), "Invalid smoother."
-    As = [A]
-    for P in reversed(Ps):
-        As.append(P.T.dot(As[-1]).dot(P).tocsr())
-    As.reverse()
-    Rs = [P.T for P in Ps]
-
-    Bs = [] # exact solvers
-
-    for lv in range(hs.numlevels):
-        lv_ind = lv_inds[lv]
-        Bs.append(solvers.make_solver(As[lv][lv_ind][:, lv_ind], spd=True))
-
-    def step(lv, x, f):
-        if lv == 0:
-            x1 = x.copy()
-            lv_ind = lv_inds[lv]
-            x1[lv_ind] = Bs[0].dot(f[lv_ind])
-            return x1
-        else:
-            x1 = x.copy()
-            P = Ps[lv-1]
-            A = As[lv]
-            n_lv = A.shape[0]
-            lv_ind = lv_inds[lv]
-
-            # pre-smoothing
-            if smoother == "forward_gs":
-                # Gauss-Seidel smoothing
-                solvers.gauss_seidel(A, x1, f, indices=lv_ind, iterations=2, sweep='forward')
-            elif smoother == "backward_gs":
-                # Gauss-Seidel smoothing
-                solvers.gauss_seidel(A, x1, f, indices=lv_ind, iterations=2, sweep='backward')
-            elif smoother == "symmetric_gs":
-                # Gauss-Seidel smoothing
-                solvers.gauss_seidel(A, x1, f, indices=lv_ind, iterations=1, sweep='symmetric')
-            elif smoother == "exact":
-                # exact solve
-                r_fine = (f - A.dot(x1))[lv_ind]
-                x1[lv_ind] += Bs[lv].dot(r_fine)
-
-            # coarse grid correction
-            r = f - A.dot(x1)
-            r_c = Rs[lv-1].dot(r)
-            aux = step(lv-1, np.zeros_like(r_c), r_c)
-            x1 += P.dot(aux)
-
-            # post-smoothing
-            if smoother == "forward_gs":
-                # Gauss-Seidel smoothing
-                solvers.gauss_seidel(A, x1, f, indices=lv_ind, iterations=2, sweep='backward')
-            elif smoother == "backward_gs":
-                # Gauss-Seidel smoothing
-                solvers.gauss_seidel(A, x1, f, indices=lv_ind, iterations=2, sweep='forward')
-            elif smoother == "symmetric_gs":
-                # Gauss-Seidel smoothing
-                solvers.gauss_seidel(A, x1, f, indices=lv_ind, iterations=1, sweep='symmetric')
-            elif smoother == "exact":
-                # exact solve
-                #r_fine = (f - A.dot(x1))[lv_ind]
-                #x1[lv_ind] += Bs[lv].dot(r_fine)
-                pass
-            return x1
-    return lambda x: step(hs.numlevels-1, x, f_in)
-
 from .test_hierarchical import create_example_hspace
 
 def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
@@ -109,13 +43,13 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
             hs.truncate_one_level(k, num_rows=P_hb[k].shape[0], inverse=True) @ P_hb[k]
             for k in range(hs.numlevels - 1)]
     inds = hs.indices_to_smooth(strategy)
-    spek_hb  = num_iterations(local_mg_step(hs, A_hb, f_hb, P_hb, inds, smoother), u_hb0, tol=tol)
-    spek_thb = num_iterations(local_mg_step(hs, A_thb, f_thb, P_thb, inds, smoother), u_thb0, tol=tol)
+    iter_hb  = num_iterations(solvers.local_mg_step(hs, A_hb, f_hb, P_hb, inds, smoother), u_hb0, tol=tol)
+    iter_thb = num_iterations(solvers.local_mg_step(hs, A_thb, f_thb, P_thb, inds, smoother), u_thb0, tol=tol)
 
-    winner = "HB" if (spek_hb <= spek_thb) else "THB"
+    winner = "HB" if (iter_hb <= iter_thb) else "THB"
     linestr = f'{strategy} ({smoother}) '.ljust(2*22)
-    print(linestr + f'{spek_hb:5}    {spek_thb:5}    {winner:6}')
-    return (spek_hb, spek_thb)
+    print(linestr + f'{iter_hb:5}    {iter_thb:5}    {winner:6}')
+    return (iter_hb, iter_thb)
 
 def num_iterations(step, sol, tol=1e-8):
     x = np.zeros_like(sol)

@@ -168,3 +168,150 @@ def twogrid(A, f, P, smoother, u0=None, tol=1e-8, smooth_steps=2, maxiter=1000):
             break
     print(numiter, 'iterations')
     return u
+
+def local_mg_step(hs, A, f, Ps, lv_inds, smoother='symmetric_gs'):
+    # Utility function for solve_hmultigrid which returns a function step(x)
+    # which realizes one V-cycle of the local multigrid method.
+    assert smoother in ("forward_gs", "backward_gs", "symmetric_gs", "exact"), "Invalid smoother."
+    As = [A]
+    for P in reversed(Ps):
+        As.append(P.T.dot(As[-1]).dot(P).tocsr())
+    As.reverse()
+
+    Bs = [] # exact solvers
+
+    exact_levels = range(hs.numlevels) if smoother=='exact' else [0]
+    for lv in exact_levels:
+        lv_ind = lv_inds[lv]
+        Bs.append(make_solver(As[lv][lv_ind][:, lv_ind], spd=True))
+
+    def step(lv, x, f):
+        if lv == 0:
+            x1 = x.copy()
+            lv_ind = lv_inds[lv]
+            x1[lv_ind] = Bs[0].dot(f[lv_ind])
+            return x1
+        else:
+            x1 = x.copy()
+            P = Ps[lv-1]
+            A = As[lv]
+            n_lv = A.shape[0]
+            lv_ind = lv_inds[lv]
+
+            # pre-smoothing
+            if smoother == "forward_gs":
+                # Gauss-Seidel smoothing
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=2, sweep='forward')
+            elif smoother == "backward_gs":
+                # Gauss-Seidel smoothing
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=2, sweep='backward')
+            elif smoother == "symmetric_gs":
+                # Gauss-Seidel smoothing
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=1, sweep='symmetric')
+            elif smoother == "exact":
+                # exact solve
+                r_fine = (f - A.dot(x1))[lv_ind]
+                x1[lv_ind] += Bs[lv].dot(r_fine)
+
+            # coarse grid correction
+            r = f - A.dot(x1)
+            r_c = P.T.dot(r)
+            x1 += P.dot(step(lv-1, np.zeros_like(r_c), r_c))
+
+            # post-smoothing
+            if smoother == "forward_gs":
+                # Gauss-Seidel smoothing
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=2, sweep='backward')
+            elif smoother == "backward_gs":
+                # Gauss-Seidel smoothing
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=2, sweep='forward')
+            elif smoother == "symmetric_gs":
+                # Gauss-Seidel smoothing
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=1, sweep='symmetric')
+            elif smoother == "exact":
+                # exact solve - no post-smoothing
+                pass
+            return x1
+    return lambda x: step(hs.numlevels-1, x, f)
+
+def iterative_solve(step, A, f, x0=None, active_dofs=None, tol=1e-8, maxiter=5000):
+    """Solve the linear system Ax=f using a basic iterative method.
+
+    Args:
+        step (callable): a function which performs the update x_old -> x_new for
+            the iterative method
+        A: matrix or linear operator describing the linear system of equations
+        f (ndarray): the right-hand side
+        x0: the starting vector; 0 is used if not specified
+        active_dofs (list or ndarray): list of active dofs on which the residual
+            is computed. Useful for eliminating Dirichlet dofs without changing
+            the matrix. If not specified, all dofs are active.
+        tol (float): the desired reduction in the Euclidean norm of the residual
+            relative to the starting residual
+        maxiter (int): the maximum number of iterations
+
+    Returns:
+        a pair `(x, iterations)` containing the solution and the number of
+        iterations performed. If `maxiter` was reached without convergence, the
+        returned number of iterations is infinite.
+    """
+    if active_dofs is None:
+        active_dofs = slice(A.shape[0])    # all dofs are active
+    if x0 is None:
+        x = np.zeros(A.shape[0])
+        res0 = f
+    else:
+        x = x0
+        res0 = f - A @ x
+    res0 = scipy.linalg.norm(res0[active_dofs])
+    iterations = 0
+    while True:
+        x = step(x)
+        r = f - A @ x       # compute new residual
+        res = scipy.linalg.norm(r[active_dofs])
+        iterations += 1
+        if res / res0 < tol:
+            return x, iterations
+        elif iterations >= maxiter:
+            print("Warning: iterative solver did not converge in {} iterations".format(iterations))
+            return x, np.inf
+
+def solve_hmultigrid(hs, A, f, strategy='cell_supp', smoother='forward_gs', truncate=False, tol=1e-8, maxiter=5000):
+    """Solve a linear scalar problem in a hierarchical spline space using local multigrid.
+
+    Args:
+        hs: the :class:`.HSpace` which describes the hierarchical spline space
+        A: the matrix describing the discretization of the problem
+        f: the right-hand side vector
+        strategy (string): how to choose the smoothing sets. Valid options are
+
+            - ``"new"``: only the new dofs per level
+            - ``"trunc"``: all dofs which interact via the truncation operator
+            - ``"cell_supp"``: all dofs whose support intersects that of the new ones
+            - ``"func_supp"``
+
+        smoother (string): the multigrid smoother to use. Valid options are
+
+            - ``"forward_gs"``
+            - ``"backward_gs"``
+            - ``"symmetric_gs"``
+            - ``"exact"``
+
+        truncate (bool): if True, the linear system is interpreted as a
+            THB-spline discretization rather than an HB-spline one
+        tol (float): the desired reduction in the residual
+        maxiter (int): the maximum number of iterations
+
+    Returns:
+        a pair `(x, iterations)` containing the solution and the number of
+        iterations performed. If `maxiter` was reached without convergence, the
+        returned number of iterations is infinite.
+    """
+    if truncate:
+        assert False, 'THB prolongators missing'
+    else:
+        Ps = hs.virtual_hierarchy_prolongators()
+    # determine non-Dirichlet dofs (for residual computation)
+    non_dir_dofs = hs.non_dirichlet_dofs()
+    mg_step = local_mg_step(hs, A, f, Ps, hs.indices_to_smooth(strategy), smoother)
+    return iterative_solve(mg_step, A, f, active_dofs=non_dir_dofs, tol=tol, maxiter=maxiter)

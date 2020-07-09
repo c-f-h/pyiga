@@ -744,7 +744,13 @@ class HSpace:
         """Refine the given cells; `marked` is a dictionary which has the
         levels as indices and the list of marked cells on that level as values.
 
-        Refinement procedure preserving the mesh-level disparity `self.disparity` following [Bracco, Gianelli, Vazquez, 2018].
+        Refinement procedure preserving the mesh-level disparity
+        `self.disparity` following [Bracco, Gianelli, Vazquez, 2018].
+
+        Returns:
+            the actually refined cells in the same format as `marked`; if
+            disparity is less than infinity, this is a superset of the
+            input cells
         """
         self._ensure_levels(max(marked.keys()) + 2)
 
@@ -775,6 +781,7 @@ class HSpace:
             self.actfun[lv+1] |= newfuncs
 
         self._clear_cache()
+        return marked       # return the actual refined cells
 
     def get_virtual_space(self, level):
         assert 0 <= level < self.numlevels, 'Invalid level.'

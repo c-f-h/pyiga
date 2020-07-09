@@ -25,6 +25,15 @@ def test_interpolation():
     # interpolate it at Gréville points and check that result is the same
     result = interpolate(kv, f)
     assert np.allclose(coeffs, result)
+    ##
+    # test for p=0
+    kv = make_knots(0, 0.0, 1.0, 10)
+    coeffs = np.random.rand(kv.numdofs)
+    def f(x): return ev(kv, coeffs, x)
+    # interpolate it at Gréville points and check that result is the same
+    result = interpolate(kv, f)
+    assert np.allclose(coeffs, result)
+
 
 def test_L2_projection():
     kv = make_knots(3, 0.0, 1.0, 10)

@@ -129,8 +129,11 @@ class KnotVector:
     def greville(self):
         """Compute Gréville abscissae for this knot vector"""
         p = self.p
-        # running averages over p knots
-        return (np.convolve(self.kv, np.ones(p) / p))[p:-p]
+        if p == 0:
+            return (self.kv[1:] + self.kv[:-1]) / 2     # cell middle points
+        else:
+            # running averages over p knots
+            return (np.convolve(self.kv, np.ones(p) / p))[p:-p]
 
     def refine(self):
         """Returns the uniform refinement of this knot vector"""

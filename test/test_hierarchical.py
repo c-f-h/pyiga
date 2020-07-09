@@ -124,11 +124,16 @@ def test_grid_eval():
     hs = create_example_hspace(p=3, dim=2, n0=6, num_levels=3)
     u = rand(hs.numdofs)
     grid = 2 * (np.linspace(0, 1, 50),)
-    f1 = hs.grid_eval(u, grid)
-    u_fine = hs.represent_fine() @ u
-    f2 = bspline.BSplineFunc(hs.knotvectors(-1), u_fine).grid_eval(grid)
-    assert np.allclose(f1, f2)
+    f_fine = bspline.BSplineFunc(hs.knotvectors(-1), hs.represent_fine() @ u)
     hsf = HSplineFunc(hs, u)
     assert hsf.dim == 1 and hsf.sdim == 2
-    f3 = hsf.grid_eval(grid)
-    assert np.allclose(f2, f3)
+    #
+    assert np.allclose(f_fine.grid_eval(grid), hsf.grid_eval(grid))
+    assert np.allclose(f_fine.grid_jacobian(grid), hsf.grid_jacobian(grid))
+    assert np.allclose(f_fine.grid_hessian(grid), hsf.grid_hessian(grid))
+    ## test THBs
+    f_fine = bspline.BSplineFunc(hs.knotvectors(-1), hs.represent_fine(truncate=True) @ u)
+    hsf = HSplineFunc(hs, u, truncate=True)
+    assert np.allclose(f_fine.grid_eval(grid), hsf.grid_eval(grid))
+    assert np.allclose(f_fine.grid_jacobian(grid), hsf.grid_jacobian(grid))
+    assert np.allclose(f_fine.grid_hessian(grid), hsf.grid_hessian(grid))

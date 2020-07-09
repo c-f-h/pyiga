@@ -1029,33 +1029,66 @@ class HSpace:
             prolongators.append(P_hb)
         return prolongators
 
-    def grid_eval(self, coeffs, gridaxes):
-        """Evaluate an HB-spline function with the given coefficients over a
-        tensor product grid.
+    def coeffs_to_levelwise_funcs(self, coeffs, truncate=False):
+        """Compute the levelwise contributions of the hierarchical spline
+        function given by the coefficient vector `coeffs` as a list containing
+        one :class:`BSplineFunc` per level.
+
+        If `truncate=True`, the coefficients are interpreted as THB-spline
+        coefficients, otherwise as HB-splines.
         """
-        assert len(gridaxes) == self.dim, "Input has wrong dimension"
+        if truncate:
+            coeffs = self.thb_to_hb() @ coeffs
         # construct the level-wise B-spline functions
         u_lv = self.split_coeffs(coeffs)
         n_tp = tuple(self.mesh(k).numbf for k in range(self.numlevels))
         IA = self.active_indices()
-        funcs = tuple(
+        return tuple(
                 bspline.BSplineFunc(self.knotvectors(lv), _reindex(n_tp[lv], IA[lv], uj))
                 for (lv,uj) in enumerate(u_lv)
                 )
+
+    def grid_eval(self, coeffs, gridaxes, truncate=False):
+        """Evaluate an HB-spline function with the given coefficients over a
+        tensor product grid.
+        """
         # evaluate them and sum the result
-        return sum(f.grid_eval(gridaxes) for f in funcs)
+        return sum(f.grid_eval(gridaxes)
+                for f in self.coeffs_to_levelwise_funcs(coeffs, truncate=truncate))
 
 class HSplineFunc:
-    """A function libing in a hierarchical spline space."""
-    def __init__(self, hspace, u):
+    """A function living in a hierarchical spline space having the coefficient
+    vector `u`.
+
+    If `truncate=True`, it is a THB-spline function, otherwise an HB-spline
+    function.
+    """
+    def __init__(self, hspace, u, truncate=False):
         self.hs = hspace
         self.coeffs = u
         self.sdim = hspace.dim
         self.dim = 1        # for now only scalar functions
+        self.truncate = truncate
 
     def grid_eval(self, gridaxes):
         """Evaluate the function on a tensor product grid.
 
         See :func:`BSplineFunc.grid_eval` for details.
         """
-        return self.hs.grid_eval(self.coeffs, gridaxes)
+        return self.hs.grid_eval(self.coeffs, gridaxes, truncate=self.truncate)
+
+    def grid_jacobian(self, gridaxes):
+        """Evaluate the Jacobian on a tensor product grid.
+
+        See :func:`BSplineFunc.grid_jacobian` for details.
+        """
+        return sum(f.grid_jacobian(gridaxes)
+                for f in self.hs.coeffs_to_levelwise_funcs(self.coeffs, truncate=self.truncate))
+
+    def grid_hessian(self, gridaxes):
+        """Evaluate the Hessian matrix on a tensor product grid.
+
+        See :func:`BSplineFunc.grid_hessian` for details.
+        """
+        return sum(f.grid_hessian(gridaxes)
+                for f in self.hs.coeffs_to_levelwise_funcs(self.coeffs, truncate=self.truncate))

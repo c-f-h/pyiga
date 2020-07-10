@@ -109,14 +109,29 @@ class HDiscretization:
                                for k in range(hs.numlevels)]
 
             # assemble the matrix from the levelwise contributions
-            A = scipy.sparse.lil_matrix((hs.numdofs, hs.numdofs))
+            coo_I, coo_J, values = [], [], []   # blockwise COO data
+
+            def insert_block(B, rows, columns):
+                # store the block B into the given rows/columns of the output matrix
+                B = B.tocsr()       # this does nothing if B is already CSR
+                I, J = B.nonzero()
+                coo_I.append(rows[I])
+                coo_J.append(columns[J])
+                values.append(B.data)
 
             for k in range(hs.numlevels):
                 # store the k-th diagonal block
-                A[np.ix_(new[k], new[k])] = A_hb_new[k]
-                A[np.ix_(neighbors[k], new[k])] = A_hb_interlevel[k]
-                A[np.ix_(new[k], neighbors[k])] = A_hb_interlevel[k].T
-            return A.tocsr()
+                insert_block(A_hb_new[k], new[k], new[k])
+                # store the two blocks containing interactions with coarser levels
+                insert_block(A_hb_interlevel[k],   neighbors[k], new[k])
+                insert_block(A_hb_interlevel[k].T, new[k], neighbors[k])
+
+            # convert the blockwise COO data into a CSR matrix
+            coo_I  = np.concatenate(coo_I)
+            coo_J  = np.concatenate(coo_J)
+            values = np.concatenate(values)
+            return scipy.sparse.csr_matrix((values, (coo_I, coo_J)),
+                    shape=(hs.numdofs, hs.numdofs))
 
     def assemble_rhs(self, vf=None):
         if vf is None:

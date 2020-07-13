@@ -3,8 +3,10 @@
 truncated hierarchical B-splines (THB-splines).
 
 The main user-facing class is :class:`HSpace`, which describes a hierarchical
-spline space and supports HB- and THB-spline representations. The remaining
-members of the module are utility functions and classes.
+spline space and supports HB- and THB-spline representations. In order to
+compute the stiffness matrix and right-hand side vector for the Galerkin
+discretization of a variational problem in such a hierarchical spline space,
+use the :class:`HDiscretization` class.
 
 The implementation is loosely based on the approach described in [GV2018]_ and
 the corresponding implementation in [GeoPDEs]_.
@@ -13,10 +15,6 @@ the corresponding implementation in [GeoPDEs]_.
     isogeometric methods using hierarchical B-splines", 2018.
     <https://doi.org/10.1016/j.apnum.2017.08.006>`_
 .. [GeoPDEs] http://rafavzqz.github.io/geopdes/
-
---------------
-Module members
---------------
 """
 import numpy as np
 import scipy.sparse
@@ -1051,7 +1049,7 @@ class HSpace:
     def coeffs_to_levelwise_funcs(self, coeffs, truncate=False):
         """Compute the levelwise contributions of the hierarchical spline
         function given by the coefficient vector `coeffs` as a list containing
-        one :class:`BSplineFunc` per level.
+        one :class:`.BSplineFunc` per level.
 
         If `truncate=True`, the coefficients are interpreted as THB-spline
         coefficients, otherwise as HB-splines.
@@ -1079,8 +1077,12 @@ class HSplineFunc:
     """A function living in a hierarchical spline space having the coefficient
     vector `u`.
 
-    If `truncate=True`, it is a THB-spline function, otherwise an HB-spline
-    function.
+    Args:
+        hspace (:class:`HSpace`): the hierarchical spline space
+        u (array): the vector of coefficients corresponding to the active basis
+            functions, with length :attr:`HSpace.numdofs`
+        truncate (bool): if true, the coefficients are interpreted as THB-spline
+            coefficients; otherwise, as HB-spline coefficients
     """
     def __init__(self, hspace, u, truncate=False):
         self.hs = hspace
@@ -1092,14 +1094,14 @@ class HSplineFunc:
     def grid_eval(self, gridaxes):
         """Evaluate the function on a tensor product grid.
 
-        See :func:`BSplineFunc.grid_eval` for details.
+        See :meth:`.BSplineFunc.grid_eval` for details.
         """
         return self.hs.grid_eval(self.coeffs, gridaxes, truncate=self.truncate)
 
     def grid_jacobian(self, gridaxes):
         """Evaluate the Jacobian on a tensor product grid.
 
-        See :func:`BSplineFunc.grid_jacobian` for details.
+        See :meth:`.BSplineFunc.grid_jacobian` for details.
         """
         return sum(f.grid_jacobian(gridaxes)
                 for f in self.hs.coeffs_to_levelwise_funcs(self.coeffs, truncate=self.truncate))
@@ -1107,7 +1109,7 @@ class HSplineFunc:
     def grid_hessian(self, gridaxes):
         """Evaluate the Hessian matrix on a tensor product grid.
 
-        See :func:`BSplineFunc.grid_hessian` for details.
+        See :meth:`.BSplineFunc.grid_hessian` for details.
         """
         return sum(f.grid_hessian(gridaxes)
                 for f in self.hs.coeffs_to_levelwise_funcs(self.coeffs, truncate=self.truncate))

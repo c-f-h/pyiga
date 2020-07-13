@@ -108,7 +108,16 @@ class InputField:
         self.updatable = updatable
 
 class VForm:
-    """Abstract representation of a variational form."""
+    """Abstract representation of a variational form.
+
+    See :doc:`/guide/vforms` for a comprehensive user guide.
+
+    Args:
+        dim (int): the space dimension
+        arity (int): the arity of the variational form, i.e., 1 for a linear
+            functional and 2 for a bilinear form
+        spacetime (bool): whether the form describes a space-time discretization (deprecated)
+    """
     def __init__(self, dim, arity=2, spacetime=False):
         self.dim = dim
         self.arity = arity

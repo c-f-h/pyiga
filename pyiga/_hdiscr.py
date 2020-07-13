@@ -11,6 +11,24 @@ def _assemble_partial_rows(asm, row_indices):
     return scipy.sparse.coo_matrix((data, (I,J)), shape=S.shape).tocsr()
 
 class HDiscretization:
+    """Represents the discretization of a variational problem over a
+    hierarchical spline space.
+
+    Args:
+        hspace (:class:`HSpace`): the hierarchical spline space in which to discretize
+        vform (:class:`.VForm`): the variational form describing the problem
+        asm_args (dict): a dictionary which provides named inputs for the assembler. Most
+            problems will require at least a geometry map; this can be given in
+            the form ``{'geo': geo}``, where ``geo`` is a geometry function
+            defined using the :doc:`/api/geometry` module. Further inputs
+            declared via the :meth:`.VForm.input` method must be included in
+            this dict.
+
+            The assemblers both for the matrix and the right-hand side will draw
+            their input arguments from this dict.
+        truncate (bool): if true, a THB-spline discretization is generated;
+            otherwise, an HB-spline discretization
+    """
     def __init__(self, hspace, vform, asm_args, truncate=False):
         self.hs = hspace
         self.truncate = truncate
@@ -39,6 +57,12 @@ class HDiscretization:
             return _assemble_partial_rows(asm, rows)
 
     def assemble_matrix(self):
+        """Assemble the stiffness matrix for the hierarchical discretization and return it.
+
+        Returns:
+            a sparse matrix whose size corresponds to the
+            :attr:`HSpace.numdofs` attribute of `hspace`
+        """
         if self.truncate:
             # compute HB version and transform it
             # HACK - overwrite truncate flag and replace it afterwards
@@ -134,6 +158,18 @@ class HDiscretization:
                     shape=(hs.numdofs, hs.numdofs))
 
     def assemble_rhs(self, vf=None):
+        """Assemble the right-hand side vector for the hierarchical discretization and return it.
+
+        By default (if `vf=None`), a standard L2 inner product `<f, v>` is used
+        for computing the right-hand side, and the function `f` is taken from
+        the key ``'f'`` of the ``asm_args`` dict.
+
+        A different functional can be specified by passing a :class:`.VForm`
+        with ``arity=1`` as the `vf` parameter.
+
+        Returns:
+            a vector whose length corresponds to the :attr:`HSpace.numdofs` attribute of `hspace`
+        """
         if vf is None:
             from .vform import L2functional_vf
             vf = L2functional_vf(dim=self.hs.dim, physical=True)

@@ -30,9 +30,10 @@ trial and the test function using :meth:`VForm.basisfuns` like this::
 
 The objects that we work with when specifying vforms are abstract
 expressions (namely, instances of :class:`Expr`) and all have certain
-properties such as a shape.
-By default, :class:`VForm` assumes a scalar-valued problem, and therefore both ``u``
-and ``v`` are scalar::
+properties such as a shape, :attr:`Expr.shape`, which is a tuple of
+dimensions just like a numpy array has.
+By default, :class:`VForm` assumes a scalar-valued problem, and therefore both
+the trial function ``u`` and the test function ``v`` are scalar::
 
     >>> u.shape
     ()
@@ -44,13 +45,13 @@ import some commonly needed functions from the :mod:`.vform` module. ::
 
     from pyiga.vform import grad, div, inner, dx
 
-An expression that we will often require is the gradient of a function,
-obtained via :func:`grad`::
+We will often need the gradient of a function, obtained via :func:`grad`::
 
     >>> gu = grad(u)
     >>> gu.shape
     (3,)
 
+Note that ``grad(u)`` is itself an expression.
 As expected, the gradient of a scalar function is a three-component
 vector. We could take the divergence (:func:`div`) of the gradient and get back a
 scalar expression which represents the Laplacian

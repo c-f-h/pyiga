@@ -116,7 +116,7 @@ would be defined like this::
         vf.add(inner(grad(u), grad(v)) * dx)
         return vf
 
-.. code::
+Calling this function results in a :class:`VForm` object::
 
     >>> laplace_vf(2)
     <pyiga.vform.VForm at 0x7f0fdcf5c0f0>

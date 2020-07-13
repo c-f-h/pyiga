@@ -166,9 +166,9 @@ In this example, ``u`` is a vector-valued function and ``p`` is scalar-valued.
 Working with coefficient functions
 ----------------------------------
 
-Often you will need to provide additional functions as input to your
-assembler, for instance to represent a space-dependent diffusion
-coefficient. A scalar input field is declared using the
+Often you will need to provide additional functions as input to your assembler,
+for instance to represent a diffusion coefficient which varies over the
+computational domain.  A scalar input field is declared using the
 :meth:`VForm.input` method as follows::
 
     >>> vf = vform.VForm(2)

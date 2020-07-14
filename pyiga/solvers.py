@@ -95,7 +95,7 @@ def gauss_seidel(A, x, b, iterations=1, indices=None, sweep='forward'):
 
 
 def OperatorSmoother(S):
-    """A smoother which applies an arbitrary operator `S` to the residual
+    r"""A smoother which applies an arbitrary operator `S` to the residual
     and uses the result as an update, i.e.,
 
     .. math::

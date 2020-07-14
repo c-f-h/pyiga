@@ -117,7 +117,7 @@ would be defined like this::
         vf.add(inner(grad(u), grad(v)) * dx)
         return vf
 
-.. code::
+Calling this function results in a :class:`VForm` object::
 
     >>> laplace_vf(2)
     <pyiga.vform.VForm at 0x7f0fdcf5c0f0>
@@ -167,9 +167,9 @@ In this example, ``u`` is a vector-valued function and ``p`` is scalar-valued.
 Working with coefficient functions
 ----------------------------------
 
-Often you will need to provide additional functions as input to your
-assembler, for instance to represent a space-dependent diffusion
-coefficient. A scalar input field is declared using the
+Often you will need to provide additional functions as input to your assembler,
+for instance to represent a diffusion coefficient which varies over the
+computational domain.  A scalar input field is declared using the
 :meth:`VForm.input` method as follows::
 
     >>> vf = vform.VForm(2)

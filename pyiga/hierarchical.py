@@ -1156,3 +1156,9 @@ class HSplineFunc:
         """
         return sum(f.grid_hessian(gridaxes)
                 for f in self.hs.coeffs_to_levelwise_funcs(self.coeffs, truncate=self.truncate))
+
+    @property
+    def support(self):
+        """Return a sequence of pairs `(lower,upper)`, one per source dimension,
+        which describe the extent of the support in the parameter space."""
+        return tuple(kv.support() for kv in self.hs.knotvectors(0))

@@ -154,6 +154,7 @@ def test_grid_eval():
     f_fine = bspline.BSplineFunc(hs.knotvectors(-1), hs.represent_fine() @ u)
     hsf = HSplineFunc(hs, u)
     assert hsf.dim == 1 and hsf.sdim == 2
+    assert hsf.support == ((0.0, 1.0), (0.0, 1.0))
     #
     assert np.allclose(f_fine.grid_eval(grid), hsf.grid_eval(grid))
     assert np.allclose(f_fine.grid_jacobian(grid), hsf.grid_jacobian(grid))

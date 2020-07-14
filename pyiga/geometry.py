@@ -17,7 +17,7 @@ class NurbsFunc:
 
     Arguments:
         kvs (seq): tuple of `d` :class:`.KnotVector`\ s.
-        coeffs (ndarray): coefficient array; see :class:`BSplineFunc` for format.
+        coeffs (ndarray): coefficient array; see :class:`.BSplineFunc` for format.
             The constructor may modify `coeffs` during premultiplication!
         weights (ndarray): coefficients for weight function in the same format
             as `coeffs`. If `weights=None` is passed, the weights are assumed to
@@ -33,7 +33,7 @@ class NurbsFunc:
         dim (int): dimension of the output of the function
 
     The evaluation functions have the same prototypes and behavior as those in
-    :class:`BSplineFunc`.
+    :class:`.BSplineFunc`.
     """
     def __init__(self, kvs, coeffs, weights, premultiplied=False):
         if isinstance(kvs, bspline.KnotVector):
@@ -249,7 +249,7 @@ def unit_square(num_intervals=1):
     """Unit square with given number of intervals per direction.
 
     Returns:
-        :class:`BSplineFunc` 2D geometry
+        :class:`.BSplineFunc` 2D geometry
     """
     return unit_cube(dim=2, num_intervals=num_intervals)
 
@@ -261,7 +261,7 @@ def perturbed_square(num_intervals=5, noise=0.02):
     given noise level.
 
     Returns:
-        :class:`BSplineFunc` 2D geometry
+        :class:`.BSplineFunc` 2D geometry
     """
     return unit_square(num_intervals).perturb(noise)
 
@@ -273,7 +273,7 @@ def bspline_quarter_annulus(r1=1.0, r2=2.0):
         r2 (float): outer radius
 
     Returns:
-        :class:`BSplineFunc` 2D geometry
+        :class:`.BSplineFunc` 2D geometry
     """
     kvx = bspline.make_knots(1, 0.0, 1.0, 1)
     kvy = bspline.make_knots(2, 0.0, 1.0, 1)
@@ -320,7 +320,7 @@ def unit_cube(dim=3, num_intervals=1):
     per coordinate direction.
 
     Returns:
-        :class:`BSplineFunc` geometry
+        :class:`.BSplineFunc` geometry
     """
     return functools.reduce(tensor_product, dim * (line_segment(0.0, 1.0, intervals=num_intervals),))
 
@@ -329,7 +329,7 @@ def identity(extents):
     given by `extents` as a list of (min,max) pairs or of :class:`.KnotVector`.
 
     Returns:
-        :class:`BSplineFunc` geometry
+        :class:`.BSplineFunc` geometry
     """
     # if any inputs are KnotVectors, extract their supports
     extents = [
@@ -346,7 +346,7 @@ def twisted_box():
     Corresponds to gismo data file twistedFlatQuarterAnnulus.xml.
 
     Returns:
-        :class:`BSplineFunc` 3D geometry
+        :class:`.BSplineFunc` 3D geometry
     """
     kv1 = bspline.make_knots(1, 0.0, 1.0, 1)
     kv2 = bspline.make_knots(3, 0.0, 1.0, 1)

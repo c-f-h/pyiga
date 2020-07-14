@@ -416,6 +416,24 @@ class HSpace:
     def total_active_cells(self):
         return sum(len(ac) for ac in self.active_cells())
 
+    def active_functions(self, lv=None, flat=False):
+        """If `lv` is specified, return the set of active functions on that level.
+        Otherwise, return a list containing, for each level, the set of active functions.
+
+        If `lv=None` and `flat=True`, return a flat list of `(lv, (i_1, ..., i_d))`
+        pairs of all active functions in canonical order, where the first entry is the level
+        and the second entry is the multi-index of the function on that level.
+        """
+        if lv is not None:
+            return self.actfun[lv]
+        else:
+            if flat:
+                return [(l, af)
+                        for l in range(self.numlevels)
+                        for af in sorted(self.actfun[l])]
+            else:
+                return self.actfun
+
     def deactivated_cells(self, lv=None):
         """If `lv` is specified, return the set of deactivated cells on that level.
         Otherwise, return a list containing, for each level, the set of deactivated cells.

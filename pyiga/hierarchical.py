@@ -11,6 +11,23 @@ use the :class:`HDiscretization` class.
 The implementation is loosely based on the approach described in [GV2018]_ and
 the corresponding implementation in [GeoPDEs]_.
 
+A tensor product B-spline basis function is usually referred to by a
+multi-index represented as a tuple `(i_1, ..., i_d)`, where `d` is the space
+dimension and `i_k` is the index of the univariate B-spline function used in
+the `k`-th coordinate direction. Similarly, cells in the underlying tensor
+product mesh are indexed by multi-indices `(j_1, .., j_d)`, where `j_k` is the
+index of the knot span along the `k`-th axis.
+
+Whenever an ordering of the degrees of freedom in a hierarchical spline space
+is required, for instance when assembling a stiffness matrix, we use the
+following **canonical order**: first, all active basis function on the coarsest
+level, then all active basis functions on the next finer level, and so on until
+the finest level. Within each level, the functions are ordered
+lexicographically with respect to their tensor product multi-index `(i_1, ...,
+i_d)`.
+
+The canonical order on active cells is defined in the same way.
+
 .. [GV2018] `Garau, Vazquez: "Algorithms for the implementation of adaptive
     isogeometric methods using hierarchical B-splines", 2018.
     <https://doi.org/10.1016/j.apnum.2017.08.006>`_
@@ -56,6 +73,18 @@ def _reindex(n, Idx, u):
     result = np.zeros(n, dtype=u.dtype)
     result[Idx] = u
     return result
+
+def _position_index(suplist, sublist):
+    """Takes two sorted lists of unique integers (e.g., two raveled index
+    lists), where `suplist` contains `sublist`. Returns list of position
+    indices of matching entries."""
+    out = []
+    k = 0
+    for candidate in sublist:
+        k = suplist.index(candidate, k)
+        out.append(k)
+    return np.array(out)
+
 
 class TPMesh:
     """A tensor product mesh described by a sequence of knot vectors."""
@@ -252,8 +281,7 @@ class HMesh:
         return {lv: c for (lv, c) in cells.items() if c}
 
     def HMesh_cells(self, marked):
-        """Returns the smallest dictionary of (active) hierarchical cells containing
-        `marked`"""
+        """Return the smallest dictionary of active hierarchical cells containing `marked`."""
         out = dict()
         for lv in marked:
             out = self._clean_Hmesh_cells(
@@ -341,8 +369,17 @@ class HSpace:
     """Represents a HB-spline or THB-spline space over an adaptively refined mesh.
 
     Arguments:
-        kvs: a sequence of :class:`.KnotVector` instances, representing
+        kvs: a sequence of `d` :class:`.KnotVector` instances, representing
             the tensor product B-spline space on the coarsest level
+        disparity (int): the mesh level disparity, meaning the maximum number of
+            coarser levels with which any active function on a given level may
+            have interactions with. This disparity is respected when calling
+            :meth:`refine`. If no restriction on the number of overlapping
+            mesh levels is desired, pass `np.inf` (which is the default).
+        bdspecs: optionally, a list of boundary specifications on which degrees
+            of freedom should be eliminated (usually for treating Dirichlet
+            boundary conditions). See :func:`.assemble.compute_dirichlet_bc`
+            for the precise format.
     """
     def __init__(self, kvs, disparity=np.inf, bdspecs=None):
         tp = TPMesh(kvs)
@@ -353,6 +390,8 @@ class HSpace:
         self.actfun = [set(hmesh.meshes[0].functions())]
         self.deactfun = [set()]
         self.disparity = disparity
+        if bdspecs is not None:
+            bdspecs = [assemble._parse_bdspec(bd, self.dim) for bd in bdspecs]
         self.bdspecs = bdspecs
         self._clear_cache()
 
@@ -392,15 +431,18 @@ class HSpace:
         return self.hmesh.meshes[lv]
 
     def knotvectors(self, lv):
-        """Return the tuple of knot vectors for the tensor product space on level `lv`."""
+        """Return a tuple of :class:`.KnotVector` instances describing the
+        tensor product space on level `lv`.
+        """
         return self.hmesh.meshes[lv].kvs
 
     def active_cells(self, lv=None, flat=False):
         """If `lv` is specified, return the set of active cells on that level.
         Otherwise, return a list containing, for each level, the set of active cells.
 
-        If `lv=None` and `flat=True`, return a flat list of `(lv, cellidx)`
-        pairs of all active cells in canonical order.
+        If `lv=None` and `flat=True`, return a flat list of `(lv, (j_1, ..., j_d))`
+        pairs of all active cells in canonical order, where the first entry is the level
+        and the second entry is the multi-index of the cell on that level.
         """
         if lv is not None:
             return self.hmesh.active[lv]
@@ -414,6 +456,7 @@ class HSpace:
 
     @property
     def total_active_cells(self):
+        """The total number of active cells in the hierarchical mesh."""
         return sum(len(ac) for ac in self.active_cells())
 
     def active_functions(self, lv=None, flat=False):
@@ -484,15 +527,13 @@ class HSpace:
             TPbindices.append(aux)
 
         # Compute boundary indices for virtual hierarchy
-        out = list()
-        out_index = list()
+        out = []
+        out_index = []
         for lv in range(self.numlevels):
-            aux = list()
+            aux = []
             for i in range(self.numlevels):
-                if i == lv: # deactivated functions added separatly
-                    #aux.append((self.actfun[i] | self.deactfun[i]) & TPbindices[i])
-                    aux.append(self.actfun[i] & TPbindices[i])
-                elif 0 <= i < lv:
+                # the deactivated functions on level `lv` will be added later
+                if 0 <= i <= lv:
                     aux.append(self.actfun[i] & TPbindices[i])
                 else:
                     aux.append(set())
@@ -504,7 +545,7 @@ class HSpace:
             [self.deactfun[lv] & TPbindices[lv]
                 for lv in range(self.numlevels)])
 
-        # insertion of deactivated functions
+        # insert deactivated functions (separate step to preserve canonical order)
         for lv in range(self.numlevels):
             out_index[lv][lv] |= self.deactfun[lv] & TPbindices[lv]
             out[lv][lv] = np.concatenate((out[lv][lv], ravel_bddeact[lv]))
@@ -565,13 +606,9 @@ class HSpace:
         """Matrix indices which do not lie on the specified Dirichlet boundaries."""
         return sorted(set(range(self.numdofs)) - set(self.dirichlet_dofs()))
 
-    def remove_indices(self, listsetA, listsetB):
-        for lv in range(self.numlevels):
-            listsetA[lv] -= listsetB[lv]
-
     def new_indices(self):
         """Return a tuple which contains tuples which contain, per level, the raveled
-        (sequential) indices of newly added basis functions in the VIRTUAL HIERARCHY per level."""
+        (sequential) indices of newly added basis functions in the virtual hierarchy per level."""
         return [
                 [ ( sorted(self.actfun[i] - self.index_dirichlet[lv][i])
                   + sorted(self.deactfun[i] - self.index_dirichlet[lv][i]))
@@ -582,7 +619,7 @@ class HSpace:
 
     def trunc_indices(self):
         """Return a tuple which contains tuples which contain, per level, the raveled
-        (sequential) indices of TRUNC basis functions in the VIRTUAL HIERARCHY per level."""
+        (sequential) indices of ``trunc`` basis functions in the virtual hierarchy per level."""
         indices = self.new_indices()        # start with only the newly added indices
         out = list()
         out_index = list()
@@ -607,7 +644,7 @@ class HSpace:
 
     def func_supp_indices(self):
         """Return a tuple which contains tuples which contain, per level, the raveled
-        (sequential) indices of FUNC_SUPP basis functions in the VIRTUAL HIERARCHY per level."""
+        (sequential) indices of ``func_supp`` basis functions in the virtual hierarchy per level."""
         indices = self.new_indices()        # start with only the newly added indices
         for lv in range(self.numlevels):
             for i in range(self.numlevels):
@@ -619,7 +656,7 @@ class HSpace:
 
     def cell_supp_indices(self, remove_dirichlet=True):
         """Return a tuple which contains tuples which contain, per level, the raveled
-        (sequential) indices of CELL_SUPP basis functions in the VIRTUAL HIERARCHY per level."""
+        (sequential) indices of ``cell_supp`` basis functions in the virtual hierarchy per level."""
         indices = self.new_indices()        # start with only the newly added indices
         for lv in range(self.numlevels):    # loop over virtual hierarchy levels
             for i in range(self.numlevels):
@@ -638,7 +675,7 @@ class HSpace:
 
     def global_indices(self):
         """Return a tuple which contains tuples which contain, per level, the raveled
-        (sequential) indices of GLOBAL basis functions in the VIRTUAL HIERARCHY per level."""
+        (sequential) indices of ``global`` basis functions in the virtual hierarchy per level."""
         indices = [ [[] for i in range(self.numlevels)] for j in range(self.numlevels) ]
         for lv in range(self.numlevels):
             for i in range(self.numlevels):
@@ -665,32 +702,19 @@ class HSpace:
         out = []
         n_lv = 0
         for l in range(self.numlevels):
-            out += list(n_lv + self._position_index(list(available_indices[lv][l]), indices[l]))
+            out += list(n_lv + _position_index(list(available_indices[lv][l]), indices[l]))
             n_lv += len(available_indices[lv][l])
         return np.array(out, dtype=int)
 
-    @staticmethod
-    def _position_index(suplist, sublist):
-        """Takes two sorted lists of unique integers (eg. two raveled index lists),
-        where `suplist` contains `sublist`. Returns list of position indices of matching
-        entries."""
-        out = list()
-        aux = 0
-        for candidate in sublist:
-            aux = suplist.index(candidate, aux)
-            out.append(aux)
-        return np.array(out)
-
-    def list_to_dict(self, listset, lv=None):
-        """Converts a list-set representation of hierarchical indices to its dict representation. If `lv` is provided, only levels `lv`-self.disparity, ..., `lv` are processed."""
+    def _list_to_dict(self, listset, lv=None):
+        """Convert a list-set representation of hierarchical indices to its
+        dict representation. If `lv` is provided, only levels
+        `lv-self.disparity`, ..., `lv` are processed.
+        """
         if not lv:
             return HMesh._clean_Hmesh_cells({l: listset[l] for l in range(self.numlevels)})
         else:
             return HMesh._clean_Hmesh_cells({l: listset[l] for l in range(max(lv-self.disparity, 0),lv+1)})
-
-    def tuplelist_to_tupledict(self, tuplelistset):
-        """Converts a tuple-list-set collection of hierarchical indices to its tuple-dict representation."""
-        return tuple(self.list_to_dict(tuplelistset[lv], lv) for lv in range(self.numlevels))
 
     def compute_cells(self, tuplelistset):
         out = list()
@@ -698,11 +722,11 @@ class HSpace:
             aux = [set(self.hmesh.meshes[l].support(funcs))
                     for (l, funcs) in enumerate(single_index)]
             out.append(
-                self.get_virtual_space(lv).hmesh.HMesh_cells(self.list_to_dict(aux)))
+                self.get_virtual_space(lv).hmesh.HMesh_cells(self._list_to_dict(aux)))
         return tuple(out)
 
     def function_support(self, lv, jj):
-        """Return the support (as a tuple of pairs) of the function on level `lv` with index `jj`."""
+        """Return the support (as a tuple of pairs) of the function on level `lv` with multi-index `jj`."""
         kvs = self.mesh(lv).kvs
         meshsupps = (kv.mesh_support_idx(j) for (kv,j) in zip(kvs, jj))
         return tuple((kv.mesh[lohi[0]], kv.mesh[lohi[1]]) for (kv,lohi) in zip(kvs,meshsupps))
@@ -742,16 +766,18 @@ class HSpace:
         return self.hmesh.meshes[k].supported_in(aux)
 
     def _cell_neighborhood(self, l, cells, truncate=False):
-        if l-self.disparity <0:
+        if l - self.disparity < 0:
             return set()
         else:
             if truncate:
-                return self.hmesh.active[l-self.disparity] & set(self.hmesh.cell_parent(l-self.disparity+1,self.cell_support_extension(l, cells, l-self.disparity+1)))
+                return self.hmesh.active[l-self.disparity] & \
+                        set(self.hmesh.cell_parent(l-self.disparity+1, self.cell_support_extension(l, cells, l-self.disparity+1)))
             else:
-                return self.hmesh.active[l-self.disparity] & set(self.cell_support_extension(l, cells, l-self.disparity))
+                return self.hmesh.active[l-self.disparity] & \
+                        set(self.cell_support_extension(l, cells, l-self.disparity))
 
     def _mark_recursive(self, l, marked, truncate=False):
-        neighbors = self._cell_neighborhood(l, marked.get(l,set()), truncate=truncate)
+        neighbors = self._cell_neighborhood(l, marked.get(l, set()), truncate=truncate)
         if neighbors:
             marked[l-self.disparity] = marked.get(l-self.disparity, set()) | neighbors
             self._mark_recursive(l-self.disparity, marked)
@@ -760,8 +786,8 @@ class HSpace:
         """Refine the given cells; `marked` is a dictionary which has the
         levels as indices and the list of marked cells on that level as values.
 
-        Refinement procedure preserving the mesh-level disparity
-        `self.disparity` following [Bracco, Gianelli, Vazquez, 2018].
+        The refinement procedure preserves the mesh level disparity, following
+        the method described in [Bracco, Giannelli, Vazquez, 2018].
 
         Returns:
             the actually refined cells in the same format as `marked`; if
@@ -950,9 +976,9 @@ class HSpace:
             return T
 
     def split_coeffs(self, x):
-        """Given a coefficient vector `x` of length :attr:`numdofs`, split it
-        into :attr:`numlevels` vectors which contain the contributions from
-        each individual level.
+        """Given a coefficient vector `x` of length :attr:`numdofs` in
+        canonical order, split it into :attr:`numlevels` vectors which contain
+        the contributions from each individual level.
         """
         j = 0
         result = []
@@ -1092,13 +1118,12 @@ class HSpace:
                 for f in self.coeffs_to_levelwise_funcs(coeffs, truncate=truncate))
 
 class HSplineFunc:
-    """A function living in a hierarchical spline space having the coefficient
-    vector `u`.
+    """A function living in a hierarchical spline space.
 
     Args:
         hspace (:class:`HSpace`): the hierarchical spline space
         u (array): the vector of coefficients corresponding to the active basis
-            functions, with length :attr:`HSpace.numdofs`
+            functions, with length :attr:`HSpace.numdofs`, in canonical order
         truncate (bool): if true, the coefficients are interpreted as THB-spline
             coefficients; otherwise, as HB-spline coefficients
     """

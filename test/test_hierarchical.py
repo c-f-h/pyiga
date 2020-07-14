@@ -8,9 +8,9 @@ def _make_hs(p=3, n=3):
     return HSpace((kv, kv))
 
 def create_example_hspace(p, dim, n0, disparity=np.inf, num_levels=3):
-    hs = HSpace(dim * (bspline.make_knots(p, 0.0, 1.0, n0),))
-    hs.disparity = disparity
-    hs.bdspecs = [(0,0), (0,1), (1,0), (1,1)] if dim==2 else [(0,0),(0,1)]
+    bdspecs = [(0,0), (0,1), (1,0), (1,1)] if dim==2 else [(0,0),(0,1)]
+    hs = HSpace(dim * (bspline.make_knots(p, 0.0, 1.0, n0),),
+            disparity=disparity, bdspecs=bdspecs)
     # perform local refinement
     delta = 0.5
     for lv in range(num_levels):

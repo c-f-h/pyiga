@@ -344,7 +344,8 @@ class HMesh:
     def refine(self, marked):
         # if necessary, add new fine levels to the data structure
         # NB: if refining on lv 0, we need 2 levels (0 and 1) -- hence the +2
-        self.ensure_levels(max(marked.keys()) + 2)
+        max_lv = max(lv for (lv,cells) in marked.items() if cells)
+        self.ensure_levels(max_lv + 2)
 
         new_cells = dict()
         for lv in range(len(self.meshes) - 1):
@@ -794,7 +795,8 @@ class HSpace:
             disparity is less than infinity, this is a superset of the
             input cells
         """
-        self._ensure_levels(max(marked.keys()) + 2)
+        max_lv = max(lv for (lv,cells) in marked.items() if cells)
+        self._ensure_levels(max_lv + 2)
 
         if self.disparity < np.inf:
             marked = marked.copy()

@@ -6,7 +6,7 @@ from matplotlib import animation
 
 from . import utils
 
-def plot_field(field, geo=None, res=80, **kwargs):
+def plot_field(field, geo=None, res=80, physical=False, **kwargs):
     """Plot a scalar field, optionally over a geometry."""
     kwargs.setdefault('shading', 'gouraud')
     if np.isscalar(res):
@@ -14,7 +14,10 @@ def plot_field(field, geo=None, res=80, **kwargs):
     if geo is not None:
         grd = tuple(np.linspace(s[0], s[1], r) for (s,r) in zip(geo.support, res))
         XY = utils.grid_eval(geo, grd)
-        C = utils.grid_eval(field, grd)
+        if physical:
+            C = utils.grid_eval_transformed(field, grd, geo)
+        else:
+            C = utils.grid_eval(field, grd)
         return plt.pcolormesh(XY[...,0], XY[...,1], C, **kwargs)
     else:
         # assumes that `field` is a BSplineFunc or equivalent

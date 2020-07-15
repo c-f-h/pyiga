@@ -100,3 +100,22 @@ def test_localmg():
               (  59,  23 ),
               (  59,  23 ),
               (  61,  22 ) ])
+
+def test_solve_hmultigrid():
+    # test the built-in solve_hmultigrid function in pyiga.solvers
+    hs = create_example_hspace(p=3, dim=2, n0=10, disparity=1, num_levels=3)
+
+    # assemble and solve the HB-spline problem
+    hdiscr = hierarchical.HDiscretization(hs, vform.stiffness_vf(dim=2),
+            {'geo': geometry.unit_square(), 'f': lambda *x: 1.0})
+    A_hb = hdiscr.assemble_matrix()
+    f_hb = hdiscr.assemble_rhs()
+
+    dir_dofs = hs.dirichlet_dofs()
+    LS_hb = assemble.RestrictedLinearSystem(A_hb, f_hb,
+            (dir_dofs, np.zeros_like(dir_dofs)))
+    u_hb = scipy.sparse.linalg.spsolve(LS_hb.A, LS_hb.b)
+    u_hb0 = LS_hb.complete(u_hb)
+
+    u_mg, iters = solvers.solve_hmultigrid(hs, A_hb, f_hb, tol=1e-8) # use default parameters for smoother and strategy
+    assert np.allclose(u_hb0, u_mg)

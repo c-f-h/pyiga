@@ -708,6 +708,11 @@ def assemble_vf(vf, kvs, symmetric=False, format='csr', layout='blocked', **kwar
     from . import compile
     Asm = compile.compile_vform(vf)   # compile assembler class
 
+    # check that all named inputs have been passed
+    for inp in vf.inputs:
+        if not inp.name in kwargs:
+            raise RuntimeError("required input parameter '%s' missing" % inp.name)
+
     num_spaces = vf.num_spaces()
     if num_spaces <= 1:
         asm = Asm(kvs, **kwargs)

@@ -90,7 +90,7 @@ class HDiscretization:
             for k in range(hs.numlevels):
                 indices = set()
                 for lv in range(max(0, k - hs.disparity), k):
-                    indices |= set(hs.hmesh.function_babys(lv, neighbors[k][lv], k))
+                    indices |= set(hs.hmesh.function_grandchildren(lv, neighbors[k][lv], k))
                 interlevel_ix.append(indices)
                 to_assemble.append(indices | hs.actfun[k])
 

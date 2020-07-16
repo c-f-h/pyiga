@@ -183,20 +183,14 @@ class HMesh:
                 *(range(2*ci, 2*(ci + 1)) for ci in c)))
         return children
 
-    def cell_babys(self, lv, cells, targetlv = None):
+    def cell_grandchildren(self, lv, cells, targetlv=None):
         if not targetlv:
             targetlv = len(self.meshes) - 1
-        assert 0 <= lv < len(self.meshes) - 1, 'Invalid level'
-        assert lv < targetlv < len(self.meshes), 'Invalid target level'
+        assert 0 <= lv < targetlv < len(self.meshes), 'Invalid levels'
         if targetlv - lv == 1:
             return self.cell_children(lv, cells)
         else:
-            return self.cell_babys(lv+1, self.cell_children(lv, cells), targetlv)
-        #babys = []
-        #for c in cells:
-        #    babys.extend(itertools.product(
-        #        *(range((targetlv - lv)*2*ci, (targetlv - lv)*2*(ci + 1)) for ci in c)))
-        #return babys
+            return self.cell_grandchildren(lv+1, self.cell_children(lv, cells), targetlv)
 
     def cell_parent(self, lv, cells):
         assert 1 <= lv < len(self.meshes), 'Invalid level'
@@ -206,7 +200,7 @@ class HMesh:
         parents.sort()
         return _make_unique(parents)
 
-    def cell_grandparent(self, lv, cells, targetlv = None):
+    def cell_grandparent(self, lv, cells, targetlv=None):
         if not targetlv:
             targetlv = 0
         assert 1 <= lv < len(self.meshes), 'Invalid level'
@@ -215,11 +209,6 @@ class HMesh:
             return self.cell_parent(lv, cells)
         else:
             return self.cell_grandparent(lv-1, self.cell_parent(lv, cells), targetlv)
-        #grandparents = []
-        #for c in cells:
-        #    grandparents.append(tuple(ci // (lv - targetlv)*2 for ci in c))
-        #grandparents.sort()
-        #return _make_unique(grandparents)
 
     def _TP_to_HMesh_cells_up(self, lv, cells):
         """Return dictionary of hierarchical cells of levels >= `lv` contributing to the
@@ -292,14 +281,14 @@ class HMesh:
         children.sort()
         return _make_unique(children)
 
-    def function_babys(self, lv, indices, targetlv = None):
+    def function_grandchildren(self, lv, indices, targetlv=None):
         if not targetlv:
             targetlv = len(self.meshes) - 1
-        assert lv < targetlv < len(self.meshes), 'Invalid target level'
+        assert 0 <= lv < targetlv < len(self.meshes), 'Invalid levels'
         if targetlv - lv == 1:
             return self.function_children(lv, indices)
         else:
-            return self.function_babys(lv+1, self.function_children(lv, indices), targetlv)
+            return self.function_grandchildren(lv+1, self.function_children(lv, indices), targetlv)
 
     def function_parents(self, lv, indices):
         parents = []
@@ -309,10 +298,10 @@ class HMesh:
         parents.sort()
         return _make_unique(parents)
 
-    def function_grandparents(self, lv, indices, targetlv = None):
+    def function_grandparents(self, lv, indices, targetlv=None):
         if not targetlv:
             targetlv = 0
-        assert 0 <= targetlv < lv, 'Invalid target level'
+        assert 0 <= targetlv < lv < len(self.meshes), 'Invalid levels'
         if lv - targetlv == 1:
             return self.function_parents(lv, indices)
         else:

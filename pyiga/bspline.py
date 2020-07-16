@@ -132,11 +132,13 @@ class KnotVector:
         # running averages over p knots
         return (np.convolve(self.kv, np.ones(p) / p))[p:-p]
 
-    def refine(self):
-        """Returns the uniform refinement of this knot vector"""
-        mesh = self.mesh
-        midpoints = (mesh[1:] + mesh[:-1]) / 2
-        kvnew = np.sort(np.concatenate((self.kv, midpoints)))
+    def refine(self, new_knots=None):
+        """Return the refinement of this knot vector by inserting `new_knots`,
+        or performing uniform refinement if none are given."""
+        if new_knots is None:
+            mesh = self.mesh
+            new_knots = (mesh[1:] + mesh[:-1]) / 2
+        kvnew = np.sort(np.concatenate((self.kv, new_knots)))
         return KnotVector(kvnew, self.p)
 
     def meshsize_avg(self):
@@ -477,6 +479,30 @@ def prolongation(kv1, kv2):
     # prune matrix
     P[np.abs(P) < 1e-15] = 0.0
     return scipy.sparse.csr_matrix(P)
+
+def knot_insertion(kv, u):
+    """Return a sparse matrix of size `(n+1) x n`, with `n = kv.numdofs´, which
+    maps coefficients from `kv` to a new knot vector obtained by inserting the
+    new knot `u` into `kv`.
+    """
+    n, p = kv.numdofs, kv.p
+    k = kv.findspan(u)
+
+    P = scipy.sparse.lil_matrix((n+1, n))
+
+    # coefficients outside the affected area are left unchanged
+    for i in range(k - p + 1):
+        P[i, i] = 1.0
+    for i in range(k + 1, n + 1):
+        P[i, i-1] = 1.0
+
+    knots = kv.kv
+    for i in reversed(range(k - p + 1, k + 1)):
+        a = (u - knots[i]) / (knots[i + p] - knots[i])
+        P[i, i - 1] = 1 - a
+        P[i, i]     = a
+
+    return P.tocsr()
 
 ################################################################################
 

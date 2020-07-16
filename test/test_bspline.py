@@ -51,6 +51,14 @@ def test_deriv():
     assert np.linalg.norm(derivs1 - allders[1].dot(coeffs), np.inf) < 1e-10
     assert np.linalg.norm(derivs2 - allders[2].dot(coeffs), np.inf) < 1e-10
 
+def test_refine():
+    kv = make_knots(2, 0.0, 1.0, 4)
+    kv2 = kv.refine([0.1])
+    assert kv2.p == kv.p and np.array_equal(kv2.kv,
+            [0.0, 0.0, 0.0, 0.1, 0.25, 0.5, 0.75, 1.0, 1.0, 1.0])
+    kv2 = kv.refine()
+    assert kv2.p == kv.p and np.array_equal(kv2.kv, make_knots(2, 0.0, 1.0, 8).kv)
+
 def test_prolongation():
     # create random spline
     kv = make_knots(3, 0.0, 1.0, 10)
@@ -64,6 +72,17 @@ def test_prolongation():
     val1 = ev(kv, coeffs, x)
     val2 = ev(kv2, coeffs2, x)
     assert np.linalg.norm(val1 - val2) < 1e-10
+
+def test_knot_insertion():
+    kv = KnotVector(np.array([0.0, 0.0, 0.0, 0.0, 0.0,
+        0.05, 0.12, 0.33, 0.51, 0.51, 0.51, 0.74, 0.88, 0.91,
+        1.0, 1.0, 1.0, 1.0, 1.0]), 4)
+    u = np.random.rand(kv.numdofs)
+    x = np.linspace(0, 1, 100)
+    for newknot in (0.01, 0.2, 0.33, 0.44, 0.6, 0.99):
+        P = knot_insertion(kv, newknot)
+        kv1 = kv.refine([newknot])
+        assert np.allclose(ev(kv, u, x), ev(kv1, P @ u, x))
 
 def test_mesh_span_indices():
     kv = make_knots(3, 0.0, 1.0, 4)

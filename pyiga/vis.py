@@ -113,11 +113,15 @@ class HSpaceVis:
     def cell_to_rect(self, lv, c):
         return self.vis_rect(self.hspace.cell_extents(lv, c))
 
-    def plot_level(self, lv, color_act='steelblue', color_deact='lavender'):
+    def setup_axes(self):
         ax = plt.gca()
         ax.set_aspect('equal')
         ax.set_xticks([])
         ax.set_yticks([])
+        return ax
+
+    def plot_level(self, lv, color_act='steelblue', color_deact='lavender'):
+        ax = self.setup_axes()
 
         from matplotlib.collections import PatchCollection
         if color_act is not None:
@@ -128,10 +132,7 @@ class HSpaceVis:
             ax.add_collection(PatchCollection(Rd, facecolor=color_deact, edgecolor='black'));
 
     def plot_level_cells(self, cells, lv, color_act='steelblue', color_deact='white'):
-        ax = plt.gca()
-        ax.set_aspect('equal')
-        ax.set_xticks([])
-        ax.set_yticks([])
+        ax = self.setup_axes()
 
         from matplotlib.collections import PatchCollection
         if color_act is not None:
@@ -140,6 +141,19 @@ class HSpaceVis:
         if color_deact is not None:
             Rd = [self.cell_to_rect(lv, c) for c in self.hspace.active_cells(lv) if c not in cells]
             ax.add_collection(PatchCollection(Rd, facecolor=color_deact, edgecolor='black'))
+
+    def plot_active_cells(self, values, cmap=None, edgecolor=None):
+        ax = self.setup_axes()
+
+        from matplotlib.collections import PatchCollection
+        act_cells = self.hspace.active_cells(flat=True)
+        if not len(values) == len(act_cells):
+            raise ValueError('invalid length of `values` array')
+        R = [self.cell_to_rect(lv, c) for (lv, c) in act_cells]
+        p = PatchCollection(R, cmap=cmap, edgecolor=edgecolor)
+        p.set_array(values)
+        ax.add_collection(p)
+        return ax, p
 
     def vis_function(self, lv, jj):
         r = self.vis_rect(self.hspace.function_support(lv, jj))
@@ -183,3 +197,8 @@ def plot_hierarchical_cells(hspace, cells, color_act='steelblue', color_deact='w
 
     for lv in range(hspace.numlevels):
         V.plot_level_cells(cells.get(lv, {}), lv, color_act=color_act, color_deact=color_deact)
+
+def plot_active_cells(hspace, values, cmap=None, edgecolor=None):
+    """Plot the mesh of active cells with colors chosen according to the given
+    `values`."""
+    return HSpaceVis(hspace).plot_active_cells(values, cmap=cmap)

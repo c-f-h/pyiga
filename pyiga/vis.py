@@ -111,7 +111,7 @@ class HSpaceVis:
         return matplotlib.patches.Rectangle((X[0], Y[0]), X[1]-X[0], Y[1]-Y[0])
 
     def cell_to_rect(self, lv, c):
-        return self.vis_rect(self.hspace.mesh(lv).cell_extents(c))
+        return self.vis_rect(self.hspace.cell_extents(lv, c))
 
     def plot_level(self, lv, color_act='steelblue', color_deact='lavender'):
         ax = plt.gca()
@@ -180,8 +180,6 @@ def plot_hierarchical_cells(hspace, cells, color_act='steelblue', color_deact='w
         color_deact: the color to use for the remaining cells
     """
     V = HSpaceVis(hspace)
-    hmesh = hspace.hmesh
-    levels = tuple(range(hspace.numlevels))
 
-    for lv in levels:
+    for lv in range(hspace.numlevels):
         V.plot_level_cells(cells.get(lv, {}), lv, color_act=color_act, color_deact=color_deact)

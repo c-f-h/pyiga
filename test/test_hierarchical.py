@@ -67,6 +67,45 @@ def test_hspace():
     vals = utils.grid_eval(one_func, 2 * (np.linspace(0.0, 1.0, 10),))
     assert np.allclose(vals, np.ones((10, 10)))
 
+def test_cells():
+    hs = create_example_hspace(p=3, dim=2, n0=4, disparity=np.inf, num_levels=3)
+
+    # utility functions for axis-aligned boxes
+    def contains(A, B):
+        return all(a[0] <= b[0] <= b[1] <= a[1] for (a,b) in zip(A,B))
+    def area(A):
+        return np.product([b-a for (a,b) in A])
+
+    L = hs.numlevels
+    for f_lv in range(L):
+        # last active function on level f_lv
+        f = sorted(hs.active_functions(lv=f_lv))[-1]
+
+        funcs = [[] for _ in range(L)]
+        funcs[f_lv] = [f]
+
+        f_supp = hs.function_support(f_lv, f)   # support as a box
+        act_cells = hs.compute_supports(funcs)  # support as a list of active cells
+
+        ar = 0.0
+        for lv, cells in act_cells.items():
+            for c in cells:
+                ext = hs.cell_extents(lv, c)
+                # support of f must contain all active cells in its support
+                assert contains(f_supp, ext)
+                # the area of the active cells must sum up to the area of f_supp
+                ar += area(ext)
+        assert abs(area(f_supp) - ar) < 1e-10
+
+def test_hmesh_cells():
+    hs = create_example_hspace(p=3, dim=2, n0=4, disparity=np.inf, num_levels=2)
+
+    # coarse deactivated cell to fine active cells
+    assert hs.hmesh.hmesh_cells({0: {(2,2)}}) == {1: {(4,4), (4,5), (5,4), (5,5)}}
+
+    # fine inactive cell to coarse active cell
+    assert hs.hmesh.hmesh_cells({2: {(6,5)}}) == {0: {(1,1)}}
+
 def test_thb_to_hb():
     hs = create_example_hspace(p=3, dim=2, n0=4, disparity=np.inf, num_levels=3)
 

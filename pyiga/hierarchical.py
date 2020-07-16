@@ -85,6 +85,16 @@ def _position_index(suplist, sublist):
         out.append(k)
     return np.array(out)
 
+def _drop_empty_items(d):
+    """Returns a copy of the dict `d` with entries with empty values removed"""
+    return {lv: c for (lv, c) in d.items() if c}
+
+def _dict_union(dA, dB):
+    """Takes two dicts of sets and returns a new dict `d` where `d[k]` is the
+    union of `dA[k]` and `dB[k]`. Non-existent keys are treated as the empty set.
+    """
+    return { k: dA.get(k, set()) | dB.get(k, set())
+            for k in dA.keys() | dB.keys() }
 
 class TPMesh:
     """A tensor product mesh described by a sequence of knot vectors."""
@@ -212,84 +222,56 @@ class HMesh:
         #return _make_unique(grandparents)
 
     def _TP_to_HMesh_cells_up(self, lv, cells):
-        """Returns dictionary of hierarchical cells of levels >=`lv` contributing to the
-        `cells` of level `lv`"""
+        """Return dictionary of hierarchical cells of levels >= `lv` contributing to the
+        `cells` of level `lv`."""
         assert 0 <= lv < len(self.meshes), 'Invalid level'
         out = dict()
-        aux_cells = set(cells.copy())
-        aux_lv = lv
-        while aux_cells:
-            out[aux_lv] = aux_cells & self.active[aux_lv]
-            aux_cells -= self.active[aux_lv]
-            #print("len = ",len(aux_cells))
-            try:
-                aux_cells = set(self.cell_children(aux_lv, aux_cells))
-                aux_lv += 1
-            except AssertionError:
-                pass
+        aux_cells = set(cells)
+        L = len(self.meshes)
+        for l in range(lv, L):
+            out[l] = aux_cells & self.active[l]
+            aux_cells -= self.active[l]
+            if l < L - 1:
+                aux_cells = set(self.cell_children(l, aux_cells))
+        assert not aux_cells, 'Invalid cells detected: {}'.format(aux_cells)
         return out
 
     def _TP_to_HMesh_cells_down(self, lv, cells):
-        """Returns dictionary of hierarchical cells of level <=`lv` contributing to the
-        `cells` of level `lv`"""
+        """Return dictionary of hierarchical cells of level <= `lv` contributing to the
+        `cells` of level `lv`."""
         assert 0 <= lv < len(self.meshes), 'Invalid level'
         out = dict()
-        aux_cells = set(cells.copy())
-        aux_lv = lv
-        while aux_cells:
-            out[aux_lv] = aux_cells & self.active[aux_lv]
-            aux_cells -= self.active[aux_lv]
-            #print("len = ",len(aux_cells))
-            try:
-                aux_cells = set(self.cell_parent(aux_lv, aux_cells))
-                aux_lv -= 1
-            except AssertionError:
-                pass
+        aux_cells = set(cells)
+        for l in reversed(range(lv + 1)):
+            out[l] = aux_cells & self.active[l]
+            aux_cells -= self.active[l]
+            if l > 0:
+                aux_cells = set(self.cell_parent(l, aux_cells))
+        assert not aux_cells, 'Invalid cells detected: {}'.format(aux_cells)
         return out
 
     def _TP_to_HMesh_cells(self, lv, cells):
-        """Returns dictionary of hierarchical cells contributing to the
-        `cells` of level `lv`"""
-        assert 0 <= lv < len(self.meshes), 'Invalid level: lv = ' + str(lv) + " maxlv = " + str(len(self.meshes))
-        #print("out_up_set = ", set(cells) & (self.active[lv] | self.deactivated[lv]))
-        #print("out_down_set = ",set(cells) - (self.active[lv] | self.deactivated[lv]))
-        out_up = self._TP_to_HMesh_cells_up(lv, set(cells) & (self.active[lv] | self.deactivated[lv]))
-        out_down = self._TP_to_HMesh_cells_down(lv, set(cells) - (self.active[lv] | self.deactivated[lv]))
-        #print("out_up = ",self._clean_Hmesh_cells(out_up))
-        #print("out_down = ",self._clean_Hmesh_cells(out_down))
-        #out_down.update(out_up)
-        return self._combine_HMesh_cells(out_down, out_up)
+        """Return dictionary of hierarchical cells contributing to the
+        `cells` of level `lv`."""
+        assert 0 <= lv < len(self.meshes), 'Invalid level'
+        cells = set(cells)
+        act_deact_lv = self.active[lv] | self.deactivated[lv]
+        out_up   = self._TP_to_HMesh_cells_up(lv,   cells & act_deact_lv)
+        out_down = self._TP_to_HMesh_cells_down(lv, cells - act_deact_lv)
+        return _dict_union(out_down, out_up)
 
-    @staticmethod
-    def _combine_HMesh_cells(cellsA, cellsB):
-        """Takes two dictionarys of (not necessarily active) hierarchical cells `cellsA`,
-        `cellsB` and returns their union"""
+    def hmesh_cells(self, cells):
+        """Return the smallest dictionary of active hierarchical cells containing `cells`."""
+        if isinstance(cells, dict):
+            # convert from dict to list
+            c = [[] for _ in range(len(self.meshes))]
+            for lv, cls in cells.items():
+                c[lv] = cls
+            cells = c
         out = dict()
-        aux = dict()
-        for common_level in cellsA.keys() & cellsB.keys():
-            tA, tB = type(cellsA[common_level]), type(cellsB[common_level])
-            assert tA == tB
-            aux[common_level] = tA(set(cellsA[common_level]) | set(cellsB[common_level]))
-        out.update(cellsA)
-        out.update(cellsB)
-        out.update(aux)
-        return out
-
-    @staticmethod
-    def _clean_Hmesh_cells(cells):
-        """Returns `cells` with empty levels removed"""
-        return {lv: c for (lv, c) in cells.items() if c}
-
-    def HMesh_cells(self, marked):
-        """Return the smallest dictionary of active hierarchical cells containing `marked`."""
-        out = dict()
-        for lv in marked:
-            out = self._clean_Hmesh_cells(
-                self._combine_HMesh_cells(out,
-                    self._TP_to_HMesh_cells(lv, marked[lv])
-                )
-            )
-        return out
+        for lv in range(len(self.meshes)):
+            out = _dict_union(out, self._TP_to_HMesh_cells(lv, cells[lv]))
+        return _drop_empty_items(out)
 
     def _function_children_1d(self, lv, dim, j):
         assert 0 <= lv < len(self.meshes) - 1, 'Invalid level'
@@ -575,27 +557,27 @@ class HSpace:
 
     @property
     def cell_dirichlet(self):
-        return self.compute_cells(self.index_dirichlet)
+        return self.compute_virtual_supports(self.index_dirichlet)
 
     @property
     def cell_new(self):
-        return self.compute_cells(self.new_indices())
+        return self.compute_virtual_supports(self.new_indices())
 
     @property
     def cell_trunc(self):
-        return self.compute_cells(self.trunc_indices())
+        return self.compute_virtual_supports(self.trunc_indices())
 
     @property
     def cell_func_supp(self):
-        return self.compute_cells(self.func_supp_indices())
+        return self.compute_virtual_supports(self.func_supp_indices())
 
     @property
     def cell_cell_supp(self):
-        return self.compute_cells(self.cell_supp_indices())
+        return self.compute_virtual_supports(self.cell_supp_indices())
 
     @property
     def cell_global(self):
-        return self.compute_cells(self.global_indices())
+        return self.compute_virtual_supports(self.global_indices())
 
     def dirichlet_dofs(self, lv=None):
         """Matrix indices which lie on the specified Dirichlet boundaries."""
@@ -707,24 +689,19 @@ class HSpace:
             n_lv += len(available_indices[lv][l])
         return np.array(out, dtype=int)
 
-    def _list_to_dict(self, listset, lv=None):
-        """Convert a list-set representation of hierarchical indices to its
-        dict representation. If `lv` is provided, only levels
-        `lv-self.disparity`, ..., `lv` are processed.
+    def compute_supports(self, functions):
+        """Compute the union of the supports, in terms of active mesh cells, of
+        the given list-of-seqs of functions and return the active cells as a
+        dict-of-sets.
         """
-        if not lv:
-            return HMesh._clean_Hmesh_cells({l: listset[l] for l in range(self.numlevels)})
-        else:
-            return HMesh._clean_Hmesh_cells({l: listset[l] for l in range(max(lv-self.disparity, 0),lv+1)})
+        supports = [set(self.hmesh.meshes[l].support(funcs))
+                for (l, funcs) in enumerate(functions)]
+        return self.hmesh.hmesh_cells(supports)
 
-    def compute_cells(self, tuplelistset):
-        out = list()
-        for (lv, single_index) in enumerate(tuplelistset):
-            aux = [set(self.hmesh.meshes[l].support(funcs))
-                    for (l, funcs) in enumerate(single_index)]
-            out.append(
-                self.get_virtual_space(lv).hmesh.HMesh_cells(self._list_to_dict(aux)))
-        return tuple(out)
+    def compute_virtual_supports(self, tuplelistset):
+        return tuple(
+                self.get_virtual_space(lv).compute_supports(functions)
+                for (lv, functions) in enumerate(tuplelistset))
 
     def function_support(self, lv, jj):
         """Return the support (as a tuple of pairs) of the function on level `lv` with multi-index `jj`."""

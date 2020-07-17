@@ -125,31 +125,23 @@ class TPMesh:
         return list(itertools.product(
             *(range(n) for n in self.numdofs)))
 
-    def _support_1d(self, dim, j):
-        ms = self.meshsupp[dim]
-        return range(ms[j,0], ms[j,1])
-
-    def _supported_in_1d(self, dim, k):
-        sf = self.suppfunc[dim]
-        return range(sf[k,0], sf[k,1])
-
     def support(self, indices):
-        """Return the list of cells where any of the given functions does not vanish."""
-        supp = []
+        """Return the set of cells where any of the given functions does not vanish."""
+        supp = set()
+        ms = self.meshsupp
         for jj in indices:
-            supp.extend(itertools.product(
-                *(self._support_1d(d, j) for (d,j) in enumerate(jj))))
-        supp.sort()
-        return _make_unique(supp)
+            supp.update(itertools.product(
+                *(range(ms[d][j,0], ms[d][j,1]) for (d,j) in enumerate(jj))))
+        return supp
 
     def supported_in(self, cells):
-        """Return the list of functions whose support intersects the given cells."""
-        funcs = []
+        """Return the set of functions whose support intersects the given cells."""
+        funcs = set()
+        sf = self.suppfunc
         for kk in cells:
-            funcs.extend(itertools.product(
-                *(self._supported_in_1d(d, k) for (d,k) in enumerate(kk))))
-        funcs.sort()
-        return _make_unique(funcs)
+            funcs.update(itertools.product(
+                *(range(sf[d][k,0], sf[d][k,1]) for (d,k) in enumerate(kk))))
+        return funcs
 
     def neighbors(self, indices):
         """Return all functions which have nontrivial support intersection with the given ones."""
@@ -633,12 +625,11 @@ class HSpace:
         for lv in range(self.numlevels):    # loop over virtual hierarchy levels
             for i in range(self.numlevels):
                 if lv - self.disparity <= i < lv:
-                    funcs = set(
-                            self.hmesh.meshes[i].supported_in(
+                    funcs = self.hmesh.meshes[i].supported_in(
                                 self.hmesh.cell_grandparent(
                                     lv,
                                     self.hmesh.meshes[lv].support(self.actfun[lv]),
-                                    i))) & self.actfun[i]
+                                    i)) & self.actfun[i]
                     if remove_dirichlet:
                         indices[lv][i] = sorted(funcs - self.index_dirichlet[lv][i])
                     else:
@@ -683,7 +674,7 @@ class HSpace:
         the given list-of-seqs of functions and return the active cells as a
         dict-of-sets.
         """
-        supports = [set(self.hmesh.meshes[l].support(funcs))
+        supports = [self.hmesh.meshes[l].support(funcs)
                 for (l, funcs) in enumerate(functions)]
         return self.hmesh.hmesh_cells(supports)
 
@@ -707,11 +698,11 @@ class HSpace:
                 mf[lv] = set()
             else:
                 # can only deactivate active functions
-                mfuncs = set(self.mesh(lv).supported_in(m)) & self.actfun[lv]
+                mfuncs = self.mesh(lv).supported_in(m) & self.actfun[lv]
                 # A function is deactivated when all the cells of its level within
                 # the support are deactivated.
                 mf[lv] = set(f for f in mfuncs
-                        if not (set(self.mesh(lv).support([f])) & self.hmesh.active[lv]))
+                        if not (self.mesh(lv).support([f]) & self.hmesh.active[lv]))
         return mf
 
     def cell_support_extension(self, l, cells, k):
@@ -721,7 +712,7 @@ class HSpace:
         else:
             aux = self.hmesh.cell_grandparent(l, cells, k)
         supported_functions = self.hmesh.meshes[k].supported_in(aux)
-        return set(self.hmesh.meshes[k].support(supported_functions))
+        return self.hmesh.meshes[k].support(supported_functions)
 
     def function_support_extension(self, l, functions, k):
         assert 0 <= k <= l, 'Invalid level.'
@@ -780,13 +771,14 @@ class HSpace:
             # find candidate functions on fine level to be activated
             candidate_funcs = self.mesh(lv+1).supported_in(new_cells[lv+1])
             # ignore functions that are already active
-            candidate_funcs = set(candidate_funcs) - self.actfun[lv+1]
+            candidate_funcs = candidate_funcs - self.actfun[lv+1]
 
             # set of active or deactivated cells on finer level
             fine_cells = self.hmesh.active[lv+1] | self.hmesh.deactivated[lv+1]
             # keep only those functions whose support is contained in those fine cells
+            msh = self.mesh(lv + 1)
             newfuncs = set(f for f in candidate_funcs if
-                set(self.mesh(lv+1).support([f])).issubset(fine_cells))
+                msh.support([f]).issubset(fine_cells))
             # activate them on the finer level
             self.actfun[lv+1] |= newfuncs
 
@@ -999,10 +991,11 @@ class HSpace:
             n0 = sum(nac[:k])
             Z = scipy.sparse.lil_matrix((naf[k], n0 + nac[k] + ndc[k]), dtype=int)
 
+            msh_k, ci_k = self.hmesh.meshes[k], cell_index[k]
             for (i, f) in enumerate(sorted(self.actfun[k])):
-                cells = self.hmesh.meshes[k].support([f])
+                cells = msh_k.support([f])
                 for c in cells:
-                    Z[i, n0 + cell_index[k].index(c)] = 1
+                    Z[i, n0 + ci_k.index(c)] = 1
             return Z.tocsr()
 
         def cell_prolongation(k):

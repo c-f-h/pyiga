@@ -95,7 +95,7 @@ class HDiscretization:
                 to_assemble.append(indices | hs.actfun[k])
 
                 # compute a bounding box for the supports of all functions to be assembled
-                supp_cells = np.array(self.hs.mesh(k).support(to_assemble[-1]))
+                supp_cells = np.array(sorted(self.hs.mesh(k).support(to_assemble[-1])))
                 if len(supp_cells) == 0:
                     bboxes.append(tuple((0,0) for j in range(self.hs.dim)))
                 else:
@@ -184,7 +184,7 @@ class HDiscretization:
                 return np.zeros(0)
 
             # determine bounding box for active functions
-            supp_cells = np.array(self.hs.mesh(k).support(self.hs.actfun[k]))
+            supp_cells = np.array(sorted(self.hs.mesh(k).support(self.hs.actfun[k])))
             bbox = tuple(
                     (supp_cells[:,j].min(), supp_cells[:,j].max() + 1)  # upper limit is exclusive
                     for j in range(supp_cells.shape[1]))

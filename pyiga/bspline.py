@@ -246,10 +246,12 @@ def active_ev(knotvec, u):
     if np.isscalar(u):
         return _bspline_active_ev_single(knotvec, u)
     else:
-        result = np.empty((knotvec.p+1, u.size))
-        for i in range(u.size):
-            result[:,i] = _bspline_active_ev_single(knotvec, u[i])
-        return result
+        # use active_deriv(), which is implemented in Cython and much faster
+        return active_deriv(knotvec, u, 0)[0, :]
+        #result = np.empty((knotvec.p+1, u.size))
+        #for i in range(u.size):
+        #    result[:,i] = _bspline_active_ev_single(knotvec, u[i])
+        #return result
 
 
 def _bspline_active_deriv_single(knotvec, u, numderiv):

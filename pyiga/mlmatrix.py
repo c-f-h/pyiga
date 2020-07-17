@@ -162,7 +162,7 @@ class MLStructure:
         bs_I = tuple(self.bs[k][0] for k in range(L))
         bs_J = tuple(self.bs[k][1] for k in range(L))
 
-        bs_J_arr = np.array(bs_J)       # for passing to cython function
+        bs_J_arr = np.array(bs_J, dtype=np.int_)       # for passing to cython function
 
         # convert to multi-indices: ix[i,k] = component index k of row_indices[i]
         ix = np.column_stack(np.unravel_index(row_indices, bs_I))

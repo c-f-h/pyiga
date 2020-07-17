@@ -397,15 +397,20 @@ def collocation(kv, nodes):
     m = nodes.size
     n = kv.numdofs
     p = kv.p
-    I, J, V = [], [], []
+    V = []
     values = active_ev(kv, nodes) # (p+1) x n
     #indices = [kv.first_active_at(u) for u in nodes]
     indices = pyx_findspans(kv.kv, p, nodes) - p        # faster version
     for k in range(m):
-        V.extend(values[:, k])
-        I.extend( (p+1) * [k] )
-        J.extend( range(indices[k], indices[k] + p  + 1) )
-    return scipy.sparse.coo_matrix((V, (I,J)), shape=(m,n)).tocsr()
+        V.append(values[:, k])
+
+    # compute I, J indices:
+    # I: p + 1 entries per row
+    I = np.repeat(np.arange(m), p + 1)
+    # J: arange(indices[k], indices[k] + p + 1) per row
+    J = (indices[:, None] + np.arange(p + 1)[None, :]).ravel()
+
+    return scipy.sparse.coo_matrix((np.concatenate(V), (I,J)), shape=(m,n)).tocsr()
 
 def collocation_derivs(kv, nodes, derivs=1):
     """Compute collocation matrix and derivative collocation matrices for B-spline
@@ -416,17 +421,21 @@ def collocation_derivs(kv, nodes, derivs=1):
     m = nodes.size
     n = kv.numdofs
     p = kv.p
-    I, J = [], []
     V = [[] for _ in range(derivs+1)]
     values = active_deriv(kv, nodes, derivs) # (derivs+1) x (p+1) x n
     #indices = [kv.first_active_at(u) for u in nodes]
     indices = pyx_findspans(kv.kv, p, nodes) - p        # faster version
     for k in range(m):
         for d in range(derivs+1):
-            V[d].extend(values[d, :, k])
-        I.extend( (p+1) * [k] )
-        J.extend( range(indices[k], indices[k] + p  + 1) )
-    return [scipy.sparse.coo_matrix((vals, (I,J)), shape=(m,n)).tocsr()
+            V[d].append(values[d, :, k])
+
+    # compute I, J indices:
+    # I: p + 1 entries per row
+    I = np.repeat(np.arange(m), p + 1)
+    # J: arange(indices[k], indices[k] + p + 1) per row
+    J = (indices[:, None] + np.arange(p + 1)[None, :]).ravel()
+
+    return [scipy.sparse.coo_matrix((np.concatenate(vals), (I,J)), shape=(m,n)).tocsr()
             for vals in V]
 
 def interpolate(kv, func, nodes=None):

@@ -103,12 +103,12 @@ def kron_partial(As, rows, restrict=False, format='csr'):
 def cartesian_product(arrays):
     """Compute the Cartesian product of any number of input arrays."""
     L = len(arrays)
-    shp = tuple(len(a) for a in arrays)
+    shp = tuple(a.shape[0] for a in arrays)
     arr = np.empty(shp + (L,), dtype=arrays[0].dtype)
     for i in range(L):
         # broadcast the i-th array along all but the i-th axis
         ix = L * [np.newaxis]
-        ix[i] = slice(len(arrays[i]))
+        ix[i] = slice(shp[i])
         arr[..., i] = arrays[i][tuple(ix)]
     arr.shape = (-1, L)
     return arr

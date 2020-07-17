@@ -165,7 +165,7 @@ class MLStructure:
         bs_J_arr = np.array(bs_J, dtype=np.int_)       # for passing to cython function
 
         # convert to multi-indices: ix[i,k] = component index k of row_indices[i]
-        ix = np.column_stack(np.unravel_index(row_indices, bs_I))
+        ix = np.column_stack(np.unravel_index(row_indices, bs_I)).astype(np.int_, copy=False)
 
         # compute the raveled Cartesian products for each row_index
         # Js is a list of 1D integer arrays

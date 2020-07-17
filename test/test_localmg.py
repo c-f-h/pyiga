@@ -11,8 +11,6 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, strategy, tol):
     hs = create_example_hspace(p, dim, n0, disparity, num_levels=3)
     dir_dofs = hs.dirichlet_dofs()
 
-    # assemble full tensor-product linear system on each level for simplicity
-
     def rhs(*x):
         return 1.0
 

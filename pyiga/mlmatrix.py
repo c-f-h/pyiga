@@ -161,23 +161,21 @@ class MLStructure:
         lvia = tuple(self._level_rowwise_interactions(k) for k in range(L))
         bs_I = tuple(self.bs[k][0] for k in range(L))
         bs_J = tuple(self.bs[k][1] for k in range(L))
-        ix = np.unravel_index(row_indices, bs_I)
 
-        counts, Js = [], []
-        for i in range(len(row_indices)):
-            I = tuple(ix[k][i] for k in range(L))   # multiindex for row[i]
-            # obtain the levelwise interactions for each index i_k
-            ia_k = tuple(lvia[k][I[k]] for k in range(L))
-            # compute global interactions by taking the Cartesian product
-            Js.append(utils.cartesian_product(ia_k))
-            counts.append(Js[-1].shape[0])
+        bs_J_arr = np.array(bs_J)       # for passing to cython function
 
+        # convert to multi-indices: ix[i,k] = component index k of row_indices[i]
+        ix = np.column_stack(np.unravel_index(row_indices, bs_I))
+
+        # compute the raveled Cartesian products for each row_index
+        # Js is a list of 1D integer arrays
+        Js = pyx_rowwise_cartesian_product(lvia, ix, bs_J_arr)
+
+        counts = tuple(J_i.shape[0] for J_i in Js)
         Is = np.repeat(row_indices, counts)
-        Js = np.concatenate(Js)
 
         if len(Js) > 0:
-            # convert from multi-index to raveled format
-            Js = np.ravel_multi_index(tuple(Js[:,k] for k in range(L)), bs_J)
+            Js = np.concatenate(Js)
         else:
             Js = np.empty(0, dtype=np.int)
 

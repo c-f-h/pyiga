@@ -7,7 +7,7 @@ from pyiga import bspline, assemble, hierarchical, solvers, vform, geometry, uti
 
 from .test_hierarchical import create_example_hspace
 
-def run_local_multigrid(p, dim, n0, disparity, smoother, num_smooth, strategy, tol):
+def run_local_multigrid(p, dim, n0, disparity, smoother, smooth_steps, strategy, tol):
     hs = create_example_hspace(p, dim, n0, disparity, num_levels=3)
     dir_dofs = hs.dirichlet_dofs()
 
@@ -42,8 +42,8 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, num_smooth, strategy, t
             hs.truncate_one_level(k, num_rows=P_hb[k].shape[0], inverse=True) @ P_hb[k]
             for k in range(hs.numlevels - 1)]
     inds = hs.indices_to_smooth(strategy)
-    iter_hb  = num_iterations(solvers.local_mg_step(hs, A_hb, f_hb, P_hb, inds, smoother, num_smooth), u_hb0, tol=tol)
-    iter_thb = num_iterations(solvers.local_mg_step(hs, A_thb, f_thb, P_thb, inds, smoother, num_smooth), u_thb0, tol=tol)
+    iter_hb  = num_iterations(solvers.local_mg_step(hs, A_hb, f_hb, P_hb, inds, smoother, smooth_steps), u_hb0, tol=tol)
+    iter_thb = num_iterations(solvers.local_mg_step(hs, A_thb, f_thb, P_thb, inds, smoother, smooth_steps), u_thb0, tol=tol)
 
     winner = "HB" if (iter_hb <= iter_thb) else "THB"
     linestr = f'{strategy} ({smoother}) '.ljust(2*22)
@@ -71,7 +71,7 @@ def test_localmg():
     print("---------------------------------------------------------")
 
     # "exact", "gs", "symmetric_gs", "forward_gs", "backward_gs", "symmetric_gs"
-    smoother, num_smooth = "symmetric_gs", 1
+    smoother, smooth_steps = "symmetric_gs", 1
 
     p = 3
 
@@ -83,7 +83,7 @@ def test_localmg():
         # available strategies: "new", "trunc", "func_supp", "cell_supp", "global"
         for strategy in ("new", "trunc", "func_supp", "cell_supp"):
             results[disparity].append(
-                    run_local_multigrid(p, dim, n0, disparity, smoother, num_smooth, strategy, tol)
+                    run_local_multigrid(p, dim, n0, disparity, smoother, smooth_steps, strategy, tol)
             )
 
     assert np.array_equal(results[np.inf],

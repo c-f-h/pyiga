@@ -169,7 +169,7 @@ def twogrid(A, f, P, smoother, u0=None, tol=1e-8, smooth_steps=2, maxiter=1000):
     print(numiter, 'iterations')
     return u
 
-def local_mg_step(hs, A, f, Ps, lv_inds, smoother='symmetric_gs', num_smooth=2):
+def local_mg_step(hs, A, f, Ps, lv_inds, smoother='symmetric_gs', smooth_steps=2):
     # Utility function for solve_hmultigrid which returns a function step(x)
     # which realizes one V-cycle of the local multigrid method.
     assert smoother in ('gs', 'forward_gs', 'backward_gs', 'symmetric_gs', 'exact'), 'Invalid smoother'
@@ -201,16 +201,16 @@ def local_mg_step(hs, A, f, Ps, lv_inds, smoother='symmetric_gs', num_smooth=2):
             # pre-smoothing
             if smoother == "gs":
                 # Gauss-Seidel smoothing
-                gauss_seidel(A, x1, f, indices=lv_ind, iterations=num_smooth, sweep='forward')
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=smooth_steps, sweep='forward')
             elif smoother == "forward_gs":
                 # forward Gauss-Seidel smoothing
-                gauss_seidel(A, x1, f, indices=lv_ind, iterations=num_smooth, sweep='forward')
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=smooth_steps, sweep='forward')
             elif smoother == "backward_gs":
                 # backward Gauss-Seidel smoothing
-                gauss_seidel(A, x1, f, indices=lv_ind, iterations=num_smooth, sweep='backward')
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=smooth_steps, sweep='backward')
             elif smoother == "symmetric_gs":
                 # Gauss-Seidel smoothing
-                gauss_seidel(A, x1, f, indices=lv_ind, iterations=num_smooth, sweep='symmetric')
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=smooth_steps, sweep='symmetric')
             elif smoother == "exact":
                 # exact solve
                 r_fine = (f - A.dot(x1))[lv_ind]
@@ -224,16 +224,16 @@ def local_mg_step(hs, A, f, Ps, lv_inds, smoother='symmetric_gs', num_smooth=2):
             # post-smoothing
             if smoother == "gs":
                 # Gauss-Seidel smoothing
-                gauss_seidel(A, x1, f, indices=lv_ind, iterations=num_smooth, sweep='backward')
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=smooth_steps, sweep='backward')
             elif smoother == "forward_gs":
                 # Gauss-Seidel smoothing
-                gauss_seidel(A, x1, f, indices=lv_ind, iterations=num_smooth, sweep='forward')
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=smooth_steps, sweep='forward')
             elif smoother == "backward_gs":
                 # Gauss-Seidel smoothing
-                gauss_seidel(A, x1, f, indices=lv_ind, iterations=num_smooth, sweep='backward')
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=smooth_steps, sweep='backward')
             elif smoother == "symmetric_gs":
                 # Gauss-Seidel smoothing
-                gauss_seidel(A, x1, f, indices=lv_ind, iterations=num_smooth, sweep='symmetric')
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=smooth_steps, sweep='symmetric')
             elif smoother == "exact":
                 pass # exact solve - no post-smoothing
             return x1
@@ -281,7 +281,7 @@ def iterative_solve(step, A, f, x0=None, active_dofs=None, tol=1e-8, maxiter=500
             print("Warning: iterative solver did not converge in {} iterations".format(iterations))
             return x, np.inf
 
-def solve_hmultigrid(hs, A, f, strategy='cell_supp', smoother='gs', num_smooth=2, truncate=False, tol=1e-8, maxiter=5000):
+def solve_hmultigrid(hs, A, f, strategy='cell_supp', smoother='gs', smooth_steps=2, truncate=False, tol=1e-8, maxiter=5000):
     """Solve a linear scalar problem in a hierarchical spline space using local multigrid.
 
     Args:
@@ -307,7 +307,7 @@ def solve_hmultigrid(hs, A, f, strategy='cell_supp', smoother='gs', num_smooth=2
             - ``"exact"``: use an exact direct solver as a pre-smoother (no
               post-smoothing)
 
-        num_smooth (int): the number of pre- and post-smoothing steps
+        smooth_steps (int): the number of pre- and post-smoothing steps
         truncate (bool): if True, the linear system is interpreted as a
             THB-spline discretization rather than an HB-spline one
         tol (float): the desired reduction in the residual

@@ -169,10 +169,10 @@ def twogrid(A, f, P, smoother, u0=None, tol=1e-8, smooth_steps=2, maxiter=1000):
     print(numiter, 'iterations')
     return u
 
-def local_mg_step(hs, A, f, Ps, lv_inds, smoother='symmetric_gs'):
+def local_mg_step(hs, A, f, Ps, lv_inds, smoother='symmetric_gs', num_smooth=2):
     # Utility function for solve_hmultigrid which returns a function step(x)
     # which realizes one V-cycle of the local multigrid method.
-    assert smoother in ("forward_gs", "backward_gs", "symmetric_gs", "exact"), "Invalid smoother."
+    assert smoother in ('gs', 'forward_gs', 'backward_gs', 'symmetric_gs', 'exact'), 'Invalid smoother'
     As = [A]
     for P in reversed(Ps):
         As.append(P.T.dot(As[-1]).dot(P).tocsr())
@@ -199,15 +199,18 @@ def local_mg_step(hs, A, f, Ps, lv_inds, smoother='symmetric_gs'):
             lv_ind = lv_inds[lv]
 
             # pre-smoothing
-            if smoother == "forward_gs":
+            if smoother == "gs":
                 # Gauss-Seidel smoothing
-                gauss_seidel(A, x1, f, indices=lv_ind, iterations=2, sweep='forward')
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=num_smooth, sweep='forward')
+            elif smoother == "forward_gs":
+                # forward Gauss-Seidel smoothing
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=num_smooth, sweep='forward')
             elif smoother == "backward_gs":
-                # Gauss-Seidel smoothing
-                gauss_seidel(A, x1, f, indices=lv_ind, iterations=2, sweep='backward')
+                # backward Gauss-Seidel smoothing
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=num_smooth, sweep='backward')
             elif smoother == "symmetric_gs":
                 # Gauss-Seidel smoothing
-                gauss_seidel(A, x1, f, indices=lv_ind, iterations=1, sweep='symmetric')
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=num_smooth, sweep='symmetric')
             elif smoother == "exact":
                 # exact solve
                 r_fine = (f - A.dot(x1))[lv_ind]
@@ -219,18 +222,20 @@ def local_mg_step(hs, A, f, Ps, lv_inds, smoother='symmetric_gs'):
             x1 += P.dot(step(lv-1, np.zeros_like(r_c), r_c))
 
             # post-smoothing
-            if smoother == "forward_gs":
+            if smoother == "gs":
                 # Gauss-Seidel smoothing
-                gauss_seidel(A, x1, f, indices=lv_ind, iterations=2, sweep='backward')
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=num_smooth, sweep='backward')
+            elif smoother == "forward_gs":
+                # Gauss-Seidel smoothing
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=num_smooth, sweep='forward')
             elif smoother == "backward_gs":
                 # Gauss-Seidel smoothing
-                gauss_seidel(A, x1, f, indices=lv_ind, iterations=2, sweep='forward')
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=num_smooth, sweep='backward')
             elif smoother == "symmetric_gs":
                 # Gauss-Seidel smoothing
-                gauss_seidel(A, x1, f, indices=lv_ind, iterations=1, sweep='symmetric')
+                gauss_seidel(A, x1, f, indices=lv_ind, iterations=num_smooth, sweep='symmetric')
             elif smoother == "exact":
-                # exact solve - no post-smoothing
-                pass
+                pass # exact solve - no post-smoothing
             return x1
     return lambda x: step(hs.numlevels-1, x, f)
 
@@ -276,7 +281,7 @@ def iterative_solve(step, A, f, x0=None, active_dofs=None, tol=1e-8, maxiter=500
             print("Warning: iterative solver did not converge in {} iterations".format(iterations))
             return x, np.inf
 
-def solve_hmultigrid(hs, A, f, strategy='cell_supp', smoother='forward_gs', truncate=False, tol=1e-8, maxiter=5000):
+def solve_hmultigrid(hs, A, f, strategy='cell_supp', smoother='gs', num_smooth=2, truncate=False, tol=1e-8, maxiter=5000):
     """Solve a linear scalar problem in a hierarchical spline space using local multigrid.
 
     Args:
@@ -287,16 +292,22 @@ def solve_hmultigrid(hs, A, f, strategy='cell_supp', smoother='forward_gs', trun
 
             - ``"new"``: only the new dofs per level
             - ``"trunc"``: all dofs which interact via the truncation operator
-            - ``"cell_supp"``: all dofs whose support intersects that of the new ones
+            - ``"cell_supp"``: all dofs whose support intersects that of the
+              new ones (support extension)
             - ``"func_supp"``
 
         smoother (string): the multigrid smoother to use. Valid options are
 
-            - ``"forward_gs"``
-            - ``"backward_gs"``
-            - ``"symmetric_gs"``
-            - ``"exact"``
+            - ``"gs"``: forward Gauss-Seidel for pre-smoothing, backward
+              Gauss-Seidel for post-smoothing
+            - ``"forward_gs"``: always use forward Gauss-Seidel
+            - ``"backward_gs"``: always use backward Gauss-Seidel
+            - ``"symmetric_gs"``: use complete symmetric Gauss-Seidel sweep for
+              both pre- and post-smoothing
+            - ``"exact"``: use an exact direct solver as a pre-smoother (no
+              post-smoothing)
 
+        num_smooth (int): the number of pre- and post-smoothing steps
         truncate (bool): if True, the linear system is interpreted as a
             THB-spline discretization rather than an HB-spline one
         tol (float): the desired reduction in the residual

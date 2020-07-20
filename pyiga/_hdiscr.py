@@ -95,13 +95,7 @@ class HDiscretization:
                 to_assemble.append(indices | hs.actfun[k])
 
                 # compute a bounding box for the supports of all functions to be assembled
-                supp_cells = np.array(sorted(self.hs.mesh(k).support(to_assemble[-1])))
-                if len(supp_cells) == 0:
-                    bboxes.append(tuple((0,0) for j in range(self.hs.dim)))
-                else:
-                    bboxes.append(tuple(
-                            (supp_cells[:,j].min(), supp_cells[:,j].max() + 1)  # upper limit is exclusive
-                            for j in range(supp_cells.shape[1])))
+                bboxes.append(self._bbox_for_functions(k, to_assemble[-1]))
 
             # convert them to raveled form
             to_assemble = hs._ravel_indices(to_assemble)
@@ -184,10 +178,7 @@ class HDiscretization:
                 return np.zeros(0)
 
             # determine bounding box for active functions
-            supp_cells = np.array(sorted(self.hs.mesh(k).support(self.hs.actfun[k])))
-            bbox = tuple(
-                    (supp_cells[:,j].min(), supp_cells[:,j].max() + 1)  # upper limit is exclusive
-                    for j in range(supp_cells.shape[1]))
+            bbox = self._bbox_for_functions(k, self.hs.actfun[k])
 
             kvs = self.hs.knotvectors(k)
             asm_args['bbox'] = bbox
@@ -207,3 +198,13 @@ class HDiscretization:
         if self.truncate:
             rhs = self.hs.thb_to_hb().T @ rhs
         return rhs
+
+    def _bbox_for_functions(self, lv, funcs):
+        """Compute a bounding box for the supports of the given functions on the given level."""
+        supp_cells = np.array(sorted(self.hs.mesh(lv).support(funcs)))
+        if len(supp_cells) == 0:
+            return tuple((0,0) for j in range(self.hs.dim))
+        else:
+            return tuple(
+                    (supp_cells[:,j].min(), supp_cells[:,j].max() + 1)  # upper limit is exclusive
+                    for j in range(supp_cells.shape[1]))

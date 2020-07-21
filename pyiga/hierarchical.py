@@ -1030,7 +1030,7 @@ class HSpace:
                 result[j] = result[j].dot(P.T)
         return scipy.sparse.vstack(result, format='csr')
 
-    def virtual_hierarchy_prolongators(self):
+    def virtual_hierarchy_prolongators(self, truncate=False):
         # compute tensor product prolongators
         Ps = tuple(self.tp_prolongation(lv, kron=False) for lv in range(self.numlevels-1))
 
@@ -1051,6 +1051,13 @@ class HSpace:
               (None,                     P_rd)
             ), format='csc')
             prolongators.append(P_hb)
+
+        if truncate:
+            # convert the HB prolongators to THB prolongators by doing
+            # levelwise inverse truncation
+            prolongators = [
+                    self.truncate_one_level(k, num_rows=P.shape[0], inverse=True) @ P
+                    for k, P in enumerate(prolongators)]
         return prolongators
 
     def coeffs_to_levelwise_funcs(self, coeffs, truncate=False):

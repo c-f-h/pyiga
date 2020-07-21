@@ -206,3 +206,35 @@ def test_grid_eval():
     assert np.allclose(f_fine.grid_eval(grid), hsf.grid_eval(grid))
     assert np.allclose(f_fine.grid_jacobian(grid), hsf.grid_jacobian(grid))
     assert np.allclose(f_fine.grid_hessian(grid), hsf.grid_hessian(grid))
+
+def test_prolongators():
+    hs = create_example_hspace(p=3, dim=2, n0=4, disparity=1, num_levels=1)
+    n0 = hs.mesh(0).numbf
+
+    # create a coarse B-spline function
+    u_tp = rand(n0)
+    f0 = bspline.BSplineFunc(hs.knotvectors(0), u_tp)
+    # bring its coefficients into canonical order (active, then deactivated)
+    u_lv0 = np.concatenate((
+        u_tp[hs.active_indices()[0]], u_tp[hs.deactivated_indices()[0]],))
+    X = 2 * (np.linspace(0, 1, 20),)
+
+    #### prolongators for HB-splines ####
+    # prolongate f to the finest space (hs itself)
+    P_hb = hs.virtual_hierarchy_prolongators()
+    u = u_lv0
+    for P in P_hb:
+        u = P @ u
+    f_hb = HSplineFunc(hs, u)
+    # compare it to the original function
+    assert np.allclose(f0.grid_eval(X), f_hb.grid_eval(X))
+
+    #### prolongators for THB-splines ####
+    # prolongate f to the finest space (hs itself)
+    P_thb = hs.virtual_hierarchy_prolongators(truncate=True)
+    u = u_lv0
+    for P in P_thb:
+        u = P @ u
+    f_thb = HSplineFunc(hs, u, truncate=True)
+    # compare it to the original function
+    assert np.allclose(f0.grid_eval(X), f_thb.grid_eval(X))

@@ -318,10 +318,7 @@ def solve_hmultigrid(hs, A, f, strategy='cell_supp', smoother='gs', smooth_steps
         iterations performed. If `maxiter` was reached without convergence, the
         returned number of iterations is infinite.
     """
-    if truncate:
-        assert False, 'THB prolongators missing'
-    else:
-        Ps = hs.virtual_hierarchy_prolongators()
+    Ps = hs.virtual_hierarchy_prolongators(truncate=truncate)
     # determine non-Dirichlet dofs (for residual computation)
     non_dir_dofs = hs.non_dirichlet_dofs()
     mg_step = local_mg_step(hs, A, f, Ps, hs.indices_to_smooth(strategy), smoother)

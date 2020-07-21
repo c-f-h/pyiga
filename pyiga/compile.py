@@ -78,11 +78,57 @@ def generate(vf, classname='CustomAssembler', on_demand=False):
     codegen.AsmGenerator(vf, classname, code, on_demand=on_demand).generate()
     return codegen.preamble() + '\n' + code.result()
 
+# There are two levels of caching for compiling vforms: (1) from a hash of the
+# vform expression to the assembler class, (2) from a hash of the Cython source
+# code to the compiled and loaded extension module.
+#
+# (2) is the most important one since compiling Cython -> C -> extension module
+# is very slow. This cache persists across processes since the modules are
+# stored on disk.
+#
+# (1) can still be useful since going from VForm to Cython source code, while
+# much faster than the compilation steps afterwards, can still add up if
+# compile_vf() is called repeatedly (like in an adaptive refinement loop).
+# This cache (which uses the following __vform_asm_cache dict) is much lighter-
+# weight and is only kept in-process.
+#
+# As an added benefit, this cache allows us to cache compilers for predefined
+# vforms which are contained in the assemblers module.
+#
+__vform_asm_cache = dict()
+
+def __asm_cache_args(on_demand):
+    return (on_demand,)
+
+def __add_to_vform_asm_cache(vf, asm):
+    cache_key = (vf.hash(), __asm_cache_args(False))
+    __vform_asm_cache[cache_key] = asm
+
+# add predefined assemblers to the cache
+from . import assemblers, vform
+for dim in (2, 3):
+    nD = str(dim) + 'D'
+    __add_to_vform_asm_cache(vform.mass_vf(dim), getattr(assemblers, 'MassAssembler'+nD))
+    __add_to_vform_asm_cache(vform.stiffness_vf(dim), getattr(assemblers, 'StiffnessAssembler'+nD))
+    __add_to_vform_asm_cache(vform.heat_st_vf(dim), getattr(assemblers, 'HeatAssembler_ST'+nD))
+    __add_to_vform_asm_cache(vform.wave_st_vf(dim), getattr(assemblers, 'WaveAssembler_ST'+nD))
+    __add_to_vform_asm_cache(vform.divdiv_vf(dim), getattr(assemblers, 'DivDivAssembler'+nD))
+    __add_to_vform_asm_cache(vform.L2functional_vf(dim), getattr(assemblers, 'L2FunctionalAssembler'+nD))
+    __add_to_vform_asm_cache(vform.L2functional_vf(dim, physical=True), getattr(assemblers, 'L2FunctionalAssemblerPhys'+nD))
+
 def compile_vform(vf, verbose=False, on_demand=False):
     """Compile the vform `vf` into an assembler class."""
-    src = generate(vf, on_demand=on_demand)
-    mod = compile_cython_module(src, verbose=verbose)
-    return mod.CustomAssembler
+    cache_key = (vf.hash(), __asm_cache_args(on_demand))
+    global __vform_asm_cache
+    cached_asm = __vform_asm_cache.get(cache_key)
+    if cached_asm:
+        return cached_asm
+    else:
+        src = generate(vf, on_demand=on_demand)
+        mod = compile_cython_module(src, verbose=verbose)
+        asm = mod.CustomAssembler
+        __vform_asm_cache[cache_key] = asm
+        return asm
 
 def compile_vforms(vfs, verbose=False):
     """Compile a list of vforms into assembler classes.

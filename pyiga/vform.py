@@ -80,6 +80,19 @@ class AsmVar:
         self.depend_dims = depend_dims  # for input fields only (which axes does it depend on)
         self.as_expr = make_var_expr(vf, self)
 
+    def hash(self, expr_hashes):
+        # helper for VForm.hash()
+        src_hash = None
+        if self.expr:
+            src_hash = expr_hashes[self.expr]
+        elif isinstance(self.src, InputField):
+            src_hash = self.src.hash()
+        elif isinstance(self.src, str):
+            src_hash = hash(self.src)
+        else:
+            assert False, 'no expr and invalid src'
+        return hash((self.name, src_hash, self.shape, self.symmetric, self.deriv, self.depend_dims))
+
     def __str__(self):
         return self.name
 
@@ -98,6 +111,8 @@ class BasisFun:
         self.component = component  # for vector-valued basis functions
         self.space = space
         self.asmgen = None  # to be set to AsmGenerator for code generation
+    def hash(self):
+        return hash((self.name, self.numcomp, self.component, self.space))
 
 class InputField:
     def __init__(self, name, shape, physical, vform, updatable=False):
@@ -106,6 +121,8 @@ class InputField:
         self.physical = physical
         self.vform = vform
         self.updatable = updatable
+    def hash(self):
+        return hash((self.name, self.shape, self.physical, self.updatable))
 
 class VForm:
     """Abstract representation of a variational form.
@@ -145,10 +162,23 @@ class VForm:
         # default input field: geometry transform
         self.Geo = self.input('geo', shape=(dim,))
 
+    def hash(self):
+        # A hash to avoid recompiling the same vform over and over again.
+        # NB: 1. Transforming the vform, such as during compilation by
+        # finalize(), changes the exprs and therefore the hash.
+        # 2. This does not persist across processes since hash() is salted.
+        # However, compilation of the generated source code is cached separately.
+        expr_hashes = self.compute_recursive(lambda e, child_hashes: e.hash(child_hashes))
+        return hash((self.dim, self.arity, self.vec, self.spacetime) +
+                tuple(bf.hash() for bf in self.basis_funs) +
+                tuple(inp.hash() for inp in self.inputs) +
+                tuple(var.hash(expr_hashes) for var in self.vars.values()) +
+                tuple(expr_hashes[e] for e in self.exprs))
+
     def _gaussweight(self):
         gw = [
             self.declare_sourced_var('gw%d' % i, shape=(), src='@gaussweights[%d]' % i,
-                depend_dims=[i])
+                depend_dims=(i,))
             for i in range(self.dim)
         ]
         return reduce(operator.mul, gw)
@@ -1180,7 +1210,7 @@ class PartialDerivExpr(Expr):
         return s
 
     def hash_key(self):
-        return (self.basisfun, self.D, self.physical)
+        return (self.basisfun.hash(), self.D, self.physical)
 
     def gencode(self):
         assert not self.physical, 'cannot generate code for physical derivative'

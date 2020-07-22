@@ -1,5 +1,8 @@
 """Classes and functions for creating and manipulating tensor product B-spline
-and NURBS patches."""
+and NURBS patches.
+
+See :doc:`/guide/geometry` for examples on how to create custom geometries.
+"""
 import numpy as np
 import numpy.random
 

@@ -57,14 +57,14 @@ cdef object from_seq(np.int_t i, np.int_t[:] dims):
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef np.int_t to_seq(np.int_t[:] I, np.int_t[:] dims):
+cdef np.int_t to_seq(np.int_t* I, np.int_t* dims, int n) nogil:
     """Convert multiindex into sequential (lexicographic) index.
 
     Same as np.ravel_multiindex(I, dims).
     """
     cdef np.int_t i, k
     i = 0
-    for k in range(dims.shape[0]):
+    for k in range(n):
         i *= dims[k]
         i += I[k]
     return i
@@ -99,6 +99,69 @@ def reindex_from_multilevel(M, np.int_t[:,:] bs):
         jj += ij[1]
     return (ii, jj)
 
+
+# computes the Cartesian product of indices and ravels them according to the size `dims`
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef pyx_raveled_cartesian_product(arrays, np.int_t[::1] dims):
+    cdef int L = len(arrays)
+    cdef np.int_t[8] I      # iteration index
+    cdef np.int_t[8] K      # corresponding indices K[k] = arrays[k][I[k]]
+    cdef np.int_t[8] shp    # size of Cartesian product
+    cdef int i, k, N
+
+    cdef (np.int_t*)[8] arr_ptrs
+    cdef np.int_t[:] arr
+
+    N = 1
+    for k in range(L):
+        # initialize shape
+        shp[k] = arrays[k].shape[0]
+        if shp[k] == 0:
+            return np.zeros(0, dtype=np.int)
+        N *= shp[k]
+        # initialize pointer
+        arr = arrays[k]
+        arr_ptrs[k] = &arr[0]
+        # initialize I and K
+        I[k] = 0
+        K[k] = arr_ptrs[k][I[k]]
+
+    out_buf = np.empty(N, dtype=np.int)
+    cdef np.int_t[::1] out = out_buf
+
+    with nogil:
+        for i in range(N):
+            # compute raveled index at current multi-index K
+            out[i] = to_seq(&K[0], &dims[0], L)
+
+            # increment multi-index I and update K
+            for k in reversed(range(L)):
+                I[k] += 1
+                if I[k] < shp[k]:
+                    K[k] = arr_ptrs[k][I[k]]
+                    break
+                else:
+                    I[k] = 0
+                    K[k] = arr_ptrs[k][I[k]]
+                    # go on to increment previous one
+    return out_buf
+
+# helper function for nonzeros_for_rows
+@cython.boundscheck(False)
+@cython.wraparound(False)
+def pyx_rowwise_cartesian_product(lvia, np.int_t[:, ::1] ix, np.int_t[::1] block_sizes):
+    cdef int N = ix.shape[0]
+    cdef int L = ix.shape[1]
+    cdef int i
+
+    Js = N * [None]
+    for i in range(N):      # loop over all row_indices
+        # obtain the levelwise interactions for each index i_k = ix[i,k]
+        ia_k = tuple(lvia[k][ix[i,k]] for k in range(L))
+        # compute global interactions by taking the Cartesian product
+        Js[i] = pyx_raveled_cartesian_product(ia_k, block_sizes)
+    return Js
 
 ################################################################################
 # Inflation and matvec

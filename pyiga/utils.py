@@ -2,6 +2,8 @@ import numpy as np
 import scipy.sparse
 import scipy.sparse.linalg
 import itertools
+import functools
+import operator
 
 def _broadcast_to_grid(X, grid_shape):
     num_dims = len(grid_shape)
@@ -63,6 +65,85 @@ def multi_kron_sparse(As, format='csr'):
         return As[0].asformat(format, copy=True)
     else:
         return scipy.sparse.kron(As[0], multi_kron_sparse(As[1:], format=format), format=format)
+
+def kron_partial(As, rows, restrict=False, format='csr'):
+    """Compute a partial Kronecker product between the sparse matrices
+    `As = (A_1, ..., A_k)`, filling only the given `rows` in the output matrix.
+
+    If `restrict=True`, a smaller matrix is returned which contains only the
+    given rows of the original matrix. Otherwise, a matrix with the same shape
+    as the full Kronecker product is returned.
+    """
+    from .mlmatrix import MLStructure
+    # determine the I,J indices of the nonzeros in the given rows
+    S = MLStructure.from_kronecker(As)
+    out_shape = (len(rows), S.shape[1]) if restrict else S.shape
+
+    if restrict:
+        I, J, I_idx = S.nonzeros_for_rows(rows, renumber_rows=True)
+    else:
+        I, J = S.nonzeros_for_rows(rows)
+    if len(I) == 0:     # no nonzeros? return zero matrix
+        return scipy.sparse.csr_matrix(out_shape)
+
+    # block sizes for unraveling the row and column indices
+    bs_I = tuple(S.bs[k][0] for k in range(S.L))
+    bs_J = tuple(S.bs[k][1] for k in range(S.L))
+    # unravel the indices to refer to the individual blocks A_k
+    I_ix = np.unravel_index(I, bs_I)
+    J_ix = np.unravel_index(J, bs_J)
+    # compute the values of the individual factor matrices
+    values = tuple(As[k][I_ix[k], J_ix[k]].A1 for k in range(S.L))
+    # compute the Kronecker product as the product of the factors
+    entries = functools.reduce(operator.mul, values)
+    if restrict:
+        I = I_idx
+    return scipy.sparse.coo_matrix((entries, (I,J)), shape=out_shape).asformat(format)
+
+def cartesian_product(arrays):
+    """Compute the Cartesian product of any number of input arrays."""
+    L = len(arrays)
+    shp = tuple(a.shape[0] for a in arrays)
+    arr = np.empty(shp + (L,), dtype=arrays[0].dtype)
+    for i in range(L):
+        # broadcast the i-th array along all but the i-th axis
+        ix = L * [np.newaxis]
+        ix[i] = slice(shp[i])
+        arr[..., i] = arrays[i][tuple(ix)]
+    arr.shape = (-1, L)
+    return arr
+
+class CSRRowSlice:
+    """A simple class which allows quickly applying a row slice of a CSR matrix
+    to dense matrices.
+
+    This is required since creating submatrices of scipy sparse matrices is a
+    very heavyweight operation.
+    """
+    def __init__(self, A, row_bounds):
+        assert isinstance(A, scipy.sparse.csr_matrix)
+        self.A = A
+        assert 0 <= row_bounds[0] <= row_bounds[1] <= A.shape[0], 'invalid row bounds'
+        self.slc = row_bounds
+        self.shape = (row_bounds[1] - row_bounds[0], A.shape[1])
+        self.dtype = A.dtype
+
+    def _matmat(self, other):
+        # adapted from _mul_multivector in scipy's compressed.py
+        M, N = self.shape
+        i0, i1 = self.slc
+
+        n_vecs = other.shape[1]  # number of column vectors
+        result = np.zeros((M, n_vecs), dtype=self.dtype)
+
+        scipy.sparse._sparsetools.csr_matvecs(M, N, n_vecs,
+                self.A.indptr[i0:i1], self.A.indices, self.A.data,
+                   other.ravel(), result.ravel())
+
+        return result
+
+    __mul__ = _matmat
+    dot = _matmat
 
 
 class LazyArray:
@@ -127,3 +208,22 @@ class LazyCachingArray:
             dest = tuple(slice((j-j0)*ts, (j-j0+1)*ts) for (j,j0) in zip(J,J0))
             output[dest] = self.get_tile(J)
         return output
+
+class BijectiveIndex:
+    """Maps a list of values to consecutive indices in the range `0, ..., len(values) - 1`
+    and allows reverse lookup of the index.
+    """
+    def __init__(self, values):
+        self.values = values
+        self._index = dict()
+        for (i, v) in enumerate(self.values):
+            self._index[v] = i
+
+    def __len__(self):
+        return len(self.values)
+
+    def __getitem__(self, i):
+        return self.values[i]
+
+    def index(self, v):
+        return self._index[v]

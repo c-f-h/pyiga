@@ -5,10 +5,8 @@
 
 import numpy as np
 import scipy.sparse.linalg
-import itertools
 
-from . import lowrank
-
+from . import lowrank, utils
 
 ################################################################################
 # Multi-level banded matrix class
@@ -147,38 +145,52 @@ class MLStructure:
         result = [[] for i in range(num_rows)]
         for s in range(nnz):
             result[bx[s, 0]].append(bx[s, 1])
-        return result
+        return [np.array(r, dtype=np.int) for r in result]
 
-    def nonzeros_for_rows(self, row_indices):
-        """For each (sequential) row index in the list `row_indices`, compute
-        the list of (sequential) column indices that that row interacts with.
-
-        I.e., this function computes the nonzeros for a subset of the rows of
-        the matrix.
+    def nonzeros_for_rows(self, row_indices, renumber_rows=False):
+        """Compute a pair of index arrays `(I,J)` specifying the locations of
+        nonzeros (just like :func:`nonzero`), but containing only those
+        nonzeros which lie in the given rows.
         """
+        if len(row_indices) == 0:
+            if renumber_rows:
+                return np.empty(0, dtype=np.int), np.empty(0, dtype=np.int), np.empty(0, dtype=np.int)
+            else:
+                return np.empty(0, dtype=np.int), np.empty(0, dtype=np.int)
         L = self.L
         lvia = tuple(self._level_rowwise_interactions(k) for k in range(L))
-        N = len(row_indices)
         bs_I = tuple(self.bs[k][0] for k in range(L))
         bs_J = tuple(self.bs[k][1] for k in range(L))
-        ix = np.unravel_index(row_indices, bs_I)
-        result = []         # multi-indices of interactions
-        for i in range(N):
-            I = tuple(ix[k][i] for k in range(L))   # multiindex for row[i]
-            # obtain the levelwise interactions for each index i_k
-            ia_k = tuple(lvia[k][I[k]] for k in range(L))
-            # compute global interactions by taking the Cartesian product
-            result.append([to_seq(J, bs_J) for J in itertools.product(*ia_k)])
-        return result
+
+        bs_J_arr = np.array(bs_J, dtype=np.int_)       # for passing to cython function
+
+        # convert to multi-indices: ix[i,k] = component index k of row_indices[i]
+        ix = np.column_stack(np.unravel_index(row_indices, bs_I)).astype(np.int_, copy=False)
+
+        # compute the raveled Cartesian products for each row_index
+        # Js is a list of 1D integer arrays
+        Js = pyx_rowwise_cartesian_product(lvia, ix, bs_J_arr)
+
+        counts = tuple(J_i.shape[0] for J_i in Js)
+        Is = np.repeat(row_indices, counts)
+
+        if len(Js) > 0:
+            Js = np.concatenate(Js)
+        else:
+            Js = np.empty(0, dtype=np.int)
+
+        if renumber_rows:
+            return Is, Js, np.repeat(np.arange(len(row_indices)), counts)
+        else:
+            return Is, Js
 
     def nonzeros_for_columns(self, col_indices):
-        """For each (sequential) column index in the list `row_indices`, compute
-        the list of (sequential) row indices that that column interacts with.
-
-        I.e., this function computes the nonzeros for a subset of the columns of
-        the matrix.
+        """Compute a pair of index arrays `(I,J)` specifying the locations of
+        nonzeros (just like :func:`nonzero`), but containing only those
+        nonzeros which lie in the given columns.
         """
-        return self.transpose().nonzeros_for_rows(col_indices)
+        J, I = self.transpose().nonzeros_for_rows(col_indices)
+        return I, J     # swap I and J because of transpose
 
     def sequential_bidx(self):
         # returns a version of bidx with ravelled indices

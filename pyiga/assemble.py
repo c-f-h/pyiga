@@ -376,13 +376,16 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
             Alternatively, one of the following six strings can be
             used for `bdspec`:
 
-            =======================  ==================
-            `bdspec` value           Meaning
-            =======================  ==================
-            ``"left"``, ``"right"``  `x` low, high
-            ``"bottom"``, ``"top"``  `y` low, high
-            ``"front"``, ``"back"``  `z` low, high
-            =======================  ==================
+            ===================  ==================
+            value                Meaning
+            ===================  ==================
+            ``"left"``           `x` low
+            ``"right"``          `x` high
+            ``"bottom"``         `y` low
+            ``"top"``            `y` high
+            ``"front"``          `z` low
+            ``"back"``           `z` high
+            ===================  ==================
         dir_func: a function which will be interpolated to obtain the
             Dirichlet boundary values. Assumed to be given in physical
             coordinates. If it is vector-valued, one Dirichlet dof is
@@ -704,6 +707,11 @@ def assemble_vf(vf, kvs, symmetric=False, format='csr', layout='blocked', **kwar
     """Compile the given variational form (:class:`.VForm`) into a matrix or vector."""
     from . import compile
     Asm = compile.compile_vform(vf)   # compile assembler class
+
+    # check that all named inputs have been passed
+    for inp in vf.inputs:
+        if not inp.name in kwargs:
+            raise RuntimeError("required input parameter '%s' missing" % inp.name)
 
     num_spaces = vf.num_spaces()
     if num_spaces <= 1:

@@ -129,8 +129,11 @@ class KnotVector:
     def greville(self):
         """Compute Gréville abscissae for this knot vector"""
         p = self.p
-        # running averages over p knots
-        return (np.convolve(self.kv, np.ones(p) / p))[p:-p]
+        if p == 0:
+            return (self.kv[1:] + self.kv[:-1]) / 2     # cell middle points
+        else:
+            # running averages over p knots
+            return (np.convolve(self.kv, np.ones(p) / p))[p:-p]
 
     def refine(self, new_knots=None):
         """Return the refinement of this knot vector by inserting `new_knots`,
@@ -245,10 +248,12 @@ def active_ev(knotvec, u):
     if np.isscalar(u):
         return _bspline_active_ev_single(knotvec, u)
     else:
-        result = np.empty((knotvec.p+1, u.size))
-        for i in range(u.size):
-            result[:,i] = _bspline_active_ev_single(knotvec, u[i])
-        return result
+        # use active_deriv(), which is implemented in Cython and much faster
+        return active_deriv(knotvec, u, 0)[0, :]
+        #result = np.empty((knotvec.p+1, u.size))
+        #for i in range(u.size):
+        #    result[:,i] = _bspline_active_ev_single(knotvec, u[i])
+        #return result
 
 
 def _bspline_active_deriv_single(knotvec, u, numderiv):
@@ -396,15 +401,20 @@ def collocation(kv, nodes):
     m = nodes.size
     n = kv.numdofs
     p = kv.p
-    I, J, V = [], [], []
+    V = []
     values = active_ev(kv, nodes) # (p+1) x n
     #indices = [kv.first_active_at(u) for u in nodes]
     indices = pyx_findspans(kv.kv, p, nodes) - p        # faster version
     for k in range(m):
-        V.extend(values[:, k])
-        I.extend( (p+1) * [k] )
-        J.extend( range(indices[k], indices[k] + p  + 1) )
-    return scipy.sparse.coo_matrix((V, (I,J)), shape=(m,n)).tocsr()
+        V.append(values[:, k])
+
+    # compute I, J indices:
+    # I: p + 1 entries per row
+    I = np.repeat(np.arange(m), p + 1)
+    # J: arange(indices[k], indices[k] + p + 1) per row
+    J = (indices[:, None] + np.arange(p + 1)[None, :]).ravel()
+
+    return scipy.sparse.coo_matrix((np.concatenate(V), (I,J)), shape=(m,n)).tocsr()
 
 def collocation_derivs(kv, nodes, derivs=1):
     """Compute collocation matrix and derivative collocation matrices for B-spline
@@ -415,17 +425,21 @@ def collocation_derivs(kv, nodes, derivs=1):
     m = nodes.size
     n = kv.numdofs
     p = kv.p
-    I, J = [], []
     V = [[] for _ in range(derivs+1)]
     values = active_deriv(kv, nodes, derivs) # (derivs+1) x (p+1) x n
     #indices = [kv.first_active_at(u) for u in nodes]
     indices = pyx_findspans(kv.kv, p, nodes) - p        # faster version
     for k in range(m):
         for d in range(derivs+1):
-            V[d].extend(values[d, :, k])
-        I.extend( (p+1) * [k] )
-        J.extend( range(indices[k], indices[k] + p  + 1) )
-    return [scipy.sparse.coo_matrix((vals, (I,J)), shape=(m,n)).tocsr()
+            V[d].append(values[d, :, k])
+
+    # compute I, J indices:
+    # I: p + 1 entries per row
+    I = np.repeat(np.arange(m), p + 1)
+    # J: arange(indices[k], indices[k] + p + 1) per row
+    J = (indices[:, None] + np.arange(p + 1)[None, :]).ravel()
+
+    return [scipy.sparse.coo_matrix((np.concatenate(vals), (I,J)), shape=(m,n)).tocsr()
             for vals in V]
 
 def interpolate(kv, func, nodes=None):
@@ -615,6 +629,7 @@ class BSplineFunc:
             vector of length :attr:`sdim` (the gradient) per grid point.
         """
         assert len(gridaxes) == self.sdim, "Input has wrong dimension"
+
         colloc = [collocation_derivs(self.kvs[i], gridaxes[i], derivs=1) for i in range(self.sdim)]
 
         grad_components = []

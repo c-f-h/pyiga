@@ -134,9 +134,10 @@ class AsmGenerator:
         self.put('@cython.wraparound(False)')
         self.put('@cython.initializedcheck(False)')
 
-    def field_type(self, var):
+    def field_type(self, var, contiguous=True):
         dim = self.dim if (var.depend_dims is None) else len(var.depend_dims)
-        return 'double[{X}:1]'.format(X=', '.join((dim + len(var.shape)) * ':'))
+        s = 'double[{X}:1]' if contiguous else 'double[{X}]'
+        return s.format(X=', '.join((dim + len(var.shape)) * ':'))
 
     def declare_var(self, var, ref=False):
         if ref:
@@ -152,19 +153,13 @@ class AsmGenerator:
             else:
                 self.declare_scalar(var.name)
 
-    def declare_params(self, params):
+    def declare_params(self, params, contiguous=True):
         for var in params:
-            self.putf('{type} _{name},', type=self.field_type(var), name=var.name)
+            self.putf('{type} _{name},', type=self.field_type(var, contiguous=contiguous), name=var.name)
 
     def declare_array_vars(self, vars):
         for var in vars:
-            if self.on_demand and isinstance(var.src, vform.InputField):
-                # in an on demand assembler, input fields are represented
-                # using lazy array classes and evaluated on demand
-                typ = 'object'
-            else:
-                typ = self.field_type(var)
-            self.putf('cdef {type} {name}', type=typ, name=var.name)
+            self.putf('cdef {type} {name}', type=self.field_type(var), name=var.name)
 
     def load_field_var(self, var, idx, ref_only=False):
         """Load the current entry of a field var into the corresponding local variable."""
@@ -222,7 +217,8 @@ class AsmGenerator:
         local_vars   = [var for var in self.vform.kernel_deps if not var.is_array]
 
         # parameters
-        self.declare_params(array_params)
+        # We will usually get slices of arrays which are therefore not contiguous.
+        self.declare_params(array_params, contiguous=False)
 
         # arrays for basis function values/derivatives
         for bfun in self.vform.basis_funs:
@@ -305,8 +301,12 @@ class AsmGenerator:
                 self.put(')')
                 self.put('if intv.a >= intv.b: return ' + zeroret + '  # no intersection of support')
 
-            self.putf('g_sta[{k}] = self.nqp * intv.a    # start of Gauss nodes', k=k)
-            self.putf('g_end[{k}] = self.nqp * intv.b    # end of Gauss nodes', k=k)
+            if self.on_demand:
+                self.putf('g_sta[{k}] = self.nqp * intv.a - self.bbox_ofs[{k}]    # start of Gauss nodes', k=k)
+                self.putf('g_end[{k}] = self.nqp * intv.b - self.bbox_ofs[{k}]    # end of Gauss nodes', k=k)
+            else:
+                self.putf('g_sta[{k}] = self.nqp * intv.a    # start of Gauss nodes', k=k)
+                self.putf('g_end[{k}] = self.nqp * intv.b    # end of Gauss nodes', k=k)
 
             # a_ij = a(phi_j, phi_i)  -- second index (j) corresponds to first (trial) function
             for idx,bfun in idx_bfun:
@@ -317,14 +317,6 @@ class AsmGenerator:
 
     def generate_entry_impl(self):
         self.gen_entry_impl_header()
-
-        if self.on_demand:
-            # in the on demand case, we have to query the lazy array Python object
-            # TODO: currently, this means that on demand assemblers can't parallelize
-            # the kernel; would be better to have only the acquisition of the
-            # lazy array data in 'with gil' and release it again for the kernel
-            self.putf('with gil:')
-            self.indent()
 
         # generate call to assembler kernel
         if self.vec:
@@ -353,36 +345,24 @@ class AsmGenerator:
         self.dedent(2)
         self.put(')')
 
-        if self.on_demand:
-            self.dedent()       # end with gil
-
         self.end_function()
 
     def parse_src(self, var):
         s = var.src
         if isinstance(s, vform.InputField):
-            if self.on_demand:
-                assert var.deriv in (0,1), \
-                        'invalid derivative %s for input field %s' % (var.deriv, s.name)
-                assert not s.physical, 'physical on-demand input fields not implemented'
-                # initialize lazy array for the input function
-                return 'LazyCachingArray({}, {}, self.gaussgrid, self.nqp, mode=\'{}\')'.format(
-                        s.name, var.shape, 'eval' if var.deriv==0 else 'jac')
-            else:
-                # not on demand -- precompute complete input field
-                if var.deriv == 0:
-                    if s.physical:
-                        return 'np.ascontiguousarray(grid_eval_transformed(%s, self.gaussgrid, self._geo))' % s.name
-                    else:
-                        return 'np.ascontiguousarray(grid_eval(%s, self.gaussgrid))' % s.name
-                elif var.deriv == 1:
-                    assert not s.physical, 'Jacobian of physical input field not implemented'
-                    return 'np.ascontiguousarray(%s.grid_jacobian(self.gaussgrid))' % s.name
-                elif var.deriv == 2:
-                    assert not s.physical, 'Hessian of physical input field not implemented'
-                    return 'np.ascontiguousarray(%s.grid_hessian(self.gaussgrid))' % s.name
+            if var.deriv == 0:
+                if s.physical:
+                    return 'np.ascontiguousarray(grid_eval_transformed(%s, self.gaussgrid, self._geo))' % s.name
                 else:
-                    assert False, 'invalid derivative %s for input field %s' % (var.deriv, s.name)
+                    return 'np.ascontiguousarray(grid_eval(%s, self.gaussgrid))' % s.name
+            elif var.deriv == 1:
+                assert not s.physical, 'Jacobian of physical input field not implemented'
+                return 'np.ascontiguousarray(%s.grid_jacobian(self.gaussgrid))' % s.name
+            elif var.deriv == 2:
+                assert not s.physical, 'Hessian of physical input field not implemented'
+                return 'np.ascontiguousarray(%s.grid_hessian(self.gaussgrid))' % s.name
+            else:
+                assert False, 'invalid derivative %s for input field %s' % (var.deriv, s.name)
         elif s.startswith('@gaussweights'):
             return s[1:]
         else:
@@ -396,7 +376,9 @@ class AsmGenerator:
         used_kvs = tuple('kvs%d' % sp for sp in used_spaces)
         input_args = ', '.join(inp.name for inp in vf.inputs)
 
-        self.putf('def __init__(self, {kvs}, {inp}):', kvs=', '.join(used_kvs), inp=input_args)
+        self.putf('def __init__(self, {kvs}, {inp}{bbox}):', kvs=', '.join(used_kvs),
+                bbox = ', bbox' if self.on_demand else '',
+                inp=input_args)
         self.indent()
 
         self.putf('self.arity = {ar}', ar=vf.arity)
@@ -415,9 +397,22 @@ class AsmGenerator:
         self.put('self._geo = geo')
         self.put('')
         self.put('# NB: we assume all kvs result in the same mesh')
-        self.put('gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)')
+
+        if self.on_demand:
+            # NB: bb[1] is the exclusive upper cell index; i.e., the last cell is bb[1]-1
+            # kv.mesh[k] is the starting point of cell k or the end point of cell k-1
+            # kv.mesh[bb[1]] is the end point of cell bb[1]-1;
+            # we need to INCLUDE that end point!
+            self.put('gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh[bb[0]:bb[1]+1] for (kv,bb) in zip(kvs0,bbox)], self.nqp)')
+        else:
+            self.put('gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)')
+
         self.put('self.gaussgrid = gaussgrid')
         self.put('N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions')
+
+        if self.on_demand:
+            self.put('self.bbox_ofs[:] = tuple(bb[0] * self.nqp for bb in bbox)')
+
         self.put('')
 
         for sp in (0,1):        # TODO: do this only for used_spaces? crashes currently
@@ -593,6 +588,7 @@ cdef class BaseAssembler{{DIM}}D:
     cdef readonly tuple kvs
     cdef object _geo
     cdef tuple gaussgrid
+    cdef size_t[{{DIM}}] bbox_ofs
 
     cdef double entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
         return -9999.99  # Not implemented
@@ -629,6 +625,26 @@ cdef class BaseAssembler{{DIM}}D:
             from_seq{{DIM}}(idx_arr[k,1], self.S0_ndofs, J)
             out[k] = self.entry_impl(I, J)
 
+    def multi_entries1(self, indices):
+        """Compute all entries given by `indices`.
+
+        Args:
+            indices: a sequence or `ndarray` of vector indices to compute
+        """
+        if self.arity != 1:
+            return None
+        cdef size_t[::1] idx_arr
+        if isinstance(indices, np.ndarray):
+            idx_arr = np.asarray(indices, order='C', dtype=np.uintp)
+        else:   # possibly given as iterator
+            idx_arr = np.array(list(indices), dtype=np.uintp)
+
+        cdef double[::1] result = np.empty(idx_arr.shape[0])
+        cdef int i
+        for i in range(idx_arr.shape[0]):
+            result[i] = self.entry1(idx_arr[i])
+        return result
+
     def multi_entries(self, indices):
         """Compute all entries given by `indices`.
 
@@ -636,7 +652,9 @@ cdef class BaseAssembler{{DIM}}D:
             indices: a sequence of `(i,j)` pairs or an `ndarray`
             of size `N x 2`.
         """
-        if self.arity != 2:
+        if self.arity == 1:
+            return self.multi_entries1(indices)
+        elif self.arity != 2:
             return None
         cdef size_t[:,::1] idx_arr
         if isinstance(indices, np.ndarray):
@@ -943,7 +961,7 @@ from pyiga.assemble_tools_cy cimport (
     IntInterval, make_intv, intersect_intervals,
     next_lexicographic2, next_lexicographic3,
 )
-from pyiga.assemble_tools_cy import compute_values_derivs
+from pyiga.assemble_tools import compute_values_derivs
 from pyiga.utils import LazyCachingArray, grid_eval, grid_eval_transformed
 
 """

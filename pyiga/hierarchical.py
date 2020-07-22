@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """This module contains support for dealing with hierarchical spline spaces and
 truncated hierarchical B-splines (THB-splines).
 
@@ -30,7 +29,7 @@ i_d)`.
 
 The canonical order on active cells is defined in the same way.
 
-.. [GV2018] `Garau, Vazquez: "Algorithms for the implementation of adaptive
+.. [GV2018] `Garau, Vázquez: "Algorithms for the implementation of adaptive
     isogeometric methods using hierarchical B-splines", 2018.
     <https://doi.org/10.1016/j.apnum.2017.08.006>`_
 .. [GeoPDEs] http://rafavzqz.github.io/geopdes/
@@ -767,7 +766,7 @@ class HSpace:
         levels as indices and the list of marked cells on that level as values.
 
         The refinement procedure preserves the mesh level disparity, following
-        the method described in [Bracco, Giannelli, Vazquez, 2018].
+        the method described in [Bracco, Giannelli, Vázquez, 2018].
 
         Returns:
             the actually refined cells in the same format as `marked`; if

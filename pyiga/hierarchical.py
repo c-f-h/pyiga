@@ -337,11 +337,17 @@ class HSpace:
     Arguments:
         kvs: a sequence of `d` :class:`.KnotVector` instances, representing
             the tensor product B-spline space on the coarsest level
-        disparity (int): the mesh level disparity, meaning the maximum number of
-            coarser levels with which any active function on a given level may
-            have interactions with. This disparity is respected when calling
-            :meth:`refine`. If no restriction on the number of overlapping
-            mesh levels is desired, pass `np.inf` (which is the default).
+        disparity (int): the desired mesh level disparity. This means that an
+            active basis function on level `lv` may have interactions at most
+            with coarse functions from level `lv - disparity`, but not from
+            any coarser levels.
+
+            This disparity is respected when calling :meth:`refine`. Lower
+            disparity leads to more gradual changes in the sizes of neighboring
+            active cells.
+
+            If no restriction on the number of overlapping mesh levels is
+            desired, pass :data:`numpy.inf` (which is the default).
         bdspecs: optionally, a list of boundary specifications on which degrees
             of freedom should be eliminated (usually for treating Dirichlet
             boundary conditions). See :func:`.assemble.compute_dirichlet_bc`

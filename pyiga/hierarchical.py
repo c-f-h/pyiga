@@ -408,7 +408,8 @@ class HSpace:
 
         If `lv=None` and `flat=True`, return a flat list of `(lv, (j_1, ..., j_d))`
         pairs of all active cells in canonical order, where the first entry is the level
-        and the second entry is the multi-index of the cell on that level.
+        and the second entry is the multi-index of the cell on that level. The length
+        of the returned list is :attr:`total_active_cells`.
         """
         if lv is not None:
             return self.hmesh.active[lv]
@@ -431,7 +432,8 @@ class HSpace:
 
         If `lv=None` and `flat=True`, return a flat list of `(lv, (i_1, ..., i_d))`
         pairs of all active functions in canonical order, where the first entry is the level
-        and the second entry is the multi-index of the function on that level.
+        and the second entry is the multi-index of the function on that level. The length
+        of the returned list is :attr:`numdofs`.
         """
         if lv is not None:
             return self.actfun[lv]

@@ -24,7 +24,7 @@ class HDiscretization:
             declared via the :meth:`.VForm.input` method must be included in
             this dict.
 
-            The assemblers both for the matrix and the right-hand side will draw
+            The assemblers both for the matrix and any linear functionals will draw
             their input arguments from this dict.
         truncate (bool): if true, a THB-spline discretization is generated;
             otherwise, an HB-spline discretization
@@ -156,17 +156,33 @@ class HDiscretization:
 
         By default (if `vf=None`), a standard L2 inner product `<f, v>` is used
         for computing the right-hand side, and the function `f` is taken from
-        the key ``'f'`` of the ``asm_args`` dict.
+        the key ``'f'`` of the ``asm_args`` dict. It is assumed to be given in
+        physical coordinates.
 
         A different functional can be specified by passing a :class:`.VForm`
         with ``arity=1`` as the `vf` parameter.
 
         Returns:
-            a vector whose length corresponds to the :attr:`HSpace.numdofs` attribute of `hspace`
+            a vector whose length is equal to the :attr:`HSpace.numdofs`
+            attribute of `hspace`, corresponding to the active basis functions
+            in canonical order
         """
         if vf is None:
             from .vform import L2functional_vf
             vf = L2functional_vf(dim=self.hs.dim, physical=True)
+        return self.assemble_functional(vf)
+
+    def assemble_functional(self, vf):
+        """Assemble a linear functional described by the :class:`.VForm` `vf` over
+        the hierarchical spline space.
+
+        Returns:
+            a vector whose length is equal to the :attr:`HSpace.numdofs`
+            attribute of `hspace`, corresponding to the active basis functions
+            in canonical order
+        """
+        if not vf.arity == 1:
+            raise ValueError('vf must be a linear functional (arity=1)')
         RhsAsm = compile.compile_vform(vf, on_demand=True)
 
         # get needed assembler arguments

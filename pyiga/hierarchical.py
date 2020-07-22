@@ -921,15 +921,25 @@ class HSpace:
 
         if num_rows is None:
             num_rows = nt[-1]
-        T = scipy.sparse.eye(num_rows, format='lil')
         A = self.represent_fine(lv=k+1, rows=actidx[k+1], restrict=True)    # rep act(0..k+1) as act(k+1)
+
         # truncation: subtract the components of the coarse functions which can
         # be represented by the active functions on level k+1
+        nA = A.shape[0]
+        # cut off the diagonal part corresponding to functions on k+1, keeping
+        # only rep act(0..k) as act(k+1)
+        A.resize(nA, nt[k])
+        A.resize(nA, num_rows)      # fill back up with zeros to the proper size
+        # put the block at the proper vertical position (indices nt[k]:nt[k+1])
+        A = scipy.sparse.vstack((scipy.sparse.csr_matrix((nt[k], num_rows)), A))
+        # fill with zeros to the final size
+        A.resize(num_rows, num_rows)
+
+        I = scipy.sparse.eye(num_rows, format='csr')
         if inverse:
-            T[nt[k]:nt[k+1], 0:nt[k]] = A[:, 0:nt[k]]
+            return I + A
         else:
-            T[nt[k]:nt[k+1], 0:nt[k]] = -A[:, 0:nt[k]]
-        return T.tocsr()
+            return I - A
 
     def thb_to_hb(self):
         """Return a sparse square matrix of size :attr:`numdofs` which

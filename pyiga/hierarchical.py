@@ -458,11 +458,23 @@ class HSpace:
         """Return the extents (as a tuple of min/max pairs) of the cell `c` on level `lv`."""
         return self.hmesh.meshes[lv].cell_extents(c)
 
-    def _ravel_indices(self, indexsets):
-        indices = [sorted(ix) if isinstance(ix, set) else ix for ix in indexsets]
+    def ravel_indices(self, indices):
+        """Given a list `indices` which contains, per level, a list or set of
+        function multi-indices on that level, return a list of arrays with the
+        corresponding raveled indices, i.e., the sequential indices corresponding
+        to the multi-indices in lexicographic order.
+
+        These raveled indices are useful, e.g., for indexing into vectors or
+        matrices which are defined over the full tensor product space on a
+        level.
+
+        See :func:`numpy.ravel_multi_index` for details on the raveling operation.
+        """
+        # if the indices are given as sets, order them first
+        indices = [sorted(ix) if isinstance(ix, set) else ix for ix in indices]
         return tuple(
             (np.ravel_multi_index(np.array(indices[lv]).T, self.mesh(lv).numdofs, order='C')
-                if len(indexsets[lv])
+                if len(indices[lv])
                 else np.arange(0))
             for lv in range(self.numlevels)
         )
@@ -471,13 +483,13 @@ class HSpace:
         """Return a tuple which contains, per level, the raveled (sequential) indices of
         active basis functions.
         """
-        return self._ravel_indices(self.actfun)
+        return self.ravel_indices(self.actfun)
 
     def deactivated_indices(self):
         """Return a tuple which contains, per level, the raveled (sequential) indices of
         deactivated basis functions.
         """
-        return self._ravel_indices(self.deactfun)
+        return self.ravel_indices(self.deactfun)
 
     def _compute_single_axis_single_level_dirichlet_indices(self, lv, bdspec):
         assert 0 <= lv < self.numlevels, 'Invalid level.'
@@ -505,11 +517,11 @@ class HSpace:
                     aux.append(self.actfun[i] & TPbindices[i])
                 else:
                     aux.append(set())
-            out.append(list(self._ravel_indices(aux)))
+            out.append(list(self.ravel_indices(aux)))
             out_index.append(aux)
 
         # deactivated boundary ravel
-        ravel_bddeact = self._ravel_indices(
+        ravel_bddeact = self.ravel_indices(
             [self.deactfun[lv] & TPbindices[lv]
                 for lv in range(self.numlevels)])
 
@@ -537,7 +549,7 @@ class HSpace:
     def ravel_global(self):
         if not self.__ravel_global:
             indices = self.global_indices()
-            self.__ravel_global = [self._ravel_indices(idx) for idx in indices]
+            self.__ravel_global = [self.ravel_indices(idx) for idx in indices]
         return self.__ravel_global
 
     @property
@@ -657,7 +669,7 @@ class HSpace:
         # get smoothing indices in TP form
         chosen_indices = getattr(self, strategy + '_indices')()
         # convert them to raveled form
-        chosen_indices = [self._ravel_indices(idx) for idx in chosen_indices]
+        chosen_indices = [self.ravel_indices(idx) for idx in chosen_indices]
         # convert them to matrix indices
         return [self.raveled_to_virtual_matrix_indices(lv, chosen_indices[lv])
                 for lv in range(self.numlevels)]

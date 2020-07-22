@@ -98,11 +98,11 @@ class HDiscretization:
                 bboxes.append(self._bbox_for_functions(k, to_assemble[-1]))
 
             # convert them to raveled form
-            to_assemble = hs._ravel_indices(to_assemble)
-            interlevel_ix = hs._ravel_indices(interlevel_ix)
+            to_assemble = hs.ravel_indices(to_assemble)
+            interlevel_ix = hs.ravel_indices(interlevel_ix)
 
             # compute neighbors as matrix indices
-            neighbors = [hs.raveled_to_virtual_matrix_indices(lv, hs._ravel_indices(idx))
+            neighbors = [hs.raveled_to_virtual_matrix_indices(lv, hs.ravel_indices(idx))
                     for lv, idx in enumerate(neighbors)]
 
             # new indices per level as local tensor product indices

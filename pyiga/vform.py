@@ -161,6 +161,7 @@ class VForm:
         }
         # default input field: geometry transform
         self.Geo = self.input('geo', shape=(dim,))
+        self.__hash = None
 
     def hash(self):
         # A hash to avoid recompiling the same vform over and over again.
@@ -168,12 +169,15 @@ class VForm:
         # finalize(), changes the exprs and therefore the hash.
         # 2. This does not persist across processes since hash() is salted.
         # However, compilation of the generated source code is cached separately.
-        expr_hashes = self.compute_recursive(lambda e, child_hashes: e.hash(child_hashes))
-        return hash((self.dim, self.arity, self.vec, self.spacetime) +
-                tuple(bf.hash() for bf in self.basis_funs) +
-                tuple(inp.hash() for inp in self.inputs) +
-                tuple(var.hash(expr_hashes) for var in self.vars.values()) +
-                tuple(expr_hashes[e] for e in self.exprs))
+        if self.__hash is None:
+            # vforms are considered immutable after initial setup - compute only once
+            expr_hashes = self.compute_recursive(lambda e, child_hashes: e.hash(child_hashes))
+            self.__hash = hash((self.dim, self.arity, self.vec, self.spacetime) +
+                    tuple(bf.hash() for bf in self.basis_funs) +
+                    tuple(inp.hash() for inp in self.inputs) +
+                    tuple(var.hash(expr_hashes) for var in self.vars.values()) +
+                    tuple(expr_hashes[e] for e in self.exprs))
+        return self.__hash
 
     def _gaussweight(self):
         gw = [
@@ -301,6 +305,8 @@ class VForm:
 
     def add(self, expr):
         """Add an expression to this VForm."""
+        if self.__hash is not None:
+            raise RuntimeError('can no longer modify this VForm')
         if self.vec:
             if expr.is_scalar():
                 expr = self.substitute_vec_components(expr)
@@ -620,6 +626,8 @@ class VForm:
     def finalize(self, do_precompute=True):
         """Performs standard transforms and dependency analysis."""
         # replace "dx" by quadrature weight function
+        # make sure the hash is computed on the initial expression tree
+        self.hash()
         self.transform(lambda e: self.W, type=VolumeMeasureExpr)
         # replace physical derivs by proper expressions in terms of parametric derivs
         self.transform(self.replace_physical_derivs, type=PartialDerivExpr)

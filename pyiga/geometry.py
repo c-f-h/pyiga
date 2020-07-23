@@ -547,6 +547,7 @@ def tensor_product(G1, G2, *Gs):
 
     if nurbs:
         Gs = tuple(G.as_nurbs() for G in Gs)
+        G1, G2 = Gs
         CC1, W1 = G1.coeffs_weights()
         CC2, W2 = G2.coeffs_weights()
         Cs = (CC1, CC2)

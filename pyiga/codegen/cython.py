@@ -393,6 +393,7 @@ class AsmGenerator:
             numcomp = '(' + ', '.join(str(nc) for nc in numcomp) + ',)'
             self.put("self.numcomp[:] = " + numcomp)
 
+        self.putf('assert geo.sdim == {dim}, "Geometry has wrong source dimension"')
         self.putf('assert geo.dim == {dim}, "Geometry has wrong dimension"')
         self.put('self._geo = geo')
         self.put('')

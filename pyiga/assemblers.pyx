@@ -32,6 +32,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
         self.nqp = max([kv.p for kv in kvs0]) + 1
         kvs1 = kvs0
         self.kvs = (kvs0, kvs1)
+        assert geo.sdim == 2, "Geometry has wrong source dimension"
         assert geo.dim == 2, "Geometry has wrong dimension"
         self._geo = geo
 
@@ -167,6 +168,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         self.nqp = max([kv.p for kv in kvs0]) + 1
         kvs1 = kvs0
         self.kvs = (kvs0, kvs1)
+        assert geo.sdim == 2, "Geometry has wrong source dimension"
         assert geo.dim == 2, "Geometry has wrong dimension"
         self._geo = geo
 
@@ -324,6 +326,7 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         self.nqp = max([kv.p for kv in kvs0]) + 1
         kvs1 = kvs0
         self.kvs = (kvs0, kvs1)
+        assert geo.sdim == 2, "Geometry has wrong source dimension"
         assert geo.dim == 2, "Geometry has wrong dimension"
         self._geo = geo
 
@@ -483,6 +486,7 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         self.nqp = max([kv.p for kv in kvs0]) + 1
         kvs1 = kvs0
         self.kvs = (kvs0, kvs1)
+        assert geo.sdim == 2, "Geometry has wrong source dimension"
         assert geo.dim == 2, "Geometry has wrong dimension"
         self._geo = geo
 
@@ -645,6 +649,7 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         kvs1 = kvs0
         self.kvs = (kvs0, kvs1)
         self.numcomp[:] = (2, 2,)
+        assert geo.sdim == 2, "Geometry has wrong source dimension"
         assert geo.dim == 2, "Geometry has wrong dimension"
         self._geo = geo
 
@@ -817,6 +822,7 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
         self.nqp = max([kv.p for kv in kvs0]) + 1
         kvs1 = kvs0
         self.kvs = (kvs0, kvs1)
+        assert geo.sdim == 2, "Geometry has wrong source dimension"
         assert geo.dim == 2, "Geometry has wrong dimension"
         self._geo = geo
 
@@ -949,6 +955,7 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
         self.nqp = max([kv.p for kv in kvs0]) + 1
         kvs1 = kvs0
         self.kvs = (kvs0, kvs1)
+        assert geo.sdim == 2, "Geometry has wrong source dimension"
         assert geo.dim == 2, "Geometry has wrong dimension"
         self._geo = geo
 
@@ -1079,6 +1086,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
         self.nqp = max([kv.p for kv in kvs0]) + 1
         kvs1 = kvs0
         self.kvs = (kvs0, kvs1)
+        assert geo.sdim == 3, "Geometry has wrong source dimension"
         assert geo.dim == 3, "Geometry has wrong dimension"
         self._geo = geo
 
@@ -1237,6 +1245,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         self.nqp = max([kv.p for kv in kvs0]) + 1
         kvs1 = kvs0
         self.kvs = (kvs0, kvs1)
+        assert geo.sdim == 3, "Geometry has wrong source dimension"
         assert geo.dim == 3, "Geometry has wrong dimension"
         self._geo = geo
 
@@ -1435,6 +1444,7 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         self.nqp = max([kv.p for kv in kvs0]) + 1
         kvs1 = kvs0
         self.kvs = (kvs0, kvs1)
+        assert geo.sdim == 3, "Geometry has wrong source dimension"
         assert geo.dim == 3, "Geometry has wrong dimension"
         self._geo = geo
 
@@ -1632,6 +1642,7 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         self.nqp = max([kv.p for kv in kvs0]) + 1
         kvs1 = kvs0
         self.kvs = (kvs0, kvs1)
+        assert geo.sdim == 3, "Geometry has wrong source dimension"
         assert geo.dim == 3, "Geometry has wrong dimension"
         self._geo = geo
 
@@ -1832,6 +1843,7 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         kvs1 = kvs0
         self.kvs = (kvs0, kvs1)
         self.numcomp[:] = (3, 3,)
+        assert geo.sdim == 3, "Geometry has wrong source dimension"
         assert geo.dim == 3, "Geometry has wrong dimension"
         self._geo = geo
 
@@ -2051,6 +2063,7 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
         self.nqp = max([kv.p for kv in kvs0]) + 1
         kvs1 = kvs0
         self.kvs = (kvs0, kvs1)
+        assert geo.sdim == 3, "Geometry has wrong source dimension"
         assert geo.dim == 3, "Geometry has wrong dimension"
         self._geo = geo
 
@@ -2201,6 +2214,7 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
         self.nqp = max([kv.p for kv in kvs0]) + 1
         kvs1 = kvs0
         self.kvs = (kvs0, kvs1)
+        assert geo.sdim == 3, "Geometry has wrong source dimension"
         assert geo.dim == 3, "Geometry has wrong dimension"
         self._geo = geo
 

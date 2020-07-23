@@ -73,6 +73,7 @@ def _jac_to_unscaled_normal(jac):
 
 class AsmVar:
     def __init__(self, vf, name, src, shape, is_array=False, symmetric=False, deriv=None, depend_dims=None):
+        self.vform = vf
         self.name = name
         if isinstance(src, Expr):
             self.expr = src
@@ -878,13 +879,13 @@ def make_var_expr(vf, var):
     """Create an expression of the proper shape which refers to the variable `var`."""
     shape = var.shape
     if shape is ():
-        return VarRefExpr(var, (), vf)
+        return VarRefExpr(var, ())
     elif len(shape) == 1:
         return LiteralVectorExpr(
-                [VarRefExpr(var, (i,), vf) for i in range(shape[0])])
+                [VarRefExpr(var, (i,)) for i in range(shape[0])])
     elif len(shape) == 2:
         return LiteralMatrixExpr(
-                [[VarRefExpr(var, (i,j), vf) for j in range(shape[1])]
+                [[VarRefExpr(var, (i,j)) for j in range(shape[1])]
                                              for i in range(shape[0])])
     else:
         assert False, 'invalid shape'
@@ -942,7 +943,7 @@ class LiteralMatrixExpr(Expr):
 
 class VarRefExpr(Expr):
     """A scalar expression which refers to an entry of a variable or a derivative thereof."""
-    def __init__(self, var, I, vf, D=None, parametric=False):
+    def __init__(self, var, I, D=None, parametric=False):
         assert isinstance(var, AsmVar)
         I = tuple(I)
         assert len(I) == len(var.shape)
@@ -950,9 +951,8 @@ class VarRefExpr(Expr):
         self.var = var
         self.I = I
         self.children = ()
-        self.vf = vf
         if D is None:
-            D = vf.dim * (0,)
+            D = self.var.vform.dim * (0,)
         self.D = tuple(D)
         assert sum(self.D) == 0 or self.is_input_var_expr(),\
                 'derivatives only valid for input vars'
@@ -999,9 +999,9 @@ class VarRefExpr(Expr):
         # generate a new expr for the parametric gradient (input vars only)
         assert self.is_input_var_expr(), '_para_grad only handles input fields'
         if len(self.I) == 0:
-            return self.vf._input_as_expr(self.var.src, deriv=self.var.deriv+1)
+            return self.var.vform._input_as_expr(self.var.src, deriv=self.var.deriv+1)
         elif len(self.I) == 1:
-            return self.vf._input_as_expr(self.var.src, deriv=self.var.deriv+1)[self.I[0], :]
+            return self.var.vform._input_as_expr(self.var.src, deriv=self.var.deriv+1)[self.I[0], :]
         else:
             assert False, 'gradient of matrices not implemented'
 
@@ -1011,7 +1011,7 @@ class VarRefExpr(Expr):
         assert self.is_scalar(), 'can only compute Hessian of scalars'
         assert self.var.deriv == 0
         assert sum(self.D) == 2
-        H = self.vf._input_as_expr(self.var.src, deriv=2)
+        H = self.var.vform._input_as_expr(self.var.src, deriv=2)
         if self.I == ():
             return H
         elif len(self.I) == 1:
@@ -1026,11 +1026,11 @@ class VarRefExpr(Expr):
         if self.parametric:
             return self
         else:
-            return VarRefExpr(self.var, self.I, self.vf, self.D, parametric=True)
+            return VarRefExpr(self.var, self.I, self.D, parametric=True)
 
     def without_derivs(self):
         """Return a reference to the underlying variable without derivatives."""
-        return VarRefExpr(self.var, self.I, self.vf, len(self.D) * (0,), parametric=True)
+        return VarRefExpr(self.var, self.I, len(self.D) * (0,), parametric=True)
 
     def get_underlying_expr(self):
         # for a var defined using an expr, get the corresponding scalar expr
@@ -1051,7 +1051,7 @@ class VarRefExpr(Expr):
             # transformation step.
             Dnew = list(self.D)
             Dnew[k] += times
-            return VarRefExpr(self.var, self.I, self.vf, Dnew, parametric)
+            return VarRefExpr(self.var, self.I, Dnew, parametric)
         elif self.var.expr:
             # in case of a variable, compute derivative of the underlying expression
             return Dx(self.get_underlying_expr(), k, times, parametric=parametric)
@@ -1059,7 +1059,7 @@ class VarRefExpr(Expr):
             raise TypeError('do not know how to compute derivative of %s' % self.x.var.name)
 
     def find_vf(self):
-        return self.vf
+        return self.var.vform
 
     base_complexity = 0
 

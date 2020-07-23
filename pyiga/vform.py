@@ -197,6 +197,7 @@ class VForm:
         # default input field: geometry transform
         self.Geo = self.input('geo', shape=(geo_dim,))
         self.__hash = None
+        self.__is_finalized = False
 
     def is_volume_integral(self):
         return self.dim == self.geo_dim
@@ -666,6 +667,8 @@ class VForm:
 
     def finalize(self, do_precompute=True):
         """Performs standard transforms and dependency analysis."""
+        if self.__is_finalized:
+            raise RuntimeError('VForm has already been finalized')
         # make sure the hash is computed on the initial expression tree
         self.hash()
         # replace "dx" and "ds" by quadrature weight function
@@ -688,6 +691,7 @@ class VForm:
         self.transform(self.replace_trivial_vars, type=VarRefExpr)
         # perform dependency analysis for expressions and variables
         self.dependency_analysis(do_precompute=do_precompute)
+        self.__is_finalized = True
 
     def find_max_deriv(self):
         #return max((max(e.D) for e in self.all_exprs(type=PartialDerivExpr)), default=0)

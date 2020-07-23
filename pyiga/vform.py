@@ -1724,3 +1724,67 @@ def L2functional_vf(dim, physical=False):
     f = V.input('f', shape=(), physical=physical, updatable=True)
     V.add(f * u * dx)
     return V
+
+################################################################################
+# parse strings to VForms
+################################################################################
+
+def _check_input_field(kvs, f):
+    # return (shape, physical) pair for function f
+    # NB: by default, _BaseGeoFuncs are considered parametric and explicitly
+    #     given functions physical!
+    from . import bspline
+    if isinstance(f, bspline._BaseGeoFunc):
+        return f.output_shape(), False
+    else:   # assume a callable function
+        supp = tuple(kv.support() for kv in kvs)
+        mid = tuple((a+b)/2 for (a,b) in supp)
+        result = f(*mid)        # evaluate it at the midpoint
+        if np.isscalar(result):
+            shp = ()
+        else:
+            shp = len(result)
+        return shp, True
+
+def parse_vf(expr, kvs, args=dict(), components=(None,None), updatable=[]):
+    dim = len(kvs)
+    loc = dict()
+
+    # parse all identifiers in the expression string
+    import re
+    words = set(re.findall(r"[^\d\W]\w*", expr))
+
+    # determine arity
+    candidate_bfuns = set(('u', 'v'))
+    bfuns = sorted(words & candidate_bfuns)
+    arity = len(bfuns)
+    if not arity in (1, 2):
+        raise ValueError('arity should be 1 or 2 - use basis functions u and/or v')
+
+    # determine volume/surface integral
+    if 'ds' in words:
+        if 'dx' in words:
+            raise RuntimeError("got both 'dx' and 'ds' - is this a volume or a surface integral?")
+        geo_dim = dim + 1
+    else:       # by default, we assume a volume integral
+        geo_dim = dim
+
+    vf = VForm(dim=dim, geo_dim=geo_dim, arity=arity)
+
+    # set up basis functions
+    if arity == 1:
+        v = vf.basisfuns(components=components)
+        loc[bfuns[0]] = v
+    elif arity == 2:
+        u, v = vf.basisfuns(components=components)
+        loc[bfuns[0]] = u
+        loc[bfuns[1]] = v
+
+    # set up used input functions
+    for inp in set(args.keys()) & words:
+        upd = (inp in updatable)
+        shp, phys = _check_input_field(kvs, args[inp])
+        loc[inp] = vf.input(inp, shape=shp, physical=phys, updatable=upd)
+
+    vf.add(eval(expr, globals(), loc))
+    return vf

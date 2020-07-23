@@ -193,3 +193,21 @@ def test_surface():
     assert (vf.dim, vf.geo_dim) == (2, 3)
     assert vf.normal.shape == (3,)
     assert vf.SW.shape == ()        # check surface weight
+
+def test_parse():
+    from pyiga import bspline, geometry
+    kvs = 2 * (bspline.make_knots(2, 0.0, 1.0, 5),)
+
+    vf = parse_vf('u * v * dx', kvs)
+    assert vf.hash() == mass_vf(2).hash()
+
+    f = bspline.BSplineFunc(kvs, np.ones(bspline.numdofs(kvs)))
+    vf = parse_vf('f * v * dx', kvs, {'f': f}, updatable=['f'])
+    assert vf.hash() == L2functional_vf(2, physical=False).hash()
+
+    f = lambda x, y: 1.0
+    vf = parse_vf('f * v * dx', kvs, {'f': f}, updatable=['f'])
+    assert vf.hash() == L2functional_vf(2, physical=True).hash()
+
+    vf = parse_vf('div(u) * div(v) * dx', kvs, components=(2,2))
+    assert vf.hash() == divdiv_vf(2).hash()

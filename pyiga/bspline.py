@@ -520,7 +520,10 @@ def knot_insertion(kv, u):
 
 ################################################################################
 
-class BSplineFunc:
+class _BaseGeoFunc:
+    pass
+
+class BSplineFunc(_BaseGeoFunc):
     """Any function that is given in terms of a tensor product B-spline basis with coefficients.
 
     Arguments:
@@ -568,6 +571,9 @@ class BSplineFunc:
         elif len(dim) == 1:
             dim = dim[0]
         self.dim = dim
+
+    def output_shape(self):
+        return self.coeffs.shape[self.sdim:]
 
     def is_scalar(self):
         """Returns True if the function is scalar-valued."""

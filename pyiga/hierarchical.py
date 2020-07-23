@@ -1116,7 +1116,7 @@ class HSpace:
         return sum(f.grid_eval(gridaxes)
                 for f in self.coeffs_to_levelwise_funcs(coeffs, truncate=truncate))
 
-class HSplineFunc:
+class HSplineFunc(bspline._BaseGeoFunc):
     """A function living in a hierarchical spline space.
 
     Args:
@@ -1132,6 +1132,9 @@ class HSplineFunc:
         self.sdim = hspace.dim
         self.dim = 1        # for now only scalar functions
         self.truncate = truncate
+
+    def output_shape(self):
+        return ()           # for now only scalar functions
 
     def grid_eval(self, gridaxes):
         """Evaluate the function on a tensor product grid.

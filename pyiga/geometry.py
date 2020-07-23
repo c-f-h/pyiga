@@ -14,7 +14,7 @@ from .tensor import apply_tprod
 import functools
 
 
-class NurbsFunc:
+class NurbsFunc(bspline._BaseGeoFunc):
     r"""Any function that is given in terms of a tensor product NURBS basis with
     coefficients and weights.
 
@@ -76,6 +76,9 @@ class NurbsFunc:
         # pre-multiply coefficients by weights
         if not premultiplied:
             self.coeffs[..., :-1] *= self.coeffs[..., -1:]
+
+    def output_shape(self):
+        return self.coeffs.shape[self.sdim:]
 
     def is_vector(self):
         """Returns True if the function is vector-valued."""

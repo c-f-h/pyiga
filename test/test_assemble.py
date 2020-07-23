@@ -292,6 +292,27 @@ def test_assemble_vf():
     f2 = inner_products(kvs, f, geo=geo)
     assert np.allclose(f1, f2)
 
+def test_assemble_surface_vf():
+    # set up vform
+    from pyiga.vform import VForm, ds
+    vf = VForm(2, geo_dim=3, arity=1)
+    v = vf.basisfuns()
+    vf.add(v * ds)      # compute surface area by summing integrals of basis functions
+
+    # set up space and geo
+    kvs = 2 * (bspline.make_knots(3, 0.0, 1.0, 10),)
+
+    # cylinder built on a quarter annulus
+    geo_3d = geometry.tensor_product(
+            geometry.line_segment(0.0, 1.0),
+            geometry.quarter_annulus())
+
+    # assemble
+    f = assemble_vf(vf, kvs, geo=geo_3d.boundary(2, 0)) # inner mantle
+    assert np.allclose(f.sum(), (2 * 1 * np.pi) / 4)    # r=1 at inner mantle, one quarter of the full circle
+    f = assemble_vf(vf, kvs, geo=geo_3d.boundary(2, 1)) # outer mantle
+    assert np.allclose(f.sum(), (2 * 2 * np.pi) / 4)    # r=2 at outer mantle, one quarter of the full circle
+
 ################################################################################
 # Test integrals
 ################################################################################

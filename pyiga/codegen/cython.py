@@ -101,9 +101,7 @@ class AsmGenerator:
     def declare_pointer(self, name, init=None):
         self.code.declare_local_variable('double*', name, init)
 
-    def declare_vec(self, name, size=None):
-        if size is None:
-            size = self.dim
+    def declare_vec(self, name, size):
         self.putf('cdef double {name}[{size}]', name=name, size=size)
 
     def gen_assign(self, var, expr):
@@ -147,9 +145,9 @@ class AsmGenerator:
                 self.declare_pointer(var.name)
         else:   # no ref - declare local storage
             if var.is_vector():
-                self.declare_vec(var.name, size=var.shape[0])
+                self.declare_vec(var.name, var.shape[0])
             elif var.is_matrix():
-                self.declare_vec(var.name, size=var.shape[0]*var.shape[1])
+                self.declare_vec(var.name, var.shape[0]*var.shape[1])
             else:
                 self.declare_scalar(var.name)
 
@@ -394,7 +392,7 @@ class AsmGenerator:
             self.put("self.numcomp[:] = " + numcomp)
 
         self.putf('assert geo.sdim == {dim}, "Geometry has wrong source dimension"')
-        self.putf('assert geo.dim == {dim}, "Geometry has wrong dimension"')
+        self.putf('assert geo.dim == {geo_dim}, "Geometry has wrong dimension"')
         self.put('self._geo = geo')
         self.put('')
         self.put('# NB: we assume all kvs result in the same mesh')
@@ -524,6 +522,7 @@ class AsmGenerator:
 
         self.env = {
             'dim': self.vform.dim,
+            'geo_dim': self.vform.geo_dim,
             'maxderiv': self.numderiv,
         }
 

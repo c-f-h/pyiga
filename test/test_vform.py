@@ -25,7 +25,6 @@ def test_arithmetic():
     exprs_equal(f**-1, 1.0 / f)
     exprs_equal(f**-2, 1.0 / (f*f))
 
-
 def test_asvector():
     vf = VForm(2)
     G = as_vector([1,2,3])
@@ -183,3 +182,14 @@ def test_tostring():
     assert str(B.dot(B)) == 'dot(((B_a[0,0], B_a[0,1]),\n (B_a[1,0], B_a[1,1])), ((B_a[0,0], B_a[0,1]),\n (B_a[1,0], B_a[1,1])))'
 
     tree_print(tmp)
+
+def test_surface():
+    vf = VForm(1, geo_dim=2)
+    assert (vf.dim, vf.geo_dim) == (1, 2)
+    assert vf.normal.shape == (2,)
+    assert vf.SW.shape == ()        # check surface weight
+
+    vf = VForm(2, geo_dim=3)
+    assert (vf.dim, vf.geo_dim) == (2, 3)
+    assert vf.normal.shape == (3,)
+    assert vf.SW.shape == ()        # check surface weight

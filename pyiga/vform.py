@@ -42,6 +42,16 @@ def _integer_power(x, y):
     else:
         return _integer_power(x, y-1) * x
 
+def _jac_to_unscaled_normal(jac):
+    if jac.shape == (2, 1):     # line integral
+        x = jac[:, 0]
+        return as_vector((-x[1], x[0]))
+    elif jac.shape == (3, 2):   # surface integral
+        x, y = jac[:, 0], jac[:, 1]
+        return cross(x, y)
+    else:
+        assert False, 'do not know how to compute normal vector for Jacobian shape {}'.format(jac.shape)
+
 # Each AsmVar represents a named variable within the expression tree and has
 # either an Expr (`expr`) or a source (`src`) determining how it is defined.
 #
@@ -131,13 +141,19 @@ class VForm:
 
     Args:
         dim (int): the space dimension
+        geo_dim (int): the dimension of the image of the geometry map. By
+            default, it is equal to `dim`. It should be either `dim` (for
+            volume integrals) or `dim + 1` (for surface integrals).
         arity (int): the arity of the variational form, i.e., 1 for a linear
             functional and 2 for a bilinear form
         spacetime (bool): whether the form describes a space-time discretization (deprecated)
     """
-    def __init__(self, dim, arity=2, spacetime=False):
+    def __init__(self, dim, geo_dim=None, arity=2, spacetime=False):
         self.dim = dim
+        if geo_dim is None:
+            geo_dim = dim
         self.arity = arity
+        self.geo_dim = geo_dim
         self.vec = False
         self.spacetime = bool(spacetime)
         if self.spacetime:
@@ -151,17 +167,41 @@ class VForm:
         self.vars = OrderedDict()
         self.exprs = []         # expressions to be added to the result
 
+        def _volume_weight(self):
+            if not self.is_volume_integral():
+                raise ValueError('volume measure not defined for surface integral')
+            return self.GaussWeight * abs(det(self.Jac))
+
+        def _surface_weight(self):
+            if not self.is_surface_integral():
+                raise ValueError('surface measure not defined for volume integral')
+            return self.GaussWeight * norm(_jac_to_unscaled_normal(self.Jac))
+
+        def _surface_normal(self):
+            if not self.is_surface_integral():
+                raise ValueError('normal vector only defined for surface integrals')
+            un = _jac_to_unscaled_normal(self.Jac)
+            return un / norm(un)
+
         # predefined local variables with their generators (created on demand)
         self.predefined_vars = {
             # for spacetime, Jac still refers to the full d+1 Jacobian
             'Jac':         lambda self: grad(self.Geo, dims=range(self.dim) if self.spacetime else None, parametric=True),
             'JacInv':      lambda self: inv(self.Jac),
             'GaussWeight': lambda self: self._gaussweight(),
-            'W':           lambda self: self.GaussWeight * abs(det(self.Jac)),
+            'W':           _volume_weight,
+            'SW':          _surface_weight,
+            'normal':      _surface_normal,
         }
         # default input field: geometry transform
-        self.Geo = self.input('geo', shape=(dim,))
+        self.Geo = self.input('geo', shape=(geo_dim,))
         self.__hash = None
+
+    def is_volume_integral(self):
+        return self.dim == self.geo_dim
+
+    def is_surface_integral(self):
+        return self.dim == self.geo_dim - 1
 
     def hash(self):
         # A hash to avoid recompiling the same vform over and over again.
@@ -625,10 +665,11 @@ class VForm:
 
     def finalize(self, do_precompute=True):
         """Performs standard transforms and dependency analysis."""
-        # replace "dx" by quadrature weight function
         # make sure the hash is computed on the initial expression tree
         self.hash()
+        # replace "dx" and "ds" by quadrature weight function
         self.transform(lambda e: self.W, type=VolumeMeasureExpr)
+        self.transform(lambda e: self.SW, type=SurfaceMeasureExpr)
         # replace physical derivs by proper expressions in terms of parametric derivs
         self.transform(self.replace_physical_derivs, type=PartialDerivExpr)
         self.transform(self.replace_physical_derivs, type=VarRefExpr)
@@ -1308,6 +1349,13 @@ class VolumeMeasureExpr(Expr):
     def __str__(self):
         return 'dx'
 
+class SurfaceMeasureExpr(Expr):
+    def __init__(self):
+        self.shape = ()
+        self.children = ()
+    def __str__(self):
+        return 'ds'
+
 # expression utility functions #################################################
 
 def iterexprs(exprs, deep=False, type=None, once=True):
@@ -1419,8 +1467,13 @@ def _to_literal_vec_mat(e):
 # expression manipulation functions ############################################
 # notation is as close to UFL as possible
 
-#: A symbolic expression representing the integration weight stemming from the geometry map.
+#: A symbolic expression representing the integration weight stemming from the
+#: geometry map.
 dx = VolumeMeasureExpr()
+
+#: A symbolic expression representing the integration weight stemming from the
+#: geometry map for surface integrals.
+ds = SurfaceMeasureExpr()
 
 def Dx(expr, k, times=1, parametric=False):
     """Partial derivative of `expr` along the `k`-th coordinate axis."""
@@ -1595,6 +1648,12 @@ def cross(x, y):
 def outer(x, y):
     """Outer product of two vectors, resulting in a matrix."""
     return OuterProdExpr(x, y)
+
+def norm(x):
+    """Euclidean norm of a vector."""
+    if not x.is_vector():
+        raise TypeError('expression is not a vector')
+    return sqrt(inner(x, x))
 
 def sqrt(x):
     """Square root of an expression."""

@@ -384,10 +384,7 @@ Manual compilation of the variational form
 Sometimes it may be necessary to directly work with the assembler class that
 results from compiling a :class:`VForm`.  The functions used for compilation
 are contained in the :mod:`pyiga.compile` module, and the resulting matrices
-can be computed using the :func:`pyiga.assemble.assemble` and
-:func:`pyiga.assemble.assemble_vector` functions for scalar- and vector-valued
-problems, respectively.
-**Note:** These interfaces are subject to change in the future.
+can be computed using the :func:`pyiga.assemble.assemble_entries` functions.
 
 Using these functions, the Laplace variational form defined above can be
 assembled as follows::
@@ -404,7 +401,7 @@ assembled as follows::
     # define the geometry map
     geo = geometry.quarter_annulus()   # NURBS quarter annulus
 
-    A = assemble.assemble(Asm(kvs, geo=geo), symmetric=True)
+    A = assemble.assemble_entries(Asm(kvs, geo=geo), symmetric=True)
 
 The geometry map is passed using ``geo=`` to the constructor of the
 assembler class, and further input functions defined as described in
@@ -413,8 +410,8 @@ the same way using their given name as the keyword.
 
 The resulting object ``A`` is a sparse matrix in CSR format; different matrix
 formats can be chosen by passing the ``format=`` keyword argument to
-``assemble()``. The argument ``symmetric=True`` takes advantage of the symmetry
-of the bilinear form in order to speed up the assembly.
+:func:`.assemble_entries`. The argument ``symmetric=True`` takes advantage of the
+symmetry of the bilinear form in order to speed up the assembly.
 
 ``pyiga.vform`` API documentation
 ---------------------------------

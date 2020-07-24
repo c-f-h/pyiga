@@ -20,7 +20,7 @@ class HDiscretization:
         asm_args (dict): a dictionary which provides named inputs for the assembler. Most
             problems will require at least a geometry map; this can be given in
             the form ``{'geo': geo}``, where ``geo`` is a geometry function
-            defined using the :doc:`/api/geometry` module. Further inputs
+            defined using the :mod:`pyiga.geometry` module. Further inputs
             declared via the :meth:`.VForm.input` method must be included in
             this dict.
 

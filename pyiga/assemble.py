@@ -30,6 +30,7 @@ General variational forms can be assembled using the following function.
 See the section :doc:`/guide/vforms` for further details.
 
 .. autofunction:: assemble_vf
+.. autofunction:: assemble_entries
 
 .. _fast-asms:
 
@@ -221,7 +222,7 @@ def bsp_mass_2d(knotvecs, geo=None, format='csr'):
         M2 = bsp_mass_1d(kv2)
         return scipy.sparse.kron(M1, M2, format=format)
     else:
-        return assemble(
+        return assemble_entries(
                 assemblers.MassAssembler2D(knotvecs, geo),
                 symmetric=True, format=format)
 
@@ -234,7 +235,7 @@ def bsp_stiffness_2d(knotvecs, geo=None, format='csr'):
         K2 = bsp_stiffness_1d(kv2)
         return scipy.sparse.kron(K1, M2, format=format) + scipy.sparse.kron(M1, K2, format=format)
     else:
-        return assemble(
+        return assemble_entries(
                 assemblers.StiffnessAssembler2D(knotvecs, geo),
                 symmetric=True, format=format)
 
@@ -245,7 +246,7 @@ def bsp_mass_3d(knotvecs, geo=None, format='csr'):
             return scipy.sparse.kron(A, B, format=format)
         return k(M[0], k(M[1], M[2]))
     else:
-        return assemble(
+        return assemble_entries(
                 assemblers.MassAssembler3D(knotvecs, geo),
                 symmetric=True, format=format)
 
@@ -258,7 +259,7 @@ def bsp_stiffness_3d(knotvecs, geo=None, format='csr'):
         K12 = k(MK[1][1], MK[2][0]) + k(MK[1][0], MK[2][1])
         return k(MK[0][1], M12) + k(MK[0][0], K12)
     else:
-        return assemble(
+        return assemble_entries(
                 assemblers.StiffnessAssembler3D(knotvecs, geo),
                 symmetric=True, format=format)
 
@@ -664,7 +665,37 @@ def integrate(kvs, f, f_physical=False, geo=None):
 # Driver routines for assemblers
 ################################################################################
 
-def assemble(asm, symmetric=False, format='csr'):
+def assemble_entries(asm, symmetric=False, format='csr', layout='blocked'):
+    """Given an instance `asm` of an assembler class, assemble all entries and return
+    the resulting matrix or vector.
+
+    Args:
+        asm: an instance of an assembler class, e.g. one compiled using
+            :func:`pyiga.compile.compile_vform`
+        symmetric (bool): (matrices only) exploit symmetry of the matrix to
+            speed up the assembly
+        format (str): (matrices only) the sparse matrix format to use; default 'csr'
+        layout (str): (vector-valued problems only): the layout of the generated
+            matrix. Valid options are:
+
+            - 'blocked': the matrix is laid out as a `k_1 x k_2` block matrix,
+              where `k_1` and `k_2` are the number of components of the test
+              and trial functions, respectively
+            - 'packed': the interactions of the components are packed together,
+              i.e., each entry of the matrix is a small `k_1 x k_2` block
+
+    Returns: an ndarray or sparse matrix:
+        - if the assembler has arity=1: an ndarray of vector entries whose
+          shape is given by the number of degrees of freedom per coordinate
+          direction. For vector-valued problem, an additional final axis is
+          added which has the number of components as its length.
+        - if the assembler has arity=2: a sparse matrix in the given `format`
+    """
+
+    if asm.arity == 1:
+        return asm.assemble_vector()
+    if hasattr(asm, 'num_components'):  # is it a vector-valued problem?
+        return assemble_entries_vec(asm, symmetric=symmetric, format=format, layout=layout)
     kvs0, kvs1 = asm.kvs
     X = MLStructure.from_kvs(kvs0, kvs1).make_mlmatrix()
 
@@ -679,7 +710,7 @@ def assemble(asm, symmetric=False, format='csr'):
     else:
         return X.asmatrix(format)
 
-def assemble_vector(asm, symmetric=False, format='csr', layout='blocked'):
+def assemble_entries_vec(asm, symmetric=False, format='csr', layout='blocked'):
     assert layout in ('packed', 'blocked')
 
     kvs0, kvs1 = asm.kvs
@@ -704,7 +735,11 @@ def assemble_vector(asm, symmetric=False, format='csr', layout='blocked'):
         return X.asmatrix(format)
 
 def assemble_vf(vf, kvs, symmetric=False, format='csr', layout='blocked', **kwargs):
-    """Compile the given variational form (:class:`.VForm`) into a matrix or vector."""
+    """Compile the given variational form (:class:`.VForm`) into a matrix or vector.
+
+    Any named inputs defined in the vform must be given as keyword arguments. For
+    the meaning of the remaining arguments, refer to :func:`assemble_entries`.
+    """
     from . import compile
     Asm = compile.compile_vform(vf)   # compile assembler class
 
@@ -720,15 +755,7 @@ def assemble_vf(vf, kvs, symmetric=False, format='csr', layout='blocked', **kwar
         assert num_spaces == 2, 'no more than two spaces allowed'
         asm = Asm(kvs[0], kvs[1], **kwargs)
 
-    if vf.arity == 1:
-        return asm.assemble_vector()
-    elif vf.arity == 2:
-        if vf.vec:
-            return assemble_vector(asm, symmetric=symmetric, format=format, layout=layout)
-        else:
-            return assemble(asm, symmetric=symmetric, format=format)
-    else:
-        raise RuntimeError('invalid arity ' + str(vf.arity))
+    return assemble_entries(asm, symmetric=symmetric, format=format, layout=layout)
 
 ################################################################################
 # Convenience functions
@@ -786,7 +813,7 @@ def divdiv(kvs, geo=None, layout='blocked', format='csr'):
         asm = assemblers.DivDivAssembler3D(kvs, geo)
     else:
         assert False, 'dimension %d not implemented' % dim
-    return assemble_vector(asm, symmetric=True, layout=layout, format=format)
+    return assemble_entries_vec(asm, symmetric=True, layout=layout, format=format)
 
 def mass_fast(kvs, geo=None, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2):
     """Assemble a mass matrix for the given tensor product B-spline basis with

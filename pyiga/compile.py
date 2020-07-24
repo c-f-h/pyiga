@@ -88,7 +88,7 @@ def generate(vf, classname='CustomAssembler', on_demand=False):
 #
 # (1) can still be useful since going from VForm to Cython source code, while
 # much faster than the compilation steps afterwards, can still add up if
-# compile_vf() is called repeatedly (like in an adaptive refinement loop).
+# compile_vform() is called repeatedly (like in an adaptive refinement loop).
 # This cache (which uses the following __vform_asm_cache dict) is much lighter-
 # weight and is only kept in-process.
 #

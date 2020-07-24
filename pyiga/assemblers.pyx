@@ -27,6 +27,12 @@ from pyiga.utils import LazyCachingArray, grid_eval, grid_eval_transformed
 cdef class MassAssembler2D(BaseAssembler2D):
     cdef double[:, ::1] W
 
+    @property
+    def inputs(self):
+        return {
+            'geo': (2,),
+        }
+
     def __init__(self, kvs0, geo):
         self.arity = 2
         self.nqp = max([kv.p for kv in kvs0]) + 1
@@ -162,6 +168,12 @@ cdef class MassAssembler2D(BaseAssembler2D):
 
 cdef class StiffnessAssembler2D(BaseAssembler2D):
     cdef double[:, :, :, ::1] B
+
+    @property
+    def inputs(self):
+        return {
+            'geo': (2,),
+        }
 
     def __init__(self, kvs0, geo):
         self.arity = 2
@@ -320,6 +332,12 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
 cdef class HeatAssembler_ST2D(BaseAssembler2D):
     cdef double[:, ::1] W
     cdef double[:, :, :, ::1] JacInv
+
+    @property
+    def inputs(self):
+        return {
+            'geo': (2,),
+        }
 
     def __init__(self, kvs0, geo):
         self.arity = 2
@@ -480,6 +498,12 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
 cdef class WaveAssembler_ST2D(BaseAssembler2D):
     cdef double[:, ::1] W
     cdef double[:, :, :, ::1] JacInv
+
+    @property
+    def inputs(self):
+        return {
+            'geo': (2,),
+        }
 
     def __init__(self, kvs0, geo):
         self.arity = 2
@@ -642,6 +666,12 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
 cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     cdef double[:, ::1] W
     cdef double[:, :, :, ::1] JacInv
+
+    @property
+    def inputs(self):
+        return {
+            'geo': (2,),
+        }
 
     def __init__(self, kvs0, geo):
         self.arity = 2
@@ -817,6 +847,13 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
     cdef double[:, ::1] W
     cdef double[:, ::1] f_a
 
+    @property
+    def inputs(self):
+        return {
+            'geo': (2,),
+            'f': (),
+        }
+
     def __init__(self, kvs0, geo, f):
         self.arity = 1
         self.nqp = max([kv.p for kv in kvs0]) + 1
@@ -950,6 +987,13 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
     cdef double[:, ::1] W
     cdef double[:, ::1] f_a
 
+    @property
+    def inputs(self):
+        return {
+            'geo': (2,),
+            'f': (),
+        }
+
     def __init__(self, kvs0, geo, f):
         self.arity = 1
         self.nqp = max([kv.p for kv in kvs0]) + 1
@@ -1080,6 +1124,12 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
             self.f_a = np.ascontiguousarray(grid_eval_transformed(f, self.gaussgrid, self._geo))
 cdef class MassAssembler3D(BaseAssembler3D):
     cdef double[:, :, ::1] W
+
+    @property
+    def inputs(self):
+        return {
+            'geo': (3,),
+        }
 
     def __init__(self, kvs0, geo):
         self.arity = 2
@@ -1239,6 +1289,12 @@ cdef class MassAssembler3D(BaseAssembler3D):
 
 cdef class StiffnessAssembler3D(BaseAssembler3D):
     cdef double[:, :, :, :, ::1] B
+
+    @property
+    def inputs(self):
+        return {
+            'geo': (3,),
+        }
 
     def __init__(self, kvs0, geo):
         self.arity = 2
@@ -1439,6 +1495,12 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
     cdef double[:, :, ::1] W
     cdef double[:, :, :, :, ::1] JacInv
 
+    @property
+    def inputs(self):
+        return {
+            'geo': (3,),
+        }
+
     def __init__(self, kvs0, geo):
         self.arity = 2
         self.nqp = max([kv.p for kv in kvs0]) + 1
@@ -1636,6 +1698,12 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
 cdef class WaveAssembler_ST3D(BaseAssembler3D):
     cdef double[:, :, ::1] W
     cdef double[:, :, :, :, ::1] JacInv
+
+    @property
+    def inputs(self):
+        return {
+            'geo': (3,),
+        }
 
     def __init__(self, kvs0, geo):
         self.arity = 2
@@ -1836,6 +1904,12 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
 cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     cdef double[:, :, ::1] W
     cdef double[:, :, :, :, ::1] JacInv
+
+    @property
+    def inputs(self):
+        return {
+            'geo': (3,),
+        }
 
     def __init__(self, kvs0, geo):
         self.arity = 2
@@ -2058,6 +2132,13 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
     cdef double[:, :, ::1] W
     cdef double[:, :, ::1] f_a
 
+    @property
+    def inputs(self):
+        return {
+            'geo': (3,),
+            'f': (),
+        }
+
     def __init__(self, kvs0, geo, f):
         self.arity = 1
         self.nqp = max([kv.p for kv in kvs0]) + 1
@@ -2208,6 +2289,13 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
 cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
     cdef double[:, :, ::1] W
     cdef double[:, :, ::1] f_a
+
+    @property
+    def inputs(self):
+        return {
+            'geo': (3,),
+            'f': (),
+        }
 
     def __init__(self, kvs0, geo, f):
         self.arity = 1

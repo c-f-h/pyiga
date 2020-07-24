@@ -366,6 +366,18 @@ class AsmGenerator:
         else:
             assert False, 'invalid source %s for var %s' % (s, var.name)
 
+    def generate_metadata(self):
+        # generate an 'inputs' property which returns a name->shape dict
+        self.put('@property')
+        self.put('def inputs(self):')
+        self.indent()
+        self.put('return {')
+        for inp in self.vform.inputs:
+            self.putf("    '{name}': {shp},", name=inp.name, shp=inp.shape)
+        self.put('}')
+        self.dedent()
+        self.put('')
+
     def generate_init(self):
         vf = self.vform
 
@@ -535,6 +547,9 @@ class AsmGenerator:
         self.declare_array_vars(var for var in self.vform.kernel_deps
                 if var.is_array and var.is_global)
         self.put('')
+
+        # generate metadata accessors
+        self.generate_metadata()
 
         # generate methods
         self.generate_init()

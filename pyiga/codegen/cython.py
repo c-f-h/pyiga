@@ -368,8 +368,8 @@ class AsmGenerator:
 
     def generate_metadata(self):
         # generate an 'inputs' property which returns a name->shape dict
-        self.put('@property')
-        self.put('def inputs(self):')
+        self.put('@classmethod')
+        self.put('def inputs(cls):')
         self.indent()
         self.put('return {')
         for inp in self.vform.inputs:

@@ -27,8 +27,8 @@ from pyiga.utils import LazyCachingArray, grid_eval, grid_eval_transformed
 cdef class MassAssembler2D(BaseAssembler2D):
     cdef double[:, ::1] W
 
-    @property
-    def inputs(self):
+    @classmethod
+    def inputs(cls):
         return {
             'geo': (2,),
         }
@@ -169,8 +169,8 @@ cdef class MassAssembler2D(BaseAssembler2D):
 cdef class StiffnessAssembler2D(BaseAssembler2D):
     cdef double[:, :, :, ::1] B
 
-    @property
-    def inputs(self):
+    @classmethod
+    def inputs(cls):
         return {
             'geo': (2,),
         }
@@ -333,8 +333,8 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
     cdef double[:, ::1] W
     cdef double[:, :, :, ::1] JacInv
 
-    @property
-    def inputs(self):
+    @classmethod
+    def inputs(cls):
         return {
             'geo': (2,),
         }
@@ -499,8 +499,8 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
     cdef double[:, ::1] W
     cdef double[:, :, :, ::1] JacInv
 
-    @property
-    def inputs(self):
+    @classmethod
+    def inputs(cls):
         return {
             'geo': (2,),
         }
@@ -667,8 +667,8 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     cdef double[:, ::1] W
     cdef double[:, :, :, ::1] JacInv
 
-    @property
-    def inputs(self):
+    @classmethod
+    def inputs(cls):
         return {
             'geo': (2,),
         }
@@ -847,8 +847,8 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
     cdef double[:, ::1] W
     cdef double[:, ::1] f_a
 
-    @property
-    def inputs(self):
+    @classmethod
+    def inputs(cls):
         return {
             'geo': (2,),
             'f': (),
@@ -987,8 +987,8 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
     cdef double[:, ::1] W
     cdef double[:, ::1] f_a
 
-    @property
-    def inputs(self):
+    @classmethod
+    def inputs(cls):
         return {
             'geo': (2,),
             'f': (),
@@ -1125,8 +1125,8 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
 cdef class MassAssembler3D(BaseAssembler3D):
     cdef double[:, :, ::1] W
 
-    @property
-    def inputs(self):
+    @classmethod
+    def inputs(cls):
         return {
             'geo': (3,),
         }
@@ -1290,8 +1290,8 @@ cdef class MassAssembler3D(BaseAssembler3D):
 cdef class StiffnessAssembler3D(BaseAssembler3D):
     cdef double[:, :, :, :, ::1] B
 
-    @property
-    def inputs(self):
+    @classmethod
+    def inputs(cls):
         return {
             'geo': (3,),
         }
@@ -1495,8 +1495,8 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
     cdef double[:, :, ::1] W
     cdef double[:, :, :, :, ::1] JacInv
 
-    @property
-    def inputs(self):
+    @classmethod
+    def inputs(cls):
         return {
             'geo': (3,),
         }
@@ -1699,8 +1699,8 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
     cdef double[:, :, ::1] W
     cdef double[:, :, :, :, ::1] JacInv
 
-    @property
-    def inputs(self):
+    @classmethod
+    def inputs(cls):
         return {
             'geo': (3,),
         }
@@ -1905,8 +1905,8 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     cdef double[:, :, ::1] W
     cdef double[:, :, :, :, ::1] JacInv
 
-    @property
-    def inputs(self):
+    @classmethod
+    def inputs(cls):
         return {
             'geo': (3,),
         }
@@ -2132,8 +2132,8 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
     cdef double[:, :, ::1] W
     cdef double[:, :, ::1] f_a
 
-    @property
-    def inputs(self):
+    @classmethod
+    def inputs(cls):
         return {
             'geo': (3,),
             'f': (),
@@ -2290,8 +2290,8 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
     cdef double[:, :, ::1] W
     cdef double[:, :, ::1] f_a
 
-    @property
-    def inputs(self):
+    @classmethod
+    def inputs(cls):
         return {
             'geo': (3,),
             'f': (),

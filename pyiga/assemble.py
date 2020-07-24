@@ -391,7 +391,8 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
             Dirichlet boundary values. Assumed to be given in physical
             coordinates. If it is vector-valued, one Dirichlet dof is
             computed per component, and they are numbered according to
-            the "blocked" matrix layout.
+            the "blocked" matrix layout. If `dir_func` is a scalar value, a
+            constant function with that value is assumed.
 
     Returns:
         A pair of arrays `(indices, values)` which denote the indices of the
@@ -408,6 +409,9 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
     # get boundary geometry and interpolate dir_func
     bdgeo = geo.boundary(bdax, bdside)
     from .approx import interpolate
+    if np.isscalar(dir_func):
+        const_value = dir_func
+        dir_func = lambda *x: const_value
     dircoeffs = interpolate(bdbasis, dir_func, geo=bdgeo)
 
     # compute sequential indices for eliminated dofs

@@ -1481,6 +1481,7 @@ ds = SurfaceMeasureExpr()
 
 def Dx(expr, k, times=1, parametric=False):
     """Partial derivative of `expr` along the `k`-th coordinate axis."""
+    expr = as_expr(expr)
     if hasattr(expr, '_dx_impl'):
         return expr._dx_impl(k, times, parametric)
     elif expr.is_vector():
@@ -1492,6 +1493,7 @@ def Dx(expr, k, times=1, parametric=False):
         raise TypeError('do not know how to compute derivative of %s ' % type(expr))
 
 def Dt(expr, times=1):
+    expr = as_expr(expr)
     if expr.is_vector():
         return LiteralVectorExpr(Dt(z, times) for z in expr)
     elif expr.is_matrix():
@@ -1519,6 +1521,7 @@ def grad(expr, dims=None, parametric=False):
     the parameter domain is computed. By default, the gradient is computed in
     physical coordinates (transformed by the geometry map).
     """
+    expr = as_expr(expr)
     if expr.is_scalar():
         if dims is None:
             vf = expr.find_vf()
@@ -1539,6 +1542,7 @@ def hess(expr, parametric=False):
     the parameter domain is computed. By default, the Hessian is computed in
     physical coordinates (transformed by the geometry map).
     """
+    expr = as_expr(expr)
     if expr.is_scalar():
         return grad(grad(expr, parametric=parametric), parametric=parametric)
     else:
@@ -1546,12 +1550,14 @@ def hess(expr, parametric=False):
 
 def div(expr, parametric=False):
     """The divergence of a vector-valued expressions, resulting in a scalar."""
+    expr = as_expr(expr)
     if not expr.is_vector():
         raise TypeError('can only compute divergence of vector expression')
     return tr(grad(expr, parametric=parametric))
 
 def curl(expr):
     """The curl (or rot) of a 3D vector expression."""
+    expr = as_expr(expr)
     if not (expr.is_vector() and len(expr) == 3):
         raise TypeError('can only compute curl of 3D vector expression')
     return as_vector((
@@ -1566,8 +1572,10 @@ def as_expr(x):
         return x
     elif isinstance(x, numbers.Real):
         return ConstExpr(x)
-    else:
-        raise TypeError('cannot coerce %s to expression' % x)
+    elif isinstance(x, tuple):
+        if all(isinstance(x, numbers.Real) or isinstance(z, Expr) for z in x):
+            return as_vector(x)
+    raise TypeError('cannot coerce %s to expression' % x)
 
 def as_vector(x):
     """Convert a sequence of expressions to a vector expression."""
@@ -1578,6 +1586,8 @@ def as_matrix(x):
 
 def inner(x, y):
     """The inner product of two vector or matrix expressions."""
+    x = as_expr(x)
+    y = as_expr(y)
     if not (x.is_vector() or x.is_matrix()):
         raise TypeError('inner() requires vector or matrix expressions')
     if not x.shape == y.shape:
@@ -1598,6 +1608,8 @@ def dot(a, b):
     * matrix, vector: matrix-vector product
     * matrix, matrix: matrix-matrix product
     """
+    a = as_expr(a)
+    b = as_expr(b)
     if a.is_vector() and b.is_vector():
         return inner(a, b)
     elif a.is_matrix() and b.is_vector():
@@ -1647,14 +1659,19 @@ def inv(A):
 
 def cross(x, y):
     """Cross product of two 3D vectors."""
+    x = as_expr(x)
+    y = as_expr(y)
     return VectorCrossExpr(x, y)
 
 def outer(x, y):
     """Outer product of two vectors, resulting in a matrix."""
+    x = as_expr(x)
+    y = as_expr(y)
     return OuterProdExpr(x, y)
 
 def norm(x):
     """Euclidean norm of a vector."""
+    x = as_expr(x)
     if not x.is_vector():
         raise TypeError('expression is not a vector')
     return sqrt(inner(x, x))

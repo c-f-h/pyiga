@@ -1785,7 +1785,7 @@ def parse_vf(expr, kvs, args=dict(), components=(None,None), updatable=[]):
         loc[bfuns[1]] = v
 
     # set up used input functions
-    for inp in set(args.keys()) & words:
+    for inp in sorted(set(args.keys()) & words):
         upd = (inp in updatable)
         shp, phys = _check_input_field(kvs, args[inp])
         loc[inp] = vf.input(inp, shape=shp, physical=phys, updatable=upd)

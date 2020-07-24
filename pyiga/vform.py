@@ -1768,6 +1768,16 @@ def _check_input_field(kvs, f):
         return shp, True
 
 def parse_vf(expr, kvs, args=dict(), bfuns=None, updatable=[]):
+    from . import bspline
+    def is_tp_spl(x):
+        return all(isinstance(y, bspline.KnotVector) for y in x)
+    if is_tp_spl(kvs):
+        pass        # a single TP spline space was passed
+    elif is_tp_spl(kvs[0]):
+        kvs = kvs[0]    # multiple spaces are being used; we only need one of them
+    else:
+        raise ValueError('expected a tensor product spline space in `kvs`')
+
     dim = len(kvs)
     loc = dict()
 
@@ -1778,7 +1788,19 @@ def parse_vf(expr, kvs, args=dict(), bfuns=None, updatable=[]):
     if bfuns is None:
         # check which of 'u' and 'v' was used
         candidate_bfuns = set(('u', 'v'))
-        bfuns = [(bf, 1) for bf in sorted(words & candidate_bfuns)]
+        bfuns = [(bf, 1, 0) for bf in sorted(words & candidate_bfuns)]
+    else:
+        # normalize the bfun representation
+        bfuns_new = []
+        for bf in bfuns:
+            if isinstance(bf, str):
+                bf = (bf, 1, 0)
+            if len(bf) == 1:
+                bf = bf + (1,)      # make it a scalar basis function
+            if len(bf) == 2:
+                bf = bf + (0,)      # by default, lives in space 0
+            bfuns_new.append(bf)
+        bfuns = bfuns_new
 
     # determine volume/surface integral
     if 'ds' in words:
@@ -1797,12 +1819,13 @@ def parse_vf(expr, kvs, args=dict(), bfuns=None, updatable=[]):
     components = tuple(bf[1] for bf in bfuns)
     if all(c == 1 for c in components):
         components = len(components) * (None,)  # force scalar assembler
+    spaces = tuple(bf[2] for bf in bfuns)
 
     if arity == 1:
-        v = vf.basisfuns(components=components)
+        v = vf.basisfuns(components=components, spaces=spaces)
         loc[bfuns[0][0]] = v
     elif arity == 2:
-        u, v = vf.basisfuns(components=components)
+        u, v = vf.basisfuns(components=components, spaces=spaces)
         loc[bfuns[0][0]] = u
         loc[bfuns[1][0]] = v
 

@@ -769,6 +769,7 @@ def assemble_vf(vf, kvs, symmetric=False, format='csr', layout='blocked', args=d
 def assemble(problem, kvs, bfuns=None, symmetric=False, format='csr', layout='blocked', args=dict(), **kwargs):
     from . import vform
     args.update(kwargs)     # add additional keyword args
+    num_spaces = 1          # by default, only one space
 
     # parse string to VForm
     if isinstance(problem, str):
@@ -776,6 +777,7 @@ def assemble(problem, kvs, bfuns=None, symmetric=False, format='csr', layout='bl
 
     # compile VForm to assembler class
     if isinstance(problem, vform.VForm):
+        num_spaces = problem.num_spaces()
         from . import compile
         problem = compile.compile_vform(problem)
 
@@ -784,7 +786,11 @@ def assemble(problem, kvs, bfuns=None, symmetric=False, format='csr', layout='bl
         # extract used args
         used_args = set(problem.inputs().keys())
         args = {k:v for (k,v) in args.items() if k in used_args}
-        problem = problem(kvs, **args)
+        if num_spaces <= 1:
+            problem = problem(kvs, **args)
+        else:
+            assert num_spaces == 2, 'no more than two spaces allowed'
+            problem = problem(kvs[0], kvs[1], **args)
 
     # now we can assume we have an instantiated assembler object
     return assemble_entries(problem, symmetric=symmetric, format=format, layout=layout)

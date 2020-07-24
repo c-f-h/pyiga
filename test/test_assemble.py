@@ -313,6 +313,18 @@ def test_assemble_surface_vf():
     f = assemble_vf(vf, kvs, geo=geo_3d.boundary(2, 1)) # outer mantle
     assert np.allclose(f.sum(), (2 * 2 * np.pi) / 4)    # r=2 at outer mantle, one quarter of the full circle
 
+def test_assemble_string():
+    kvs = 2 * (bspline.make_knots(2, 0.0, 1.0, 10),)
+    geo = geometry.quarter_annulus()
+    A1 = assemble('inner(grad(u), grad(v)) * dx', kvs, geo=geo)
+    A2 = stiffness(kvs, geo)
+    assert np.allclose(A1.A, A2.A)
+
+    f = lambda x, y: x * y**2
+    f1 = assemble('f * v * dx', kvs, geo=geo, f=f)
+    f2 = inner_products(kvs, f, geo=geo, f_physical=True)
+    assert np.allclose(f1, f2)
+
 ################################################################################
 # Test integrals
 ################################################################################

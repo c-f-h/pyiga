@@ -198,7 +198,7 @@ def test_parse():
     from pyiga import bspline, geometry
     kvs = 2 * (bspline.make_knots(2, 0.0, 1.0, 5),)
 
-    vf = parse_vf('u * v * dx', kvs)
+    vf = parse_vf('u * v * dx', kvs, bfuns=[('u', 1), ('v', 1)])
     assert vf.hash() == mass_vf(2).hash()
 
     f = bspline.BSplineFunc(kvs, np.ones(bspline.numdofs(kvs)))
@@ -209,5 +209,5 @@ def test_parse():
     vf = parse_vf('f * v * dx', kvs, {'f': f}, updatable=['f'])
     assert vf.hash() == L2functional_vf(2, physical=True).hash()
 
-    vf = parse_vf('div(u) * div(v) * dx', kvs, components=(2,2))
+    vf = parse_vf('div(u) * div(v) * dx', kvs, bfuns=[('u', 2), ('v', 2)])
     assert vf.hash() == divdiv_vf(2).hash()

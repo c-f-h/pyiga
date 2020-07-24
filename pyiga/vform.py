@@ -1767,7 +1767,7 @@ def _check_input_field(kvs, f):
             shp = len(result)
         return shp, True
 
-def parse_vf(expr, kvs, args=dict(), components=(None,None), updatable=[]):
+def parse_vf(expr, kvs, args=dict(), bfuns=None, updatable=[]):
     dim = len(kvs)
     loc = dict()
 
@@ -1775,12 +1775,10 @@ def parse_vf(expr, kvs, args=dict(), components=(None,None), updatable=[]):
     import re
     words = set(re.findall(r"[^\d\W]\w*", expr))
 
-    # determine arity
-    candidate_bfuns = set(('u', 'v'))
-    bfuns = sorted(words & candidate_bfuns)
-    arity = len(bfuns)
-    if not arity in (1, 2):
-        raise ValueError('arity should be 1 or 2 - use basis functions u and/or v')
+    if bfuns is None:
+        # check which of 'u' and 'v' was used
+        candidate_bfuns = set(('u', 'v'))
+        bfuns = [(bf, 1) for bf in sorted(words & candidate_bfuns)]
 
     # determine volume/surface integral
     if 'ds' in words:
@@ -1790,16 +1788,23 @@ def parse_vf(expr, kvs, args=dict(), components=(None,None), updatable=[]):
     else:       # by default, we assume a volume integral
         geo_dim = dim
 
+    arity = len(bfuns)
+    if not arity in (1, 2):
+        raise ValueError('arity should be 1 or 2')
     vf = VForm(dim=dim, geo_dim=geo_dim, arity=arity)
 
     # set up basis functions
+    components = tuple(bf[1] for bf in bfuns)
+    if all(c == 1 for c in components):
+        components = len(components) * (None,)  # force scalar assembler
+
     if arity == 1:
         v = vf.basisfuns(components=components)
-        loc[bfuns[0]] = v
+        loc[bfuns[0][0]] = v
     elif arity == 2:
         u, v = vf.basisfuns(components=components)
-        loc[bfuns[0]] = u
-        loc[bfuns[1]] = v
+        loc[bfuns[0][0]] = u
+        loc[bfuns[1][0]] = v
 
     # set up used input functions
     for inp in sorted(set(args.keys()) & words):

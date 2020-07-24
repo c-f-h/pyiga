@@ -766,13 +766,13 @@ def assemble_vf(vf, kvs, symmetric=False, format='csr', layout='blocked', args=d
 
     return assemble_entries(asm, symmetric=symmetric, format=format, layout=layout)
 
-def assemble(problem, kvs, symmetric=False, format='csr', layout='blocked', args=dict(), **kwargs):
+def assemble(problem, kvs, bfuns=None, symmetric=False, format='csr', layout='blocked', args=dict(), **kwargs):
     from . import vform
     args.update(kwargs)     # add additional keyword args
 
     # parse string to VForm
     if isinstance(problem, str):
-        problem = vform.parse_vf(problem, kvs, args=args, components=(None,None))
+        problem = vform.parse_vf(problem, kvs, args=args, bfuns=bfuns)
 
     # compile VForm to assembler class
     if isinstance(problem, vform.VForm):

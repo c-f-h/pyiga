@@ -734,26 +734,31 @@ def assemble_entries_vec(asm, symmetric=False, format='csr', layout='blocked'):
     else:
         return X.asmatrix(format)
 
-def assemble_vf(vf, kvs, symmetric=False, format='csr', layout='blocked', **kwargs):
+def assemble_vf(vf, kvs, symmetric=False, format='csr', layout='blocked', args=dict(), **kwargs):
     """Compile the given variational form (:class:`.VForm`) into a matrix or vector.
 
-    Any named inputs defined in the vform must be given as keyword arguments. For
-    the meaning of the remaining arguments, refer to :func:`assemble_entries`.
+    Any named inputs defined in the vform must be given in the `args` dict or
+    as keyword arguments. For the meaning of the remaining arguments, refer to
+    :func:`assemble_entries`.
     """
     from . import compile
     Asm = compile.compile_vform(vf)   # compile assembler class
 
-    # check that all named inputs have been passed
+    # check that all named inputs have been passed and extract the used args
+    # (it is valid to specify additional, non-used args)
+    args.update(kwargs)
+    used_args = dict()
     for inp in vf.inputs:
-        if not inp.name in kwargs:
+        if not inp.name in args:
             raise RuntimeError("required input parameter '%s' missing" % inp.name)
+        used_args[inp.name] = args[inp.name]
 
     num_spaces = vf.num_spaces()
     if num_spaces <= 1:
-        asm = Asm(kvs, **kwargs)
+        asm = Asm(kvs, **used_args)
     else:
         assert num_spaces == 2, 'no more than two spaces allowed'
-        asm = Asm(kvs[0], kvs[1], **kwargs)
+        asm = Asm(kvs[0], kvs[1], **used_args)
 
     return assemble_entries(asm, symmetric=symmetric, format=format, layout=layout)
 

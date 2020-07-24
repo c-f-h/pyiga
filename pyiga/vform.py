@@ -1790,5 +1790,9 @@ def parse_vf(expr, kvs, args=dict(), components=(None,None), updatable=[]):
         shp, phys = _check_input_field(kvs, args[inp])
         loc[inp] = vf.input(inp, shape=shp, physical=phys, updatable=upd)
 
+    # set up additional terms
+    if 'x' in words and 'x' not in args:
+        loc['x'] = vf.Geo       # x is a shorthand for the physical coordinates
+
     vf.add(eval(expr, globals(), loc))
     return vf

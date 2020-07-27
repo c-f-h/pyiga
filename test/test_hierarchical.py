@@ -179,14 +179,14 @@ def test_incidence():
 
 def test_hierarchical_assemble():
     hs = create_example_hspace(p=4, dim=2, n0=4, disparity=1, num_levels=3)
-    hdiscr = HDiscretization(hs, vform.stiffness_vf(dim=2), {'geo': geometry.unit_square()})
+    geo = geometry.bspline_quarter_annulus()
+    hdiscr = HDiscretization(hs, vform.stiffness_vf(dim=2), {'geo': geo})
     A = hdiscr.assemble_matrix()
     # compute matrix on the finest level for comparison
-    A_fine = assemble.stiffness(hs.knotvectors(-1))
+    A_fine = assemble.stiffness(hs.knotvectors(-1), geo=geo)
     I_hb = hs.represent_fine()
     A_hb = (I_hb.T @ A_fine @ I_hb)
-    error = abs(A - A_hb).max()
-    assert error < 1e-14
+    assert np.allclose(A.A, A_hb.A)
 
 def test_grid_eval():
     hs = create_example_hspace(p=3, dim=2, n0=6, num_levels=3)

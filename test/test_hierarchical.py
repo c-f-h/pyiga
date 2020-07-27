@@ -187,6 +187,9 @@ def test_hierarchical_assemble():
     I_hb = hs.represent_fine()
     A_hb = (I_hb.T @ A_fine @ I_hb)
     assert np.allclose(A.A, A_hb.A)
+    #
+    A3 = assemble.assemble(vform.stiffness_vf(dim=2), hs, geo=geo)
+    assert np.allclose(A.A, A3.A)
 
 def test_grid_eval():
     hs = create_example_hspace(p=3, dim=2, n0=6, num_levels=3)

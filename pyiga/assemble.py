@@ -29,6 +29,7 @@ They take one or two arguments:
 General variational forms can be assembled using the following function.
 See the section :doc:`/guide/vforms` for further details.
 
+.. autofunction:: assemble
 .. autofunction:: assemble_vf
 .. autofunction:: assemble_entries
 
@@ -750,12 +751,79 @@ def assemble_vf(vf, kvs, symmetric=False, format='csr', layout='blocked', args=N
     args.update(kwargs)
     return assemble(vf, kvs, symmetric=symmetric, format=format, layout=layout, args=args)
 
-def assemble(problem, kvs, bfuns=None, symmetric=False, format='csr', layout='blocked', args=None, **kwargs):
+def _assemble_hspace(problem, hs, args, bfuns=None, symmetric=False, format='csr', layout='blocked'):
+    if isinstance(problem, str):
+        from . import vform
+        problem = vform.parse_vf(problem, hs.knotvectors(0), args=args, bfuns=bfuns)
+    from .hierarchical import HDiscretization
+    # TODO: nonsymmetric problems
+    # TODO: we need a flag for truncate (probably in HSpace itself)
+    # TODO: vector-valued problems
+    if problem.arity == 2:
+        hdiscr = HDiscretization(hs, problem, asm_args=args, truncate=False)
+        return hdiscr.assemble_matrix().asformat(format)
+    elif problem.arity == 1:
+        hdiscr = HDiscretization(hs, None, asm_args=args, truncate=False)
+        return hdiscr.assemble_functional(problem)
+
+def assemble(problem, kvs, bfuns=None, args=None, symmetric=False, format='csr', layout='blocked', **kwargs):
+    """Assemble a matrix or vector in a function space.
+
+    Args:
+        problem: the description of the variational form to assemble. It can be
+            passed in a number of formats (see :doc:`/guide/vforms` for details):
+
+            - string: a textual description of the variational form
+            - :class:`.VForm`: an abstract description of the variational form
+            - assembler class (result of compiling a :class:`.VForm` using
+              :func:`pyiga.compile.compile_vform`)
+            - assembler object (result of instantiating an assembler class with
+              a concrete space and input functions) -- in this case `kvs` and
+              `args` are ignored
+
+        kvs:
+            - a tuple of :class:`.KnotVector` instances, describing a tensor product
+              spline space
+            - if the variational form requires more than one space, then a tuple of
+              such tuples, each describing one tensor product spline space (usually
+              one for the trial space and one for the test space)
+            - an :class:`.HSpace` instance for problems in hierarchical spline spaces
+
+        bfuns: a list of used basis functions. By default, scalar basis functions 'u'
+            and 'v' are assumed, and the arity of the variational form is determined
+            automatically based on whether one or both of these functions are used.
+            Otherwise, `bfuns` should be a list of tuples `(name, components, space)`,
+            where `name` is a string, `components` is an integer describing the number
+            of components the basis function has, and `space` is an integer referring
+            to which input space the function lives in. Shorter tuples are valid, in
+            which case the components default to `components=1` (scalar basis
+            function) and `space=0` (all functions living in the same, first, input
+            space).
+
+            This argument is only used if `problem` is given as a string.
+
+        args (dict): a dictionary which provides named inputs for the assembler. Most
+            problems will require at least a geometry map; this can be given in
+            the form ``{'geo': geo}``, where ``geo`` is a geometry function
+            defined using the :mod:`pyiga.geometry` module. Further values used
+            in the `problem` description must be passed here.
+
+            For convenience, any additional keyword arguments to this function are
+            added to the `args` dict automatically.
+
+    For the meaning of the remaining arguments and the format of the output,
+    refer to :func:`assemble_entries`.
+    """
     from . import vform
     if args is None:
         args = dict()
     args.update(kwargs)     # add additional keyword args
     num_spaces = 1          # by default, only one space
+
+    from .hierarchical import HSpace
+    if isinstance(kvs, HSpace):
+        return _assemble_hspace(problem, kvs, bfuns=bfuns, symmetric=symmetric,
+                format=format, layout=layout, args=args)
 
     # parse string to VForm
     if isinstance(problem, str):

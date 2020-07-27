@@ -190,6 +190,12 @@ def test_hierarchical_assemble():
     #
     A3 = assemble.assemble(vform.stiffness_vf(dim=2), hs, geo=geo)
     assert np.allclose(A.A, A3.A)
+    #
+    def f(x, y):
+        return np.cos(x) * np.exp(y)
+    f_hb = assemble.inner_products(hs.knotvectors(-1), f, f_physical=True, geo=geo).ravel() @ I_hb
+    f2 = assemble.assemble('f * v * dx', hs, f=f, geo=geo)
+    assert np.allclose(f_hb, f2)
 
 def test_grid_eval():
     hs = create_example_hspace(p=3, dim=2, n0=6, num_levels=3)

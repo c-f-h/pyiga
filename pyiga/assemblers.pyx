@@ -979,10 +979,6 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
                 values_u[0], values_u[1],
         )
 
-    def update(self, f=None):
-        if f:
-            self.f_a = np.ascontiguousarray(grid_eval(f, self.gaussgrid))
-
 cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
     cdef double[:, ::1] W
     cdef double[:, ::1] f_a
@@ -1118,10 +1114,6 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
                 self.f_a [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_u[0], values_u[1],
         )
-
-    def update(self, f=None):
-        if f:
-            self.f_a = np.ascontiguousarray(grid_eval_transformed(f, self.gaussgrid, self._geo))
 cdef class MassAssembler3D(BaseAssembler3D):
     cdef double[:, :, ::1] W
 
@@ -2282,10 +2274,6 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
                 values_u[0], values_u[1], values_u[2],
         )
 
-    def update(self, f=None):
-        if f:
-            self.f_a = np.ascontiguousarray(grid_eval(f, self.gaussgrid))
-
 cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
     cdef double[:, :, ::1] W
     cdef double[:, :, ::1] f_a
@@ -2439,7 +2427,3 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
                 self.f_a [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_u[0], values_u[1], values_u[2],
         )
-
-    def update(self, f=None):
-        if f:
-            self.f_a = np.ascontiguousarray(grid_eval_transformed(f, self.gaussgrid, self._geo))

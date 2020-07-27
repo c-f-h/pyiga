@@ -202,11 +202,11 @@ def test_parse():
     assert vf.hash() == mass_vf(2).hash()
 
     f = bspline.BSplineFunc(kvs, np.ones(bspline.numdofs(kvs)))
-    vf = parse_vf('f * v * dx', kvs, {'f': f}, updatable=['f'])
+    vf = parse_vf('f * v * dx', kvs, {'f': f})
     assert vf.hash() == L2functional_vf(2, physical=False).hash()
 
     f = lambda x, y: 1.0
-    vf = parse_vf('f * v * dx', kvs, {'f': f}, updatable=['f'])
+    vf = parse_vf('f * v * dx', kvs, {'f': f})
     assert vf.hash() == L2functional_vf(2, physical=True).hash()
 
     vf = parse_vf('div(u) * div(v) * dx', kvs, bfuns=[('u', 2), ('v', 2)])

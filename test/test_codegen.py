@@ -48,7 +48,7 @@ def test_codegen_vectorlaplace2d():
 
 def test_codegen_functional():
     code = codegen.CodeGen()
-    vf = vform.L2functional_vf(3)
+    vf = vform.L2functional_vf(3, updatable=True)
     assert (not vf.vec) and vf.arity == 1
     codegen.AsmGenerator(vf, 'TestAsm', code).generate()
     code = codegen.preamble() + '\n' + code.result()

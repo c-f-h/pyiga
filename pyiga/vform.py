@@ -1739,10 +1739,10 @@ def divdiv_vf(dim):
     V.add(div(u) * div(v) * dx)
     return V
 
-def L2functional_vf(dim, physical=False):
+def L2functional_vf(dim, physical=False, updatable=False):
     V = VForm(dim, arity=1)
     u = V.basisfuns()
-    f = V.input('f', shape=(), physical=physical, updatable=True)
+    f = V.input('f', shape=(), physical=physical, updatable=updatable)
     V.add(f * u * dx)
     return V
 

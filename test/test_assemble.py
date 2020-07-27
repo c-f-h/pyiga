@@ -1,3 +1,4 @@
+import unittest
 from pyiga.assemble import *
 from pyiga import geometry
 from pyiga.utils import read_sparse_matrix
@@ -324,6 +325,11 @@ def test_assemble_string():
     f1 = assemble('f * v * dx', kvs, geo=geo, f=f)
     f2 = inner_products(kvs, f, geo=geo, f_physical=True)
     assert np.allclose(f1, f2)
+
+    # test error handling
+    with unittest.TestCase().assertRaises(ValueError) as cm:
+        assemble('inner(grad(u), grad(v)) * dx', kvs)
+    assert str(cm.exception) == "required input parameter 'geo' missing"
 
 ################################################################################
 # Test integrals

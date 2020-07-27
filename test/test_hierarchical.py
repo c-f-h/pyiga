@@ -200,12 +200,16 @@ def test_grid_eval():
     assert np.allclose(f_fine.grid_eval(grid), hsf.grid_eval(grid))
     assert np.allclose(f_fine.grid_jacobian(grid), hsf.grid_jacobian(grid))
     assert np.allclose(f_fine.grid_hessian(grid), hsf.grid_hessian(grid))
+    #
+    assert np.allclose(hsf(grid[1][7], grid[0][19]), hsf.grid_eval(grid)[19, 7])
     ## test THBs
     f_fine = bspline.BSplineFunc(hs.knotvectors(-1), hs.represent_fine(truncate=True) @ u)
     hsf = HSplineFunc(hs, u, truncate=True)
     assert np.allclose(f_fine.grid_eval(grid), hsf.grid_eval(grid))
     assert np.allclose(f_fine.grid_jacobian(grid), hsf.grid_jacobian(grid))
     assert np.allclose(f_fine.grid_hessian(grid), hsf.grid_hessian(grid))
+    #
+    assert np.allclose(hsf(grid[1][7], grid[0][19]), hsf.grid_eval(grid)[19, 7])
 
 def test_prolongators():
     hs = create_example_hspace(p=3, dim=2, n0=4, disparity=1, num_levels=1)

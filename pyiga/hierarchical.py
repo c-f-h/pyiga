@@ -1136,6 +1136,10 @@ class HSplineFunc(bspline._BaseGeoFunc):
     def output_shape(self):
         return ()           # for now only scalar functions
 
+    def eval(self, *x):
+        return sum(f.eval(*x)
+                for f in self.hs.coeffs_to_levelwise_funcs(self.coeffs, truncate=self.truncate))
+
     def grid_eval(self, gridaxes):
         """Evaluate the function on a tensor product grid.
 

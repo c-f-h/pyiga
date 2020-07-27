@@ -67,6 +67,8 @@ def gauss_seidel(A, x, b, iterations=1, indices=None, sweep='forward'):
     if scipy.sparse.issparse(A):
         from . import relaxation_cy
         if not scipy.sparse.isspmatrix_csr(A):
+            import warnings
+            warnings.warn('matrix for Gauss-Seidel is not CSR; converting (performance warning)', RuntimeWarning)
             A = scipy.sparse.csr_matrix(A)
 
         if indices is not None:

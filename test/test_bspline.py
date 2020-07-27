@@ -13,6 +13,7 @@ def test_eval():
     # evaluate all at once and compare
     values2 = ev(kv, coeffs, x)
     assert np.linalg.norm(values - values2) < 1e-10
+    assert np.allclose(values2[7], BSplineFunc(kv, coeffs)(x[7]))
     # evaluate through collocation matrix and compare
     values3 = collocation(kv, x).dot(coeffs)
     assert np.linalg.norm(values - values3) < 1e-10

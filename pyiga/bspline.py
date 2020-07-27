@@ -521,7 +521,8 @@ def knot_insertion(kv, u):
 ################################################################################
 
 class _BaseGeoFunc:
-    pass
+    def __call__(self, *x):
+        return self.eval(*x)
 
 class BSplineFunc(_BaseGeoFunc):
     """Any function that is given in terms of a tensor product B-spline basis with coefficients.

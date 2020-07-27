@@ -1,15 +1,79 @@
 Assembling custom forms
 =======================
 
-It is possible to define custom linear or bilinear forms and have highly
+``pyiga`` makes it possible to define custom linear or bilinear forms and have highly
 efficient code for assembling them automatically generated, similar to
 the facilities in `FEniCS <https://fenicsproject.org/>`__ or
 `NGSolve <https://ngsolve.org/>`__.
 
 .. py:currentmodule:: pyiga.vform
 
-Defining VForms
----------------
+.. _sec-stringbased:
+
+Assembling variational forms from their textual description
+-----------------------------------------------------------
+
+The most convenient interface for assembling custom forms is by calling
+:func:`pyiga.assemble.assemble` with a string describing the problem as the
+first argument. Here is a simple but complete example::
+
+    from pyiga import bspline, geometry, assemble
+
+    kvs = (bspline.make_knots(3, 0.0, 1.0, 30),
+           bspline.make_knots(3, 0.0, 1.0, 30))
+    geo = geometry.quarter_annulus()
+    A = assemble.assemble('inner(grad(u), grad(v)) * dx', kvs, geo=geo)
+
+Here we define a cubic 2D tensor product spline space with 30 intervals per
+coordinate direction and then assemble a standard Laplace variational form over
+a quarter annulus geometry. The result is the sparse stiffness matrix `A`.
+
+The string representing the integrand occurring in this example should be
+mostly self-explanatory: it represents the inner product of the gradients of
+the trial and test functions `u` and `v`, multiplied by the volume measure
+`dx`.
+
+In a similar way we can assemble linear functionals, such as we would need for
+computing a right-hand side for a discretized problem::
+
+    def f(x, y): return np.cos(x) * np.exp(y)
+    rhs = assemble.assemble('f * v * dx', kvs, geo=geo, f=f)
+
+Note that we specified the additional input function `f` as a keyword argument
+to :func:`.assemble`. The :func:`.assemble` function automatically determined
+that we are assembling a linear functional from the fact that we are referring
+to only one basis function, `v`, in the description of our form. The result is
+not a 1D vector as one might expect, but a 2D array whose shape is ::
+
+    rhs.shape == (kvs[0].numdofs, kvs[1].numdofs)
+
+However, it is easy to convert it to a 1D vector by calling :code:`rhs.ravel()`.
+
+Vector-valued problems are realized by informing :func:`.assemble` of the
+number of components of the basis functions via the `bfuns` argument. For
+instance, the stiffness matrix for the vector Laplace problem could be realized
+as follows::
+
+    A = assemble.assemble('inner(grad(u), grad(v)) * dx', kvs,
+            bfuns=[('u',2), ('v',2)], geo=geo)
+
+The :func:`.assemble` function also works in hierarchical spline spaces; simply
+pass an instance of :class:`pyiga.hierarchical.HSpace` as the second argument
+instead of the tuple of knot vectors `kvs`. The result will be a sparse matrix
+or a 1D vector, and in each case the degrees of freedom are ordered according
+to the canonical order defined in the :mod:`pyiga.hierarchical` module.
+
+For most problems, this simple string-based interface is sufficient to generate
+all required matrices and vectors. However, in some edge cases it may be
+necessary to define a custom vform by hand. The remainder of this document
+describes the internals of how to create such objects. It also gives a more
+formal description of how the expressions occurring in the strings above should
+be interpreted. In essence, these strings are nothing but Python expressions
+evaluated in a context where the members of the :mod:`pyiga.vform` module are
+made available.
+
+Programmatically defining VForms
+--------------------------------
 
 The :mod:`pyiga.vform` module contains the tools for describing variational
 forms, and :class:`pyiga.vform.VForm` is the main class used to represent
@@ -82,12 +146,12 @@ and for matrices, it is the Frobenius product.
 .. _UFL documentation: https://readthedocs.org/projects/fenics-ufl/downloads/pdf/latest/
 
 Finally we want to represent the integral of this expression over the
-computational domain. We do this by multiplying with the symbol :attr:`dx`::
+computational domain. We do this by multiplying with the symbol :data:`dx`::
 
     integral = inner(grad(u), grad(v)) * dx
 
-Internally, :attr:`dx` is actually a scalar expression which represents the
-determinant of the Jacobian of the geometry map, i.e., the scalar term
+Internally, :data:`dx` is actually a scalar expression which represents the
+absolute value of the determinant of the geometry Jacobian, i.e., the scalar term
 that stems from transforming the integrand from the physical domain to
 the parameter domain.
 
@@ -97,8 +161,12 @@ the intermediate steps and variables and simply do ::
 
     vf.add(inner(grad(u), grad(v)) * dx)
 
+Note that the expression passed to :meth:`VForm.add` here is exactly the string
+we passed to :func:`.assemble` in the first example in :ref:`the previous section
+<sec-stringbased>`.
+
 A simple example
-------------------
+----------------
 
 It’s usually convenient to define vforms in their own functions so that
 we don’t pollute the global namespace with the definitions from the
@@ -190,8 +258,9 @@ would do ::
     u, v = vf.basisfuns()
     vf.add(coeff * inner(grad(u), grad(v)) * dx)
 
-Input fields can be declared vector- or matrix-valued simply by
-prescribing their shape::
+Input fields can be declared vector- or matrix-valued simply by prescribing
+their shape. In this example, we declare a 2x2 matrix-valued coefficient
+function::
 
     >>> vf = vform.VForm(2)
     >>> coeff = vf.input('coeff', shape=(2,2))
@@ -214,6 +283,13 @@ the parameter domain. If your input function is given in terms of physical
 coordinates, declare it as follows::
 
     coeff = vf.input('coeff', physical=True)
+
+.. note::
+    In the simple string-based interface described in :ref:`the first section
+    <sec-stringbased>`, functions passed as :class:`.BSplineFunc` or similar
+    objects are assumed to be given in parametric coordinates, whereas standard
+    Python functions are assumed to be given in physical coordinates.  This
+    simple heuristic usually produces the expected result.
 
 For performance reasons, it is sometimes beneficial to be able to update
 a single input function without recreating the entire assembler class,
@@ -252,13 +328,15 @@ constant values using the :func:`as_expr`, :func:`as_vector`, and
 
 We can then work with these constants exactly as with any other expression.
 
-For constant scalar values, the coercion to expressions is performed
-implicitly, making :func:`as_expr` unnecessary. This means that we can directly
-write, e.g. ::
+For constant scalar values as well as tuples of constants or expressions, the
+coercion to expressions is performed implicitly, making :func:`as_expr` and
+:func:`as_vector` unnecessary in these cases. This means that we can directly
+write expressions such as ::
 
     vf.add(inner(3 * grad(u), grad(v)) * dx)
+    vf.add(inner((2.0, 3.0), grad(u)) * dx)
 
-This example also shows that multiplication of a scalar with a vector works as
+The first example also shows that multiplication of a scalar with a vector works as
 expected, i.e., the vector is multiplied componentwise with the scalar.
 
 Defining linear (unary) forms
@@ -303,21 +381,24 @@ like this::
 
 You can compute both parametric and physical derivatives of basis functions as
 well as input fields given in parametric coordinates. An input field that is
-given in terms of physical coordinates only support physical derivatives.
+given in terms of physical coordinates only supports physical derivatives.
 
-Note that the symbol :attr:`dx` still includes the geometry Jacobian, and
+Note that the symbol :data:`dx` still includes the geometry Jacobian, and
 therefore you should not multiply your expression with it if you want to
-integrate over the parameter domain instead of the physical domain.
+integrate over the parameter domain instead of the physical domain.  In this
+case, you should multiply your expression with the attribute
+:attr:`HSpace.GaussWeight` instead, which represents the weight for the Gauss
+quadrature. Usually, the weight is automatically subsumed into :data:`dx`.
 
 
 Supported functions
 -------------------
 
 The following functions and expressions are implemented in
-``pyiga.vform`` and have the same semantics as in the UFL language
+:mod:`pyiga.vform` and have the same semantics as in the UFL language
 (see the `UFL documentation`_):
 
-:attr:`dx`
+:data:`dx`
 :func:`Dx`
 :func:`grad`
 :func:`div`

@@ -42,20 +42,6 @@ import itertools
 from . import bspline, utils, assemble
 from ._hdiscr import HDiscretization
 
-def _make_unique(L):
-    """Return a list which contains the entries of `L` with consecutive duplicates removed."""
-    n = len(L)
-    if n == 0:
-        return []
-    else:
-        U = [L[0]]
-        last = U[0]
-        for x in L[1:]:
-            if x != last:
-                U.append(x)
-            last = x
-        return U
-
 def _compute_supported_functions(kv, meshsupp):
     """Compute an array containing for each cell the index of the first and
     one beyond the last function supported in it.
@@ -188,11 +174,7 @@ class HMesh:
 
     def cell_parent(self, lv, cells):
         assert 1 <= lv < len(self.meshes), 'Invalid level'
-        parents = []
-        for c in cells:
-            parents.append(tuple(ci // 2 for ci in c))
-        parents.sort()
-        return _make_unique(parents)
+        return {tuple(ci // 2 for ci in c) for c in cells}
 
     def cell_grandparent(self, lv, cells, targetlv=None):
         if not targetlv:
@@ -268,12 +250,11 @@ class HMesh:
         return list(self.P[lv-1][dim].getrow(j).nonzero()[1])
 
     def function_children(self, lv, indices):
-        children = []
+        children = set()
         for jj in indices:
-            children.extend(itertools.product(
+            children.update(itertools.product(
                 *(self._function_children_1d(lv, d, j) for (d,j) in enumerate(jj))))
-        children.sort()
-        return _make_unique(children)
+        return children
 
     def function_grandchildren(self, lv, indices, targetlv=None):
         if not targetlv:
@@ -285,12 +266,11 @@ class HMesh:
             return self.function_grandchildren(lv+1, self.function_children(lv, indices), targetlv)
 
     def function_parents(self, lv, indices):
-        parents = []
+        parents = set()
         for jj in indices:
-            parents.extend(itertools.product(
+            parents.update(itertools.product(
                 *(self._function_parents_1d(lv, d, j) for (d,j) in enumerate(jj))))
-        parents.sort()
-        return _make_unique(parents)
+        return parents
 
     def function_grandparents(self, lv, indices, targetlv=None):
         if not targetlv:

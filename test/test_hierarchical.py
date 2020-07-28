@@ -106,7 +106,7 @@ def test_hmesh_cells():
 
     # fine inactive cell to coarse active cell
     assert hs.hmesh.hmesh_cells({2: {(6,5)}}) == {0: {(1,1)}}
-    assert hs.hmesh.cell_grandparent(2, [(6,5)], 0) == [(1,1)]
+    assert hs.hmesh.cell_grandparent(2, [(6,5)], 0) == {(1,1)}
 
 def test_thb_to_hb():
     hs = create_example_hspace(p=3, dim=2, n0=4, disparity=np.inf, num_levels=3)

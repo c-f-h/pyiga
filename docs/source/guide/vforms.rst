@@ -391,6 +391,41 @@ case, you should multiply your expression with the attribute
 quadrature. Usually, the weight is automatically subsumed into :data:`dx`.
 
 
+Surface integrals
+-----------------
+
+By default, a :class:`VForm` will assume that the dimension of the image of the
+geometry map is the same as the dimension of the spline space over which we are
+integrating. For computing matrices and vectors over surfaces, we can specify
+the `geo_dim` argument of the :class:`VForm` constructor to be one higher than
+the input dimension. Of course, the `geo` function we pass when assembling must
+match that output dimension. We also have to multiply with the surface measure
+:data:`ds` instead of the volume measure :data:`dx` when computing such
+integrals.
+
+Here is a simple example which describes a linear functional over a surface::
+
+    def L2_surface_functional_vf(dim):
+        V = VForm(dim, geo_dim=dim+1, arity=1)
+        v = V.basisfuns()
+        f = V.input('f')
+        V.add(f * v * ds)
+        return V
+
+When called with `dim=2`, it represents a 2D surface integral in a 3D ambient
+space.
+
+If you need to use the normal vector in your expression, you can access it via
+the :attr:`VForm.normal` attribute. It is oriented according to the standard
+right-hand rule and has unit length.
+
+At the moment, transformations of derivatives on surfaces are not implemented,
+and therefore you can only use :ref:`parametric derivatives <sec-parametric>`.
+
+The string-based interface :ref:`described above <sec-stringbased>` will
+automatically switch to surface integration when it detects that ``ds`` was
+used instead of ``dx``.
+
 Supported functions
 -------------------
 

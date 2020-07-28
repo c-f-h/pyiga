@@ -55,6 +55,23 @@ as follows::
     A = assemble.assemble('inner(grad(u), grad(v)) * dx', kvs,
             bfuns=[('u',2), ('v',2)], geo=geo)
 
+In addition to the :ref:`sec-supported` described below, the following
+keywords can be used in the string description:
+
+==============  ==============================================================
+``dx``          volume measure
+``ds``          surface measure (switches to :ref:`sec-surface`)
+``u``, ``v``    default trial and test function (only when not using the
+                `bfuns` argument of :func:`.assemble`)
+``x``           current position in physical coordinates (i.e., the value of
+                the geometry map)
+``n``           the unit normal vector (only for surface integrals)
+``gw``          the Gauss quadrature weight at the current node (usually not
+                needed since it is included in ``dx`` and ``ds``)
+``jac``         the Jacobian matrix of the geometry map with shape
+                `geo_dim x dim`
+==============  ==============================================================
+
 The :func:`.assemble` function also works in hierarchical spline spaces; simply
 pass an instance of :class:`pyiga.hierarchical.HSpace` as the second argument
 instead of the tuple of knot vectors `kvs`. The result will be a sparse matrix
@@ -391,6 +408,8 @@ case, you should multiply your expression with the attribute
 quadrature. Usually, the weight is automatically subsumed into :data:`dx`.
 
 
+.. _sec-surface:
+
 Surface integrals
 -----------------
 
@@ -425,6 +444,9 @@ and therefore you can only use :ref:`parametric derivatives <sec-parametric>`.
 The string-based interface :ref:`described above <sec-stringbased>` will
 automatically switch to surface integration when it detects that ``ds`` was
 used instead of ``dx``.
+
+
+.. _sec-supported:
 
 Supported functions
 -------------------

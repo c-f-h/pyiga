@@ -1838,6 +1838,12 @@ def parse_vf(expr, kvs, args=dict(), bfuns=None, updatable=[]):
     # set up additional terms
     if 'x' in words and 'x' not in args:
         loc['x'] = vf.Geo       # x is a shorthand for the physical coordinates
+    if 'n' in words and 'n' not in args:
+        loc['n'] = vf.normal
+    if 'gw' in words and 'gw' not in args:
+        loc['gw'] = vf.GaussWeight
+    if 'jac' in words and 'jac' not in args:
+        loc['jac'] = vf.Jac
 
     vf.add(eval(expr, globals(), loc))
     return vf

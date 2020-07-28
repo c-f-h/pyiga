@@ -1,11 +1,23 @@
 # -*- coding: utf-8 -*-
-"""Matrix assembling functions for B-spline IgA.
+"""Assembling functions for B-spline IgA.
 
-This module contains functions to assemble mass and stiffness matrices
-for IgA with tensor product B-spline functions.
+This module contains functions to assemble stiffness matrices and load vectors
+for isogeometric discretizations. Furthermore, it provides support for
+computing and eliminating Dirichlet dofs from a linear system.
 
 
 .. _gauss-asms:
+
+Assembling general problems
+---------------------------
+
+General variational forms can be assembled using the following function.
+See the section :doc:`/guide/vforms` for further details.
+
+.. autofunction:: assemble
+.. autofunction:: assemble_vf
+.. autofunction:: assemble_entries
+
 
 Tensor product Gauss quadrature assemblers
 ------------------------------------------
@@ -26,12 +38,6 @@ They take one or two arguments:
 .. autofunction:: mass
 .. autofunction:: stiffness
 
-General variational forms can be assembled using the following function.
-See the section :doc:`/guide/vforms` for further details.
-
-.. autofunction:: assemble
-.. autofunction:: assemble_vf
-.. autofunction:: assemble_entries
 
 .. _fast-asms:
 
@@ -59,10 +65,12 @@ They take the following additional arguments:
 .. autofunction:: mass_fast
 .. autofunction:: stiffness_fast
 
+
 Right-hand sides
 ----------------
 
 .. autofunction:: inner_products
+
 
 Boundary and initial conditions
 -------------------------------
@@ -74,6 +82,7 @@ Boundary and initial conditions
 
 .. autoclass:: RestrictedLinearSystem
     :members:
+
 
 Integration
 -----------
@@ -599,7 +608,7 @@ class RestrictedLinearSystem:
     def restrict_rhs(self, f):
         """Given a right-hand side vector `f`, return its restriction to the non-eliminated rows.
 
-        If `elim_rows` was not passed, this is equivalent to :func:`RestrictedLinearSystem.restrict`.
+        If `elim_rows` was not passed, this is equivalent to :meth:`restrict`.
         """
         return self.R_free_v.dot(f)
 
@@ -689,7 +698,9 @@ def assemble_entries(asm, symmetric=False, format='csr', layout='blocked'):
             - 'packed': the interactions of the components are packed together,
               i.e., each entry of the matrix is a small `k_1 x k_2` block
 
-    Returns: an ndarray or sparse matrix:
+    Returns:
+        ndarray or sparse matrix:
+
         - if the assembler has arity=1: an ndarray of vector entries whose
           shape is given by the number of degrees of freedom per coordinate
           direction. For vector-valued problem, an additional final axis is
@@ -780,12 +791,14 @@ def assemble(problem, kvs, args=None, bfuns=None, symmetric=False, format='csr',
               a concrete space and input functions) -- in this case `kvs` and
               `args` are ignored
 
-        kvs:
+        kvs: the space or spaces in which to assemble the problem. Either:
+
             - a tuple of :class:`.KnotVector` instances, describing a tensor product
               spline space
-            - if the variational form requires more than one space, then a tuple of
-              such tuples, each describing one tensor product spline space (usually
-              one for the trial space and one for the test space)
+            - if the variational form requires more than one space (e.g., for a
+              Petrov-Galerkin discretization), then a tuple of such tuples,
+              each describing one tensor product spline space (usually one for
+              the trial space and one for the test space)
             - an :class:`.HSpace` instance for problems in hierarchical spline spaces
 
         args (dict): a dictionary which provides named inputs for the assembler. Most

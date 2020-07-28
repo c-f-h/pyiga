@@ -7,7 +7,8 @@ Individual functions living in such a spline space are represented by the
 class :class:`HSplineFunc`, which follows the interface of :class:`.BSplineFunc`.
 In order to compute the stiffness matrix and right-hand side vector for the
 Galerkin discretization of a variational problem in a hierarchical spline
-space, use the :class:`HDiscretization` class.
+space, use :func:`pyiga.assemble.assemble`. Internally, this uses the
+:class:`HDiscretization` class.
 
 The implementation of :class:`HSpace` is loosely based on the approach
 described in [GV2018]_ and the corresponding implementation in [GeoPDEs]_.

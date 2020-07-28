@@ -456,12 +456,12 @@ The following functions and expressions are implemented in
 :func:`tan`
 
 In addition, all expressions have the members :meth:`Expr.dx` for partial
-derivatives (analogous to the global function :func:`Dx`),
-:attr:`Expr.T` for transposing matrices,
-:attr:`Expr.x`, :attr:`Expr.y`, :attr:`Expr.z` for accessing
-vector components, and :meth:`Expr.dot()` which is analogous to the global
-:func:`dot` function. Expressions can also be manipulated using the standard
-arithmetic operators ``+,-,*,/`` as shown above.
+derivatives (analogous to the global function :func:`Dx`), :attr:`Expr.T` for
+transposing matrices, and :meth:`Expr.dot()` which is analogous to the global
+:func:`dot` function.
+Vector and matrix expressions can be indexed and sliced using the standard
+Python ``[]`` operator.  Expressions also support the standard arithmetic
+operators ``+, -, *, /, **``.
 
 .. _sec-compiling:
 

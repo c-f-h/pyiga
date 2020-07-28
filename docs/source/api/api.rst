@@ -15,3 +15,4 @@ API Reference
    tensor
    solvers
    vis
+   vform

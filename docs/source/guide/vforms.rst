@@ -6,8 +6,6 @@ efficient code for assembling them automatically generated, similar to
 the facilities in `FEniCS <https://fenicsproject.org/>`__ or
 `NGSolve <https://ngsolve.org/>`__.
 
-.. py:currentmodule:: pyiga.vform
-
 .. _sec-stringbased:
 
 Assembling variational forms from their textual description
@@ -71,6 +69,8 @@ formal description of how the expressions occurring in the strings above should
 be interpreted. In essence, these strings are nothing but Python expressions
 evaluated in a context where the members of the :mod:`pyiga.vform` module are
 made available.
+
+.. py:currentmodule:: pyiga.vform
 
 Programmatically defining VForms
 --------------------------------
@@ -493,9 +493,3 @@ The resulting object ``A`` is a sparse matrix in CSR format; different matrix
 formats can be chosen by passing the ``format=`` keyword argument to
 :func:`.assemble_entries`. The argument ``symmetric=True`` takes advantage of the
 symmetry of the bilinear form in order to speed up the assembly.
-
-``pyiga.vform`` API documentation
----------------------------------
-
-.. automodule:: pyiga.vform
-    :members:

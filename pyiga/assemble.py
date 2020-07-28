@@ -766,7 +766,7 @@ def _assemble_hspace(problem, hs, args, bfuns=None, symmetric=False, format='csr
         hdiscr = HDiscretization(hs, None, asm_args=args, truncate=False)
         return hdiscr.assemble_functional(problem)
 
-def assemble(problem, kvs, bfuns=None, args=None, symmetric=False, format='csr', layout='blocked', **kwargs):
+def assemble(problem, kvs, args=None, bfuns=None, symmetric=False, format='csr', layout='blocked', **kwargs):
     """Assemble a matrix or vector in a function space.
 
     Args:
@@ -789,6 +789,15 @@ def assemble(problem, kvs, bfuns=None, args=None, symmetric=False, format='csr',
               one for the trial space and one for the test space)
             - an :class:`.HSpace` instance for problems in hierarchical spline spaces
 
+        args (dict): a dictionary which provides named inputs for the assembler. Most
+            problems will require at least a geometry map; this can be given in
+            the form ``{'geo': geo}``, where ``geo`` is a geometry function
+            defined using the :mod:`pyiga.geometry` module. Further values used
+            in the `problem` description must be passed here.
+
+            For convenience, any additional keyword arguments to this function are
+            added to the `args` dict automatically.
+
         bfuns: a list of used basis functions. By default, scalar basis functions 'u'
             and 'v' are assumed, and the arity of the variational form is determined
             automatically based on whether one or both of these functions are used.
@@ -801,15 +810,6 @@ def assemble(problem, kvs, bfuns=None, args=None, symmetric=False, format='csr',
             space).
 
             This argument is only used if `problem` is given as a string.
-
-        args (dict): a dictionary which provides named inputs for the assembler. Most
-            problems will require at least a geometry map; this can be given in
-            the form ``{'geo': geo}``, where ``geo`` is a geometry function
-            defined using the :mod:`pyiga.geometry` module. Further values used
-            in the `problem` description must be passed here.
-
-            For convenience, any additional keyword arguments to this function are
-            added to the `args` dict automatically.
 
     For the meaning of the remaining arguments and the format of the output,
     refer to :func:`assemble_entries`.

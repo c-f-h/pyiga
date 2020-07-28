@@ -336,6 +336,8 @@ class HSpace:
     Arguments:
         kvs: a sequence of `d` :class:`.KnotVector` instances, representing
             the tensor product B-spline space on the coarsest level
+        truncate (bool): if True, the space represents a THB-spline space,
+            otherwise an HB-spline space
         disparity (int): the desired mesh level disparity. This means that an
             active basis function on level `lv` may have interactions at most
             with coarse functions from level `lv - disparity`, but not from
@@ -352,12 +354,13 @@ class HSpace:
             boundary conditions). See :func:`.assemble.compute_dirichlet_bc`
             for the precise format.
     """
-    def __init__(self, kvs, disparity=np.inf, bdspecs=None):
+    def __init__(self, kvs, truncate=False, disparity=np.inf, bdspecs=None):
         tp = TPMesh(kvs)
         hmesh = HMesh(tp)
         assert len(hmesh.meshes) == 1
         self.dim = hmesh.dim
         self.hmesh = hmesh
+        self.truncate = bool(truncate)
         self.actfun = [set(hmesh.meshes[0].functions())]
         self.deactfun = [set()]
         self.disparity = disparity
@@ -827,7 +830,7 @@ class HSpace:
             lv: tuple(c for c in self.active_cells(lv) if region_function(*cell_center(c)))
         })
 
-    def represent_fine(self, lv=None, truncate=False, rows=None, restrict=False):
+    def represent_fine(self, lv=None, truncate=None, rows=None, restrict=False):
         """Compute a matrix which represents HB- or THB-spline basis functions in terms of
         their coefficients in the finest tensor product spline space.
 
@@ -841,6 +844,7 @@ class HSpace:
 
         If `truncate` is True, the representation of the THB-spline (truncated) basis
         functions is computed instead of that of the HB-splines.
+        If `truncate` is None (default), the attribute :attr:`HSpace.truncate` is used.
 
         If `rows` is given, only those rows are kept in the output. In other
         words, only the representation with respect to these tensor product
@@ -852,6 +856,8 @@ class HSpace:
         if lv == None:
             lv = self.numlevels - 1
         assert 0 <= lv < self.numlevels, "Invalid level."
+        if truncate is None:
+            truncate = self.truncate
         act_indices = list(self.active_indices()[:lv+1])
         deact_indices = self.deactivated_indices()[lv]
         # generate list of raveled active indices of virtual level lv
@@ -920,7 +926,7 @@ class HSpace:
 
         if num_rows is None:
             num_rows = nt[-1]
-        A = self.represent_fine(lv=k+1, rows=actidx[k+1], restrict=True)    # rep act(0..k+1) as act(k+1)
+        A = self.represent_fine(lv=k+1, rows=actidx[k+1], truncate=False, restrict=True)    # rep act(0..k+1) as act(k+1)
 
         # truncation: subtract the components of the coarse functions which can
         # be represented by the active functions on level k+1
@@ -1059,7 +1065,9 @@ class HSpace:
                 result[j] = result[j].dot(P.T)
         return scipy.sparse.vstack(result, format='csr')
 
-    def virtual_hierarchy_prolongators(self, truncate=False):
+    def virtual_hierarchy_prolongators(self, truncate=None):
+        if truncate is None:
+            truncate = self.truncate
         # compute tensor product prolongators
         Ps = tuple(self.tp_prolongation(lv, kron=False) for lv in range(self.numlevels-1))
 
@@ -1089,14 +1097,17 @@ class HSpace:
                     for k, P in enumerate(prolongators)]
         return prolongators
 
-    def coeffs_to_levelwise_funcs(self, coeffs, truncate=False):
+    def coeffs_to_levelwise_funcs(self, coeffs, truncate=None):
         """Compute the levelwise contributions of the hierarchical spline
         function given by the coefficient vector `coeffs` as a list containing
         one :class:`.BSplineFunc` per level.
 
         If `truncate=True`, the coefficients are interpreted as THB-spline
-        coefficients, otherwise as HB-splines.
+        coefficients; if `False`, as HB-splines; if `None` (default),
+        :attr:`HSpace.truncate` is used.
         """
+        if truncate is None:
+            truncate = self.truncate
         if truncate:
             coeffs = self.thb_to_hb() @ coeffs
         # construct the level-wise B-spline functions
@@ -1108,10 +1119,12 @@ class HSpace:
                 for (lv,uj) in enumerate(u_lv)
                 )
 
-    def grid_eval(self, coeffs, gridaxes, truncate=False):
+    def grid_eval(self, coeffs, gridaxes, truncate=None):
         """Evaluate an HB-spline function with the given coefficients over a
         tensor product grid.
         """
+        if truncate is None:
+            truncate = self.truncate
         # evaluate them and sum the result
         return sum(f.grid_eval(gridaxes)
                 for f in self.coeffs_to_levelwise_funcs(coeffs, truncate=truncate))
@@ -1123,14 +1136,17 @@ class HSplineFunc(bspline._BaseGeoFunc):
         hspace (:class:`HSpace`): the hierarchical spline space
         u (array): the vector of coefficients corresponding to the active basis
             functions, with length :attr:`HSpace.numdofs`, in canonical order
-        truncate (bool): if true, the coefficients are interpreted as THB-spline
-            coefficients; otherwise, as HB-spline coefficients
+        truncate (bool): if True, the coefficients are interpreted as THB-spline
+            coefficients; if False, as HB-spline coefficients. If it is `None`
+            (default), the attribute :attr:`HSpace.truncate` of `hspace` is used.
     """
-    def __init__(self, hspace, u, truncate=False):
+    def __init__(self, hspace, u, truncate=None):
         self.hs = hspace
         self.coeffs = u
         self.sdim = hspace.dim
         self.dim = 1        # for now only scalar functions
+        if truncate is None:
+            truncate = self.hs.truncate
         self.truncate = truncate
 
     def output_shape(self):

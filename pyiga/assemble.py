@@ -757,13 +757,12 @@ def _assemble_hspace(problem, hs, args, bfuns=None, symmetric=False, format='csr
         problem = vform.parse_vf(problem, hs.knotvectors(0), args=args, bfuns=bfuns)
     from .hierarchical import HDiscretization
     # TODO: nonsymmetric problems
-    # TODO: we need a flag for truncate (probably in HSpace itself)
     # TODO: vector-valued problems
     if problem.arity == 2:
-        hdiscr = HDiscretization(hs, problem, asm_args=args, truncate=False)
+        hdiscr = HDiscretization(hs, problem, asm_args=args)
         return hdiscr.assemble_matrix().asformat(format)
     elif problem.arity == 1:
-        hdiscr = HDiscretization(hs, None, asm_args=args, truncate=False)
+        hdiscr = HDiscretization(hs, None, asm_args=args)
         return hdiscr.assemble_functional(problem)
 
 def assemble(problem, kvs, args=None, bfuns=None, symmetric=False, format='csr', layout='blocked', **kwargs):

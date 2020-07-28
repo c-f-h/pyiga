@@ -243,11 +243,12 @@ def test_prolongators():
     assert np.allclose(f0.grid_eval(X), f_hb.grid_eval(X))
 
     #### prolongators for THB-splines ####
+    hs.truncate = True
     # prolongate f to the finest space (hs itself)
-    P_thb = hs.virtual_hierarchy_prolongators(truncate=True)
+    P_thb = hs.virtual_hierarchy_prolongators()
     u = u_lv0
     for P in P_thb:
         u = P @ u
-    f_thb = HSplineFunc(hs, u, truncate=True)
+    f_thb = HSplineFunc(hs, u)
     # compare it to the original function
     assert np.allclose(f0.grid_eval(X), f_thb.grid_eval(X))

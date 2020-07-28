@@ -20,6 +20,7 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, smooth_steps, strategy,
     hdiscr = hierarchical.HDiscretization(hs, vform.stiffness_vf(dim=2), params)
     A_hb = hdiscr.assemble_matrix()
     f_hb = hdiscr.assemble_rhs()
+    P_hb = hs.virtual_hierarchy_prolongators()
 
     LS_hb = assemble.RestrictedLinearSystem(A_hb, f_hb,
             (dir_dofs, np.zeros_like(dir_dofs)))
@@ -27,9 +28,11 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, smooth_steps, strategy,
     u_hb0 = LS_hb.complete(u_hb)
 
     # assemble and solve the THB-spline problem
-    hdiscr = hierarchical.HDiscretization(hs, vform.stiffness_vf(dim=2), params, truncate=True)
+    hs.truncate = True
+    hdiscr = hierarchical.HDiscretization(hs, vform.stiffness_vf(dim=2), params)
     A_thb = hdiscr.assemble_matrix()
     f_thb = hdiscr.assemble_rhs()
+    P_thb = hs.virtual_hierarchy_prolongators()
 
     LS_thb = assemble.RestrictedLinearSystem(A_thb, f_thb,
             (dir_dofs, np.zeros_like(dir_dofs)))
@@ -37,8 +40,6 @@ def run_local_multigrid(p, dim, n0, disparity, smoother, smooth_steps, strategy,
     u_thb0 = LS_thb.complete(u_thb)
 
     # iteration numbers of the local MG method in the (T)HB basis
-    P_hb = hs.virtual_hierarchy_prolongators()
-    P_thb = hs.virtual_hierarchy_prolongators(truncate=True)
     inds = hs.indices_to_smooth(strategy)
     iter_hb  = num_iterations(solvers.local_mg_step(hs, A_hb, f_hb, P_hb, inds, smoother, smooth_steps), u_hb0, tol=tol)
     iter_thb = num_iterations(solvers.local_mg_step(hs, A_thb, f_thb, P_thb, inds, smoother, smooth_steps), u_thb0, tol=tol)
@@ -101,9 +102,10 @@ def test_solve_hmultigrid():
     hs = create_example_hspace(p=3, dim=2, n0=10, disparity=1, num_levels=3)
 
     for truncate in (False, True):      # test HB- and THB-splines
+        hs.truncate = truncate
         # assemble and solve the (T)HB-spline problem
         hdiscr = hierarchical.HDiscretization(hs, vform.stiffness_vf(dim=2),
-                {'geo': geometry.unit_square(), 'f': lambda *x: 1.0}, truncate=truncate)
+                {'geo': geometry.unit_square(), 'f': lambda *x: 1.0})
         A_hb = hdiscr.assemble_matrix()
         f_hb = hdiscr.assemble_rhs()
 
@@ -115,5 +117,5 @@ def test_solve_hmultigrid():
         u_hb0 = LS_hb.complete(u_hb)
 
         # we use default parameters for smoother and strategy
-        u_mg, iters = solvers.solve_hmultigrid(hs, A_hb, f_hb, tol=1e-8, truncate=truncate)
+        u_mg, iters = solvers.solve_hmultigrid(hs, A_hb, f_hb, tol=1e-8)
         assert np.allclose(u_hb0, u_mg)

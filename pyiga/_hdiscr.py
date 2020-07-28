@@ -15,7 +15,7 @@ class HDiscretization:
     hierarchical spline space.
 
     Args:
-        hspace (:class:`HSpace`): the hierarchical spline space in which to discretize
+        hspace (:class:`HSpace`): the HB- or THB-spline space in which to discretize
         vform (:class:`.VForm`): the variational form describing the problem
         asm_args (dict): a dictionary which provides named inputs for the assembler. Most
             problems will require at least a geometry map; this can be given in
@@ -26,12 +26,10 @@ class HDiscretization:
 
             The assemblers both for the matrix and any linear functionals will draw
             their input arguments from this dict.
-        truncate (bool): if true, a THB-spline discretization is generated;
-            otherwise, an HB-spline discretization
     """
-    def __init__(self, hspace, vform, asm_args, truncate=False):
+    def __init__(self, hspace, vform, asm_args):
         self.hs = hspace
-        self.truncate = truncate
+        self.truncate = hspace.truncate
         self.vf = vform
         self.asm_args = asm_args
         self.asm_class = None
@@ -115,7 +113,7 @@ class HDiscretization:
             As = [self._assemble_level(k, rows=to_assemble[k], bbox=bboxes[k])
                     for k in range(hs.numlevels)]
             # I_hb[k]: maps HB-coefficients to TP coefficients on level k
-            I_hb = [hs.represent_fine(lv=k, rows=to_assemble[k]) for k in range(hs.numlevels)]
+            I_hb = [hs.represent_fine(lv=k, truncate=False, rows=to_assemble[k]) for k in range(hs.numlevels)]
 
             # the diagonal block consisting of interactions on the same level
             A_hb_new = [As[k][new_loc[k]][:,new_loc[k]]

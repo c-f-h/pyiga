@@ -283,11 +283,11 @@ def iterative_solve(step, A, f, x0=None, active_dofs=None, tol=1e-8, maxiter=500
             print("Warning: iterative solver did not converge in {} iterations".format(iterations))
             return x, np.inf
 
-def solve_hmultigrid(hs, A, f, strategy='cell_supp', smoother='gs', smooth_steps=2, truncate=False, tol=1e-8, maxiter=5000):
+def solve_hmultigrid(hs, A, f, strategy='cell_supp', smoother='gs', smooth_steps=2, tol=1e-8, maxiter=5000):
     """Solve a linear scalar problem in a hierarchical spline space using local multigrid.
 
     Args:
-        hs: the :class:`.HSpace` which describes the hierarchical spline space
+        hs: the :class:`.HSpace` which describes the HB- or THB-spline space
         A: the matrix describing the discretization of the problem
         f: the right-hand side vector
         strategy (string): how to choose the smoothing sets. Valid options are
@@ -310,8 +310,6 @@ def solve_hmultigrid(hs, A, f, strategy='cell_supp', smoother='gs', smooth_steps
               post-smoothing)
 
         smooth_steps (int): the number of pre- and post-smoothing steps
-        truncate (bool): if True, the linear system is interpreted as a
-            THB-spline discretization rather than an HB-spline one
         tol (float): the desired reduction in the residual
         maxiter (int): the maximum number of iterations
 
@@ -320,7 +318,7 @@ def solve_hmultigrid(hs, A, f, strategy='cell_supp', smoother='gs', smooth_steps
         iterations performed. If `maxiter` was reached without convergence, the
         returned number of iterations is infinite.
     """
-    Ps = hs.virtual_hierarchy_prolongators(truncate=truncate)
+    Ps = hs.virtual_hierarchy_prolongators()
     # determine non-Dirichlet dofs (for residual computation)
     non_dir_dofs = hs.non_dirichlet_dofs()
     mg_step = local_mg_step(hs, A, f, Ps, hs.indices_to_smooth(strategy), smoother)

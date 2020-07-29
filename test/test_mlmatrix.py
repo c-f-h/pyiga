@@ -1,6 +1,8 @@
 from pyiga.mlmatrix import *
 from numpy.random import rand
 
+from pyiga import utils
+
 def _random_banded(n, bw):
     return scipy.sparse.spdiags(rand(2*bw+1, n), np.arange(-bw,bw+1), n, n)
 
@@ -126,6 +128,17 @@ def test_mlbanded_3d():
     assert np.allclose(X, M.asmatrix().A)
     M2 = MLMatrix(structure=S, matrix=scipy.sparse.csr_matrix(X))
     assert np.allclose(X, M.asmatrix().A)
+
+def test_mlbanded_4d():
+    bs = (7, 6, 5, 4)
+    bw = (3, 2, 2, 2)
+
+    As = tuple(_random_banded(n, p) for (n,p) in zip(bs, bw))
+    A = utils.multi_kron_sparse(As)
+
+    S = MLStructure.multi_banded(bs, bw)
+    M = MLMatrix(structure=S, matrix=A)
+    assert np.allclose(A.A, M.asmatrix().A)
 
 def test_tofrom_seq():
     for i in range(3*4*5):

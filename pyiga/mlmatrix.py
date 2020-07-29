@@ -126,7 +126,7 @@ class MLStructure:
         elif self.L == 3:
             IJ = ml_nonzero_3d(self.bidx, self._bs_arr, lower_tri=lower_tri)
         else:
-            assert False, 'dimension %d not implemented' % self.L
+            IJ = ml_nonzero_nd(self.bidx, self._bs_arr, lower_tri=lower_tri)
         return IJ[0,:], IJ[1,:]
 
     def transpose(self):

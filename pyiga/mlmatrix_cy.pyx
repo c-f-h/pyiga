@@ -324,3 +324,73 @@ cpdef void ml_matvec_3d(double[:,:,::1] X, bidx, block_sizes, double[::1] x, dou
 
                 y[I] += X[i,j,k] * x[J]
 
+
+# generic dimension
+
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef object ml_nonzero_nd(bidx, block_sizes, bint lower_tri=False):
+    cdef unsigned L = len(bidx)
+    assert L <= 8, 'ml_nonzero_nd only implemented for L <= 8'
+
+    cdef (unsigned*)[8] bidx_ptr
+    cdef np.int_t NN[8]             # number of nonzeros per dimension
+    cdef np.int_t block_rows[8]     # number of rows in dimension k
+    cdef np.int_t block_cols[8]     # number of columns in dimension k
+    cdef np.int_t cur_idx[8]        # current nonzero idx (0..NN[k])
+    cdef np.int_t block_i[8]        # row of current nonzero corresponding to cur_idx[k]
+    cdef np.int_t block_j[8]        # column of current nonzero corresponding to cur_idx[k]
+
+    cdef unsigned[:,::1] bidx_temp
+    cdef size_t k, idx, N, I, J
+
+    N = 1
+    for i in range(L):
+        bidx_temp = bidx[i]
+        bidx_ptr[i] = &bidx_temp[0,0]
+        NN[i] = len(bidx_temp)
+        N *= NN[i]
+        block_rows[i], block_cols[i] = block_sizes[i]
+
+        # intialize cur_idx to 0 and set the corresponding block_i/block_j values
+        cur_idx[i] = 0
+        block_i[i], block_j[i] = bidx_ptr[i][0], bidx_ptr[0][1]
+
+    results = np.empty((2, N), dtype=np.uintp)
+    cdef size_t[:, ::1] IJ = results
+
+    cdef bint done = (N == 0)
+
+    with nogil:
+        idx = 0
+
+        while not done:
+            # compute sequential index for current (I,J) multi-indices
+            I = to_seq(&block_i[0], &block_rows[0], L)
+            J = to_seq(&block_j[0], &block_cols[0], L)
+
+            if not lower_tri or J <= I:
+                IJ[0,idx] = I
+                IJ[1,idx] = J
+                idx += 1
+
+            # increment multi-index cur_idx and update block_i, block_j
+            for k in reversed(range(L)):
+                cur_idx[k] += 1
+                if cur_idx[k] < NN[k]:
+                    block_i[k], block_j[k] = bidx_ptr[k][2*cur_idx[k]+0], bidx_ptr[k][2*cur_idx[k]+1]
+                    break
+                else:
+                    if k == 0:      # reached the end of the first dimension?
+                        done = True
+                        break
+                    cur_idx[k] = 0
+                    block_i[k], block_j[k] = bidx_ptr[k][2*cur_idx[k]+0], bidx_ptr[k][2*cur_idx[k]+1]
+                    # go on to increment previous one
+
+    if idx < N: # TODO: what's the closed formula for N in the triangular case?
+        return results[:, :idx]
+    else:
+        return results
+

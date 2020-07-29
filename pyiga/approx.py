@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Methods for approximating functions in tensor product spline spaces."""
+"""Methods for approximating functions in spline spaces."""
 from __future__ import print_function
 
 from . import bspline
@@ -7,6 +7,7 @@ from . import assemble
 from . import tensor
 from . import operators
 from . import utils
+from . import hierarchical
 
 import sys
 import scipy.sparse.linalg
@@ -40,6 +41,15 @@ def interpolate(kvs, f, geo=None, nodes=None):
                 for i in range(len(kvs))]
     return tensor.apply_tprod(Cinvs, rhs)
 
+def _project_L2_hspace(hs, f, f_physical=False, geo=None):
+    from . import vform, geometry
+    if geo is None:
+        geo = geometry.identity(hs.knotvectors(0))
+    M = assemble.assemble(vform.mass_vf(hs.dim), hs, geo=geo)
+    rhs = assemble.assemble(vform.L2functional_vf(hs.dim, physical=f_physical),
+            hs, geo=geo, f=f)
+    return operators.make_solver(M, spd=True).dot(rhs)
+
 def project_L2(kvs, f, f_physical=False, geo=None):
     """Perform :math:`L_2`-projection into a spline space.
 
@@ -51,8 +61,13 @@ def project_L2(kvs, f, f_physical=False, geo=None):
     By default, `f` is assumed to be defined in the parameter domain. If it is
     given in physical coordinates, pass `f_physical=True`. This requires `geo`
     to be specified.
+
+    This function also supports projection into a hierarchical spline space by
+    passing a :class:`.HSpace` object in place of `kvs`.
     """
-    if isinstance(kvs, bspline.KnotVector):
+    if isinstance(kvs, hierarchical.HSpace):
+        return _project_L2_hspace(kvs, f, f_physical, geo)
+    elif isinstance(kvs, bspline.KnotVector):
         kvs = (kvs,)
     Minvs = [operators.make_solver(assemble.mass(kv), spd=True) for kv in kvs]
     rhs = assemble.inner_products(kvs, f, f_physical=f_physical, geo=geo)

@@ -7,10 +7,10 @@ def _make_hs(p=3, n=3):
     kv = bspline.make_knots(p, 0.0, 1.0, n)
     return HSpace((kv, kv))
 
-def create_example_hspace(p, dim, n0, disparity=np.inf, num_levels=3):
+def create_example_hspace(p, dim, n0, disparity=np.inf, truncate=False, num_levels=3):
     bdspecs = [(0,0), (0,1), (1,0), (1,1)] if dim==2 else [(0,0),(0,1)]
     hs = HSpace(dim * (bspline.make_knots(p, 0.0, 1.0, n0),),
-            disparity=disparity, bdspecs=bdspecs)
+            truncate=truncate, disparity=disparity, bdspecs=bdspecs)
     # perform local refinement
     delta = 0.5
     for lv in range(num_levels):
@@ -252,3 +252,20 @@ def test_prolongators():
     f_thb = HSplineFunc(hs, u)
     # compare it to the original function
     assert np.allclose(f0.grid_eval(X), f_thb.grid_eval(X))
+
+def test_project_L2():
+    def f(x, y): return x**2 - 4*x*y + y**3
+    X = 2 * (np.linspace(0, 1, 20),)
+    from pyiga import approx
+
+    # HB-splines
+    hs = create_example_hspace(p=3, dim=2, n0=4, disparity=np.inf, num_levels=3)
+    u = approx.project_L2(hs, f, f_physical=True)   # geo=None
+    u_func = HSplineFunc(hs, u)
+    assert np.allclose(utils.grid_eval(f, X), u_func.grid_eval(X))
+
+    # THB-splines
+    hs = create_example_hspace(p=3, dim=2, n0=4, disparity=np.inf, truncate=True, num_levels=3)
+    u = approx.project_L2(hs, f, f_physical=True)   # geo=None
+    u_func = HSplineFunc(hs, u)
+    assert np.allclose(utils.grid_eval(f, X), u_func.grid_eval(X))

@@ -205,8 +205,7 @@ class AsmGenerator:
         # function definition
         self.cython_pragmas()
         self.put('@staticmethod')
-        rettype = 'void' if self.vec else 'double'
-        self.putf('cdef {rettype} combine(', rettype=rettype)
+        self.put('cdef void combine(')
         self.indent(2)
         # dimension arguments
         self.put(self.dimrep('size_t n{}') + ',')
@@ -222,15 +221,16 @@ class AsmGenerator:
         for bfun in self.vform.basis_funs:
             self.put(self.dimrep('double* VD%s{}' % bfun.name) + ',')
 
-        if self.vec:    # for vector assemblers, result is passed as a pointer
-            self.put('double result[]')
+        self.put('double result[]')     # output argument
         self.dedent()
         self.put(') nogil:')
 
         # local variables
-        if not self.vec:    # for vector assemblers, result is passed as a pointer
-            self.declare_scalar('result', '0.0')
-
+        if not self.vec:
+            self.declare_scalar('r', '0.0')
+        else:
+            self.putf('cdef double* r = [ {init} ]', vec=self.vec,
+                    init=', '.join(self.vec * ('0.0',)))
         self.declare_custom_variables()
 
         self.put('')
@@ -246,10 +246,10 @@ class AsmGenerator:
         if self.vec:
             for expr in self.vform.exprs:
                 for i, e_i in enumerate(expr):
-                    self.put(('result[%d] += ' % i) + e_i.gencode())
+                    self.put(('r[%d] += ' % i) + e_i.gencode())
         else:
             for expr in self.vform.exprs:
-                self.put('result += ' + expr.gencode())
+                self.put('r += ' + expr.gencode())
 
         # end main loop
         for _ in range(self.dim):
@@ -257,18 +257,16 @@ class AsmGenerator:
         ############################################################
 
         if not self.vec:
-            self.put('return result')
+            self.put('result[0] = r')
+        else:
+            for i in range(self.vec):
+                self.putf('result[{i}] = r[{i}]', i=i)
+
         self.end_function()
 
     def gen_entry_impl_header(self):
-        if self.vec:
-            funcdecl = 'cdef void entry_impl(self, size_t[{dim}] i, size_t[{dim}] j, double result[]) nogil:'.format(dim=self.dim)
-        else:
-            funcdecl = 'cdef double entry_impl(self, size_t[{dim}] i, size_t[{dim}] j) nogil:'.format(dim=self.dim)
-        zeroret = '' if self.vec else '0.0'  # for vector assemblers, result[] is 0-initialized
-
         self.cython_pragmas()
-        self.putf(funcdecl)
+        self.putf('cdef void entry_impl(self, size_t[{dim}] i, size_t[{dim}] j, double result[]) nogil:')
         self.indent()
         self.putf('cdef int k')
         self.putf('cdef IntInterval intv')
@@ -297,7 +295,7 @@ class AsmGenerator:
                             k=k, space=bfun.space, idx=idx)
                 self.dedent(2)
                 self.put(')')
-                self.put('if intv.a >= intv.b: return ' + zeroret + '  # no intersection of support')
+                self.put('if intv.a >= intv.b: return   # no intersection of support')
 
             if self.on_demand:
                 self.putf('g_sta[{k}] = self.nqp * intv.a - self.bbox_ofs[{k}]    # start of Gauss nodes', k=k)
@@ -317,10 +315,7 @@ class AsmGenerator:
         self.gen_entry_impl_header()
 
         # generate call to assembler kernel
-        if self.vec:
-            self.putf('{classname}.combine(', classname=self.classname)
-        else:
-            self.putf('return {classname}.combine(', classname=self.classname)
+        self.putf('{classname}.combine(', classname=self.classname)
         self.indent(2)
 
         # generate dimension arguments
@@ -336,9 +331,8 @@ class AsmGenerator:
         for bfun in self.vform.basis_funs:
             self.put(self.dimrep('values_%s[{0}]' % bfun.name) + ',')
 
-        # generate output argument if needed (for vector assemblers)
-        if self.vec:
-            self.put('result')
+        # generate output argument
+        self.put('result')
 
         self.dedent(2)
         self.put(')')
@@ -605,27 +599,31 @@ cdef class BaseAssembler{{DIM}}D:
     cdef tuple gaussgrid
     cdef size_t[{{DIM}}] bbox_ofs
 
-    cdef double entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j) nogil:
-        return -9999.99  # Not implemented
+    cdef void entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j, double result[]) nogil:
+        pass
 
     cpdef double entry1(self, size_t i):
         """Compute an entry of the vector to be assembled."""
         if self.arity != 1:
             return 0.0
         cdef size_t[{{DIM}}] I
+        cdef double result = 0.0
         with nogil:
             from_seq{{DIM}}(i, self.S0_ndofs, I)
-            return self.entry_impl(I, <size_t*>0)
+            self.entry_impl(I, <size_t*>0, &result)
+            return result
 
     cpdef double entry(self, size_t i, size_t j):
         """Compute an entry of the matrix."""
         if self.arity != 2:
             return 0.0
         cdef size_t[{{DIM}}] I, J
+        cdef double result = 0.0
         with nogil:
             from_seq{{DIM}}(i, self.S1_ndofs, I)
             from_seq{{DIM}}(j, self.S0_ndofs, J)
-            return self.entry_impl(I, J)
+            self.entry_impl(I, J, &result)
+            return result
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -638,7 +636,7 @@ cdef class BaseAssembler{{DIM}}D:
         for k in range(idx_arr.shape[0]):
             from_seq{{DIM}}(idx_arr[k,0], self.S1_ndofs, I)
             from_seq{{DIM}}(idx_arr[k,1], self.S0_ndofs, J)
-            out[k] = self.entry_impl(I, J)
+            self.entry_impl(I, J, &out[k])
 
     def multi_entries1(self, indices):
         """Compute all entries given by `indices`.
@@ -677,7 +675,7 @@ cdef class BaseAssembler{{DIM}}D:
         else:   # possibly given as iterator
             idx_arr = np.array(list(indices), dtype=np.uintp)
 
-        cdef double[::1] result = np.empty(idx_arr.shape[0])
+        cdef double[::1] result = np.zeros(idx_arr.shape[0])
 
         num_threads = pyiga.get_max_threads()
         if num_threads <= 1:
@@ -702,7 +700,7 @@ cdef class BaseAssembler{{DIM}}D:
     def assemble_vector(self):
         if self.arity != 1:
             return None
-        result = np.empty(tuple(self.S0_ndofs), order='C')
+        result = np.zeros(tuple(self.S0_ndofs), order='C')
         cdef double[{{ dimrepeat(':') }}:1] _result = result
         cdef double* out = &_result[ {{ dimrepeat('0') }} ]
 
@@ -711,7 +709,7 @@ cdef class BaseAssembler{{DIM}}D:
         {{ dimrepeat('I[{}]', sep=' = ') }} = 0
         with nogil:
             while True:
-               out[0] = self.entry_impl(I, <size_t*>0)
+               self.entry_impl(I, <size_t*>0, out)
                out += 1
                if not next_lexicographic{{DIM}}(I, zero, self.S0_ndofs):
                    break
@@ -789,7 +787,8 @@ cdef void _asm_core_{{DIM}}d_kernel(
 {{ indent(k)   }}        if {{ dimrepeat('diag{} == 0', sep=' and ', upper=k) }} and diag{{k}} > 0:
 {{ indent(k)   }}            continue
 {% endfor %}
-{{ indent(DIM) }}entry = asm.entry_impl(i, j)
+{{ indent(DIM) }}entry = 0.0
+{{ indent(DIM) }}asm.entry_impl(i, j, &entry)
 {{ indent(DIM) }}entries[{{ dimrepeat('mu{}') }}] = entry
 
 {{ indent(DIM) }}if symmetric:

@@ -111,13 +111,14 @@ cdef class MassAssembler2D(BaseAssembler2D):
     @cython.wraparound(False)
     @cython.initializedcheck(False)
     @staticmethod
-    cdef double combine(
+    cdef void combine(
             size_t n0, size_t n1,
             double[:, :] _W,
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
+            double result[]
         ) nogil:
-        cdef double result = 0.0
+        cdef double r = 0.0
 
         cdef double W
         cdef size_t i0
@@ -127,13 +128,13 @@ cdef class MassAssembler2D(BaseAssembler2D):
             for i1 in range(n1):
                 W = _W[i0, i1]
 
-                result += (((VDu0[1*i0+0] * VDu1[1*i1+0]) * (VDv0[1*i0+0] * VDv1[1*i1+0])) * W)
-        return result
+                r += (((VDu0[1*i0+0] * VDu1[1*i1+0]) * (VDv0[1*i0+0] * VDv1[1*i1+0])) * W)
+        result[0] = r
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
+    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[2]
@@ -144,7 +145,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
                 make_intv(self.S0_meshsupp0[j[0],0], self.S0_meshsupp0[j[0],1]),
                 make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1]),
         )
-        if intv.a >= intv.b: return 0.0  # no intersection of support
+        if intv.a >= intv.b: return   # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ j[0], g_sta[0], 0 ]
@@ -153,17 +154,18 @@ cdef class MassAssembler2D(BaseAssembler2D):
                 make_intv(self.S0_meshsupp1[j[1],0], self.S0_meshsupp1[j[1],1]),
                 make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1]),
         )
-        if intv.a >= intv.b: return 0.0  # no intersection of support
+        if intv.a >= intv.b: return   # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ j[1], g_sta[1], 0 ]
         values_v[1] = &self.S0_C1[ i[1], g_sta[1], 0 ]
 
-        return MassAssembler2D.combine(
+        MassAssembler2D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_u[0], values_u[1],
                 values_v[0], values_v[1],
+                result
         )
 
 cdef class StiffnessAssembler2D(BaseAssembler2D):
@@ -266,13 +268,14 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
     @cython.wraparound(False)
     @cython.initializedcheck(False)
     @staticmethod
-    cdef double combine(
+    cdef void combine(
             size_t n0, size_t n1,
             double[:, :, :, :] _B,
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
+            double result[]
         ) nogil:
-        cdef double result = 0.0
+        cdef double r = 0.0
 
         cdef double _dv_01
         cdef double _dv_10
@@ -290,13 +293,13 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
                 _dv_10 = (VDv0[2*i0+0] * VDv1[2*i1+1])
                 _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
                 _du_10 = (VDu0[2*i0+0] * VDu1[2*i1+1])
-                result += ((((B[0] * _du_10) + (B[1] * _du_01)) * _dv_10) + (((B[1] * _du_10) + (B[3] * _du_01)) * _dv_01))
-        return result
+                r += ((((B[0] * _du_10) + (B[1] * _du_01)) * _dv_10) + (((B[1] * _du_10) + (B[3] * _du_01)) * _dv_01))
+        result[0] = r
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
+    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[2]
@@ -307,7 +310,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
                 make_intv(self.S0_meshsupp0[j[0],0], self.S0_meshsupp0[j[0],1]),
                 make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1]),
         )
-        if intv.a >= intv.b: return 0.0  # no intersection of support
+        if intv.a >= intv.b: return   # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ j[0], g_sta[0], 0 ]
@@ -316,17 +319,18 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
                 make_intv(self.S0_meshsupp1[j[1],0], self.S0_meshsupp1[j[1],1]),
                 make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1]),
         )
-        if intv.a >= intv.b: return 0.0  # no intersection of support
+        if intv.a >= intv.b: return   # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ j[1], g_sta[1], 0 ]
         values_v[1] = &self.S0_C1[ i[1], g_sta[1], 0 ]
 
-        return StiffnessAssembler2D.combine(
+        StiffnessAssembler2D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1],
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_u[0], values_u[1],
                 values_v[0], values_v[1],
+                result
         )
 
 cdef class HeatAssembler_ST2D(BaseAssembler2D):
@@ -430,14 +434,15 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
     @cython.wraparound(False)
     @cython.initializedcheck(False)
     @staticmethod
-    cdef double combine(
+    cdef void combine(
             size_t n0, size_t n1,
             double[:, :] _W,
             double[:, :, :, :] _JacInv,
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
+            double result[]
         ) nogil:
-        cdef double result = 0.0
+        cdef double r = 0.0
 
         cdef double _dv_10
         cdef double _du_01
@@ -455,13 +460,13 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
                 _dv_10 = (VDv0[2*i0+0] * VDv1[2*i1+1])
                 _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
                 _du_10 = (VDu0[2*i0+0] * VDu1[2*i1+1])
-                result += ((((JacInv[0] * _du_10) * (JacInv[0] * _dv_10)) + (_du_01 * (VDv0[2*i0+0] * VDv1[2*i1+0]))) * W)
-        return result
+                r += ((((JacInv[0] * _du_10) * (JacInv[0] * _dv_10)) + (_du_01 * (VDv0[2*i0+0] * VDv1[2*i1+0]))) * W)
+        result[0] = r
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
+    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[2]
@@ -472,7 +477,7 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
                 make_intv(self.S0_meshsupp0[j[0],0], self.S0_meshsupp0[j[0],1]),
                 make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1]),
         )
-        if intv.a >= intv.b: return 0.0  # no intersection of support
+        if intv.a >= intv.b: return   # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ j[0], g_sta[0], 0 ]
@@ -481,18 +486,19 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
                 make_intv(self.S0_meshsupp1[j[1],0], self.S0_meshsupp1[j[1],1]),
                 make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1]),
         )
-        if intv.a >= intv.b: return 0.0  # no intersection of support
+        if intv.a >= intv.b: return   # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ j[1], g_sta[1], 0 ]
         values_v[1] = &self.S0_C1[ i[1], g_sta[1], 0 ]
 
-        return HeatAssembler_ST2D.combine(
+        HeatAssembler_ST2D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_u[0], values_u[1],
                 values_v[0], values_v[1],
+                result
         )
 
 cdef class WaveAssembler_ST2D(BaseAssembler2D):
@@ -596,14 +602,15 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
     @cython.wraparound(False)
     @cython.initializedcheck(False)
     @staticmethod
-    cdef double combine(
+    cdef void combine(
             size_t n0, size_t n1,
             double[:, :] _W,
             double[:, :, :, :] _JacInv,
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
+            double result[]
         ) nogil:
-        cdef double result = 0.0
+        cdef double r = 0.0
 
         cdef double _dv_11
         cdef double _dv_01
@@ -623,13 +630,13 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
                 _dv_01 = (VDv0[3*i0+1] * VDv1[3*i1+0])
                 _du_10 = (VDu0[3*i0+0] * VDu1[3*i1+1])
                 _du_02 = (VDu0[3*i0+2] * VDu1[3*i1+0])
-                result += (((_du_02 * _dv_01) + ((JacInv[0] * _du_10) * (JacInv[0] * _dv_11))) * W)
-        return result
+                r += (((_du_02 * _dv_01) + ((JacInv[0] * _du_10) * (JacInv[0] * _dv_11))) * W)
+        result[0] = r
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
+    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[2]
@@ -640,7 +647,7 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
                 make_intv(self.S0_meshsupp0[j[0],0], self.S0_meshsupp0[j[0],1]),
                 make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1]),
         )
-        if intv.a >= intv.b: return 0.0  # no intersection of support
+        if intv.a >= intv.b: return   # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ j[0], g_sta[0], 0 ]
@@ -649,18 +656,19 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
                 make_intv(self.S0_meshsupp1[j[1],0], self.S0_meshsupp1[j[1],1]),
                 make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1]),
         )
-        if intv.a >= intv.b: return 0.0  # no intersection of support
+        if intv.a >= intv.b: return   # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ j[1], g_sta[1], 0 ]
         values_v[1] = &self.S0_C1[ i[1], g_sta[1], 0 ]
 
-        return WaveAssembler_ST2D.combine(
+        WaveAssembler_ST2D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_u[0], values_u[1],
                 values_v[0], values_v[1],
+                result
         )
 
 cdef class DivDivAssembler2D(BaseVectorAssembler2D):
@@ -773,6 +781,7 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
             double* VDv0, double* VDv1,
             double result[]
         ) nogil:
+        cdef double* r = [ 0.0, 0.0, 0.0, 0.0 ]
 
         cdef double _dv_01
         cdef double _dv_10
@@ -800,10 +809,14 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
                 _du_10 = (VDu0[2*i0+0] * VDu1[2*i1+1])
                 _tmp5 = ((JacInv[1] * _du_10) + (JacInv[3] * _du_01))
                 _tmp3 = ((JacInv[0] * _du_10) + (JacInv[2] * _du_01))
-                result[0] += ((_tmp3 * _tmp4) * W)
-                result[1] += ((_tmp5 * _tmp4) * W)
-                result[2] += ((_tmp3 * _tmp6) * W)
-                result[3] += ((_tmp5 * _tmp6) * W)
+                r[0] += ((_tmp3 * _tmp4) * W)
+                r[1] += ((_tmp5 * _tmp4) * W)
+                r[2] += ((_tmp3 * _tmp6) * W)
+                r[3] += ((_tmp5 * _tmp6) * W)
+        result[0] = r[0]
+        result[1] = r[1]
+        result[2] = r[2]
+        result[3] = r[3]
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -933,13 +946,14 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
     @cython.wraparound(False)
     @cython.initializedcheck(False)
     @staticmethod
-    cdef double combine(
+    cdef void combine(
             size_t n0, size_t n1,
             double[:, :] _W,
             double[:, :] _f_a,
             double* VDu0, double* VDu1,
+            double result[]
         ) nogil:
-        cdef double result = 0.0
+        cdef double r = 0.0
 
         cdef double W
         cdef double f_a
@@ -951,13 +965,13 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
                 W = _W[i0, i1]
                 f_a = _f_a[i0, i1]
 
-                result += ((f_a * (VDu0[1*i0+0] * VDu1[1*i1+0])) * W)
-        return result
+                r += ((f_a * (VDu0[1*i0+0] * VDu1[1*i1+0])) * W)
+        result[0] = r
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
+    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[2]
@@ -972,11 +986,12 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ i[1], g_sta[1], 0 ]
 
-        return L2FunctionalAssembler2D.combine(
+        L2FunctionalAssembler2D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 self.f_a [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_u[0], values_u[1],
+                result
         )
 
 cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
@@ -1069,13 +1084,14 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
     @cython.wraparound(False)
     @cython.initializedcheck(False)
     @staticmethod
-    cdef double combine(
+    cdef void combine(
             size_t n0, size_t n1,
             double[:, :] _W,
             double[:, :] _f_a,
             double* VDu0, double* VDu1,
+            double result[]
         ) nogil:
-        cdef double result = 0.0
+        cdef double r = 0.0
 
         cdef double W
         cdef double f_a
@@ -1087,13 +1103,13 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
                 W = _W[i0, i1]
                 f_a = _f_a[i0, i1]
 
-                result += ((f_a * (VDu0[1*i0+0] * VDu1[1*i1+0])) * W)
-        return result
+                r += ((f_a * (VDu0[1*i0+0] * VDu1[1*i1+0])) * W)
+        result[0] = r
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
+    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[2]
@@ -1108,11 +1124,12 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ i[1], g_sta[1], 0 ]
 
-        return L2FunctionalAssemblerPhys2D.combine(
+        L2FunctionalAssemblerPhys2D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 self.f_a [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_u[0], values_u[1],
+                result
         )
 cdef class MassAssembler3D(BaseAssembler3D):
     cdef double[:, :, ::1] W
@@ -1213,13 +1230,14 @@ cdef class MassAssembler3D(BaseAssembler3D):
     @cython.wraparound(False)
     @cython.initializedcheck(False)
     @staticmethod
-    cdef double combine(
+    cdef void combine(
             size_t n0, size_t n1, size_t n2,
             double[:, :, :] _W,
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
+            double result[]
         ) nogil:
-        cdef double result = 0.0
+        cdef double r = 0.0
 
         cdef double W
         cdef size_t i0
@@ -1231,13 +1249,13 @@ cdef class MassAssembler3D(BaseAssembler3D):
                 for i2 in range(n2):
                     W = _W[i0, i1, i2]
 
-                    result += (((VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0]) * (VDv0[1*i0+0] * VDv1[1*i1+0] * VDv2[1*i2+0])) * W)
-        return result
+                    r += (((VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0]) * (VDv0[1*i0+0] * VDv1[1*i1+0] * VDv2[1*i2+0])) * W)
+        result[0] = r
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
+    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[3]
@@ -1248,7 +1266,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp0[j[0],0], self.S0_meshsupp0[j[0],1]),
                 make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1]),
         )
-        if intv.a >= intv.b: return 0.0  # no intersection of support
+        if intv.a >= intv.b: return   # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ j[0], g_sta[0], 0 ]
@@ -1257,7 +1275,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp1[j[1],0], self.S0_meshsupp1[j[1],1]),
                 make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1]),
         )
-        if intv.a >= intv.b: return 0.0  # no intersection of support
+        if intv.a >= intv.b: return   # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ j[1], g_sta[1], 0 ]
@@ -1266,17 +1284,18 @@ cdef class MassAssembler3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp2[j[2],0], self.S0_meshsupp2[j[2],1]),
                 make_intv(self.S0_meshsupp2[i[2],0], self.S0_meshsupp2[i[2],1]),
         )
-        if intv.a >= intv.b: return 0.0  # no intersection of support
+        if intv.a >= intv.b: return   # no intersection of support
         g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
         g_end[2] = self.nqp * intv.b    # end of Gauss nodes
         values_u[2] = &self.S0_C2[ j[2], g_sta[2], 0 ]
         values_v[2] = &self.S0_C2[ i[2], g_sta[2], 0 ]
 
-        return MassAssembler3D.combine(
+        MassAssembler3D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1], g_end[2]-g_sta[2],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_u[0], values_u[1], values_u[2],
                 values_v[0], values_v[1], values_v[2],
+                result
         )
 
 cdef class StiffnessAssembler3D(BaseAssembler3D):
@@ -1405,13 +1424,14 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
     @cython.wraparound(False)
     @cython.initializedcheck(False)
     @staticmethod
-    cdef double combine(
+    cdef void combine(
             size_t n0, size_t n1, size_t n2,
             double[:, :, :, :, :] _B,
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
+            double result[]
         ) nogil:
-        cdef double result = 0.0
+        cdef double r = 0.0
 
         cdef double _dv_001
         cdef double _dv_010
@@ -1435,13 +1455,13 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                     _du_001 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
                     _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
                     _du_100 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
-                    result += ((((((B[0] * _du_100) + (B[1] * _du_010)) + (B[2] * _du_001)) * _dv_100) + ((((B[1] * _du_100) + (B[4] * _du_010)) + (B[5] * _du_001)) * _dv_010)) + ((((B[2] * _du_100) + (B[5] * _du_010)) + (B[8] * _du_001)) * _dv_001))
-        return result
+                    r += ((((((B[0] * _du_100) + (B[1] * _du_010)) + (B[2] * _du_001)) * _dv_100) + ((((B[1] * _du_100) + (B[4] * _du_010)) + (B[5] * _du_001)) * _dv_010)) + ((((B[2] * _du_100) + (B[5] * _du_010)) + (B[8] * _du_001)) * _dv_001))
+        result[0] = r
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
+    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[3]
@@ -1452,7 +1472,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp0[j[0],0], self.S0_meshsupp0[j[0],1]),
                 make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1]),
         )
-        if intv.a >= intv.b: return 0.0  # no intersection of support
+        if intv.a >= intv.b: return   # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ j[0], g_sta[0], 0 ]
@@ -1461,7 +1481,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp1[j[1],0], self.S0_meshsupp1[j[1],1]),
                 make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1]),
         )
-        if intv.a >= intv.b: return 0.0  # no intersection of support
+        if intv.a >= intv.b: return   # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ j[1], g_sta[1], 0 ]
@@ -1470,17 +1490,18 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp2[j[2],0], self.S0_meshsupp2[j[2],1]),
                 make_intv(self.S0_meshsupp2[i[2],0], self.S0_meshsupp2[i[2],1]),
         )
-        if intv.a >= intv.b: return 0.0  # no intersection of support
+        if intv.a >= intv.b: return   # no intersection of support
         g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
         g_end[2] = self.nqp * intv.b    # end of Gauss nodes
         values_u[2] = &self.S0_C2[ j[2], g_sta[2], 0 ]
         values_v[2] = &self.S0_C2[ i[2], g_sta[2], 0 ]
 
-        return StiffnessAssembler3D.combine(
+        StiffnessAssembler3D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1], g_end[2]-g_sta[2],
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_u[0], values_u[1], values_u[2],
                 values_v[0], values_v[1], values_v[2],
+                result
         )
 
 cdef class HeatAssembler_ST3D(BaseAssembler3D):
@@ -1607,14 +1628,15 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
     @cython.wraparound(False)
     @cython.initializedcheck(False)
     @staticmethod
-    cdef double combine(
+    cdef void combine(
             size_t n0, size_t n1, size_t n2,
             double[:, :, :] _W,
             double[:, :, :, :, :] _JacInv,
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
+            double result[]
         ) nogil:
-        cdef double result = 0.0
+        cdef double r = 0.0
 
         cdef double _dv_010
         cdef double _dv_100
@@ -1638,13 +1660,13 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
                     _du_001 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
                     _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
                     _du_100 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
-                    result += ((((((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) * ((JacInv[0] * _dv_100) + (JacInv[3] * _dv_010))) + (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) * ((JacInv[1] * _dv_100) + (JacInv[4] * _dv_010)))) + (_du_001 * (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+0]))) * W)
-        return result
+                    r += ((((((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) * ((JacInv[0] * _dv_100) + (JacInv[3] * _dv_010))) + (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) * ((JacInv[1] * _dv_100) + (JacInv[4] * _dv_010)))) + (_du_001 * (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+0]))) * W)
+        result[0] = r
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
+    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[3]
@@ -1655,7 +1677,7 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp0[j[0],0], self.S0_meshsupp0[j[0],1]),
                 make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1]),
         )
-        if intv.a >= intv.b: return 0.0  # no intersection of support
+        if intv.a >= intv.b: return   # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ j[0], g_sta[0], 0 ]
@@ -1664,7 +1686,7 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp1[j[1],0], self.S0_meshsupp1[j[1],1]),
                 make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1]),
         )
-        if intv.a >= intv.b: return 0.0  # no intersection of support
+        if intv.a >= intv.b: return   # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ j[1], g_sta[1], 0 ]
@@ -1673,18 +1695,19 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp2[j[2],0], self.S0_meshsupp2[j[2],1]),
                 make_intv(self.S0_meshsupp2[i[2],0], self.S0_meshsupp2[i[2],1]),
         )
-        if intv.a >= intv.b: return 0.0  # no intersection of support
+        if intv.a >= intv.b: return   # no intersection of support
         g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
         g_end[2] = self.nqp * intv.b    # end of Gauss nodes
         values_u[2] = &self.S0_C2[ j[2], g_sta[2], 0 ]
         values_v[2] = &self.S0_C2[ i[2], g_sta[2], 0 ]
 
-        return HeatAssembler_ST3D.combine(
+        HeatAssembler_ST3D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1], g_end[2]-g_sta[2],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_u[0], values_u[1], values_u[2],
                 values_v[0], values_v[1], values_v[2],
+                result
         )
 
 cdef class WaveAssembler_ST3D(BaseAssembler3D):
@@ -1811,14 +1834,15 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
     @cython.wraparound(False)
     @cython.initializedcheck(False)
     @staticmethod
-    cdef double combine(
+    cdef void combine(
             size_t n0, size_t n1, size_t n2,
             double[:, :, :] _W,
             double[:, :, :, :, :] _JacInv,
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
+            double result[]
         ) nogil:
-        cdef double result = 0.0
+        cdef double r = 0.0
 
         cdef double _dv_011
         cdef double _dv_101
@@ -1844,13 +1868,13 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
                     _du_010 = (VDu0[3*i0+0] * VDu1[3*i1+1] * VDu2[3*i2+0])
                     _du_100 = (VDu0[3*i0+0] * VDu1[3*i1+0] * VDu2[3*i2+1])
                     _du_002 = (VDu0[3*i0+2] * VDu1[3*i1+0] * VDu2[3*i2+0])
-                    result += (((_du_002 * _dv_001) + ((((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) * ((JacInv[0] * _dv_101) + (JacInv[3] * _dv_011))) + (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) * ((JacInv[1] * _dv_101) + (JacInv[4] * _dv_011))))) * W)
-        return result
+                    r += (((_du_002 * _dv_001) + ((((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) * ((JacInv[0] * _dv_101) + (JacInv[3] * _dv_011))) + (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) * ((JacInv[1] * _dv_101) + (JacInv[4] * _dv_011))))) * W)
+        result[0] = r
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
+    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[3]
@@ -1861,7 +1885,7 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp0[j[0],0], self.S0_meshsupp0[j[0],1]),
                 make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1]),
         )
-        if intv.a >= intv.b: return 0.0  # no intersection of support
+        if intv.a >= intv.b: return   # no intersection of support
         g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
         g_end[0] = self.nqp * intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ j[0], g_sta[0], 0 ]
@@ -1870,7 +1894,7 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp1[j[1],0], self.S0_meshsupp1[j[1],1]),
                 make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1]),
         )
-        if intv.a >= intv.b: return 0.0  # no intersection of support
+        if intv.a >= intv.b: return   # no intersection of support
         g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
         g_end[1] = self.nqp * intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ j[1], g_sta[1], 0 ]
@@ -1879,18 +1903,19 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp2[j[2],0], self.S0_meshsupp2[j[2],1]),
                 make_intv(self.S0_meshsupp2[i[2],0], self.S0_meshsupp2[i[2],1]),
         )
-        if intv.a >= intv.b: return 0.0  # no intersection of support
+        if intv.a >= intv.b: return   # no intersection of support
         g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
         g_end[2] = self.nqp * intv.b    # end of Gauss nodes
         values_u[2] = &self.S0_C2[ j[2], g_sta[2], 0 ]
         values_v[2] = &self.S0_C2[ i[2], g_sta[2], 0 ]
 
-        return WaveAssembler_ST3D.combine(
+        WaveAssembler_ST3D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1], g_end[2]-g_sta[2],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_u[0], values_u[1], values_u[2],
                 values_v[0], values_v[1], values_v[2],
+                result
         )
 
 cdef class DivDivAssembler3D(BaseVectorAssembler3D):
@@ -2026,6 +2051,7 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
             double* VDv0, double* VDv1, double* VDv2,
             double result[]
         ) nogil:
+        cdef double* r = [ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ]
 
         cdef double _dv_001
         cdef double _dv_010
@@ -2063,15 +2089,24 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
                     _tmp6 = (((JacInv[2] * _du_100) + (JacInv[5] * _du_010)) + (JacInv[8] * _du_001))
                     _tmp5 = (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) + (JacInv[7] * _du_001))
                     _tmp3 = (((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) + (JacInv[6] * _du_001))
-                    result[0] += ((_tmp3 * _tmp4) * W)
-                    result[1] += ((_tmp5 * _tmp4) * W)
-                    result[2] += ((_tmp6 * _tmp4) * W)
-                    result[3] += ((_tmp3 * _tmp7) * W)
-                    result[4] += ((_tmp5 * _tmp7) * W)
-                    result[5] += ((_tmp6 * _tmp7) * W)
-                    result[6] += ((_tmp3 * _tmp8) * W)
-                    result[7] += ((_tmp5 * _tmp8) * W)
-                    result[8] += ((_tmp6 * _tmp8) * W)
+                    r[0] += ((_tmp3 * _tmp4) * W)
+                    r[1] += ((_tmp5 * _tmp4) * W)
+                    r[2] += ((_tmp6 * _tmp4) * W)
+                    r[3] += ((_tmp3 * _tmp7) * W)
+                    r[4] += ((_tmp5 * _tmp7) * W)
+                    r[5] += ((_tmp6 * _tmp7) * W)
+                    r[6] += ((_tmp3 * _tmp8) * W)
+                    r[7] += ((_tmp5 * _tmp8) * W)
+                    r[8] += ((_tmp6 * _tmp8) * W)
+        result[0] = r[0]
+        result[1] = r[1]
+        result[2] = r[2]
+        result[3] = r[3]
+        result[4] = r[4]
+        result[5] = r[5]
+        result[6] = r[6]
+        result[7] = r[7]
+        result[8] = r[8]
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -2222,13 +2257,14 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
     @cython.wraparound(False)
     @cython.initializedcheck(False)
     @staticmethod
-    cdef double combine(
+    cdef void combine(
             size_t n0, size_t n1, size_t n2,
             double[:, :, :] _W,
             double[:, :, :] _f_a,
             double* VDu0, double* VDu1, double* VDu2,
+            double result[]
         ) nogil:
-        cdef double result = 0.0
+        cdef double r = 0.0
 
         cdef double W
         cdef double f_a
@@ -2242,13 +2278,13 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
                     W = _W[i0, i1, i2]
                     f_a = _f_a[i0, i1, i2]
 
-                    result += ((f_a * (VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0])) * W)
-        return result
+                    r += ((f_a * (VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0])) * W)
+        result[0] = r
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
+    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[3]
@@ -2267,11 +2303,12 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
         g_end[2] = self.nqp * intv.b    # end of Gauss nodes
         values_u[2] = &self.S0_C2[ i[2], g_sta[2], 0 ]
 
-        return L2FunctionalAssembler3D.combine(
+        L2FunctionalAssembler3D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1], g_end[2]-g_sta[2],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 self.f_a [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_u[0], values_u[1], values_u[2],
+                result
         )
 
 cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
@@ -2376,13 +2413,14 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
     @cython.wraparound(False)
     @cython.initializedcheck(False)
     @staticmethod
-    cdef double combine(
+    cdef void combine(
             size_t n0, size_t n1, size_t n2,
             double[:, :, :] _W,
             double[:, :, :] _f_a,
             double* VDu0, double* VDu1, double* VDu2,
+            double result[]
         ) nogil:
-        cdef double result = 0.0
+        cdef double r = 0.0
 
         cdef double W
         cdef double f_a
@@ -2396,13 +2434,13 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
                     W = _W[i0, i1, i2]
                     f_a = _f_a[i0, i1, i2]
 
-                    result += ((f_a * (VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0])) * W)
-        return result
+                    r += ((f_a * (VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0])) * W)
+        result[0] = r
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
+    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
         cdef int k
         cdef IntInterval intv
         cdef size_t g_sta[3]
@@ -2421,9 +2459,10 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
         g_end[2] = self.nqp * intv.b    # end of Gauss nodes
         values_u[2] = &self.S0_C2[ i[2], g_sta[2], 0 ]
 
-        return L2FunctionalAssemblerPhys3D.combine(
+        L2FunctionalAssemblerPhys3D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1], g_end[2]-g_sta[2],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 self.f_a [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_u[0], values_u[1], values_u[2],
+                result
         )

@@ -22,27 +22,31 @@ cdef class BaseAssembler2D:
     cdef tuple gaussgrid
     cdef size_t[2] bbox_ofs
 
-    cdef double entry_impl(self, size_t[2] i, size_t[2] j) nogil:
-        return -9999.99  # Not implemented
+    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
+        pass
 
     cpdef double entry1(self, size_t i):
         """Compute an entry of the vector to be assembled."""
         if self.arity != 1:
             return 0.0
         cdef size_t[2] I
+        cdef double result = 0.0
         with nogil:
             from_seq2(i, self.S0_ndofs, I)
-            return self.entry_impl(I, <size_t*>0)
+            self.entry_impl(I, <size_t*>0, &result)
+            return result
 
     cpdef double entry(self, size_t i, size_t j):
         """Compute an entry of the matrix."""
         if self.arity != 2:
             return 0.0
         cdef size_t[2] I, J
+        cdef double result = 0.0
         with nogil:
             from_seq2(i, self.S1_ndofs, I)
             from_seq2(j, self.S0_ndofs, J)
-            return self.entry_impl(I, J)
+            self.entry_impl(I, J, &result)
+            return result
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -55,7 +59,7 @@ cdef class BaseAssembler2D:
         for k in range(idx_arr.shape[0]):
             from_seq2(idx_arr[k,0], self.S1_ndofs, I)
             from_seq2(idx_arr[k,1], self.S0_ndofs, J)
-            out[k] = self.entry_impl(I, J)
+            self.entry_impl(I, J, &out[k])
 
     def multi_entries1(self, indices):
         """Compute all entries given by `indices`.
@@ -94,7 +98,7 @@ cdef class BaseAssembler2D:
         else:   # possibly given as iterator
             idx_arr = np.array(list(indices), dtype=np.uintp)
 
-        cdef double[::1] result = np.empty(idx_arr.shape[0])
+        cdef double[::1] result = np.zeros(idx_arr.shape[0])
 
         num_threads = pyiga.get_max_threads()
         if num_threads <= 1:
@@ -119,7 +123,7 @@ cdef class BaseAssembler2D:
     def assemble_vector(self):
         if self.arity != 1:
             return None
-        result = np.empty(tuple(self.S0_ndofs), order='C')
+        result = np.zeros(tuple(self.S0_ndofs), order='C')
         cdef double[:, ::1] _result = result
         cdef double* out = &_result[ 0, 0 ]
 
@@ -128,7 +132,7 @@ cdef class BaseAssembler2D:
         I[0] = I[1] = 0
         with nogil:
             while True:
-               out[0] = self.entry_impl(I, <size_t*>0)
+               self.entry_impl(I, <size_t*>0, out)
                out += 1
                if not next_lexicographic2(I, zero, self.S0_ndofs):
                    break
@@ -205,7 +209,8 @@ cdef void _asm_core_2d_kernel(
             if diag0 == 0 and diag1 > 0:
                 continue
 
-        entry = asm.entry_impl(i, j)
+        entry = 0.0
+        asm.entry_impl(i, j, &entry)
         entries[mu0, mu1] = entry
 
         if symmetric:
@@ -379,27 +384,31 @@ cdef class BaseAssembler3D:
     cdef tuple gaussgrid
     cdef size_t[3] bbox_ofs
 
-    cdef double entry_impl(self, size_t[3] i, size_t[3] j) nogil:
-        return -9999.99  # Not implemented
+    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
+        pass
 
     cpdef double entry1(self, size_t i):
         """Compute an entry of the vector to be assembled."""
         if self.arity != 1:
             return 0.0
         cdef size_t[3] I
+        cdef double result = 0.0
         with nogil:
             from_seq3(i, self.S0_ndofs, I)
-            return self.entry_impl(I, <size_t*>0)
+            self.entry_impl(I, <size_t*>0, &result)
+            return result
 
     cpdef double entry(self, size_t i, size_t j):
         """Compute an entry of the matrix."""
         if self.arity != 2:
             return 0.0
         cdef size_t[3] I, J
+        cdef double result = 0.0
         with nogil:
             from_seq3(i, self.S1_ndofs, I)
             from_seq3(j, self.S0_ndofs, J)
-            return self.entry_impl(I, J)
+            self.entry_impl(I, J, &result)
+            return result
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -412,7 +421,7 @@ cdef class BaseAssembler3D:
         for k in range(idx_arr.shape[0]):
             from_seq3(idx_arr[k,0], self.S1_ndofs, I)
             from_seq3(idx_arr[k,1], self.S0_ndofs, J)
-            out[k] = self.entry_impl(I, J)
+            self.entry_impl(I, J, &out[k])
 
     def multi_entries1(self, indices):
         """Compute all entries given by `indices`.
@@ -451,7 +460,7 @@ cdef class BaseAssembler3D:
         else:   # possibly given as iterator
             idx_arr = np.array(list(indices), dtype=np.uintp)
 
-        cdef double[::1] result = np.empty(idx_arr.shape[0])
+        cdef double[::1] result = np.zeros(idx_arr.shape[0])
 
         num_threads = pyiga.get_max_threads()
         if num_threads <= 1:
@@ -476,7 +485,7 @@ cdef class BaseAssembler3D:
     def assemble_vector(self):
         if self.arity != 1:
             return None
-        result = np.empty(tuple(self.S0_ndofs), order='C')
+        result = np.zeros(tuple(self.S0_ndofs), order='C')
         cdef double[:, :, ::1] _result = result
         cdef double* out = &_result[ 0, 0, 0 ]
 
@@ -485,7 +494,7 @@ cdef class BaseAssembler3D:
         I[0] = I[1] = I[2] = 0
         with nogil:
             while True:
-               out[0] = self.entry_impl(I, <size_t*>0)
+               self.entry_impl(I, <size_t*>0, out)
                out += 1
                if not next_lexicographic3(I, zero, self.S0_ndofs):
                    break
@@ -572,7 +581,8 @@ cdef void _asm_core_3d_kernel(
                 if diag0 == 0 and diag1 == 0 and diag2 > 0:
                     continue
 
-            entry = asm.entry_impl(i, j)
+            entry = 0.0
+            asm.entry_impl(i, j, &entry)
             entries[mu0, mu1, mu2] = entry
 
             if symmetric:

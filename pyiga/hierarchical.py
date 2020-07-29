@@ -5,6 +5,9 @@ The main user-facing class is :class:`HSpace`, which describes a hierarchical
 spline space and supports HB- and THB-spline representations.
 Individual functions living in such a spline space are represented by the
 class :class:`HSplineFunc`, which follows the interface of :class:`.BSplineFunc`.
+L2 projection into a hierarchical spline space can be done using the
+:func:`pyiga.approx.project_L2` function.
+
 In order to compute the stiffness matrix and right-hand side vector for the
 Galerkin discretization of a variational problem in a hierarchical spline
 space, use :func:`pyiga.assemble.assemble`. Internally, this uses the

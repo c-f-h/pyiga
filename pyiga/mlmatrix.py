@@ -263,13 +263,10 @@ class MLMatrix(scipy.sparse.linalg.LinearOperator):
             return scipy.sparse.coo_matrix(
                     (self._data, (self.structure.bidx[0][:,0], self.structure.bidx[0][:,1])),
                     shape=self.shape).asformat(format)
-        elif self.L == 2:
-            A = inflate_2d_bidx(self._data, self.structure.bidx, self.structure._bs_arr)
-        elif self.L == 3:
-            A = inflate_3d_bidx(self._data, self.structure.bidx, self.structure._bs_arr)
         else:
-            assert False, 'dimension %d not implemented' % self.L
-        return A.asformat(format)
+            IJ = self.nonzero()
+            A = scipy.sparse.csr_matrix((self._data.ravel('C'), IJ), shape=self.shape)
+            return A.asformat(format)
 
     def _matvec(self, x):
         """Compute the matrix-vector product with vector `x`."""

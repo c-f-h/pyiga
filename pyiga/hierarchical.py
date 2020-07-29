@@ -1,8 +1,9 @@
-"""This module contains support for dealing with hierarchical spline spaces and
-truncated hierarchical B-splines (THB-splines).
+"""This module implements hierarchical spline spaces and supports the
+hierarchical B-spline (HB-spline) and truncated hierarchical B-spline
+(THB-spline) bases.
 
 The main user-facing class is :class:`HSpace`, which describes a hierarchical
-spline space and supports HB- and THB-spline representations.
+spline space and supports both HB- and THB-spline representations.
 Individual functions living in such a spline space are represented by the
 class :class:`HSplineFunc`, which follows the interface of :class:`.BSplineFunc`.
 L2 projection into a hierarchical spline space can be done using the
@@ -12,9 +13,6 @@ In order to compute the stiffness matrix and right-hand side vector for the
 Galerkin discretization of a variational problem in a hierarchical spline
 space, use :func:`pyiga.assemble.assemble`. Internally, this uses the
 :class:`HDiscretization` class.
-
-The implementation of :class:`HSpace` is loosely based on the approach
-described in [GV2018]_ and the corresponding implementation in [GeoPDEs]_.
 
 A tensor product B-spline basis function is usually referred to by a
 multi-index represented as a tuple `(i_1, ..., i_d)`, where `d` is the space
@@ -28,10 +26,13 @@ is required, for instance when assembling a stiffness matrix, we use the
 following **canonical order**: first, all active basis function on the coarsest
 level, then all active basis functions on the next finer level, and so on until
 the finest level. Within each level, the functions are ordered
-lexicographically with respect to their tensor product multi-index `(i_1, ...,
+lexicographically with respect to their tensor product multi-indices `(i_1, ...,
 i_d)`.
 
 The canonical order on active cells is defined in the same way.
+
+The implementation of :class:`HSpace` is loosely based on the approach
+described in [GV2018]_ and the corresponding implementation in [GeoPDEs]_.
 
 .. [GV2018] `Garau, Vázquez: "Algorithms for the implementation of adaptive
     isogeometric methods using hierarchical B-splines", 2018.

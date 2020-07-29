@@ -820,20 +820,60 @@ cdef class BaseVectorAssembler{{DIM}}D:
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
 
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef inline void from_seq(self, size_t i, size_t[{{DIM + 1}}] out) nogil:
-        out[{{DIM}}] = i % self.numcomp[0]
-        i /= self.numcomp[0]
-        {%- for k in range(1, DIM)|reverse %}
-        out[{{k}}] = i % self.S0_ndofs[{{k}}]
-        i /= self.S0_ndofs[{{k}}]
-        {%- endfor %}
-        out[0] = i
-
     cdef void entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j, double result[]) nogil:
         pass
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    cdef void multi_blocks_chunk(self, size_t[:,::1] idx_arr, double[:,:,::1] out) nogil:
+        if self.arity != 2:
+            return
+        cdef size_t[{{DIM}}] I, J
+        cdef size_t k
+
+        for k in range(idx_arr.shape[0]):
+            from_seq{{DIM}}(idx_arr[k,0], self.S1_ndofs, I)
+            from_seq{{DIM}}(idx_arr[k,1], self.S0_ndofs, J)
+            self.entry_impl(I, J, &out[k, 0, 0])
+
+    def multi_blocks(self, indices):
+        """Compute all blocks with the given `indices`.
+
+        Args:
+            indices: a sequence of `(i,j)` pairs or an `ndarray`
+            of size `N x 2`.
+        Returns:
+            an array of size `N x numcomp[0] x numcomp[1]`
+        """
+        if self.arity == 1:
+            return None #self.multi_entries1(indices)
+        elif self.arity != 2:
+            return None
+        cdef size_t[:,::1] idx_arr
+        if isinstance(indices, np.ndarray):
+            idx_arr = np.asarray(indices, order='C', dtype=np.uintp)
+        else:   # possibly given as iterator
+            idx_arr = np.array(list(indices), dtype=np.uintp)
+
+        cdef double[:, :, ::1] result = np.zeros((idx_arr.shape[0], self.numcomp[0], self.numcomp[1]))
+
+        num_threads = pyiga.get_max_threads()
+        if num_threads <= 1:
+            self.multi_blocks_chunk(idx_arr, result)
+        else:
+            thread_pool = get_thread_pool()
+
+            def asm_chunk(idxchunk, out):
+                cdef size_t[:, ::1] idxchunk_ = idxchunk
+                cdef double[:, :, ::1] out_ = out
+                with nogil:
+                    self.multi_blocks_chunk(idxchunk_, out_)
+
+            results = thread_pool.map(asm_chunk,
+                        chunk_tasks(idx_arr, num_threads),
+                        chunk_tasks(result, num_threads))
+            list(results)   # wait for threads to finish
+        return result
 
     @cython.boundscheck(False)
     @cython.wraparound(False)

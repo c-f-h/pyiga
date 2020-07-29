@@ -331,6 +331,22 @@ def test_assemble_string():
         assemble('inner(grad(u), grad(v)) * dx', kvs)
     assert str(cm.exception) == "required input parameter 'geo' missing"
 
+def test_assemble_nonsym_vec():
+    kvs = 2 * (bspline.make_knots(2, 0.0, 1.0, 5),)
+    geo = geometry.quarter_annulus()
+
+    problem = 'inner(as_matrix([[2,1],[0,0]]).dot(u), v) * dx'
+    A = assemble(problem, kvs, geo=geo, bfuns=[('u',2), ('v',2)], layout='packed')
+    u = interpolate(kvs, lambda x, y: (x*y, -2*x*y), geo=geo)
+    assert np.allclose(A @ u.ravel(), 0)
+
+    # test the blockwise assembling using multi_blocks
+    asm = instantiate_assembler(problem, kvs, args={'geo': geo}, bfuns=[('u',2), ('v',2)])
+    blocks = np.array(asm.multi_blocks([(0,0), (0,1), (2,1)]))
+    assert np.array_equal(blocks[0], A[0:2, 0:2].A)
+    assert np.array_equal(blocks[1], A[0:2, 2:4].A)
+    assert np.array_equal(blocks[2], A[4:6, 2:4].A)
+
 ################################################################################
 # Test integrals
 ################################################################################

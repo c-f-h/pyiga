@@ -826,20 +826,26 @@ def assemble(problem, kvs, args=None, bfuns=None, symmetric=False, format='csr',
     For the meaning of the remaining arguments and the format of the output,
     refer to :func:`assemble_entries`.
     """
-    from . import vform
     if args is None:
         args = dict()
     args.update(kwargs)     # add additional keyword args
-    num_spaces = 1          # by default, only one space
 
     from .hierarchical import HSpace
     if isinstance(kvs, HSpace):
         return _assemble_hspace(problem, kvs, bfuns=bfuns, symmetric=symmetric,
                 format=format, layout=layout, args=args)
+    else:
+        asm = instantiate_assembler(problem, kvs, args, bfuns)
+        return assemble_entries(asm, symmetric=symmetric, format=format, layout=layout)
+
+def instantiate_assembler(problem, kvs, args, bfuns):
+    from . import vform
 
     # parse string to VForm
     if isinstance(problem, str):
         problem = vform.parse_vf(problem, kvs, args=args, bfuns=bfuns)
+
+    num_spaces = 1          # by default, only one space
 
     # compile VForm to assembler class
     if isinstance(problem, vform.VForm):
@@ -858,13 +864,10 @@ def assemble(problem, kvs, args=None, bfuns=None, symmetric=False, format='csr',
             used_args[inp] = args[inp]
 
         if num_spaces <= 1:
-            problem = problem(kvs, **used_args)
+            return problem(kvs, **used_args)
         else:
             assert num_spaces == 2, 'no more than two spaces allowed'
-            problem = problem(kvs[0], kvs[1], **used_args)
-
-    # now we can assume we have an instantiated assembler object
-    return assemble_entries(problem, symmetric=symmetric, format=format, layout=layout)
+            return problem(kvs[0], kvs[1], **used_args)
 
 ################################################################################
 # Convenience functions

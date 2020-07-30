@@ -172,8 +172,13 @@ def test_divdiv_geo_2d():
     geo = geometry.bspline_quarter_annulus()
     A = divdiv((kv,kv), geo, layout='packed')
     # construct divergence-free function
-    u = interpolate((kv,kv), lambda x,y: (x,-y), geo=geo).ravel()
-    assert abs(A.dot(u)).max() < 1e-12
+    u = interpolate((kv,kv), lambda x,y: (x,-y), geo=geo)
+    assert abs(A.dot(u.ravel())).max() < 1e-12
+
+    # test blocked layout
+    A = divdiv((kv,kv), geo, layout='blocked')
+    u_blocked = np.moveaxis(u, -1, 0)   # move last axis to the front
+    assert abs(A.dot(u_blocked.ravel())).max() < 1e-12
 
 ################################################################################
 # Test fast ACA assemblers with geometry transforms
@@ -346,6 +351,11 @@ def test_assemble_nonsym_vec():
     assert np.array_equal(blocks[0], A[0:2, 0:2].A)
     assert np.array_equal(blocks[1], A[0:2, 2:4].A)
     assert np.array_equal(blocks[2], A[4:6, 2:4].A)
+
+    # test blocked layout
+    A = assemble(problem, kvs, geo=geo, bfuns=[('u',2), ('v',2)], layout='blocked')
+    u_blocked = np.moveaxis(u, -1, 0)   # move last axis to the front
+    assert np.allclose(A @ u_blocked.ravel(), 0)
 
 ################################################################################
 # Test integrals

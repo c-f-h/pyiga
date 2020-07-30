@@ -713,18 +713,20 @@ def assemble_entries(asm, symmetric=False, format='csr', layout='blocked'):
     if hasattr(asm, 'num_components'):  # is it a vector-valued problem?
         return assemble_entries_vec(asm, symmetric=symmetric, format=format, layout=layout)
     kvs0, kvs1 = asm.kvs
-    X = MLStructure.from_kvs(kvs0, kvs1).make_mlmatrix()
 
-    if isinstance(asm, assemble_tools.BaseAssembler2D):
-        X.data = assemble_tools.generic_assemble_core_2d(asm, X.structure.bidx, symmetric=symmetric)
-    elif isinstance(asm, assemble_tools.BaseAssembler3D):
-        X.data = assemble_tools.generic_assemble_core_3d(asm, X.structure.bidx, symmetric=symmetric)
-    else:
-        assert False, 'Unknown assembler type'
-    if format == 'mlb':
-        return X
-    else:
-        return X.asmatrix(format)
+    S = MLStructure.from_kvs(kvs0, kvs1)                # set up sparsity structure
+    IJ = S.nonzero(lower_tri=symmetric)                 # compute locations of nonzero entries
+    entries = asm.multi_entries(np.column_stack(IJ))    # compute the entries
+    A = scipy.sparse.coo_matrix((entries, IJ), shape=S.shape).tocsr()
+
+    # if symmetric, add the transpose of the lower triangular part
+    if symmetric:
+        I, J = IJ
+        off_diag = np.nonzero(I != J)[0]    # indices of off-diagonal entries
+        A_upper = scipy.sparse.coo_matrix((entries[off_diag], (J[off_diag], I[off_diag])), shape=S.shape)
+        A += A_upper
+
+    return A.asformat(format)
 
 def assemble_entries_vec(asm, symmetric=False, format='csr', layout='blocked'):
     assert layout in ('packed', 'blocked')

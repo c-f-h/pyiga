@@ -98,7 +98,8 @@ cdef class BaseAssembler2D:
         else:   # possibly given as iterator
             idx_arr = np.array(list(indices), dtype=np.uintp)
 
-        cdef double[::1] result = np.zeros(idx_arr.shape[0])
+        _result = np.zeros(idx_arr.shape[0])
+        cdef double[::1] result = _result
 
         num_threads = pyiga.get_max_threads()
         if num_threads <= 1:
@@ -116,7 +117,7 @@ cdef class BaseAssembler2D:
                         chunk_tasks(idx_arr, num_threads),
                         chunk_tasks(result, num_threads))
             list(results)   # wait for threads to finish
-        return result
+        return _result
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -140,82 +141,6 @@ cdef class BaseAssembler2D:
 
     def entry_func_ptr(self):
         return pycapsule.PyCapsule_New(<void*>_entry_func_2d, "entryfunc", NULL)
-
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-def generic_assemble_core_2d(BaseAssembler2D asm, bidx, bint symmetric=False):
-    if asm.arity != 2:
-        return None
-    cdef unsigned[:, ::1] bidx0, bidx1
-    cdef long mu0, mu1, MU0, MU1
-    cdef double[:, ::1] entries
-
-    bidx0, bidx1 = bidx
-    MU0, MU1 = bidx0.shape[0], bidx1.shape[0]
-
-    cdef size_t[::1] transp0, transp1
-    if symmetric:
-        transp0 = get_transpose_idx_for_bidx(bidx0)
-        transp1 = get_transpose_idx_for_bidx(bidx1)
-    else:
-        transp0 = transp1 = None
-
-    entries = np.zeros((MU0, MU1))
-
-    cdef int num_threads = pyiga.get_max_threads()
-
-    for mu0 in prange(MU0, num_threads=num_threads, nogil=True):
-        _asm_core_2d_kernel(asm, symmetric,
-            bidx0, bidx1,
-            transp0, transp1,
-            entries,
-            mu0)
-    return entries
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-@cython.initializedcheck(False)
-cdef void _asm_core_2d_kernel(
-    BaseAssembler2D asm,
-    bint symmetric,
-    unsigned[:, ::1] bidx0, unsigned[:, ::1] bidx1,
-    size_t[::1] transp0, size_t[::1] transp1,
-    double[:, ::1] entries,
-    long _mu0
-) nogil:
-    cdef size_t[2] i, j
-    cdef int diag0, diag1
-    cdef double entry
-    cdef long mu0, mu1, MU0, MU1
-
-    mu0 = _mu0
-    MU0, MU1 = bidx0.shape[0], bidx1.shape[0]
-
-    i[0] = bidx0[mu0, 0]
-    j[0] = bidx0[mu0, 1]
-
-    if symmetric:
-        diag0 = <int>j[0] - <int>i[0]
-        if diag0 > 0:       # block is above diagonal?
-            return
-
-    for mu1 in range(MU1):
-        i[1] = bidx1[mu1, 0]
-        j[1] = bidx1[mu1, 1]
-
-        if symmetric:
-            diag1 = <int>j[1] - <int>i[1]
-            if diag0 == 0 and diag1 > 0:
-                continue
-
-        entry = 0.0
-        asm.entry_impl(i, j, &entry)
-        entries[mu0, mu1] = entry
-
-        if symmetric:
-            if diag0 != 0 or diag1 != 0:     # are we off the diagonal?
-                entries[ transp0[mu0], transp1[mu1] ] = entry   # then also write into the transposed entry
 
 
 # helper function for fast low-rank assembler
@@ -502,7 +427,8 @@ cdef class BaseAssembler3D:
         else:   # possibly given as iterator
             idx_arr = np.array(list(indices), dtype=np.uintp)
 
-        cdef double[::1] result = np.zeros(idx_arr.shape[0])
+        _result = np.zeros(idx_arr.shape[0])
+        cdef double[::1] result = _result
 
         num_threads = pyiga.get_max_threads()
         if num_threads <= 1:
@@ -520,7 +446,7 @@ cdef class BaseAssembler3D:
                         chunk_tasks(idx_arr, num_threads),
                         chunk_tasks(result, num_threads))
             list(results)   # wait for threads to finish
-        return result
+        return _result
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -544,92 +470,6 @@ cdef class BaseAssembler3D:
 
     def entry_func_ptr(self):
         return pycapsule.PyCapsule_New(<void*>_entry_func_3d, "entryfunc", NULL)
-
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-def generic_assemble_core_3d(BaseAssembler3D asm, bidx, bint symmetric=False):
-    if asm.arity != 2:
-        return None
-    cdef unsigned[:, ::1] bidx0, bidx1, bidx2
-    cdef long mu0, mu1, mu2, MU0, MU1, MU2
-    cdef double[:, :, ::1] entries
-
-    bidx0, bidx1, bidx2 = bidx
-    MU0, MU1, MU2 = bidx0.shape[0], bidx1.shape[0], bidx2.shape[0]
-
-    cdef size_t[::1] transp0, transp1, transp2
-    if symmetric:
-        transp0 = get_transpose_idx_for_bidx(bidx0)
-        transp1 = get_transpose_idx_for_bidx(bidx1)
-        transp2 = get_transpose_idx_for_bidx(bidx2)
-    else:
-        transp0 = transp1 = transp2 = None
-
-    entries = np.zeros((MU0, MU1, MU2))
-
-    cdef int num_threads = pyiga.get_max_threads()
-
-    for mu0 in prange(MU0, num_threads=num_threads, nogil=True):
-        _asm_core_3d_kernel(asm, symmetric,
-            bidx0, bidx1, bidx2,
-            transp0, transp1, transp2,
-            entries,
-            mu0)
-    return entries
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-@cython.initializedcheck(False)
-cdef void _asm_core_3d_kernel(
-    BaseAssembler3D asm,
-    bint symmetric,
-    unsigned[:, ::1] bidx0, unsigned[:, ::1] bidx1, unsigned[:, ::1] bidx2,
-    size_t[::1] transp0, size_t[::1] transp1, size_t[::1] transp2,
-    double[:, :, ::1] entries,
-    long _mu0
-) nogil:
-    cdef size_t[3] i, j
-    cdef int diag0, diag1, diag2
-    cdef double entry
-    cdef long mu0, mu1, mu2, MU0, MU1, MU2
-
-    mu0 = _mu0
-    MU0, MU1, MU2 = bidx0.shape[0], bidx1.shape[0], bidx2.shape[0]
-
-    i[0] = bidx0[mu0, 0]
-    j[0] = bidx0[mu0, 1]
-
-    if symmetric:
-        diag0 = <int>j[0] - <int>i[0]
-        if diag0 > 0:       # block is above diagonal?
-            return
-
-    for mu1 in range(MU1):
-        i[1] = bidx1[mu1, 0]
-        j[1] = bidx1[mu1, 1]
-
-        if symmetric:
-            diag1 = <int>j[1] - <int>i[1]
-            if diag0 == 0 and diag1 > 0:
-                continue
-
-        for mu2 in range(MU2):
-            i[2] = bidx2[mu2, 0]
-            j[2] = bidx2[mu2, 1]
-
-            if symmetric:
-                diag2 = <int>j[2] - <int>i[2]
-                if diag0 == 0 and diag1 == 0 and diag2 > 0:
-                    continue
-
-            entry = 0.0
-            asm.entry_impl(i, j, &entry)
-            entries[mu0, mu1, mu2] = entry
-
-            if symmetric:
-                if diag0 != 0 or diag1 != 0 or diag2 != 0:     # are we off the diagonal?
-                    entries[ transp0[mu0], transp1[mu1], transp2[mu2] ] = entry   # then also write into the transposed entry
 
 
 # helper function for fast low-rank assembler

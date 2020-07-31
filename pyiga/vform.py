@@ -1651,6 +1651,8 @@ def inv(A):
         raise ValueError('can only compute inverse of square matrices')
     n = A.shape[0]
     invdet = ConstExpr(1) / det(A)
+    if n == 1:
+        return as_matrix([[invdet]])
     cofacs = as_matrix(
             [[ (-1)**(i+j) * minor(A, i, j)
                 for i in range(n)]

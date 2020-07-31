@@ -16,10 +16,10 @@ cimport numpy as np
 from pyiga.quadrature import make_tensor_quadrature
 
 from pyiga.assemble_tools_cy cimport (
-    BaseAssembler2D, BaseAssembler3D,
-    BaseVectorAssembler2D, BaseVectorAssembler3D,
+    BaseAssembler1D, BaseAssembler2D, BaseAssembler3D,
+    BaseVectorAssembler1D, BaseVectorAssembler2D, BaseVectorAssembler3D,
     IntInterval, make_intv, intersect_intervals,
-    next_lexicographic2, next_lexicographic3,
+    next_lexicographic1, next_lexicographic2, next_lexicographic3,
 )
 from pyiga.assemble_tools import compute_values_derivs
 from pyiga.utils import LazyCachingArray, grid_eval, grid_eval_transformed

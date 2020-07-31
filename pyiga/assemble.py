@@ -767,7 +767,9 @@ def assemble_entries_vec(asm, symmetric=False, format='csr', layout='blocked'):
     else:
         X = S.make_mlmatrix()
 
-        if dim == 2:
+        if dim == 1:
+            X.data = assemble_tools.generic_assemble_core_vec_1d(asm, X.structure.bidx[:dim], symmetric)
+        elif dim == 2:
             X.data = assemble_tools.generic_assemble_core_vec_2d(asm, X.structure.bidx[:dim], symmetric)
         elif dim == 3:
             X.data = assemble_tools.generic_assemble_core_vec_3d(asm, X.structure.bidx[:dim], symmetric)

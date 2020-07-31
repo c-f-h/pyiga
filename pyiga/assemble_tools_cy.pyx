@@ -27,6 +27,12 @@ import itertools
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
+cdef inline void from_seq1(size_t i, size_t[1] ndofs, size_t[1] out) nogil:
+    out[0] = i
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
 cdef inline void from_seq2(size_t i, size_t[2] ndofs, size_t[2] out) nogil:
     out[1] = i % ndofs[1]
     i /= ndofs[1]
@@ -147,6 +153,13 @@ cdef IntInterval make_intv(int a, int b) nogil:
 cdef IntInterval intersect_intervals(IntInterval intva, IntInterval intvb) nogil:
     return make_intv(max(intva.a, intvb.a), min(intva.b, intvb.b))
 
+
+cdef int next_lexicographic1(size_t[1] cur, size_t start[1], size_t end[1]) nogil:
+    cur[0] += 1
+    if cur[0] == end[0]:
+        return 0
+    else:
+        return 1
 
 cdef int next_lexicographic2(size_t[2] cur, size_t start[2], size_t end[2]) nogil:
     cdef size_t i

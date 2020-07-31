@@ -336,6 +336,17 @@ def test_assemble_string():
     f2 = assemble('f * div(v) * dx', kvs, bfuns=[('v',2)], geo=geo, f=f, layout='blocked')
     assert np.allclose(f1.transpose(2, 0, 1), f2)
 
+    # 1D problem - matrix
+    geo = geometry.unit_cube(dim=1)
+    A1 = assemble('inner(grad(u), grad(v)) * dx', kvs[:1], geo=geo)
+    A2 = stiffness(kvs[0])
+    assert np.allclose(A1.A, A2.A)
+    # 1D problem - rhs
+    f = lambda x: 1 + x**2
+    f1 = assemble('f * v * dx', kvs[:1], geo=geo, f=f)
+    f2 = inner_products(kvs[0], f=f, f_physical=True, geo=geo)
+    assert np.allclose(f1, f2)
+
     # test error handling
     with unittest.TestCase().assertRaises(ValueError) as cm:
         assemble('inner(grad(u), grad(v)) * dx', kvs)

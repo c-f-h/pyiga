@@ -35,7 +35,6 @@ def _compile_cython_module_nocache(src, modname, verbose=False):
     extra_compile_args = ['-O3', '-march=native', '-ffast-math', '-fopenmp']
 
     extension = Extension(name=modname,
-                          language="c++",
                           sources=[modfile],
                           include_dirs=include_dirs,
                           extra_compile_args=extra_compile_args)

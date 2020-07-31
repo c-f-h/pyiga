@@ -3,7 +3,7 @@ __pycache__
 *.swp
 *_cy.c
 *_cy.cpp
-pyiga/assemblers.cpp
+pyiga/assemblers.c
 *_cy.html
 /build/
 /dist/

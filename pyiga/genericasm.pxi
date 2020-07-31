@@ -205,7 +205,8 @@ cdef class BaseVectorAssembler2D:
         else:   # possibly given as iterator
             idx_arr = np.array(list(indices), dtype=np.uintp)
 
-        cdef double[:, :, ::1] result = np.zeros((idx_arr.shape[0], self.numcomp[0], self.numcomp[1]))
+        _result = np.zeros((idx_arr.shape[0], self.numcomp[0], self.numcomp[1]))
+        cdef double[:, :, ::1] result = _result
 
         num_threads = pyiga.get_max_threads()
         if num_threads <= 1:
@@ -223,7 +224,7 @@ cdef class BaseVectorAssembler2D:
                         chunk_tasks(idx_arr, num_threads),
                         chunk_tasks(result, num_threads))
             list(results)   # wait for threads to finish
-        return result
+        return _result
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -538,7 +539,8 @@ cdef class BaseVectorAssembler3D:
         else:   # possibly given as iterator
             idx_arr = np.array(list(indices), dtype=np.uintp)
 
-        cdef double[:, :, ::1] result = np.zeros((idx_arr.shape[0], self.numcomp[0], self.numcomp[1]))
+        _result = np.zeros((idx_arr.shape[0], self.numcomp[0], self.numcomp[1]))
+        cdef double[:, :, ::1] result = _result
 
         num_threads = pyiga.get_max_threads()
         if num_threads <= 1:
@@ -556,7 +558,7 @@ cdef class BaseVectorAssembler3D:
                         chunk_tasks(idx_arr, num_threads),
                         chunk_tasks(result, num_threads))
             list(results)   # wait for threads to finish
-        return result
+        return _result
 
     @cython.boundscheck(False)
     @cython.wraparound(False)

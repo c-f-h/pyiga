@@ -728,29 +728,59 @@ def assemble_entries(asm, symmetric=False, format='csr', layout='blocked'):
 
     return A.asformat(format)
 
+def _coo_to_csr_indices(IJ, shape):
+    X = scipy.sparse.coo_matrix((np.arange(len(IJ[0])), IJ), shape=shape)
+    X = X.tocsr()
+    return X.indices, X.indptr, X.data
+
 def assemble_entries_vec(asm, symmetric=False, format='csr', layout='blocked'):
     assert layout in ('packed', 'blocked')
 
     kvs0, kvs1 = asm.kvs
     dim = len(kvs0)
     nc = asm.num_components()[::-1]  # reverse axes (u = kv0 = columns)
-    struc = MLStructure.from_kvs(kvs0, kvs1).join(MLStructure.dense(nc))
-    X = struc.make_mlmatrix()
+    S_base = MLStructure.from_kvs(kvs0, kvs1)   # structure for the block indices
+    S = S_base.join(MLStructure.dense(nc))      # final matrix structure (for 'packed')
 
-    if dim == 2:
-        X.data = assemble_tools.generic_assemble_core_vec_2d(asm, X.structure.bidx[:dim], symmetric)
-    elif dim == 3:
-        X.data = assemble_tools.generic_assemble_core_vec_3d(asm, X.structure.bidx[:dim], symmetric)
-    else:
-        assert False, 'dimension %d not implemented' % dim
+    if layout == 'packed' and format == 'bsr':
+        IJ = S_base.nonzero(lower_tri=symmetric)          # compute locations of nonzero blocks
+        blocks = asm.multi_blocks(np.column_stack(IJ))    # compute the blocks
+        # convert the block-COO coordinates IJ to BSR coordinates
+        indices, indptr, permut = _coo_to_csr_indices(IJ, S_base.shape)
+        A = scipy.sparse.bsr_matrix((blocks[permut], indices, indptr), shape=S.shape, blocksize=nc)
 
-    if layout == 'blocked':
-        axes = (dim,) + tuple(range(dim))    # bring last axis to the front
-        X = X.reorder(axes)
-    if format == 'mlb':
-        return X
+        if symmetric:
+            assert nc[0] == nc[1], 'matrix with nonsymmetric block size cannot be symmetric'
+            I, J = IJ
+            off_diag = np.nonzero(I != J)[0]        # only blocks off the diagonal
+            indices, indptr, permut = _coo_to_csr_indices((J[off_diag], I[off_diag]), S_base.shape)
+            blocks_T = np.swapaxes(blocks[off_diag][permut], -1, -2)  # transpose the blocks
+            A_upper = scipy.sparse.bsr_matrix((blocks_T, indices, indptr), shape=S.shape, blocksize=nc)
+            A += A_upper
+
+        return A.asformat(format)
+
     else:
-        return X.asmatrix(format)
+        X = S.make_mlmatrix()
+
+        if dim == 2:
+            X.data = assemble_tools.generic_assemble_core_vec_2d(asm, X.structure.bidx[:dim], symmetric)
+        elif dim == 3:
+            X.data = assemble_tools.generic_assemble_core_vec_3d(asm, X.structure.bidx[:dim], symmetric)
+        else:
+            # NB: dim-independent, but does not take advantage of symmetry
+            IJ = S_base.nonzero()          # compute locations of nonzero blocks
+            blocks = asm.multi_blocks(np.column_stack(IJ))    # compute the blocks
+            X.data = blocks.reshape(X.datashape)
+
+        if layout == 'blocked':
+            axes = (dim,) + tuple(range(dim))   # bring last axis to the front
+            X = X.reorder(axes)
+
+        if format == 'mlb':
+            return X
+        else:
+            return X.asmatrix(format)
 
 def assemble_vf(vf, kvs, symmetric=False, format='csr', layout='blocked', args=None, **kwargs):
     """Compile the given variational form (:class:`.VForm`) into a matrix or vector.

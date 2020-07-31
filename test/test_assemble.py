@@ -170,7 +170,7 @@ def test_stiffness_geo_3d():
 def test_divdiv_geo_2d():
     kv = bspline.make_knots(3, 0.0, 1.0, 15)
     geo = geometry.bspline_quarter_annulus()
-    A = divdiv((kv,kv), geo, layout='packed')
+    A = divdiv((kv,kv), geo, layout='packed', format='bsr')
     # construct divergence-free function
     u = interpolate((kv,kv), lambda x,y: (x,-y), geo=geo)
     assert abs(A.dot(u.ravel())).max() < 1e-12
@@ -341,16 +341,17 @@ def test_assemble_nonsym_vec():
     geo = geometry.quarter_annulus()
 
     problem = 'inner(as_matrix([[2,1],[0,0]]).dot(u), v) * dx'
-    A = assemble(problem, kvs, geo=geo, bfuns=[('u',2), ('v',2)], layout='packed')
+    A = assemble(problem, kvs, geo=geo, bfuns=[('u',2), ('v',2)], layout='packed', format='bsr')
     u = interpolate(kvs, lambda x, y: (x*y, -2*x*y), geo=geo)
     assert np.allclose(A @ u.ravel(), 0)
 
     # test the blockwise assembling using multi_blocks
     asm = instantiate_assembler(problem, kvs, args={'geo': geo}, bfuns=[('u',2), ('v',2)])
     blocks = np.array(asm.multi_blocks([(0,0), (0,1), (2,1)]))
-    assert np.array_equal(blocks[0], A[0:2, 0:2].A)
-    assert np.array_equal(blocks[1], A[0:2, 2:4].A)
-    assert np.array_equal(blocks[2], A[4:6, 2:4].A)
+    AA = A.A        # bsr does not support slicing
+    assert np.array_equal(blocks[0], AA[0:2, 0:2])
+    assert np.array_equal(blocks[1], AA[0:2, 2:4])
+    assert np.array_equal(blocks[2], AA[4:6, 2:4])
 
     # test blocked layout
     A = assemble(problem, kvs, geo=geo, bfuns=[('u',2), ('v',2)], layout='blocked')

@@ -331,6 +331,11 @@ def test_assemble_string():
     f2 = inner_products(kvs, f, geo=geo, f_physical=True)
     assert np.allclose(f1, f2)
 
+    # vector-valued problems
+    f1 = assemble('f * div(v) * dx', kvs, bfuns=[('v',2)], geo=geo, f=f, layout='packed')
+    f2 = assemble('f * div(v) * dx', kvs, bfuns=[('v',2)], geo=geo, f=f, layout='blocked')
+    assert np.allclose(f1.transpose(2, 0, 1), f2)
+
     # test error handling
     with unittest.TestCase().assertRaises(ValueError) as cm:
         assemble('inner(grad(u), grad(v)) * dx', kvs)

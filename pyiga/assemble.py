@@ -690,7 +690,7 @@ def assemble_entries(asm, symmetric=False, format='csr', layout='blocked'):
             speed up the assembly
         format (str): (matrices only) the sparse matrix format to use; default 'csr'
         layout (str): (vector-valued problems only): the layout of the generated
-            matrix. Valid options are:
+            matrix or vector. Valid options are:
 
             - 'blocked': the matrix is laid out as a `k_1 x k_2` block matrix,
               where `k_1` and `k_2` are the number of components of the test
@@ -707,10 +707,14 @@ def assemble_entries(asm, symmetric=False, format='csr', layout='blocked'):
           added which has the number of components as its length.
         - if the assembler has arity=2: a sparse matrix in the given `format`
     """
-
+    is_vector_valued = hasattr(asm, 'num_components')
     if asm.arity == 1:
-        return asm.assemble_vector()
-    if hasattr(asm, 'num_components'):  # is it a vector-valued problem?
+        result = asm.assemble_vector()
+        if is_vector_valued and layout == 'blocked':
+            # bring the last (component) axis to the front
+            result = np.moveaxis(result, -1, 0)
+        return result
+    if is_vector_valued:
         return assemble_entries_vec(asm, symmetric=symmetric, format=format, layout=layout)
     kvs0, kvs1 = asm.kvs
 

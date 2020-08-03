@@ -581,10 +581,15 @@ class VForm:
         #   PetIGA: A framework for high-performance isogeometric analysis,
         #   https://doi.org/10.1016/j.cma.2016.05.011.
         # BUT NOTE: there is a sign error in the paper!
-        d = self.dim
-        J = self.JacInv
-        return -sum(hess(self.Geo[m], parametric=True)[e,u] * J[a,m] * J[e,i] * J[u,j]
-                    for m in range(d) for e in range(d) for u in range(d))
+        var_name = '_geo_hess_trf_{}_{}_{}'.format(a, i, j)
+        if var_name in self.vars:
+            return self.vars[var_name].as_expr
+        else:
+            d = self.dim
+            J = self.JacInv
+            expr = -sum(hess(self.Geo[m], parametric=True)[e,u] * J[a,m] * J[e,i] * J[u,j]
+                        for m in range(d) for e in range(d) for u in range(d))
+            return self.let(var_name, expr)
 
     def insert_input_field_derivs(self, e):
         if sum(e.D) == 0:
@@ -646,7 +651,7 @@ class VForm:
 
             # find all nontrivial exprs which are used more than once
             cse = [e for (h,e) in hash_to_exprs.items()
-                    if expr_count[h] > 1 and complexity[e] > 0]
+                    if expr_count[h] > 1 and complexity[e] > 2]
             if not cse:
                 break
 
@@ -1378,20 +1383,14 @@ def iterexprs(exprs, deep=False, type=None, once=True):
                 seen.add(e)
 
         for c in e.children:
-            # Py2.7
-            #yield from recurse(c)
-            for x in recurse(c): yield x
+            yield from recurse(c)
         if (deep and e.is_var_expr()
                  and e.var.expr is not None):
-            # Py2.7
-            #yield from recurse(e.var.expr)
-            for x in recurse(e.var.expr): yield x
+            yield from recurse(e.var.expr)
         if type is None or isinstance(e, type):
             yield e
     for e in exprs:
-        # Py2.7
-        #yield from recurse(e)
-        for x in recurse(e): yield x
+        yield from recurse(e)
 
 def mapexprs(exprs, fun, deep=False):
     """Replace each expr `e` in a list of expr trees by `fun(e)`, depth first.

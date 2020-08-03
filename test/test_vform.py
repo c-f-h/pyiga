@@ -146,8 +146,9 @@ def test_symderiv():
     exprs_equal(curl(2 + grad(u)), curl(grad(u)), simplify=True)
 
 def test_hess():
-    vf = VForm(3)
+    vf = VForm(3, arity=1)
     f = vf.input('f')
+    v = vf.basisfuns()
     Hp = hess(f, parametric=True)
     assert Hp.shape == (3,3)
     exprs_equal(Hp[0,1], Dx(Dx(f, 0, parametric=True), 1, parametric=True))
@@ -156,6 +157,9 @@ def test_hess():
     assert H.shape == (3,3)
     exprs_equal(H[1,1], Dx(Dx(f, 1), 1))
     exprs_equal(H[1,2], Dx(Dx(f, 2), 1))
+    # test finalize
+    vf.add(inner(H, H) * v * dx)
+    vf.finalize()
 
 def test_tostring():
     vf = VForm(2)

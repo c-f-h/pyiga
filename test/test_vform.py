@@ -127,6 +127,7 @@ def test_input_physical():
     assert G.shape == (3,3)
     # expressions with physical derivatives
     assert grad(f).shape == (3,)
+    exprs_equal(grad(f)[1:], grad(f, dims=[1,2]))
     assert grad(g).shape == (3,3)
     assert grad(f, dims=(1,2)).shape == (2,)
     exprs_equal(grad(f, dims=(1,2))[0], Dx(f, 1))

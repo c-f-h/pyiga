@@ -25,7 +25,8 @@ def test_animate_field():
     fields = [ bspline.BSplineFunc(kvs,
         approx.interpolate(kvs, lambda x,y: np.sin(t+x) * np.exp(y)))
         for t in range(3) ]
-    animate_field(fields, geo=geometry.bspline_quarter_annulus(), res=10)
+    anim = animate_field(fields, geo=geometry.bspline_quarter_annulus(), res=10)
+    anim.to_jshtml()
 
 from .test_hierarchical import create_example_hspace
 

@@ -270,11 +270,13 @@ def test_ls():
     assert Y.shape == F.shape
     assert fro_norm(X - Y) < 0.1 * fro_norm(X)
     #
-    T1 = gta_ls(A, F, 3)
-    T2 = gta_ls(A, F, 3, spd=True)
+    T1 = gta_ls(A, F, 5)
+    T2 = gta_ls(A, F, 5, spd=True)
     assert T1.shape == F.shape
     assert T2.shape == F.shape
-    assert fro_norm(T1 - T2) < 0.1 * fro_norm(T1)
+    assert fro_norm(T1 - T2) < 0.01 * fro_norm(T1)
+    A_op = CanonicalOperator(A)
+    assert fro_norm(A_op.apply(T2) - F) < 0.01 * fro_norm(F)    # check relative residual
 
 def test_canonical_op():
     N = (3,4,5)

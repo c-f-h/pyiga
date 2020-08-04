@@ -1564,12 +1564,12 @@ def as_expr(x):
     """Interpret input as an expression; useful for constants."""
     if isinstance(x, Expr):
         return x
-    elif isinstance(x, numbers.Real):
+    elif isinstance(x, numbers.Number):
         return ConstExpr(x)
     elif isinstance(x, tuple):
-        if all(isinstance(x, numbers.Real) or isinstance(z, Expr) for z in x):
+        if all(isinstance(z, numbers.Number) or isinstance(z, Expr) for z in x):
             return as_vector(x)
-    raise TypeError('cannot coerce %s to expression' % x)
+    raise TypeError('cannot coerce {} to expression'.format(x))
 
 def as_vector(x):
     """Convert a sequence of expressions to a vector expression."""

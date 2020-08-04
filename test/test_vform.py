@@ -77,6 +77,11 @@ def test_vectorexpr():
     assert cross(u, v).shape == (3,)
     assert outer(u, v).shape == (3, 3)
     assert A.dot(u).shape == (3,)
+    x = (1, 2, 3)
+    assert inner(x, v).shape == ()
+    assert cross(x, v).shape == (3,)
+    assert outer(x, v).shape == (3, 3)
+    assert A.dot(x).shape == (3,)
 
 def test_basisderivs():
     # scalar basis functions

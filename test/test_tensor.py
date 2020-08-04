@@ -2,6 +2,7 @@ from pyiga.tensor import *
 
 from numpy.random import rand
 from scipy.sparse.linalg import aslinearoperator
+from scipy.sparse import kron as spkron
 
 def test_modek_tprod():
     X = rand(3,3,3)
@@ -291,7 +292,7 @@ def test_canonical_op():
     Y = I.apply(X)
     assert Y.R == (2,2,2)
     assert np.allclose(X.asarray(), Y.asarray())
-    #
+    # multiplication
     A = CanonicalOperator([tuple(_random_banded(n, 1) for n in N) for k in range(3)])
     B = CanonicalOperator([tuple(_random_banded(n, 1) for n in N) for k in range(2)])
     AB = A * B
@@ -301,7 +302,10 @@ def test_canonical_op():
     Y2 = AB.apply(X)
     assert np.allclose(Y1.asarray(), Y2.asarray())
     assert np.allclose(((A @ B) @ X).asarray(), (A @ (B @ X)).asarray())
-    #
+    # arithmetic
     assert np.allclose(((A + B) @ X).asarray(), (A @ X + B @ X).asarray())
     assert np.allclose(((A - B) @ X).asarray(), (A @ X - B @ X).asarray())
     assert np.allclose(((-A) @ X).asarray(), -(A @ X).asarray())
+    # kron
+    assert scipy.sparse.linalg.norm(
+            (A.kron(B)).asmatrix() - spkron(A.asmatrix(), B.asmatrix())) < 1e-10

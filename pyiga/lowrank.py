@@ -3,70 +3,27 @@ import numpy.random
 
 from .lowrank_cy import *
 from . import tensor
+from . import utils
 
 ################################################################################
-# Utility classes for entrywise matrix/tensor generation
+# Utility class for entrywise matrix/tensor generation
 ################################################################################
-
-class MatrixGenerator:
-    def __init__(self, m, n, entryfunc=None, multientryfunc=None):
-        """Set up a matrix generator with shape (m,n).
-
-        Arguments:
-            m: number of rows
-            n: number of columns
-            `entryfunc`: a function taking i,j and producing an entry.
-            `multientryfunc`: a function taking a list of (i,j) pairs
-                and producing an ndarray of the requested entries.
-
-        At least one of the two functions must be provided.
-        """
-        self.shape = (m,n)
-        assert entryfunc is not None or multientryfunc is not None, \
-            "At least one of entryfunc and multientryfunc must be specified"
-        if entryfunc is not None:
-            self.entry = entryfunc
-        if multientryfunc is not None:
-            self.compute_entries = multientryfunc
-
-    @staticmethod
-    def from_array(X):
-        """Create a MatrixGenerator which just returns the entries of a 2D array"""
-        assert X.ndim == 2
-        return MatrixGenerator(X.shape[0], X.shape[1],
-                lambda i,j: X[i,j])
-
-    def entry(self, i, j):
-        """Generate the entry at row i and column j"""
-        return self.compute_entries([(i, j)])[0]
-
-    def compute_entries(self, indices):
-        """Compute all entries given by the list of pairs `indices`."""
-        indices = list(indices)
-        n = len(indices)
-        result = np.empty(n)
-        for i in range(n):
-            result[i] = self.entry(*indices[i])
-        return result
-
-    def row(self, i):
-        """Generate the i-th row"""
-        return self.compute_entries((i,j) for j in range(self.shape[1]))
-
-    def column(self, j):
-        """Generate the j-th column"""
-        return self.compute_entries((i,j) for i in range(self.shape[0]))
-
-    def asarray(self):
-        """Generate the entire matrix as an np.ndarray"""
-        return self.compute_entries(
-                (i,j) for i in range(self.shape[0])
-                      for j in range(self.shape[1])).reshape(self.shape, order='C')
-
 
 class TensorGenerator:
     def __init__(self, shape, entryfunc=None, multientryfunc=None):
+        """A tensor which is given via a function which computes its entries.
+
+        Arguments:
+            shape (tuple): the shape of the tensor
+            `entryfunc`: a function taking a multi-index `(i1, ..., id)` and
+                producing the corresponding entry of the tensor
+            `multientryfunc`: a function taking a sequence of multi-indices
+                and producing an ndarray of the requested entries
+
+        At least one of the two functions must be provided.
+        """
         self.shape = tuple(shape)
+        self.ndim = len(self.shape)
         assert entryfunc is not None or multientryfunc is not None, \
             "At least one of entryfunc and multientryfunc must be specified"
         if entryfunc is not None:
@@ -77,6 +34,15 @@ class TensorGenerator:
     @staticmethod
     def from_array(X):
         return TensorGenerator(X.shape, lambda I: X[tuple(I)])
+
+    def __getitem__(self, I):
+        I, shp, singl = tensor._normalize_indices(I, self.shape)
+        I_arange = [np.arange(ik.start, ik.stop, ik.step)
+                    if isinstance(ik, range) else ik
+                    for ik in I]
+        indices = utils.cartesian_product(I_arange)
+        X = self.compute_entries(indices).reshape(shp)
+        return np.squeeze(X, axis=singl)
 
     def entry(self, I):
         """Generate the entry at index I"""
@@ -91,19 +57,8 @@ class TensorGenerator:
             result[i] = self.entry(indices[i])
         return result
 
-    def fiber_at(self, I, axis):
-        """Generate the fiber (vector) passing through index I along the given axis"""
-        assert len(I) == len(self.shape)
-        I = list(I)
-        m = self.shape[axis]
-        indices = []
-        for i in range(m):
-            I[axis] = i
-            indices.append(tuple(I))
-        return self.compute_entries(indices)
-
     def matrix_at(self, I, axes):
-        """Return a MatrixGenerator for the matrix slice of this tensor which
+        """Return a TensorGenerator for the matrix slice of this tensor which
         passes through index I along the given two axes."""
         assert len(axes) == 2
         assert len(I) == len(self.shape)
@@ -115,16 +70,14 @@ class TensorGenerator:
                 indices[k] = tuple(I)
             return self.compute_entries(indices)
 
-        return MatrixGenerator(self.shape[axes[0]],
-                               self.shape[axes[1]],
+        return TensorGenerator((self.shape[axes[0]],
+                                self.shape[axes[1]]),
                                multientryfunc=multientryfunc)
 
     def asarray(self):
         """Generate the full tensor as an np.ndarray"""
-        return self.compute_entries(
-            (i,j,k) for i in range(self.shape[0])
-                    for j in range(self.shape[1])
-                    for k in range(self.shape[2])).reshape(self.shape, order='C')
+        I = utils.cartesian_product(tuple(np.arange(nk) for nk in self.shape))
+        return self.compute_entries(I).reshape(self.shape, order='C')
 
 
 ################################################################################
@@ -133,8 +86,9 @@ class TensorGenerator:
 
 def aca(A, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2, startval=None):
     """Adaptive Cross Approximation (ACA) algorithm with row pivoting"""
-    if not isinstance(A, MatrixGenerator):
-        A = MatrixGenerator.from_array(A)  # assume it's an array
+    if not isinstance(A, TensorGenerator):
+        A = TensorGenerator.from_array(A)  # assume it's an array
+    assert A.ndim == 2
     if startval is not None:
         X = np.array(startval, order='C')
         assert X.shape == A.shape
@@ -146,7 +100,7 @@ def aca(A, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2, startval=
     tolcount,  max_tolcount  = 0, tolcount
 
     while True:
-        E_row = X[i,:] - A.row(i)
+        E_row = X[i,:] - A[i,:]
         j0 = abs(E_row).argmax()
         e = abs(E_row[j0])
         if e < 1e-15:
@@ -172,7 +126,7 @@ def aca(A, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2, startval=
         if verbose >= 2:
             print(i, '\t', j0, '\t', e)
 
-        col = A.column(j0) - X[:,j0]
+        col = A[:,j0] - X[:,j0]
         rank_1_update(X, 1 / E_row[j0], col, E_row)
 
         col[i] = 0  # error is now 0 there
@@ -186,8 +140,9 @@ def aca(A, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2, startval=
 
 def aca_lr(A, tol=1e-10, maxiter=100, verbose=2):
     """ACA which returns the crosses rather than the full matrix"""
-    if not isinstance(A, MatrixGenerator):
-        A = MatrixGenerator.from_array(A)  # assume it's an array
+    if not isinstance(A, TensorGenerator):
+        A = TensorGenerator.from_array(A)  # assume it's an array
+    assert A.ndim == 2
     crosses = []
 
     def X_row(i):
@@ -201,7 +156,7 @@ def aca_lr(A, tol=1e-10, maxiter=100, verbose=2):
     tolcount,  max_tolcount  = 0, 3
 
     while k < maxiter:
-        err_i = X_row(i) - A.row(i)
+        err_i = X_row(i) - A[i,:]
         j0 = abs(err_i).argmax()
         e = abs(err_i[j0])
         if e < 1e-15:
@@ -227,7 +182,7 @@ def aca_lr(A, tol=1e-10, maxiter=100, verbose=2):
 
         if verbose >= 2:
             print(i, '\t', j0, '\t', e)
-        c = (A.column(j0) - X_col(j0)) / err_i[j0]
+        c = (A[:,j0] - X_col(j0)) / err_i[j0]
         crosses.append((c, err_i))
         i = abs(c).argmax()
         k += 1
@@ -254,6 +209,7 @@ def _tensor_slice(A, I):
 def aca_3d(A, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2, lr=False):
     if not isinstance(A, TensorGenerator):
         A = TensorGenerator.from_array(A)  # assume it's an array
+    assert A.ndim == 3
 
     X = np.zeros(A.shape)
     if lr: X_lr = tensor.TensorSum(tensor.CanonicalTensor.zeros(A.shape))
@@ -267,7 +223,7 @@ def aca_3d(A, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2, lr=Fal
     tolcount,  max_tolcount  = 0, tolcount
 
     while k < maxiter:
-        E_col = A.fiber_at(I, axis=0) - X[:,I[1],I[2]]
+        E_col = A[:,I[1],I[2]] - X[:,I[1],I[2]]
         i0 = abs(E_col).argmax()
         e = abs(E_col[i0])
         if e < 1e-15:

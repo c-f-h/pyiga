@@ -60,6 +60,38 @@ def _modek_tensordot_sparse(B, X, k):
     # reshape back, new axis is in first position
     return np.reshape(Yk, shp)
 
+def _normalize_indices(I, shape):
+    if not isinstance(I, tuple):
+        I = (I,)
+    d = len(shape)
+    if len(I) < d:
+        I = I + (d - len(I)) * (slice(None),)
+    elif len(I) > d:
+        raise ValueError('got {} indices but have only {} axes'.format(len(I), d))
+
+    I_new = []
+    shape_new = []
+    singleton = []
+
+    for k in range(d):
+        ik = I[k]
+        if np.isscalar(ik):
+            if not 0 <= ik < shape[k]:
+                raise ValueError('invalid index {} for axis {} of length {}'
+                        .format(ik, k, shape[k]))
+            r = range(ik, ik + 1)
+            shape_new.append(1)
+            singleton.append(k)
+        elif isinstance(ik, slice):
+            r = range(shape[k])[ik]
+            shape_new.append(len(r))
+        else:
+            r = arange(shape[k])[ik]
+            shape_new.append(len(r))
+        I_new.append(r)
+
+    return tuple(I_new), tuple(shape_new), tuple(singleton)
+
 
 def apply_tprod(ops, A):
     """Apply multi-way tensor product of operators to tensor `A`.

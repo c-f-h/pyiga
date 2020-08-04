@@ -108,7 +108,7 @@ class AsmVar:
         return self.name
 
     def is_scalar(self):
-        return self.shape is ()
+        return self.shape == ()
     def is_vector(self):
         return len(self.shape) == 1
     def is_matrix(self):
@@ -775,7 +775,7 @@ class Expr:
 
     def is_scalar(self):
         """Returns True iff the expression is scalar."""
-        return self.shape is ()
+        return self.shape == ()
     def is_vector(self):
         """Returns True iff the expression is vector-valued."""
         return len(self.shape) == 1
@@ -887,7 +887,7 @@ class Expr:
 def make_var_expr(vf, var):
     """Create an expression of the proper shape which refers to the variable `var`."""
     shape = var.shape
-    if shape is ():
+    if shape == ():
         return VarRefExpr(var, ())
     elif len(shape) == 1:
         return LiteralVectorExpr(

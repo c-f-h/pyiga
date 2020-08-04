@@ -541,7 +541,7 @@ def tensor_product(G1, G2, *Gs):
     (:attr:`.BSplineFunc.dim`) equal to the sum of the target dimensions of the
     input functions.
     """
-    if Gs is not ():
+    if Gs != ():
         return tensor_product(G1, tensor_product(G2, *Gs))
     assert G1.is_vector() and G2.is_vector(), 'only implemented for vector-valued functions'
 

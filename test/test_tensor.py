@@ -298,3 +298,7 @@ def test_canonical_op():
     Y2 = AB.apply(X)
     assert np.allclose(Y1.asarray(), Y2.asarray())
     assert np.allclose(((A @ B) @ X).asarray(), (A @ (B @ X)).asarray())
+    #
+    assert np.allclose(((A + B) @ X).asarray(), (A @ X + B @ X).asarray())
+    assert np.allclose(((A - B) @ X).asarray(), (A @ X - B @ X).asarray())
+    assert np.allclose(((-A) @ X).asarray(), -(A @ X).asarray())

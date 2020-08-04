@@ -11,12 +11,13 @@ install:
   - bash miniconda.sh -b -p $HOME/miniconda
   - export PATH="$HOME/miniconda/bin:$PATH"
   - conda config --set always_yes yes --set changeps1 no
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION wheel setuptools Cython nose numpy scipy networkx jinja2 coverage codecov
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION wheel setuptools Cython pytest pytest-cov numpy scipy networkx jinja2 coverage codecov
   - source activate test-environment
   - python setup.py install
 
 script:
-  - python setup.py nosetests --verbosity=2 --with-coverage --cover-package=pyiga --cover-xml
+  - python setup.py build_ext -i
+  - py.test -v --cov=pyiga --cov-report=xml
   - codecov
 
 notifications:

@@ -57,7 +57,7 @@ class MatrixGenerator:
         """Generate the j-th column"""
         return self.compute_entries((i,j) for i in range(self.shape[0]))
 
-    def full(self):
+    def asarray(self):
         """Generate the entire matrix as an np.ndarray"""
         return self.compute_entries(
                 (i,j) for i in range(self.shape[0])
@@ -119,7 +119,7 @@ class TensorGenerator:
                                self.shape[axes[1]],
                                multientryfunc=multientryfunc)
 
-    def full(self):
+    def asarray(self):
         """Generate the full tensor as an np.ndarray"""
         return self.compute_entries(
             (i,j,k) for i in range(self.shape[0])

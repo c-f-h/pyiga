@@ -295,3 +295,4 @@ def test_canonical_op():
     Y1 = A.apply(B.apply(X))
     Y2 = AB.apply(X)
     assert np.allclose(Y1.asarray(), Y2.asarray())
+    assert np.allclose(((A @ B) @ X).asarray(), (A @ (B @ X)).asarray())

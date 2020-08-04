@@ -1131,6 +1131,12 @@ class CanonicalOperator:
         assert X.shape == self.shape[1], 'wrong shape of input tensor'
         return reduce(operator.add, (apply_tprod(t, X) for t in self.terms))
 
+    def __matmul__(self, X):
+        if isinstance(X, CanonicalOperator):
+            return self * X
+        else:
+            return self.apply(X)
+
     def slice(self, limits):
         return CanonicalOperator([
             tuple(A[l[0]:l[1], l[0]:l[1]] for (A,l) in zip(term, limits))

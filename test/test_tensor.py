@@ -280,6 +280,9 @@ def test_ls():
     A_op = CanonicalOperator(A)
     assert fro_norm(A_op.apply(T2) - F) < 0.01 * fro_norm(F)    # check relative residual
 
+def _random_banded(n, bw):
+    return scipy.sparse.spdiags(rand(2*bw+1, n), np.arange(-bw,bw+1), n, n).tocsr()
+
 def test_canonical_op():
     N = (3,4,5)
     I = CanonicalOperator.eye(N)
@@ -289,8 +292,8 @@ def test_canonical_op():
     assert Y.R == (2,2,2)
     assert np.allclose(X.asarray(), Y.asarray())
     #
-    A = CanonicalOperator([tuple(scipy.sparse.rand(n,n, 0.1) for n in N) for k in range(3)])
-    B = CanonicalOperator([tuple(scipy.sparse.rand(n,n, 0.1) for n in N) for k in range(2)])
+    A = CanonicalOperator([tuple(_random_banded(n, 1) for n in N) for k in range(3)])
+    B = CanonicalOperator([tuple(_random_banded(n, 1) for n in N) for k in range(2)])
     AB = A * B
     assert AB.R == 6
     assert scipy.sparse.linalg.norm(AB.asmatrix() - (A.asmatrix().dot(B.asmatrix()))) < 1e-6

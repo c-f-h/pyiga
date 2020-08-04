@@ -32,6 +32,11 @@ def _random_tucker(shape, R):
     d = len(Us)
     return TuckerTensor(Us, rand(*(d * (R,))))
 
+def _test_tensor_arithmetic(X, Y):
+    assert np.allclose((-X).asarray(), -(X.asarray()))
+    assert np.allclose((X + Y).asarray(), X.asarray() + Y.asarray())
+    assert np.allclose((X - Y).asarray(), X.asarray() - Y.asarray())
+
 def test_tucker():
     X = rand(3,4,5)
     T = hosvd(X)
@@ -56,9 +61,7 @@ def test_tucker():
         assert U.shape == X.Us[k].shape
         assert np.allclose(U.T.dot(U), np.eye(U.shape[1]))
     # add and sub
-    Y = _random_tucker((3,4,5), 3)
-    assert np.allclose((X + Y).asarray(), X.asarray() + Y.asarray())
-    assert np.allclose((X - Y).asarray(), X.asarray() - Y.asarray())
+    _test_tensor_arithmetic(X, _random_tucker((3,4,5), 3))
     # compression
     XX = (X + X).compress()
     assert XX.R == X.R and np.allclose(XX.asarray(), 2*X.asarray())
@@ -168,9 +171,7 @@ def test_canonical():
     y = als1(A.asarray())
     assert np.allclose(outer(*x), outer(*y), atol=1e-4)
     # add and sub
-    B = _random_canonical(A.shape, 3)
-    assert np.allclose((A + B).asarray(), A.asarray() + B.asarray())
-    assert np.allclose((A - B).asarray(), A.asarray() - B.asarray())
+    _test_tensor_arithmetic(A, _random_canonical(A.shape, 3))
 
 def test_coercion():
     C = _random_canonical((3,4,5), 2)
@@ -208,6 +209,7 @@ def test_tensorsum():
     assert np.allclose(
             apply_tprod(U, X).asarray(),
             apply_tprod(U, AB).asarray())
+    _test_tensor_arithmetic(AB, _random_tucker(AB.shape, 2))
 
 def test_tensorprod():
     A = _random_tucker((2,3), 2)
@@ -222,7 +224,7 @@ def test_tensorprod():
             array_outer(apply_tprod(Us[:2], A).asarray(),
                         apply_tprod(Us[2:], B).asarray()))
     ##
-    assert np.allclose((-X).asarray(), -(X.asarray()))
+    _test_tensor_arithmetic(X, _random_tucker(X.shape, 2))
     ## compare to CanonicalTensor
     x, y = rand(7), rand(8)
     X = TensorProd(x, y)

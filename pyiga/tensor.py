@@ -853,21 +853,11 @@ class TuckerTensor:
         Returns:
             :class:`TuckerTensor`: the orthonormalized Tucker tensor
         """
-        USVh = [scipy.linalg.svd(U, full_matrices=False, check_finite=False)
-                for U in self.Us]
-        transform = []
-        for (U,S,Vh) in USVh:
-            # make sure S has same length as first axis of Vh
-            S = np.pad(S, (0, Vh.shape[0]-S.shape[0]), 'constant')
-            transform.append(S[:, None] * Vh)
-        return TuckerTensor(
-                (U for (U,_,_) in USVh),
-                apply_tprod(transform, self.X))
-
-        QR = tuple(np.linalg.qr(U) for U in self.Us)
-        Rinv = tuple(scipy.linalg.solve_triangular(R, np.eye(R.shape[1])) for (_,R) in QR)
-        return TuckerTensor(tuple(Q for (Q,_) in QR),
-                apply_tprod(Rinv, self.X))
+        QR = tuple(scipy.linalg.qr(U, mode='economic', check_finite=False)
+                for U in self.Us)
+        Qs = tuple(Q for (Q,_) in QR)
+        Rs = tuple(R for (_,R) in QR)
+        return TuckerTensor(Qs, apply_tprod(Rs, self.X))
 
     def norm(self):
         """Compute the Frobenius norm of the tensor."""

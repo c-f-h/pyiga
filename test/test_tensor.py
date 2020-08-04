@@ -48,7 +48,13 @@ def test_tucker():
     ###
     X = _random_tucker((3,4,5), 2)
     # orthogonalize
-    assert np.allclose(X.asarray(), X.orthogonalize().asarray())
+    XO = X.orthogonalize()
+    assert np.allclose(X.asarray(), XO.asarray())
+    assert X.X.shape == XO.X.shape
+    for k in range(XO.ndim):
+        U = XO.Us[k]
+        assert U.shape == X.Us[k].shape
+        assert np.allclose(U.T.dot(U), np.eye(U.shape[1]))
     # add and sub
     Y = _random_tucker((3,4,5), 3)
     assert np.allclose((X + Y).asarray(), X.asarray() + Y.asarray())

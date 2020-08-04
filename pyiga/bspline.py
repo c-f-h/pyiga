@@ -216,37 +216,38 @@ def deriv(knotvec, coeffs, deriv, u):
 
 ################################################################################
 
-def _bspline_active_ev_single(knotvec, u):
-    """Evaluate all active B-spline basis functions at a single point `u`"""
-    kv, p = knotvec.kv, knotvec.p
-    left = np.empty(p)
-    right = np.empty(p)
-    result = np.empty(p+1)
-
-    span = knotvec.findspan(u)
-
-    result[0] = 1.0
-
-    for j in range(1, p+1):
-        left[j-1] = u - kv[span+1-j]
-        right[j-1] = kv[span+j] - u
-        saved = 0.0
-
-        for r in range(j):
-            temp = result[r] / (right[r] + left[j-r-1])
-            result[r] = saved + right[r] * temp
-            saved = left[j-r-1] * temp
-
-        result[j] = saved
-
-    return result
+# currently unused
+#def _bspline_active_ev_single(knotvec, u):
+#    """Evaluate all active B-spline basis functions at a single point `u`"""
+#    kv, p = knotvec.kv, knotvec.p
+#    left = np.empty(p)
+#    right = np.empty(p)
+#    result = np.empty(p+1)
+#
+#    span = knotvec.findspan(u)
+#
+#    result[0] = 1.0
+#
+#    for j in range(1, p+1):
+#        left[j-1] = u - kv[span+1-j]
+#        right[j-1] = kv[span+j] - u
+#        saved = 0.0
+#
+#        for r in range(j):
+#            temp = result[r] / (right[r] + left[j-r-1])
+#            result[r] = saved + right[r] * temp
+#            saved = left[j-r-1] * temp
+#
+#        result[j] = saved
+#
+#    return result
 
 def active_ev(knotvec, u):
     """Evaluate all active B-spline basis functions at the points `u`.
 
     Returns an array of shape (p+1, u.size) if `u` is an array."""
     if np.isscalar(u):
-        return _bspline_active_ev_single(knotvec, u)
+        return active_ev(knotvec, np.array([u]))[:, 0]
     else:
         # use active_deriv(), which is implemented in Cython and much faster
         return active_deriv(knotvec, u, 0)[0, :]
@@ -255,91 +256,92 @@ def active_ev(knotvec, u):
         #    result[:,i] = _bspline_active_ev_single(knotvec, u[i])
         #return result
 
+# optimized in bspline_cy
+#def _bspline_active_deriv_single(knotvec, u, numderiv):
+#    """Evaluate all active B-spline basis functions and their derivatives
+#    up to `numderiv` at a single point `u`"""
+#    kv, p = knotvec.kv, knotvec.p
+#    NDU   = np.empty((p+1, p+1))
+#    left  = np.empty(p)
+#    right = np.empty(p)
+#    result = np.empty((numderiv+1, p+1))
+#
+#    span = knotvec.findspan(u)
+#
+#    NDU[0,0] = 1.0
+#
+#    for j in range(1, p+1):
+#        # Compute knot splits
+#        left[j-1]  = u - kv[span+1-j]
+#        right[j-1] = kv[span+j] - u
+#        saved = 0.0
+#
+#        for r in range(j):     # For all but the last basis functions of degree j (ndu row)
+#            # Strictly lower triangular part: Knot differences of distance j
+#            NDU[j, r] = right[r] + left[j-r-1]
+#            temp = NDU[r, j-1] / NDU[j, r]
+#            # Upper triangular part: Basis functions of degree j
+#            NDU[r, j] = saved + right[r] * temp  # r-th function value of degree j
+#            saved = left[j-r-1] * temp
+#
+#        # Diagonal: j-th (last) function value of degree j
+#        NDU[j, j] = saved
+#
+#    # copy function values into result array
+#    result[0, :] = NDU[:, -1]
+#
+#    a1 = np.empty(p+1)
+#    a2 = np.empty(p+1)
+#
+#    for r in range(p+1):    # loop over basis functions
+#        a1[0] = 1.0
+#
+#        fac = p        # fac = fac(p) / fac(p-k)
+#
+#        # Compute the k-th derivative of the r-th basis function
+#        for k in range(1, numderiv+1):
+#            rk = r - k
+#            pk = p - k
+#            d = 0.0
+#
+#            if r >= k:
+#                a2[0] = a1[0] / NDU[pk+1, rk]
+#                d = a2[0] * NDU[rk, pk]
+#
+#            j1 = 1 if rk >= -1  else -rk
+#            j2 = k-1 if r-1 <= pk else p - r
+#
+#            for j in range(j1, j2+1):
+#                a2[j] = (a1[j] - a1[j-1]) / NDU[pk+1, rk+j]
+#                d += a2[j] * NDU[rk+j, pk]
+#
+#            if r <= pk:
+#                a2[k] = -a1[k-1] / NDU[pk+1, r]
+#                d += a2[k] * NDU[r, pk]
+#
+#            result[k, r] = d * fac
+#            fac *= pk          # update fac = fac(p) / fac(p-k) for next k
+#
+#            # swap rows a1 and a2
+#            (a1,a2) = (a2,a1)
+#
+#    return result
 
-def _bspline_active_deriv_single(knotvec, u, numderiv):
-    """Evaluate all active B-spline basis functions and their derivatives
-    up to `numderiv` at a single point `u`"""
-    kv, p = knotvec.kv, knotvec.p
-    NDU   = np.empty((p+1, p+1))
-    left  = np.empty(p)
-    right = np.empty(p)
-    result = np.empty((numderiv+1, p+1))
-
-    span = knotvec.findspan(u)
-
-    NDU[0,0] = 1.0
-
-    for j in range(1, p+1):
-        # Compute knot splits
-        left[j-1]  = u - kv[span+1-j]
-        right[j-1] = kv[span+j] - u
-        saved = 0.0
-
-        for r in range(j):     # For all but the last basis functions of degree j (ndu row)
-            # Strictly lower triangular part: Knot differences of distance j
-            NDU[j, r] = right[r] + left[j-r-1]
-            temp = NDU[r, j-1] / NDU[j, r]
-            # Upper triangular part: Basis functions of degree j
-            NDU[r, j] = saved + right[r] * temp  # r-th function value of degree j
-            saved = left[j-r-1] * temp
-
-        # Diagonal: j-th (last) function value of degree j
-        NDU[j, j] = saved
-
-    # copy function values into result array
-    result[0, :] = NDU[:, -1]
-
-    a1 = np.empty(p+1)
-    a2 = np.empty(p+1)
-
-    for r in range(p+1):    # loop over basis functions
-        a1[0] = 1.0
-
-        fac = p        # fac = fac(p) / fac(p-k)
-
-        # Compute the k-th derivative of the r-th basis function
-        for k in range(1, numderiv+1):
-            rk = r - k
-            pk = p - k
-            d = 0.0
-
-            if r >= k:
-                a2[0] = a1[0] / NDU[pk+1, rk]
-                d = a2[0] * NDU[rk, pk]
-
-            j1 = 1 if rk >= -1  else -rk
-            j2 = k-1 if r-1 <= pk else p - r
-
-            for j in range(j1, j2+1):
-                a2[j] = (a1[j] - a1[j-1]) / NDU[pk+1, rk+j]
-                d += a2[j] * NDU[rk+j, pk]
-
-            if r <= pk:
-                a2[k] = -a1[k-1] / NDU[pk+1, r]
-                d += a2[k] * NDU[r, pk]
-
-            result[k, r] = d * fac
-            fac *= pk          # update fac = fac(p) / fac(p-k) for next k
-
-            # swap rows a1 and a2
-            (a1,a2) = (a2,a1)
-
-    return result
-
-def active_deriv(knotvec, u, numderiv):
-    """Evaluate all active B-spline basis functions and their derivatives
-    up to `numderiv` at the points `u`.
-
-    Returns an array with shape (numderiv+1, p+1) if `u` is scalar or
-    an array with shape (numderiv+1, p+1, u.size) otherwise.
-    """
-    if np.isscalar(u):
-        return _bspline_active_deriv_single(knotvec, u, numderiv)
-    else:
-        result = np.empty((numderiv+1, knotvec.p+1, u.size))
-        for i in range(u.size):
-            result[:,:,i] = _bspline_active_deriv_single(knotvec, u[i], numderiv)
-        return result
+# optimized in bspline_cy
+#def active_deriv(knotvec, u, numderiv):
+#    """Evaluate all active B-spline basis functions and their derivatives
+#    up to `numderiv` at the points `u`.
+#
+#    Returns an array with shape (numderiv+1, p+1) if `u` is scalar or
+#    an array with shape (numderiv+1, p+1, u.size) otherwise.
+#    """
+#    if np.isscalar(u):
+#        return _bspline_active_deriv_single(knotvec, u, numderiv)
+#    else:
+#        result = np.empty((numderiv+1, knotvec.p+1, u.size))
+#        for i in range(u.size):
+#            result[:,:,i] = _bspline_active_deriv_single(knotvec, u[i], numderiv)
+#        return result
 
 
 def _bspline_single_ev_single(knotvec, i, u):

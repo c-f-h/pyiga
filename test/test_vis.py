@@ -40,7 +40,7 @@ def test_plot_hierarchical_cells():
     cells = hs.compute_supports(hs.cell_supp_indices()[-1])
     plot_hierarchical_cells(hs, cells)
 
-def test_plot_hierarchical_cells():
+def test_plot_active_cells():
     hs = create_example_hspace(p=3, dim=2, n0=4, disparity=1, num_levels=3)
     data = 7.0 * np.arange(hs.total_active_cells)
     plot_active_cells(hs, data)

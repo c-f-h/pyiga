@@ -41,7 +41,7 @@ def _test_tensor_arithmetic(X, Y):
 
 def _test_tensor_slicing(X):
     A = X.asarray()
-    assert X[1,2,3] == A[1,2,3]
+    assert np.allclose(X[1,2,3], A[1,2,3])
     assert np.allclose(X[2,:,1].asarray(), A[2,:,1])
     assert np.allclose(X[:,3,:].asarray(), A[:,3,:])
     assert np.allclose(X[::-1].asarray(), A[::-1])

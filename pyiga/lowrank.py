@@ -189,23 +189,6 @@ def aca_lr(A, tol=1e-10, maxiter=100, verbose=2):
     return crosses
 
 
-def _tensor_slice(A, I):
-    I = tuple(I)
-    assert len(I) == A.ndim, 'invalid slice index'
-    if isinstance(A, np.ndarray):
-        sl = tuple((slice(None) if ii is None else ii) for ii in I)
-        return A[sl]
-    else:
-        def slice_op(j, n):
-            C = scipy.sparse.csr_matrix((1,n))
-            C[0,j] = 1.0
-            return C
-        sl_ops = tuple(slice_op(I[j], A.shape[j]) if (I[j] is not None) else None
-                for j in range(len(I)))
-        S = tensor.apply_tprod(sl_ops, A)
-        return np.squeeze(tensor.asarray(S))
-
-
 def aca_3d(A, tol=1e-10, maxiter=100, skipcount=3, tolcount=3, verbose=2, lr=False):
     if not isinstance(A, TensorGenerator):
         A = TensorGenerator.from_array(A)  # assume it's an array

@@ -76,17 +76,15 @@ def _normalize_indices(I, shape):
     for k in range(d):
         ik = I[k]
         if np.isscalar(ik):
-            if not 0 <= ik < shape[k]:
-                raise ValueError('invalid index {} for axis {} of length {}'
-                        .format(ik, k, shape[k]))
-            r = range(ik, ik + 1)
+            i = range(shape[k])[ik] # raises error if invalid index
+            r = range(i, i+1)
             shape_new.append(1)
             singleton.append(k)
         elif isinstance(ik, slice):
             r = range(shape[k])[ik]
             shape_new.append(len(r))
-        else:
-            r = arange(shape[k])[ik]
+        else:   # should be a list/array of indices
+            r = np.arange(shape[k])[ik]
             shape_new.append(len(r))
         I_new.append(r)
 

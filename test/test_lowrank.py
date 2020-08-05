@@ -15,6 +15,9 @@ def test_tensorgenerator():
     assert np.array_equal(tgen[::-1], X[::-1])
     assert np.array_equal(tgen[:, 3:0:-2, 2], X[:, 3:0:-2, 2])
     assert np.array_equal(tgen[1:,2:,4:], X[1:,2:,4:])
+    assert np.array_equal(tgen[-1,-2,-3:], X[-1,-2,-3:])
+    i = [1,3]
+    assert np.array_equal(tgen[1,i,2], X[1,i,2])
 
 def test_aca():
     n,k = 50, 3

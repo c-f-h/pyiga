@@ -86,6 +86,9 @@ def test_tucker():
     assert np.allclose(A.asarray()[:,0,:,:], A2.asarray())
     with unittest.TestCase().assertRaises(ValueError):
         A.squeeze(2)    # invalid axis - not length 1
+    assert A.squeeze(axis=()) is A
+    A = _random_tucker((1,1,1), 3)
+    assert A.squeeze() == A.ravel()[0]
 
 def test_gta():
     X = _random_tucker((3,4,5), 2)
@@ -190,6 +193,9 @@ def test_canonical():
     assert np.allclose(A.asarray()[:,0,:,:], A2.asarray())
     with unittest.TestCase().assertRaises(ValueError):
         A.squeeze(2)    # invalid axis - not length 1
+    assert A.squeeze(axis=()) is A
+    A = _random_canonical((1,1,1), 3)
+    assert A.squeeze() == A.ravel()[0]
 
 def test_coercion():
     C = _random_canonical((3,4,5), 2)

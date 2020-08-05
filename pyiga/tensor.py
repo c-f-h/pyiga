@@ -834,6 +834,12 @@ class CanonicalTensor:
             Xs = (Xs[0] * factors,) + Xs[1:]
             return CanonicalTensor(Xs)
 
+    def __getitem__(self, I):
+        I, shp, singl = _normalize_indices(I, self.shape)
+        A = CanonicalTensor(X[Ik] for (X,Ik) in zip(self.Xs, I))
+        assert A.shape == shp
+        return A.squeeze(axis=singl)
+
 
 class TuckerTensor:
     r"""A *d*-dimensional tensor in **Tucker format** is given as a list of *d* basis matrices

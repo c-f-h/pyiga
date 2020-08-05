@@ -39,6 +39,18 @@ def _test_tensor_arithmetic(X, Y):
     assert np.allclose((X + Y).asarray(), X.asarray() + Y.asarray())
     assert np.allclose((X - Y).asarray(), X.asarray() - Y.asarray())
 
+def _test_tensor_slicing(X):
+    A = X.asarray()
+    assert X[1,2,3] == A[1,2,3]
+    assert np.allclose(X[2,:,1].asarray(), A[2,:,1])
+    assert np.allclose(X[:,3,:].asarray(), A[:,3,:])
+    assert np.allclose(X[::-1].asarray(), A[::-1])
+    assert np.allclose(X[:, 3:0:-2, 2].asarray(), A[:, 3:0:-2, 2])
+    assert np.allclose(X[1:,2:,4:].asarray(), A[1:,2:,4:])
+    assert np.allclose(X[-1,-2,-3:].asarray(), A[-1,-2,-3:])
+    i = [1,3]
+    assert np.allclose(X[1,i,2].asarray(), A[1,i,2])
+
 def test_tucker():
     X = rand(3,4,5)
     T = hosvd(X)
@@ -196,6 +208,8 @@ def test_canonical():
     assert A.squeeze(axis=()) is A
     A = _random_canonical((1,1,1), 3)
     assert A.squeeze() == A.ravel()[0]
+    # slicing
+    _test_tensor_slicing(_random_canonical((4,5,6), 2))
 
 def test_coercion():
     C = _random_canonical((3,4,5), 2)

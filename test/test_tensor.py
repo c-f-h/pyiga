@@ -250,6 +250,7 @@ def test_tensorsum():
             apply_tprod(U, X).asarray(),
             apply_tprod(U, AB).asarray())
     _test_tensor_arithmetic(AB, _random_tucker(AB.shape, 2))
+    _test_tensor_slicing(AB)
 
 def test_tensorprod():
     A = _random_tucker((2,3), 2)
@@ -263,8 +264,11 @@ def test_tensorprod():
     assert np.allclose(apply_tprod(Us, X).asarray(),
             array_outer(apply_tprod(Us[:2], A).asarray(),
                         apply_tprod(Us[2:], B).asarray()))
-    ##
+    # arithmetic
     _test_tensor_arithmetic(X, _random_tucker(X.shape, 2))
+    # slicing
+    _test_tensor_slicing(TensorProd(_random_tucker((3,4), 2),
+                                    _random_canonical((5,), 3)))
     ## compare to CanonicalTensor
     x, y = rand(7), rand(8)
     X = TensorProd(x, y)

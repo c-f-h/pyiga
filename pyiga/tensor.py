@@ -1088,6 +1088,13 @@ class TensorSum:
     def __neg__(self):
         return TensorSum(*(-X for X in self.Xs))
 
+    def __getitem__(self, I):
+        Ys = tuple(X[I] for X in self.Xs)
+        if all(np.isscalar(Y) for Y in Ys):
+            return sum(Ys)
+        else:
+            return TensorSum(*Ys)
+
 
 class TensorProd:
     """Represents the abstract tensor product of an arbitrary number of tensors."""
@@ -1132,6 +1139,19 @@ class TensorProd:
 
     def __neg__(self):
         return TensorProd(*((-self.Xs[0],) + self.Xs[1:]))
+
+    def __getitem__(self, I):
+        if not isinstance(I, tuple):
+            I = (I,)
+        if len(I) > self.ndim:
+            raise ValueError('too many indices')
+        if len(I) < self.ndim:
+            I = I + (self.ndim - len(I)) * (slice(None),)
+        Ys = tuple(X[I[sl]] for (X,sl) in zip(self.Xs, self.slices))
+        if all(np.isscalar(Y) for Y in Ys):
+            return np.product(Ys)
+        else:
+            return TensorProd(*Ys)
 
 ################################################################################
 ## Linear operators on tensors

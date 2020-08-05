@@ -990,6 +990,27 @@ class TuckerTensor:
     def __neg__(self):
         return TuckerTensor((U.copy() for U in self.Us), -self.X)
 
+    def squeeze(self, axis=None):
+        """Eliminate singleton axes. Equivalent to :func:`numpy.squeeze`."""
+        if axis is None:
+            axis = tuple(i for i in range(self.ndim) if self.shape[i] == 1)
+        else:
+            if np.isscalar(axis):
+                axis = (axis,)
+            if not all(self.shape[i] == 1 for i in axis):
+                raise ValueError('all given axes must be singletons!')
+        if len(axis) == 0:
+            return self
+        elif len(axis) == self.ndim:    # singleton tensor
+            return self.ravel()[0]      # - return the single entry
+        else:
+            remaining = sorted(set(range(self.ndim)) - set(axis))
+            factors = self.ndim * [None]
+            for i in axis:
+                factors[i] = self.Us[i]     # has shape 1 x R_i
+            X = apply_tprod(factors, self.X).squeeze(axis)
+            return TuckerTensor(tuple(self.Us[i] for i in remaining), X)
+
 
 def join_tucker_bases(T1, T2):
     """Represent the two Tucker tensors `T1` and `T2` in a joint basis.

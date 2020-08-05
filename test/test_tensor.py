@@ -78,6 +78,14 @@ def test_tucker():
     X = rand(3,4,5)
     Y = TuckerTensor.from_tensor(X)
     assert np.allclose(X, Y.asarray())
+    # squeeze
+    A = _random_tucker((7,1,6,1), 3)
+    A2 = A.squeeze()
+    assert np.allclose(A.asarray()[:,0,:,0], A2.asarray())
+    A2 = A.squeeze(1)
+    assert np.allclose(A.asarray()[:,0,:,:], A2.asarray())
+    with unittest.TestCase().assertRaises(ValueError):
+        A.squeeze(2)    # invalid axis - not length 1
 
 def test_gta():
     X = _random_tucker((3,4,5), 2)

@@ -22,6 +22,11 @@ Any tensor can be expanded to a full `ndarray` using :func:`asarray`.
 In addition, most tensor classes have overloaded operators for adding and
 subtracting tensors in their native format.
 
+All tensors can be sliced using the standard numpy ``[]`` indexing syntax. The
+result is a tensor in the same format, except for the case where all axes have
+a single scalar index, in which case the entry at the corresponding index is
+returned as a scalar value.
+
 Linear operators on tensors, themselves represented in suitable low-rank formats,
 are described by
 

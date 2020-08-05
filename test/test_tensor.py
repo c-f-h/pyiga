@@ -101,6 +101,8 @@ def test_tucker():
     assert A.squeeze(axis=()) is A
     A = _random_tucker((1,1,1), 3)
     assert A.squeeze() == A.ravel()[0]
+    # slicing
+    _test_tensor_slicing(_random_tucker((4,5,6), 2))
 
 def test_gta():
     X = _random_tucker((3,4,5), 2)

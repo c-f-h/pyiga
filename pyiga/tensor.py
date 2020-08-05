@@ -1017,6 +1017,12 @@ class TuckerTensor:
             X = apply_tprod(factors, self.X).squeeze(axis)
             return TuckerTensor(tuple(self.Us[i] for i in remaining), X)
 
+    def __getitem__(self, I):
+        I, shp, singl = _normalize_indices(I, self.shape)
+        T = TuckerTensor(tuple(U[Ik] for (U,Ik) in zip(self.Us, I)), self.X)
+        assert T.shape == shp
+        return T.squeeze(axis=singl)
+
 
 def join_tucker_bases(T1, T2):
     """Represent the two Tucker tensors `T1` and `T2` in a joint basis.

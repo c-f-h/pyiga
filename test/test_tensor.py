@@ -1,5 +1,6 @@
 from pyiga.tensor import *
 
+import unittest
 from numpy.random import rand
 from scipy.sparse.linalg import aslinearoperator
 from scipy.sparse import kron as spkron
@@ -173,6 +174,14 @@ def test_canonical():
     assert np.allclose(outer(*x), outer(*y), atol=1e-4)
     # add and sub
     _test_tensor_arithmetic(A, _random_canonical(A.shape, 3))
+    # squeeze
+    A = _random_canonical((7,1,6,1), 3)
+    A2 = A.squeeze()
+    assert np.allclose(A.asarray()[:,0,:,0], A2.asarray())
+    A2 = A.squeeze(1)
+    assert np.allclose(A.asarray()[:,0,:,:], A2.asarray())
+    with unittest.TestCase().assertRaises(ValueError):
+        A.squeeze(2)    # invalid axis - not length 1
 
 def test_coercion():
     C = _random_canonical((3,4,5), 2)

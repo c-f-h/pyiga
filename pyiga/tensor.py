@@ -810,6 +810,30 @@ class CanonicalTensor:
     def __sub__(self, T2):
         return self + (-T2)
 
+    def squeeze(self, axis=None):
+        """Eliminate singleton axes. Equivalent to :func:`numpy.squeeze`."""
+        if axis is None:
+            axis = tuple(i for i in range(self.ndim) if self.shape[i] == 1)
+        else:
+            if np.isscalar(axis):
+                axis = (axis,)
+            if not all(self.shape[i] == 1 for i in axis):
+                raise ValueError('all given axes must be singletons!')
+        if len(axis) == 0:
+            return self
+        elif len(axis) == self.ndim:    # singleton tensor
+            return self.ravel()[0]      # - return the single entry
+        else:
+            remaining = sorted(set(range(self.ndim)) - set(axis))
+            Xs = tuple(self.Xs[i] for i in remaining)
+            # each singleton X has shape 1 x R - multiply them all up
+            factors = self.Xs[axis[0]].copy()
+            for i in axis[1:]:
+                factors *= self.Xs[i]
+            # incorporate the factors into the first remaining X
+            Xs = (Xs[0] * factors,) + Xs[1:]
+            return CanonicalTensor(Xs)
+
 
 class TuckerTensor:
     r"""A *d*-dimensional tensor in **Tucker format** is given as a list of *d* basis matrices

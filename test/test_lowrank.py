@@ -20,6 +20,7 @@ def test_tensorgenerator():
     assert np.array_equal(tgen[1,i,2], X[1,i,2])
 
 def test_aca():
+    np.random.seed(23875203)
     n,k = 50, 3
     X = np.zeros((n,n))
     for i in range(k):
@@ -38,6 +39,7 @@ def test_aca():
     assert np.allclose(X, T.asarray())
 
 def test_aca3d():
+    np.random.seed(23875203)
     n,k = 10, 3
     X = np.zeros((n,n,n))
     for i in range(k):

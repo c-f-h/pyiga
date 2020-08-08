@@ -14,7 +14,7 @@ from .tensor import apply_tprod
 import functools
 
 
-class NurbsFunc(bspline._BaseGeoFunc):
+class NurbsFunc(bspline._BaseSplineFunc):
     r"""Any function that is given in terms of a tensor product NURBS basis with
     coefficients and weights.
 
@@ -84,13 +84,6 @@ class NurbsFunc(bspline._BaseGeoFunc):
         """Returns True if the function is vector-valued."""
         # NB: currently, NURBS can never be truly scalar due to how weights are stored
         return len(self.coeffs.shape[self.sdim:]) == 1
-
-    def eval(self, *x):
-        coords = tuple(np.asarray([t]) for t in reversed(x))
-        y = self.grid_eval(coords).squeeze(axis=tuple(range(self.sdim)))
-        if y.shape == ():
-            y = y.item()
-        return y
 
     def grid_eval(self, gridaxes):
         assert len(gridaxes) == self.sdim, "Input has wrong dimension"
@@ -211,7 +204,7 @@ class NurbsFunc(bspline._BaseGeoFunc):
         return NurbsFunc(self.kvs, C[..., I], self.coeffs[..., -1], premultiplied=True)
 
 
-class UserFunction:
+class UserFunction(bspline._BaseGeoFunc):
     """A function (supporting the same basic protocol as :class:`.BSplineFunc`) which is given
     in terms of a user-defined callable.
 

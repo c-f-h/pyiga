@@ -59,6 +59,16 @@ def test_evaluation():
         [ 0.   ,  2.   ]]])
     assert abs(exact[1,1] - geo.eval(0.5, 0.3)).max() < 1e-14
     assert abs(exact - values).max() < 1e-14
+    # test calling a geometry function with mixed scalar/array arguments
+    x = 0.7
+    y = [0.1, 0.33, 0.72]
+    z = np.linspace(0.0, 0.5, 4)
+    # BSplineFunc
+    geo = bspline_quarter_annulus().cylinderize(0, 1)
+    assert np.allclose(geo(x, y, z), geo.grid_eval((z, y, [x]))[:, :, 0])
+    # NurbsFunc
+    geo = twisted_box()
+    assert np.allclose(geo(x, y, z), geo.grid_eval((z, y, [x]))[:, :, 0])
 
 def test_jacobian():
     geo = bspline_quarter_annulus()

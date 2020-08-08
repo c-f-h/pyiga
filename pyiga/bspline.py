@@ -526,7 +526,27 @@ class _BaseGeoFunc:
     def __call__(self, *x):
         return self.eval(*x)
 
-class BSplineFunc(_BaseGeoFunc):
+class _BaseSplineFunc(_BaseGeoFunc):
+    def eval(self, *x):
+        """Evaluate the function at a single point of the parameter domain.
+
+        Args:
+            *x: the point at which to evaluate the function, in xyz order
+        """
+        def as_array(t):
+            if np.isscalar(t):
+                return np.asarray([t], dtype=float)
+            else:
+                return np.asanyarray(t, dtype=float)
+        coords = tuple(reversed(x))     # XYZ->ZYX order
+        singletons = tuple(i for i in range(self.sdim) if np.isscalar(coords[i]))
+        coords = tuple(as_array(t) for t in reversed(x))
+        y = self.grid_eval(coords).squeeze(axis=singletons)
+        if y.shape == ():
+            y = y.item()
+        return y
+
+class BSplineFunc(_BaseSplineFunc):
     """Any function that is given in terms of a tensor product B-spline basis with coefficients.
 
     Arguments:
@@ -585,18 +605,6 @@ class BSplineFunc(_BaseGeoFunc):
     def is_vector(self):
         """Returns True if the function is vector-valued."""
         return len(self.coeffs.shape[self.sdim:]) == 1
-
-    def eval(self, *x):
-        """Evaluate the function at a single point of the parameter domain.
-
-        Args:
-            *x: the point at which to evaluate the function, in xyz order
-        """
-        coords = tuple(np.asarray([t], dtype=float) for t in reversed(x))
-        y = self.grid_eval(coords).squeeze(axis=tuple(range(self.sdim)))
-        if y.shape == ():
-            y = y.item()
-        return y
 
     def grid_eval(self, gridaxes):
         """Evaluate the function on a tensor product grid.

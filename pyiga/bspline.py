@@ -790,6 +790,9 @@ class BSplineFunc(_BaseGeoFunc):
         from .geometry import NurbsFunc
         return NurbsFunc(self.kvs, self.coeffs.copy(), np.ones(self.coeffs.shape[:self.sdim]))
 
+    def __getitem__(self, I):
+        return BSplineFunc(self.kvs, self.coeffs[..., I])
+
 
 class PhysicalGradientFunc:
     """A class for function objects which evaluate physical (transformed) gradients of

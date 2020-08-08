@@ -285,3 +285,20 @@ def test_as_nurbs():
     G2 = G.as_nurbs()
     assert isinstance(G, BSplineFunc) and isinstance(G2, NurbsFunc)
     assert geos_roughly_equal(G, G2)
+
+def test_getitem():
+    grid = 2 * (np.linspace(0.0, 1.0, 10),)
+    # BSplineFunc
+    G = bspline_quarter_annulus()
+    f = G.grid_eval(grid)
+    fx = G[0].grid_eval(grid)
+    fy = G[1].grid_eval(grid)
+    assert np.allclose(f[..., 0], fx)
+    assert np.allclose(f[..., 1], fy)
+    # NurbsFunc
+    G = quarter_annulus()
+    f = G.grid_eval(grid)
+    fx = G[0].grid_eval(grid)   # NB: currently, these are 1D vector-valued functions
+    fy = G[1].grid_eval(grid)
+    assert np.allclose(f[..., 0], fx[..., 0])
+    assert np.allclose(f[..., 1], fy[..., 0])

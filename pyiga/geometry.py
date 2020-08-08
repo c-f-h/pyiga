@@ -206,6 +206,10 @@ class NurbsFunc(bspline._BaseGeoFunc):
     def as_nurbs(self):
         return self
 
+    def __getitem__(self, I):
+        C = self.coeffs[..., :-1]
+        return NurbsFunc(self.kvs, C[..., I], self.coeffs[..., -1], premultiplied=True)
+
 
 class UserFunction:
     """A function (supporting the same basic protocol as :class:`.BSplineFunc`) which is given

@@ -92,7 +92,7 @@ def test_unitsquare():
 
 def test_boundary():
     geo = twisted_box()
-    bd = geo.boundary(axis=2, side=1)
+    bd = geo.boundary((2, 1))
     assert bd.sdim == geo.sdim - 1
     assert bd.dim == geo.dim
     assert np.allclose(geo.eval(1,1,0), bd.eval(1,0))
@@ -165,9 +165,9 @@ def test_nurbs_hessian():
 
 def test_nurbs_boundary():
     geo = quarter_annulus()
-    assert geos_roughly_equal(geo.boundary(1, 0),
+    assert geos_roughly_equal(geo.boundary('left'),
                               circular_arc(np.pi/2, 1.0))
-    assert geos_roughly_equal(geo.boundary(1, 1),
+    assert geos_roughly_equal(geo.boundary('right'),
                               circular_arc(np.pi/2, 2.0))
 
 def test_line_segment():

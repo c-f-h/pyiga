@@ -350,7 +350,7 @@ class HSpace:
         self.deactfun = [set()]
         self.disparity = disparity
         if bdspecs is not None:
-            bdspecs = [assemble._parse_bdspec(bd, self.dim) for bd in bdspecs]
+            bdspecs = [bspline._parse_bdspec(bd, self.dim) for bd in bdspecs]
         self.bdspecs = bdspecs
         self._clear_cache()
 

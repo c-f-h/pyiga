@@ -314,9 +314,9 @@ def test_assemble_surface_vf():
             geometry.quarter_annulus())
 
     # assemble
-    f = assemble_vf(vf, kvs, geo=geo_3d.boundary(2, 0)) # inner mantle
+    f = assemble_vf(vf, kvs, geo=geo_3d.boundary('left')) # inner mantle
     assert np.allclose(f.sum(), (2 * 1 * np.pi) / 4)    # r=1 at inner mantle, one quarter of the full circle
-    f = assemble_vf(vf, kvs, geo=geo_3d.boundary(2, 1)) # outer mantle
+    f = assemble_vf(vf, kvs, geo=geo_3d.boundary('right')) # outer mantle
     assert np.allclose(f.sum(), (2 * 2 * np.pi) / 4)    # r=2 at outer mantle, one quarter of the full circle
 
 def test_assemble_string():

@@ -10,6 +10,29 @@ import scipy.interpolate
 
 from .tensor import apply_tprod
 
+def _parse_bdspec(bdspec, dim):
+    if bdspec == 'left':
+        bd = (dim - 1, 0)
+    elif bdspec == 'right':
+        bd = (dim - 1, 1)
+    elif bdspec == 'bottom':
+        bd = (dim - 2, 0)
+    elif bdspec == 'top':
+        bd = (dim - 2, 1)
+    elif bdspec == 'front':
+        bd = (dim - 3, 0)
+    elif bdspec == 'back':
+        bd = (dim - 3, 1)
+    else:
+        bd = bdspec
+    if not (len(bd) == 2 and bd[1] in (0,1)):
+        raise ValueError('invalid bdspec ' + str(bd))
+    if bd[0] < 0 or bd[0] >= dim:
+        raise ValueError('invalid bdspec %s for space of dimension %d'
+                % (bdspec, dim))
+    return bd
+
+
 class KnotVector:
     """Represents an open B-spline knot vector together with a spline degree.
 
@@ -719,18 +742,17 @@ class BSplineFunc(_BaseSplineFunc):
         function after a geometry transform."""
         return PhysicalGradientFunc(self, geo)
 
-    def boundary(self, axis, side):
+    def boundary(self, bdspec):
         """Return one side of the boundary as a :class:`BSplineFunc`.
 
         Args:
-            axis (int): the index of the axis along which to take the boundary.
-            side (int): 0 for the "lower" or 1 for the "upper" boundary along
-                the given axis
+            bdspec: the side of the boundary to return; see :func:`.compute_dirichlet_bc`
 
         Returns:
             :class:`BSplineFunc`: representation of the boundary side;
             has :attr:`sdim` reduced by 1 and the same :attr:`dim` as this function
         """
+        axis, side = _parse_bdspec(bdspec, self.sdim)
         assert 0 <= axis < self.sdim, 'Invalid axis'
         slices = self.sdim * [slice(None)]
         slices[axis] = (0 if side==0 else -1)

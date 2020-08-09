@@ -130,18 +130,17 @@ class NurbsFunc(bspline._BaseSplineFunc):
         I,J = np.triu_indices(mat.shape[-1])    # indices for upper triangular part
         return Nhess1 - mat[..., I, J]          # linearize the symmetric part
 
-    def boundary(self, axis, side):
+    def boundary(self, bdspec):
         """Return one side of the boundary as a :class:`NurbsFunc`.
 
         Args:
-            axis (int): the index of the axis along which to take the boundary.
-            side (int): 0 for the "lower" or 1 for the "upper" boundary along
-                the given axis
+            bdspec: the side of the boundary to return; see :func:`.compute_dirichlet_bc`
 
         Returns:
             :class:`NurbsFunc`: representation of the boundary side;
             has `sdim` reduced by 1 and the same `dim` as this function
         """
+        axis, side = bspline._parse_bdspec(bdspec, self.sdim)
         assert 0 <= axis < self.sdim, 'Invalid axis'
         slices = self.sdim * [slice(None)]
         slices[axis] = (0 if side==0 else -1)

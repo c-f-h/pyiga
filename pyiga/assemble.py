@@ -352,28 +352,6 @@ def slice_indices(ax, idx, shape, ravel=False):
         multi_indices = np.ravel_multi_index(multi_indices.T, shape)
     return multi_indices
 
-def _parse_bdspec(bdspec, dim):
-    if bdspec == 'left':
-        bd = (dim - 1, 0)
-    elif bdspec == 'right':
-        bd = (dim - 1, 1)
-    elif bdspec == 'bottom':
-        bd = (dim - 2, 0)
-    elif bdspec == 'top':
-        bd = (dim - 2, 1)
-    elif bdspec == 'front':
-        bd = (dim - 3, 0)
-    elif bdspec == 'back':
-        bd = (dim - 3, 1)
-    else:
-        bd = bdspec
-    if not (len(bd) == 2 and bd[1] in (0,1)):
-        raise ValueError('invalid bdspec ' + str(bd))
-    if bd[0] < 0 or bd[0] >= dim:
-        raise ValueError('invalid bdspec %s for space of dimension %d'
-                % (bdspec, dim))
-    return bd
-
 def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
     """Compute indices and values for a Dirichlet boundary condition using
     interpolation.
@@ -409,7 +387,8 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
         dofs within the tensor product basis which lie along the Dirichlet
         boundary and their computed values, respectively.
     """
-    bdax, bdside = _parse_bdspec(bdspec, len(kvs))
+    bdspec = bspline._parse_bdspec(bdspec, len(kvs))
+    bdax, bdside = bdspec
 
     # get basis for the boundary face
     bdbasis = list(kvs)
@@ -417,7 +396,7 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
     del bdbasis[bdax]
 
     # get boundary geometry and interpolate dir_func
-    bdgeo = geo.boundary(bdax, bdside)
+    bdgeo = geo.boundary(bdspec)
     from .approx import interpolate
     if np.isscalar(dir_func):
         const_value = dir_func
@@ -497,12 +476,13 @@ def compute_initial_condition_01(kvs, geo, bdspec, g0, g1, physical=True):
         dofs within the tensor product basis which lie along the initial face
         of the space-time cylinder and their computed values, respectively.
     """
-    bdax, bdside = _parse_bdspec(bdspec, len(kvs))
+    bdspec = bspline._parse_bdspec(bdspec, len(kvs))
+    bdax, bdside = bdspec
 
     bdbasis = list(kvs)
     del bdbasis[bdax]
 
-    bdgeo = geo.boundary(bdax, bdside) if physical else None
+    bdgeo = geo.boundary(bdspec) if physical else None
     from .approx import interpolate
     coeffs01 = np.stack((  # coefficients for 0th and 1st derivatives, respectively
         interpolate(bdbasis, g0, geo=bdgeo).ravel(),

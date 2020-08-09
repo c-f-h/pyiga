@@ -196,6 +196,15 @@ def test_circle():
     assert np.allclose(v[-1], [r,0])
     assert abs(r - np.linalg.norm(v, axis=-1)).max() < 1e-12
 
+def test_semicircle():
+    r = 2.09
+    geo = semicircle(r=r)
+    assert np.allclose(geo(0.0), (r,0))
+    assert np.allclose(geo(0.5), (0,r))
+    assert np.allclose(geo(1.0), (-r,0))
+    v = geo.grid_eval((np.linspace(0., 1., 50),))
+    assert abs(r - np.linalg.norm(v, axis=-1)).max() < 1e-12
+
 def test_outer():
     ### outer_sum
     Gy, Gx = line_segment([0,1],[0,2]), line_segment([2,0],[3,0])

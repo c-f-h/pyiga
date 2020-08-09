@@ -433,6 +433,19 @@ def circle(r=1.0):
     W = np.array([1, .5, 1, .5, 1, .5, 1])
     return NurbsFunc(kv, pts, weights=W)
 
+def semicircle(r=1.0):
+    """Construct a semicircle in the upper half-plane with radius `r` using NURBS."""
+    kv = bspline.make_knots(2, 0.0, 1.0, 2, mult=2)
+    coeffs = np.array([
+	1.0, 0.0,
+	1.0, 1.0,
+	0.0, 1.0,
+	-1.0, 1.0,
+	-1.0, 0.0,
+    ]).reshape((-1, 2))
+    W = [1.0, 1.0/np.sqrt(2), 1.0, 1.0/np.sqrt(2), 1.0]
+    return NurbsFunc(kv, r * coeffs, W)
+
 ################################################################################
 # Operations on geometries
 ################################################################################

@@ -73,7 +73,7 @@ def plot_curve(geo, res=50, linewidth=None, color='black'):
     plt.plot(pts[:,0], pts[:,1], color=color, linewidth=linewidth)
 
 
-def animate_field(fields, geo, vrange=None, res=(50,50), cmap=None, interval=50):
+def animate_field(fields, geo, vrange=None, res=(50,50), cmap=None, interval=50, progress=False):
     """Animate a sequence of scalar fields over a geometry."""
     fields = list(fields)
     fig, ax = plt.subplots()
@@ -94,9 +94,22 @@ def animate_field(fields, geo, vrange=None, res=(50,50), cmap=None, interval=50)
                 vmin=vrange[0], vmax=vrange[1], axes=ax)
     fig.colorbar(quadmesh, ax=ax)
 
+    if progress:
+        from tqdm import tqdm
+    else:
+        def noop(self, *args, **kwargs): pass
+        class tqdm:
+            __init__ = noop
+            update   = noop
+            close    = noop
+
+    pbar = tqdm(total=len(fields))
     def anim_func(i):
         C = utils.grid_eval(fields[i], grd)
         quadmesh.set_array(C.ravel())
+        pbar.update()
+        if i == len(fields) - 1:
+            pbar.close()
 
     return animation.FuncAnimation(fig, anim_func, frames=len(fields), interval=interval)
 

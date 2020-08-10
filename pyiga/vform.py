@@ -1757,11 +1757,7 @@ def _check_input_field(kvs, f):
         supp = tuple(kv.support() for kv in kvs)
         mid = tuple((a+b)/2 for (a,b) in supp)
         result = f(*mid)        # evaluate it at the midpoint
-        if np.isscalar(result):
-            shp = ()
-        else:
-            shp = len(result)
-        return shp, True
+        return np.shape(result), True
 
 def parse_vf(expr, kvs, args=dict(), bfuns=None, updatable=[]):
     from . import bspline

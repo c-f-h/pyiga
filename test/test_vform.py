@@ -224,3 +224,5 @@ def test_parse():
 
     # some other features
     vf = parse_vf('f * v * ds', kvs[:1], {'f': geometry.circular_arc(1.4)[0]})
+
+    vf = parse_vf('inner(f, v) * ds', kvs, bfuns=[('v',2)], args={'f': lambda x, y: (-y, x)})

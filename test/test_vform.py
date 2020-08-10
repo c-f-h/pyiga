@@ -221,3 +221,6 @@ def test_parse():
 
     vf = parse_vf('div(u) * div(v) * dx', kvs, bfuns=[('u', 2), ('v', 2)])
     assert vf.hash() == divdiv_vf(2).hash()
+
+    # some other features
+    vf = parse_vf('f * v * ds', kvs[:1], {'f': geometry.circular_arc(1.4)[0]})

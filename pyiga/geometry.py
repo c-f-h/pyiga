@@ -56,8 +56,10 @@ class NurbsFunc(bspline._BaseSplineFunc):
         dim = coeffs.shape[self.sdim:]
         if len(dim) == 0:
             dim = 1
+            self._isscalar = True
         elif len(dim) == 1:
             dim = dim[0]
+            self._isscalar = False
         else:
             assert False, 'Tensor-valued NURBS functions not implemented'
         self.dim = dim
@@ -78,12 +80,20 @@ class NurbsFunc(bspline._BaseSplineFunc):
             self.coeffs[..., :-1] *= self.coeffs[..., -1:]
 
     def output_shape(self):
-        return self.coeffs.shape[self.sdim:]
+        if self._isscalar:
+            return ()
+        else:
+            shp = list(self.coeffs.shape[self.sdim:])
+            shp[-1] -= 1
+            return tuple(shp)
+
+    def is_scalar(self):
+        """Returns True if the function is scalar-valued."""
+        return self.output_shape() == ()
 
     def is_vector(self):
         """Returns True if the function is vector-valued."""
-        # NB: currently, NURBS can never be truly scalar due to how weights are stored
-        return len(self.coeffs.shape[self.sdim:]) == 1
+        return len(self.output_shape()) == 1
 
     def grid_eval(self, gridaxes):
         assert len(gridaxes) == self.sdim, "Input has wrong dimension"
@@ -94,7 +104,10 @@ class NurbsFunc(bspline._BaseSplineFunc):
                 "Grid axes should be one-dimensional"
         colloc = [bspline.collocation(self.kvs[i], gridaxes[i]) for i in range(self.sdim)]
         vals = apply_tprod(colloc, self.coeffs)
-        return vals[..., :-1] / vals[..., -1:]       # divide by weight function
+        f = vals[..., :-1] / vals[..., -1:]       # divide by weight function
+        if self._isscalar:
+            f = np.squeeze(f, -1)           # eliminate scalar axis
+        return f
 
     def grid_jacobian(self, gridaxes):
         bsp = BSplineFunc(self.kvs, self.coeffs)
@@ -104,7 +117,10 @@ class NurbsFunc(bspline._BaseSplineFunc):
         jac = bsp.grid_jacobian(gridaxes)   # shape(grid) x (dim+1) x sdim
         Vjac = jac[..., :-1, :]
         Wjac = jac[..., -1:, :]
-        return (Vjac * W - V * Wjac) / (W**2)   # use quotient rule for (V/W)'
+        J = (Vjac * W - V * Wjac) / (W**2)   # use quotient rule for (V/W)'
+        if self._isscalar:
+            J = np.squeeze(J, -2)           # eliminate scalar axis
+        return J
 
     def grid_hessian(self, gridaxes):
         bsp = BSplineFunc(self.kvs, self.coeffs)
@@ -128,7 +144,10 @@ class NurbsFunc(bspline._BaseSplineFunc):
         mat = (Njac[..., None, :] * Wjac[..., :, None]) / W[..., None]     # shape(grid) x dim x sdim x sdim
         mat += mat.swapaxes(-1, -2)             # symmetrize
         I,J = np.triu_indices(mat.shape[-1])    # indices for upper triangular part
-        return Nhess1 - mat[..., I, J]          # linearize the symmetric part
+        H = Nhess1 - mat[..., I, J]             # linearize the symmetric part
+        if self._isscalar:
+            H = np.squeeze(H, -2)           # eliminate scalar axis
+        return H
 
     def boundary(self, bdspec):
         """Return one side of the boundary as a :class:`NurbsFunc`.
@@ -437,11 +456,11 @@ def semicircle(r=1.0):
     """Construct a semicircle in the upper half-plane with radius `r` using NURBS."""
     kv = bspline.make_knots(2, 0.0, 1.0, 2, mult=2)
     coeffs = np.array([
-	1.0, 0.0,
-	1.0, 1.0,
-	0.0, 1.0,
-	-1.0, 1.0,
-	-1.0, 0.0,
+        1.0, 0.0,
+        1.0, 1.0,
+        0.0, 1.0,
+        -1.0, 1.0,
+        -1.0, 0.0,
     ]).reshape((-1, 2))
     W = [1.0, 1.0/np.sqrt(2), 1.0, 1.0/np.sqrt(2), 1.0]
     return NurbsFunc(kv, r * coeffs, W)

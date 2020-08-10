@@ -125,6 +125,15 @@ def test_nurbs():
     vals = nurbs.grid_eval(grid)
     assert abs(r - np.linalg.norm(vals, axis=-1)).max() < 1e-12
 
+    assert nurbs.output_shape() == (2,)
+    assert nurbs.is_vector()
+    nurbsx = nurbs[0]
+    assert nurbsx.output_shape() == ()
+    assert nurbsx.is_scalar()
+    assert nurbsx.grid_eval(grid).shape[1:] == ()
+    assert nurbsx.grid_jacobian(grid).shape[1:] == (1,)
+    assert nurbsx.grid_hessian(grid).shape[1:] == (1,)
+
 def _num_hess(f, x, h=1e-3):
     def delta(i, diffi, j, diffj):
         y = list(x)
@@ -237,8 +246,8 @@ def test_outer():
 
 def test_tensorproduct():
     kv = bspline.make_knots(2, 0.0, 1.0, 1)
-    Gy = NurbsFunc(kv, [0,.5,1], [1,3,1])
-    Gx = NurbsFunc(kv, [0,.5,1], [1,1.0/3.0,1])
+    Gy = NurbsFunc(kv, np.reshape([0,.5,1], (3,1)), [1,3,1])
+    Gx = NurbsFunc(kv, np.reshape([0,.5,1], (3,1)), [1,1.0/3.0,1])
     G = tensor_product(Gy, Gx)
     assert G.sdim == Gy.sdim + Gx.sdim
     assert G.dim == Gy.dim + Gx.dim
@@ -319,5 +328,5 @@ def test_getitem():
     f = G.grid_eval(grid)
     fx = G[0].grid_eval(grid)   # NB: currently, these are 1D vector-valued functions
     fy = G[1].grid_eval(grid)
-    assert np.allclose(f[..., 0], fx[..., 0])
-    assert np.allclose(f[..., 1], fy[..., 0])
+    assert np.allclose(f[..., 0], fx)
+    assert np.allclose(f[..., 1], fy)

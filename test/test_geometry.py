@@ -188,13 +188,23 @@ def test_line_segment():
     assert line_segment(3, 5).dim == 1
 
 def test_circular_arc():
-    alpha = 2./3.*np.pi
-    geo = circular_arc(alpha, r=2)
-    grd = np.linspace(0., 1., 50)
-    v = geo.grid_eval((grd,))
-    assert np.allclose(v[0], [2,0])
-    assert np.allclose(v[-1], [2*np.cos(alpha), 2*np.sin(alpha)])
-    assert np.allclose(2., np.linalg.norm(v, axis=-1))
+    alpha, r = 2./3.*np.pi, 2.0
+    def pt(s): return (r * np.cos(s * alpha), r * np.sin(s * alpha))
+    geo = circular_arc(alpha, r=r)   # 3-point arc
+    grd = np.linspace(0., 1., 51)
+    v = geo(grd)
+    assert np.allclose(v[0],  pt(0.0))
+    assert np.allclose(v[25], pt(0.5))
+    assert np.allclose(v[50], pt(1.0))
+    assert np.allclose(r, np.linalg.norm(v, axis=-1))
+    ## 7-point arc
+    alpha, r = 5.2/3.*np.pi, 1.7
+    geo = circular_arc(alpha, r=r)
+    grd = np.linspace(0., 1., 61)
+    v = geo(grd)
+    for k in range(0, 61, 10):
+        assert np.allclose(v[k],  pt(k / 60))
+    assert np.allclose(r, np.linalg.norm(v, axis=-1))
 
 def test_circle():
     r = 1.75

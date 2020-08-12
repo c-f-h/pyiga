@@ -425,45 +425,51 @@ def circular_arc(alpha, r=1.0):
 
     The arc is centered at the origin, starts on the positive `x` axis and
     travels in counterclockwise direction.
+    """
+    if 0.0 < alpha < np.pi:
+        return circular_arc_3pt(alpha, r)
+    elif np.pi <= alpha <= 2 * np.pi:
+        return circular_arc_7pt(alpha, r)
+    else:
+        raise ValueError('invalid angle {}'.format(alpha))
+
+def circular_arc_3pt(alpha, r=1.0):
+    """Construct a circular arc with angle `alpha` and radius `r` using 3 control points.
+
     The angle `alpha` must be between 0 and `pi`.
     """
     # formulas adapted from
     # https://www.cs.mtu.edu/~shene/COURSES/cs3621/NOTES/spline/NURBS/RB-circles.html
     assert 0.0 < alpha < np.pi, 'Invalid angle'
-    beta = np.pi/2 - alpha/2
-    d = 1.0 / np.sin(beta)
 
-    coeffs = r * np.array([
-        [1.0, 0.0, 1.0],
-        [d * np.cos(alpha/2), d * np.sin(alpha/2), np.sin(beta)],
-        [np.cos(alpha), np.sin(alpha), 1.0]
-    ])
-    return NurbsFunc(bspline.make_knots(2, 0.0, 1.0, 1), coeffs, weights=None)
+    kv = bspline.make_knots(2, 0.0, 1.0, 1)
+    coeffs = np.array([(np.cos(a), np.sin(a)) for a in np.linspace(0, alpha, 3)])
+    W = [1.0, np.cos(alpha / 2), 1.0]
+    return NurbsFunc(kv, r * coeffs, weights=W, premultiplied=True)
 
-def circle(r=1.0):
-    """Construct a circle with radius `r` using NURBS."""
-    knots = np.array([0,0,0, 1./3., 1./3., 2./3., 2./3, 1,1,1])
-    kv = bspline.KnotVector(knots, 2)
+def circular_arc_5pt(alpha, r=1.0):
+    """Construct a circular arc with angle `alpha` and radius `r` using 5 control points."""
+    kv = bspline.make_knots(2, 0.0, 1.0, 2, mult=2)
+    coeffs = np.array([(np.cos(a), np.sin(a)) for a in np.linspace(0, alpha, 5)])
+    w = np.cos(alpha / 4)
+    W = [1.0, w, 1.0, w, 1.0]
+    return NurbsFunc(kv, r * coeffs, weights=W, premultiplied=True)
 
-    pts = r * np.array([(np.cos(a), np.sin(a)) for a in np.linspace(0, 2*np.pi, 7)])
-    pts[1] *= 2
-    pts[3] *= 2
-    pts[5] *= 2
-    W = np.array([1, .5, 1, .5, 1, .5, 1])
-    return NurbsFunc(kv, pts, weights=W)
+def circular_arc_7pt(alpha, r=1.0):
+    """Construct a circular arc with angle `alpha` and radius `r` using 7 control points."""
+    kv = bspline.make_knots(2, 0.0, 1.0, 3, mult=2)
+    coeffs = np.array([(np.cos(a), np.sin(a)) for a in np.linspace(0, alpha, 7)])
+    w = np.cos(alpha / 6)
+    W = np.array([1, w, 1, w, 1, w, 1])
+    return NurbsFunc(kv, r * coeffs, weights=W, premultiplied=True)
 
 def semicircle(r=1.0):
     """Construct a semicircle in the upper half-plane with radius `r` using NURBS."""
-    kv = bspline.make_knots(2, 0.0, 1.0, 2, mult=2)
-    coeffs = np.array([
-        1.0, 0.0,
-        1.0, 1.0,
-        0.0, 1.0,
-        -1.0, 1.0,
-        -1.0, 0.0,
-    ]).reshape((-1, 2))
-    W = [1.0, 1.0/np.sqrt(2), 1.0, 1.0/np.sqrt(2), 1.0]
-    return NurbsFunc(kv, r * coeffs, W)
+    return circular_arc_5pt(np.pi, r)
+
+def circle(r=1.0):
+    """Construct a circle with radius `r` using NURBS."""
+    return circular_arc_7pt(2 * np.pi, r)
 
 ################################################################################
 # Operations on geometries

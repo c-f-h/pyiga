@@ -18,6 +18,9 @@ See the section :doc:`/guide/vforms` for further details.
 .. autofunction:: assemble_vf
 .. autofunction:: assemble_entries
 
+.. autoclass:: Assembler
+    :members:
+
 
 Tensor product Gauss quadrature assemblers
 ------------------------------------------
@@ -856,12 +859,12 @@ def assemble(problem, kvs, args=None, bfuns=None, symmetric=False, format='csr',
         asm = instantiate_assembler(problem, kvs, args, bfuns)
         return assemble_entries(asm, symmetric=symmetric, format=format, layout=layout)
 
-def instantiate_assembler(problem, kvs, args, bfuns):
+def instantiate_assembler(problem, kvs, args, bfuns, updatable=[]):
     from . import vform
 
     # parse string to VForm
     if isinstance(problem, str):
-        problem = vform.parse_vf(problem, kvs, args=args, bfuns=bfuns)
+        problem = vform.parse_vf(problem, kvs, args=args, bfuns=bfuns, updatable=updatable)
 
     num_spaces = 1          # by default, only one space
 
@@ -886,6 +889,53 @@ def instantiate_assembler(problem, kvs, args, bfuns):
         else:
             assert num_spaces == 2, 'no more than two spaces allowed'
             return problem(kvs[0], kvs[1], **used_args)
+
+class Assembler:
+    """A high-level interface to an assembler class.
+
+    Usually, you will simply call :func:`assemble` to assemble a matrix or
+    vector. When assembling a sequence of problems with changing parameters, it
+    may be more efficient to instantiate the assembler class only once and
+    inform it of the changing inputs via the `updatable` argument. You may then
+    call :meth:`update` to change these input fields and assemble the problem
+    via :meth:`assemble`.  Instead of calling :meth:`update` explicitly, you
+    can also simply pass the fields to be updated as additional keyword
+    arguments to :meth:`assemble`.
+
+    `updatable` is a list of names of assembler arguments which are to be
+    considered updatable. The other arguments have the same meaning as for
+    :func:`assemble`.
+    """
+    def __init__(self, problem, kvs, args=None, bfuns=None, symmetric=False, updatable=[], **kwargs):
+        if args is None:
+            args = dict()
+        args.update(kwargs)
+        self.symmetric = bool(symmetric)
+        self.updatable = tuple(updatable)
+        self.asm = instantiate_assembler(problem, kvs, args, bfuns, self.updatable)
+        if not all(upd_name in self.asm.inputs().keys() for upd_name in self.updatable):
+            raise ValueError('Assembler received an updatable argument which is not an assembler input')
+
+    def update(self, **kwargs):
+        """Update all input fields given as `name=func` keyword arguments.
+
+        All fields updated in this manner must have been specified in the list
+        of `updatable` arguments when creating the :class:`Assembler` object.
+        """
+        if not hasattr(self.asm, 'update'):
+            raise RuntimeError('assembler object is not updatable')
+        if not all(name in self.updatable for name in kwargs.keys()):
+            raise RuntimeError('update() received an argument which was not specified as updatable')
+        self.asm.update(**kwargs)
+
+    def assemble(self, format='csr', layout='blocked', **upd_fields):
+        """Assemble the problem.
+
+        Any additional keyword arguments are passed to :meth:`update`.
+        """
+        if upd_fields:
+            self.update(**upd_fields)
+        return assemble_entries(self.asm, symmetric=self.symmetric, format=format, layout=layout)
 
 ################################################################################
 # Convenience functions

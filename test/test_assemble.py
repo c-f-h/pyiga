@@ -326,6 +326,16 @@ def test_assemble_string():
     A2 = stiffness(kvs, geo)
     assert np.allclose(A1.A, A2.A)
 
+    # use Assembler class
+    asm = Assembler('inner(grad(u), grad(v)) * dx', kvs, geo=geo, symmetric=True, updatable=['geo'])
+    A3 = asm.assemble()
+    assert np.allclose(A2.A, A3.A)
+
+    with unittest.TestCase().assertRaises(RuntimeError):
+        asm.assemble(f=geo)       # not an updatable field
+    with unittest.TestCase().assertRaises(ValueError):
+        asm = Assembler('inner(grad(u), grad(v)) * dx', kvs, geo=geo, updatable=['f'])  # f is not an input
+
     f = lambda x, y: x * y**2
     f1 = assemble('f * v * dx', kvs, geo=geo, f=f)
     f2 = inner_products(kvs, f, geo=geo, f_physical=True)

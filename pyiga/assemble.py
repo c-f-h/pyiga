@@ -355,6 +355,14 @@ def slice_indices(ax, idx, shape, ravel=False):
         multi_indices = np.ravel_multi_index(multi_indices.T, shape)
     return multi_indices
 
+def _drop_nans(indices, values):
+    isnan = np.isnan(values)
+    if np.any(isnan):
+        notnan_idx = np.nonzero(np.logical_not(isnan))[0]
+        return indices[notnan_idx], values[notnan_idx]
+    else:
+        return indices, values
+
 def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
     """Compute indices and values for a Dirichlet boundary condition using
     interpolation.
@@ -412,14 +420,15 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
 
     extra_dims = dircoeffs.ndim - len(bdbasis)
     if extra_dims == 0:
-        return bdindices, dircoeffs.ravel()
+        return _drop_nans(bdindices, dircoeffs.ravel())
     elif extra_dims == 1:
         # vector function; assume blocked vector discretization
         numcomp = dircoeffs.shape[-1]
         NN = np.prod(N)
-        return combine_bcs(
+        idx, val = combine_bcs(
             (bdindices + j*NN, dircoeffs[..., j].ravel())
                 for j in range(numcomp))
+        return _drop_nans(idx, val)
     else:
         raise ValueError('invalid dimension of Dirichlet coefficients: %s' % dircoeffs.shape)
 

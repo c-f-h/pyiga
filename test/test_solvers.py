@@ -55,3 +55,9 @@ def test_twogrid():
     S = SequentialSmoother((GaussSeidelSmoother(), OperatorSmoother(1e-6*np.eye(len(f)))))
     x = twogrid(A, f, P, S)
     assert np.linalg.norm(f - A.dot(x)) < 1e-6
+
+def test_newton():
+    def F(x): return np.array([np.sin(x[0]) - 1/2])
+    def J(x): return np.array([[np.cos(x[0])]])
+    x = newton(F, J, [0.0])
+    assert np.allclose(x, np.pi / 6)

@@ -323,3 +323,34 @@ def solve_hmultigrid(hs, A, f, strategy='cell_supp', smoother='gs', smooth_steps
     non_dir_dofs = hs.non_dirichlet_dofs()
     mg_step = local_mg_step(hs, A, f, Ps, hs.indices_to_smooth(strategy), smoother)
     return iterative_solve(mg_step, A, f, active_dofs=non_dir_dofs, tol=tol, maxiter=maxiter)
+
+
+## Nonlinear problems
+
+def newton(F, J, x0, atol=1e-6, rtol=1e-6, maxiter=100, freeze_jac=1):
+    """Solve the nonlinear problem F(x) == 0 using Newton iteration.
+
+    Args:
+        F (function): function computing the residual of the nonlinear equation
+        J (function): function computing the Jacobian matrix of `F`
+        x0 (ndarray): the initial guess as a vector
+        atol (float): absolute tolerance for the norm of the residual
+        rtol (float): relative tolerance with respect to the initial residual
+        maxiter (int): the maximum number of iterations
+        freeze_jac (int): if >1, the Jacobian is only updated every `freeze_jac` steps
+
+    Returns:
+        ndarray: a vector `x` which approximately satisfies F(x) == 0
+    """
+    x = np.array(x0)
+    res = F(x)
+    target = max(atol, rtol * np.linalg.norm(res))
+    for num_it in range(maxiter):
+        if np.linalg.norm(res) < target:    # converged?
+            return x
+        if num_it % freeze_jac == 0:  # update Jacobian only every freeze_jac steps
+            jac = J(x)
+            jac_inv = make_solver(jac)
+        x -= jac_inv.dot(res)
+        res = F(x)
+    raise RuntimeError('Newton method did not converge')

@@ -1,4 +1,6 @@
 """Functions and classes for representing and manipulating variational forms in an abstract way.
+
+For a detailed user guide, see :doc:`/guide/vforms`.
 """
 from collections import OrderedDict, defaultdict
 from functools import reduce

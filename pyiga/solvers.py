@@ -1,8 +1,8 @@
-"""Linear solvers."""
+"""Solvers for linear, nonlinear, and time-dependent problems."""
 import numpy as np
-import numpy.linalg
 import scipy.linalg
 from .operators import make_solver, KroneckerOperator, DiagonalOperator
+from . import utils
 
 from functools import reduce
 
@@ -327,6 +327,12 @@ def solve_hmultigrid(hs, A, f, strategy='cell_supp', smoother='gs', smooth_steps
 
 ## Nonlinear problems
 
+class NoConvergenceError(Exception):
+    def __init__(self, method, num_iter, last_iterate):
+        self.method = method
+        self.num_iter = num_iter
+        self.last_iterate = last_iterate
+
 def newton(F, J, x0, atol=1e-6, rtol=1e-6, maxiter=100, freeze_jac=1):
     """Solve the nonlinear problem F(x) == 0 using Newton iteration.
 
@@ -353,4 +359,582 @@ def newton(F, J, x0, atol=1e-6, rtol=1e-6, maxiter=100, freeze_jac=1):
             jac_inv = make_solver(jac)
         x -= jac_inv.dot(res)
         res = F(x)
-    raise RuntimeError('Newton method did not converge')
+    raise NoConvergenceError('newton', maxiter, x)
+
+
+## Time stepping
+
+def dirk_step(A, M, F, J, x, tau, data=None, Fx=None):
+    # A: Butcher tableau (including b vector, optionally b_hat vector)
+    # M: mass matrix or None
+    # F: right-hand side
+    # x: current iterate
+    # tau: stepsize
+    if M is None:
+        M = scipy.sparse.eye(x.shape[0])
+    if data is None:
+        data = dict()
+    s = A.shape[1]      # number of stages
+    b = A[s, :]
+    is_sa = np.allclose(b, A[s-1, :])   # stiffly accurate?
+    ys = []
+    Fy = []         # list of right-hand sides F(y[i])
+    for i in range(s):
+        # add up contributions below the diagonal
+        a_ii = A[i,i]
+
+        if a_ii == 0: # and (M is None or i == 0):       # explicit step
+            # if diagonal is 0 and i == 0, then y_i = x
+            # if diagonal is 0 and M=I, we don't need to solve a linear system
+            assert i == 0
+            ys.append(x)
+            if Fx is not None:
+                Fy.append(Fx)
+            else:
+                Fy.append(F(x))
+        else:
+            # set up right-hand side (constant term in F)
+            terms = tau * sum(A[i,j] * Fy[j] for j in range(i))
+            rhs = M @ x + terms
+
+            last_Fz = None      # remember F(y_i) to avoid one evaluation of F
+            def newton_F(z):
+                nonlocal last_Fz
+                last_Fz = F(z)
+                return M @ z - tau * a_ii * last_Fz - rhs
+            def newton_J(z):
+                return M - tau * a_ii * J(z)
+
+            # solve the nonlinear system
+            x_start = x if (i==0) else ys[-1]
+            y_i = newton(newton_F, newton_J, x_start, atol=1e-4, freeze_jac=2)
+            ys.append(y_i)
+            Fy.append(last_Fz)
+
+    # caching accessor for solver for mass matrix
+    # NB: assumes M nonsingular - doesn't work for DAEs!
+    def get_Minv():
+        if 'M_inv' in data:
+            return data['M_inv']
+        else:
+            M_inv = make_solver(M, spd=True)
+            data['M_inv'] = M_inv
+            return M_inv
+
+    if is_sa:
+        x_new = ys[s-1]
+        F_x_new = Fy[s-1]
+    else:
+        x_new = get_Minv() @ (M @ x + tau * sum(b[i] * Fy[i] for i in range(s)))
+        F_x_new = None
+
+    if A.shape[0] == s + 2:   # embedded RK scheme?
+        b_hat = A[s + 1, :]
+        x_est = get_Minv() @ (M @ x + tau * sum(b_hat[i] * Fy[i] for i in range(s)))
+        return x_new, x_est, F_x_new
+    else:
+        return x_new, F_x_new
+
+def _constant_step_method(stepper):
+    def _method(M, F, J, x, tau, t_end, *, t0=0.0, progress=False):
+        """
+        Args:
+            M (matrix): the mass matrix
+            F (function): the right-hand side
+            J (function): function computing the Jacobian of `F`
+            x (vector): the initial value
+            tau0 (float): the initial time step
+            t_end (float): the final time up to which to integrate
+            t0 (float): the initial time; 0 by default
+            progress (bool): whether to show a progress bar
+
+        Returns:
+            A tuple `(times, solutions)`, where `times` is a list of increasing
+            times in the interval `(t0, t_end)`, and `solutions` is a list of
+            vectors which contains the computed solutions at these times.
+        """
+        times = [t0]
+        solutions = [x]
+        Fx = None
+        data = dict()
+        from math import ceil
+        num_iter = int(ceil((t_end - t0) / tau))
+        tqdm = utils.progress_bar(progress)
+        for i in tqdm(range(num_iter)):
+            try:
+                x, Fx = stepper(M, F, J, x, tau, data, Fx=Fx)
+            except NoConvergenceError:
+                # if Newton failed to converge, return partial results
+                print('Nonlinear solve failed; returning partial results')
+                return times, solutions
+            t = t0 + (i + 1) * tau
+            times.append(t)
+            solutions.append(x)
+        return times, solutions
+    return _method
+
+def _adaptive_step_method(stepper, err_order, const_method):
+    def _method(M, F, J, x, tau0, t_end, tol, *, t0=0.0, step_factor=0.9, progress=False):
+        """
+        Args:
+            M (matrix): the mass matrix
+            F (function): the right-hand side
+            J (function): function computing the Jacobian of `F`
+            x (vector): the initial value
+            tau0 (float): the initial time step
+            t_end (float): the final time up to which to integrate
+            tol (float): error tolerance for choosing the adaptive time step;
+                if `None`, use constant time steps
+            t0 (float): the initial time; 0 by default
+            step_factor (float): the safety factor for choosing the step size
+            progress (bool): whether to show a progress bar
+
+        Returns:
+            A tuple `(times, solutions)`, where `times` is a list of increasing
+            times in the interval `(t0, t_end)`, and `solutions` is a list of
+            vectors which contains the computed solutions at these times.
+        """
+        if tol is None:
+            return const_method(M, F, J, x, tau0, t_end, t0=t0)
+        times = [t0]
+        solutions = [x]
+        Fx = None
+        tau = tau0
+        data = dict()
+        tqdm = utils.progress_bar(progress)
+        with tqdm(total=t_end-t0) as pbar:
+            t = t0
+            while t < t_end:
+                try:
+                    xnew, xhat, Fxnew = stepper(M, F, J, x, tau, data, Fx=Fx)
+                    d = tol + tol * abs(x)
+                    r = np.linalg.norm((xhat - xnew) / d) / np.sqrt(len(x))
+                    if r == 0: r = 1e-15
+
+                    if r <= 1:
+                        # successful step
+                        t += tau
+                        x = xnew
+                        Fx = Fxnew
+                        times.append(t)
+                        solutions.append(x)
+                        # update the progress bar
+                        pbar.update(tau)
+                        pbar.set_postfix({'tau': tau})
+
+                    # update step size for next step
+                    fac = step_factor * r**(-1 / err_order)
+                    fac = min(5.0, max(0.2, fac))
+                    tau *= fac
+
+                except NoConvergenceError:
+                    # Newton failed to converge; reject step
+                    tau *= 0.5
+
+        return times, solutions
+    return _method
+
+def dirk_method(A, name, displayname):
+    def stepper(*args, **kwargs):
+        return dirk_step(A, *args, **kwargs)
+    f = _constant_step_method(stepper)
+    f.__name__ = f.__qualname__ = name
+    f.__doc__ = ('Solve a time-dependent problem using the {} method.\n'
+        .format(displayname) + f.__doc__)
+    return f
+
+def adaptive_dirk_method(A, err_order, name, displayname):
+    # define non-adaptive fallback
+    const_method = dirk_method(A[:-1, :], name, displayname)
+
+    def stepper(*args, **kwargs):
+        return dirk_step(A, *args, **kwargs)
+    f = _adaptive_step_method(stepper, err_order, const_method)
+    f.__name__ = f.__qualname__ = name
+    f.__doc__ = ('Solve a time-dependent problem using the {} method.\n'
+        .format(displayname) + f.__doc__)
+    return f
+
+def coeffs_sdirk3():
+    # Skvortsov 2006; Alexander 1977
+    gamma = 0.435866521508
+    b2 = 1/4 * (5 - 20*gamma + 6*gamma**2)
+    A = np.array([
+        [gamma,       0.0,    0.0],
+        [(1-gamma)/2, gamma,  0.0],
+        [1-b2-gamma,  b2,     gamma],
+        ##########
+        [1-b2-gamma,  b2,     gamma],
+    ])
+    return A
+
+def coeffs_sdirk3_b():
+    # Nørsett's three-stage, 4th order DIRK method
+    # NB: not stiffly accurate
+    xi = 0.128886400515
+    A = np.array([
+        [xi,        0.0,   0.0],
+        [1/2 - xi,   xi,   0.0],
+        [2*xi, 1 - 4*xi,    xi],
+        ##########
+        [1 / (6*(2*xi-1)**2), 2 * (6*xi**2 - 6*xi +1) / (3*(2*xi-1)**2), 1 / (6*(2*xi-1)**2)]
+    ])
+    return A
+
+def coeffs_sdirk21():
+    # Ellsiepen; order 2, embedded rule of order 1
+    alpha = 1 - np.sqrt(2)/2
+    alp_hat = 2 - 5/4 * np.sqrt(2)
+    A = np.array([
+        [alpha,     0.0],
+        [1 - alpha, alpha],
+        ##################
+        [1 - alpha, alpha],
+        [1 - alp_hat, alp_hat]
+    ])
+    return A, 1
+
+def coeffs_dirk34():
+    # 4 stages, order 3, L-stable, stiffly accurate
+    # embedded rule has order 2
+    a21 = a22 = a33 = a44 = 0.1558983899988677
+    a32 = 1.072486270734370
+    a31 = 1 - a32 - a22
+    a42 = 0.7685298292769537
+    a43 = 0.09666483609791597
+    A = np.array([
+        [0.0, 0.0, 0.0, 0.0],
+        [a21, a22, 0.0, 0.0],
+        [a31, a32, a33, 0.0],
+        [0.0, a42, a43, a44],
+        ####################
+        [0.0, a42, a43, a44],
+        [a31, a32, a33, 0.0],
+    ])
+    return A, 2
+
+def coeffs_esdirk23():
+    # Jorgensen et al 2018
+    # https://arxiv.org/pdf/1803.01613.pdf
+    # 3 stages, order 2, A- and L-stable, stiffly accurate
+    # embedded method has order 3 (not stable)
+    gamma = (2 - np.sqrt(2)) / 2
+    A = np.array([
+        [0.0,         0.0,         0.0],
+        [gamma,       gamma,       0.0],
+        [(1-gamma)/2, (1-gamma)/2, gamma],
+        ##########
+        [(1-gamma)/2, (1-gamma)/2, gamma],
+        [(6*gamma-1)/(12*gamma), 1/(12*gamma*(1-2*gamma)), (1-3*gamma)/(3*(1-2*gamma))],
+    ])
+    return A, 3
+
+def coeffs_esdirk34():
+    # Jorgensen et al 2018
+    # https://arxiv.org/pdf/1803.01613.pdf
+    # 4 stages, order 3, A- and L-stable, stiffly accurate
+    # embedded method has order 4 (not stable)
+    a21 = 0.43586652150845899942
+    a31 = 0.14073777472470619619
+    a32 = -0.1083655513813208000
+    gam = 0.43586652150845899942
+    b = [
+      0.10239940061991099768,
+      -0.3768784522555561061,
+      0.83861253012718610911,
+      gam
+    ]
+    b_hat = [
+      0.15702489786032493710,
+      0.11733044137043884870,
+      0.61667803039212146434,
+      0.10896663037711474985
+    ]
+    A = np.array([
+        [0.0, 0.0, 0.0, 0.0],
+        [a21, gam, 0.0, 0.0],
+        [a31, a32, gam, 0.0],
+        b,
+        ####################
+        b,
+        b_hat
+    ])
+    return A, 4
+
+
+crank_nicolson = dirk_method(np.array([
+    [0.0, 0.0],
+    [0.5, 0.5],
+    ##########
+    [0.5, 0.5]
+]), 'crank_nicolson', 'Crank-Nicolson')
+
+sdirk3 = dirk_method(coeffs_sdirk3(), 'sdirk3', 'SDIRK3 Runge-Kutta')
+sdirk3_b = dirk_method(coeffs_sdirk3_b(), 'sdirk3_b', 'SDIRK3 (alternate) Runge-Kutta')
+sdirk21 = adaptive_dirk_method(*coeffs_sdirk21(), 'sdirk21', 'SDIRK21 (Ellsiepen) Runge-Kutta')
+dirk34 = adaptive_dirk_method(*coeffs_dirk34(), 'dirk34', 'DIRK34 Runge-Kutta')
+
+# methods from https://arxiv.org/pdf/1803.01613.pdf
+esdirk23 = adaptive_dirk_method(*coeffs_esdirk23(), 'esdirk23', 'ESDIRK23 Runge-Kutta')
+esdirk34 = adaptive_dirk_method(*coeffs_esdirk34(), 'esdirk34', 'ESDIRK34 Runge-Kutta')
+
+## Rosenbrock methods
+
+# All of these are referenced in http://dx.doi.org/10.1016/j.cma.2009.10.005
+
+def rosenbrock_step(A, Gamma, b, b_hat, M, F, J, x, tau, data, Fx=None):
+    gamma = Gamma[0,0]    # assume all entries on the diagonal are the same
+
+    jac = J(x)   # Jacobian at initial time
+    C = M - tau * gamma * jac
+    C_inv = make_solver(C)
+
+    ks = []
+    s = A.shape[0]
+    for i in range(s):
+        y_i = x + tau * sum(A[i,j] * ks[j] for j in range(i))
+        rhs = F(y_i)
+        if i > 0:
+            w_i = sum(Gamma[i,j] * ks[j] for j in range(i))
+            rhs += tau * jac.dot(w_i)
+        k_i = C_inv.dot(rhs)
+        ks.append(k_i)
+    x_new = x + tau * sum(b[i] * ks[i] for i in range(s))
+
+    if b_hat is not None:
+        x_est = x + tau * sum(b_hat[i] * ks[i] for i in range(s))
+        return x_new, x_est, None
+    else:
+        return x_new, None
+
+def coeffs_ros3p():
+    A = np.array([
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+    ])
+
+    gam = 0.7886751347
+    g21 = -1.0
+    g31 = -0.7886751347
+    g32 = -1.077350269
+
+    Gamma = np.array([
+        [gam, 0.0, 0.0],
+        [g21, gam, 0.0],
+        [g31, g32, gam],
+    ])
+
+    b = np.array([2/3, 0, 1/3])
+    b_hat = np.array([1/3, 1/3, 1/3])
+    return A, Gamma, b, b_hat, 2
+
+def coeffs_ros3pw():
+    a21 = 1.5773502691896257e+00
+    a31 = 5.0000000000000000e-01
+    a32 = 0.0000000000000000e+00
+
+    gam = 7.8867513459481287e-01
+    g21 = -1.5773502691896257e+00
+    g31 = -6.7075317547305480e-01
+    g32 = -1.7075317547305482e-01
+
+    b1 = 1.0566243270259355e-01
+    b2 = 4.9038105676657971e-02
+    b3 = 8.4529946162074843e-01
+
+    b_hat1 = -1.7863279495408180e-01
+    b_hat2 =  3.3333333333333333e-01
+    b_hat3 =  8.4529946162074843e-01
+
+    A = np.array([
+        [0.0, 0.0, 0.0],
+        [a21, 0.0, 0.0],
+        [a31, a32, 0.0],
+    ])
+    Gamma = np.array([
+        [gam, 0.0, 0.0],
+        [g21, gam, 0.0],
+        [g31, g32, gam],
+    ])
+    b = np.array([b1, b2, b3])
+    b_hat = np.array([b_hat1, b_hat2, b_hat3])
+
+    return A, Gamma, b, b_hat, 2
+
+def coeffs_rowdaind2():
+    a21 = 0.5
+    a31 = 0.28
+    a32 = 0.72
+    a41 = 0.28
+    a42 = 0.72
+    a43 = 0.0
+
+    A = np.array([
+        [0.0, 0.0, 0.0, 0.0],
+        [a21, 0.0, 0.0, 0.0],
+        [a31, a32, 0.0, 0.0],
+        [a41, a42, a43, 0.0],
+    ])
+
+    gam = 0.3
+    g21 = -1.121794871794876e-1
+    g31 = 2.54
+    g32 = -3.84
+    g41 = 29.0/75.0
+    g42 = -0.72
+    g43 = 1.0/30.0
+    Gamma = np.array([
+        [gam, 0.0, 0.0, 0.0],
+        [g21, gam, 0.0, 0.0],
+        [g31, g32, gam, 0.0],
+        [g41, g42, g43, gam],
+    ])
+
+    b1 = 2.0/3.0
+    b2 = 0.0
+    b3 = 1.0/30.0
+    b4 = 0.3
+
+    b_hat1 = 4.799002800355166e-1
+    b_hat2 = 5.176203811215082e-1
+    b_hat3 = 2.479338842975209e-3
+    b_hat4 = 0.0
+
+    b = np.array([b1, b2, b3, b4])
+    b_hat = np.array([b_hat1, b_hat2, b_hat3, b_hat4])
+
+    return A, Gamma, b, b_hat, 2
+
+def coeffs_rodasp():
+    gamma = 0.25
+
+    a21 = 0.75
+    a31 = 8.6120400814152190E-2
+    a32 = 0.1238795991858478
+    a41 = 0.7749345355073236
+    a42 = 0.1492651549508680
+    a43 = -0.2941996904581916
+    a51 = 5.308746682646142
+    a52 = 1.330892140037269
+    a53 = -5.374137811655562
+    a54 = -0.2655010110278497
+    a61 = -1.764437648774483
+    a62 = -0.4747565572063027
+    a63 = 2.369691846915802
+    a64 = 0.6195023590649829
+    a65 = 0.25
+    A = np.array([
+        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        [a21, 0.0, 0.0, 0.0, 0.0, 0.0],
+        [a31, a32, 0.0, 0.0, 0.0, 0.0],
+        [a41, a42, a43, 0.0, 0.0, 0.0],
+        [a51, a52, a53, a54, 0.0, 0.0],
+        [a61, a62, a63, a64, a65, 0.0],
+    ])
+
+    b21 = 0.0
+    b31 = -0.049392
+    b32 = -0.014112
+    b41 = -0.4820494693877561
+    b42 = -0.1008795555555556
+    b43 =  0.9267290249433117
+
+    b51 = -1.764437648774483
+    b52 = -0.4747565572063027
+    b53 =  2.369691846915802
+    b54 =  0.6195023590649829
+
+    b61 = -8.0368370789113464E-2
+    b62 = -5.6490613592447572E-2
+    b63 =  0.4882856300427991
+    b64 =  0.5057162114816189
+    b65 = -0.1071428571428569
+
+    B = np.array([
+        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        [b21, 0.0, 0.0, 0.0, 0.0, 0.0],
+        [b31, b32, 0.0, 0.0, 0.0, 0.0],
+        [b41, b42, b43, 0.0, 0.0, 0.0],
+        [b51, b52, b53, b54, 0.0, 0.0],
+        [b61, b62, b63, b64, b65, 0.0],
+    ])
+
+    np.fill_diagonal(B, gamma)
+    Gamma = B - A
+
+    b     = np.array([b61, b62, b63, b64, b65, gamma])
+    b_hat = np.array([b51, b52, b53, b54, gamma, 0])
+    return A, Gamma, b, b_hat, 3
+
+def coeffs_rosi2p1():
+    a21 = 5.0000000000000000e-1
+    a31 = 5.5729261836499822e-1
+    a32 = 1.9270738163500176e-1
+    a41 =-3.0084516445435860e-1
+    a42 = 1.8995581939026787e+0
+    a43 =-5.9871302944832006e-1
+
+    A = np.array([
+        [0.0, 0.0, 0.0, 0.0],
+        [a21, 0.0, 0.0, 0.0],
+        [a31, a32, 0.0, 0.0],
+        [a41, a42, a43, 0.0],
+    ])
+
+    gam = 4.3586652150845900e-1
+    g21 =-5.0000000000000000e-1
+    g31 =-6.4492162993321323e-1
+    g32 = 6.3491801247597734e-2
+    g41 = 9.3606009252719842e-3
+    g42 =-2.5462058718013519e-1
+    g43 =-3.2645441930944352e-1
+
+    Gamma = np.array([
+        [gam, 0.0, 0.0, 0.0],
+        [g21, gam, 0.0, 0.0],
+        [g31, g32, gam, 0.0],
+        [g41, g42, g43, gam],
+    ])
+
+    b1  = 5.2900072579103834e-2
+    b2  = 1.3492662311920438e+0
+    b3  =-9.1013275270050265e-1
+    b4  = 5.0796644892935516e-1
+
+    bh1 = 1.4974465479289098e-1
+    bh2 = 7.0051069041421810e-1
+    bh3 = 0.0000000000000000e+0
+    bh4 = 1.4974465479289098e-1
+
+    b = np.array([b1, b2, b3, b4])
+    b_hat = np.array([bh1, bh2, bh3, bh4])
+
+    return A, Gamma, b, b_hat, 2
+
+def rosenbrock_method(A, Gamma, b, name, displayname):
+    def stepper(*args, **kwargs):
+        return rosenbrock_step(A, Gamma, b, None, *args, **kwargs)
+    f = _constant_step_method(stepper)
+    f.__name__ = f.__qualname__ = name
+    f.__doc__ = ('Solve a time-dependent problem using the {} method.\n'
+        .format(displayname) + f.__doc__)
+    return f
+
+def adaptive_rosenbrock_method(A, Gamma, b, b_hat, err_order, name, displayname):
+    # define non-adaptive fallback
+    const_method = rosenbrock_method(A, Gamma, b, name, displayname)
+
+    def stepper(*args, **kwargs):
+        return rosenbrock_step(A, Gamma, b, b_hat, *args, **kwargs)
+    f = _adaptive_step_method(stepper, err_order, const_method)
+    f.__name__ = f.__qualname__ = name
+    f.__doc__ = ('Solve a time-dependent problem using the {} method.\n'
+        .format(displayname) + f.__doc__)
+    return f
+
+ros3p = adaptive_rosenbrock_method(*coeffs_ros3p(), 'ros3p', 'ROS3P Rosenbrock')
+ros3pw = adaptive_rosenbrock_method(*coeffs_ros3pw(), 'ros3pw', 'ROS3PW Rosenbrock')
+rowdaind2 = adaptive_rosenbrock_method(*coeffs_rowdaind2(), 'rowdaind2', 'ROWDAIND2 Rosenbrock')
+rodasp = adaptive_rosenbrock_method(*coeffs_rodasp(), 'rodasp', 'RODASP Rosenbrock')
+rosi2p1 = adaptive_rosenbrock_method(*coeffs_rosi2p1(), 'rosi2p1', 'ROSI2P1 Rosenbrock')

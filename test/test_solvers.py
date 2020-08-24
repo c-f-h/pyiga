@@ -61,3 +61,41 @@ def test_newton():
     def J(x): return np.array([[np.cos(x[0])]])
     x = newton(F, J, [0.0])
     assert np.allclose(x, np.pi / 6)
+
+def test_ode():
+    # simple stiff ODE
+    A = np.array([
+        [0.0, 1.0],
+        [-1000.0, -1001.0]
+    ])
+    M = np.eye(2)
+    def F(x): return A.dot(x)
+    def J(x): return A
+    x0 = np.array([1.0, 0.0])
+
+    def exsol(t): return -1/999 * np.exp(-1000*t) + 1000/999 * np.exp(-t)
+
+    t_end = 1.0
+    sol_1 = exsol(t_end)
+
+    # constant step Crank-Nicolson
+    sols = crank_nicolson(M, F, J, x0, 1e-2, t_end)
+    assert np.isclose(sols[1][-1][0], sol_1, rtol=1e-4)
+
+    # constant step DIRK method
+    sols = sdirk3(M, F, J, x0, 1e-2, t_end)
+    assert np.isclose(sols[1][-1][0], sol_1, rtol=1e-4)
+
+    # constant step Rosenbrock method
+    sols = ros3p(M, F, J, x0, 1e-2, t_end, tol=None)
+    assert np.isclose(sols[1][-1][0], sol_1, rtol=1e-4)
+
+    # adaptive step DIRK method
+    sols = esdirk34(M, F, J, x0, 1e-2, t_end, tol=1e-5)
+    ts = sols[0]
+    xs = sols[1]
+    assert ts[-2] <= t_end <= ts[-1]
+    from scipy.interpolate import interp1d
+    x_end = interp1d(ts, xs, kind='cubic', axis=0)(t_end)
+    #print(len(ts), 'steps, error =', abs(x_end[0] - sol_1))
+    assert np.isclose(x_end[0], sol_1, rtol=1e-4)

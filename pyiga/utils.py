@@ -227,3 +227,26 @@ class BijectiveIndex:
 
     def index(self, v):
         return self._index[v]
+
+
+def _noop(self, *args, **kwargs): pass
+class _DummyPbar:
+    """No-op stand-in for tqdm."""
+    def __init__(self, *args, **kwags):
+        if len(args) > 0:
+            self.r = args[0]
+    def __iter__(self):
+        return iter(self.r)
+    def __enter__(self):
+        return self
+    __exit__ = _noop
+    update   = _noop
+    close    = _noop
+    set_postfix = _noop
+
+def progress_bar(enable=True):
+    if enable:
+        from tqdm import tqdm
+        return tqdm
+    else:
+        return _DummyPbar

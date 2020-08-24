@@ -94,15 +94,7 @@ def animate_field(fields, geo, vrange=None, res=(50,50), cmap=None, interval=50,
                 vmin=vrange[0], vmax=vrange[1], axes=ax)
     fig.colorbar(quadmesh, ax=ax)
 
-    if progress:
-        from tqdm import tqdm
-    else:
-        def noop(self, *args, **kwargs): pass
-        class tqdm:
-            __init__ = noop
-            update   = noop
-            close    = noop
-
+    tqdm = utils.progress_bar(progress)
     pbar = tqdm(total=len(fields))
     def anim_func(i):
         C = utils.grid_eval(fields[i], grd)

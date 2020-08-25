@@ -246,7 +246,15 @@ class _DummyPbar:
 
 def progress_bar(enable=True):
     if enable:
-        from tqdm import tqdm
-        return tqdm
+        import sys
+        if 'tqdm' not in sys.modules:
+            # tqdm shows an ugly warning when we slightly overstep the end time in a
+            # time integration routine. To avoid that we disable its warnings.
+            import tqdm
+            import warnings
+            warnings.simplefilter('ignore', tqdm.TqdmWarning)
+        else:
+            import tqdm
+        return tqdm.tqdm
     else:
         return _DummyPbar

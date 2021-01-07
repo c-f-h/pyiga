@@ -820,6 +820,14 @@ class BSplineFunc(_BaseSplineFunc):
         from .geometry import NurbsFunc
         return NurbsFunc(self.kvs, self.coeffs.copy(), np.ones(self.coeffs.shape[:self.sdim]))
 
+    def as_vector(self):
+        """Convert a scalar function to a 1D vector function."""
+        if self.is_vector():
+            return self
+        else:
+            assert self.is_scalar()
+            return BSplineFunc(self.kvs, self.coeffs[..., np.newaxis])
+
     def __getitem__(self, I):
         return BSplineFunc(self.kvs, self.coeffs[..., I])
 

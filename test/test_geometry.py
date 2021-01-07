@@ -126,10 +126,10 @@ def test_nurbs():
     assert abs(r - np.linalg.norm(vals, axis=-1)).max() < 1e-12
 
     assert nurbs.output_shape() == (2,)
-    assert nurbs.is_vector()
+    assert (not nurbs.is_scalar()) and nurbs.is_vector()
     nurbsx = nurbs[0]
     assert nurbsx.output_shape() == ()
-    assert nurbsx.is_scalar()
+    assert nurbsx.is_scalar() and (not nurbsx.is_vector())
     assert nurbsx.grid_eval(grid).shape[1:] == ()
     assert nurbsx.grid_jacobian(grid).shape[1:] == (1,)
     assert nurbsx.grid_hessian(grid).shape[1:] == (1,)
@@ -323,6 +323,28 @@ def test_as_nurbs():
     G2 = G.as_nurbs()
     assert isinstance(G, BSplineFunc) and isinstance(G2, NurbsFunc)
     assert geos_roughly_equal(G, G2)
+
+def test_as_vector():
+    grid = 2 * (np.linspace(0.0, 1.0, 10),)
+
+    F = bspline_quarter_annulus()[0]
+    assert F.is_scalar()
+    Fv = F.as_vector()
+    assert Fv.is_vector()
+    f = F.grid_eval(grid)
+    fv = Fv.grid_eval(grid)
+    assert f.shape + (1,) == fv.shape
+    assert np.allclose(f, fv[..., 0])
+
+    # same test with NURBS
+    F = quarter_annulus()[0]
+    assert F.is_scalar()
+    Fv = F.as_vector()
+    assert Fv.is_vector()
+    f = F.grid_eval(grid)
+    fv = Fv.grid_eval(grid)
+    assert f.shape + (1,) == fv.shape
+    assert np.allclose(f, fv[..., 0])
 
 def test_getitem():
     grid = 2 * (np.linspace(0.0, 1.0, 10),)

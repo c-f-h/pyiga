@@ -217,6 +217,14 @@ class NurbsFunc(bspline._BaseSplineFunc):
     def as_nurbs(self):
         return self
 
+    def as_vector(self):
+        if self.is_vector():
+            return self
+        else:
+            assert self.is_scalar()
+            C = self.coeffs[..., :-1]   # keep singleton dimension, don't squeeze it
+            return NurbsFunc(self.kvs, C, self.coeffs[..., -1], premultiplied=True)
+
     def __getitem__(self, I):
         C = self.coeffs[..., :-1]
         return NurbsFunc(self.kvs, C[..., I], self.coeffs[..., -1], premultiplied=True)

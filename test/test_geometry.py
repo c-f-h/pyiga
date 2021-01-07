@@ -255,14 +255,14 @@ def test_outer():
             Gy.grid_eval((Y,))[:, None, ...] * Gx.grid_eval((X,))[None, :, ...])
 
 def test_tensorproduct():
+    Gy = circular_arc(np.pi / 2)                    # 2D function
     kv = bspline.make_knots(2, 0.0, 1.0, 1)
-    Gy = NurbsFunc(kv, np.reshape([0,.5,1], (3,1)), [1,3,1])
-    Gx = NurbsFunc(kv, np.reshape([0,.5,1], (3,1)), [1,1.0/3.0,1])
+    Gx = NurbsFunc(kv, [0,.5,1], [1,1.0/3.0,1])     # scalar function
     G = tensor_product(Gy, Gx)
-    assert G.sdim == Gy.sdim + Gx.sdim
-    assert G.dim == Gy.dim + Gx.dim
+    assert G.sdim == Gy.sdim + Gx.sdim == 2
+    assert G.dim  == Gy.dim + Gx.dim   == 3
     Y,X = np.linspace(0,1,7), np.linspace(0,1,7)
-    Vy,Vx = Gy.grid_eval((Y,)), Gx.grid_eval((X,))
+    Vy, Vx = Gy.grid_eval((Y,)), Gx.grid_eval((X,))[..., np.newaxis]  # convert Gx to vector
     V = G.grid_eval((Y,X))
     for i in range(len(Y)):
         for j in range(len(X)):

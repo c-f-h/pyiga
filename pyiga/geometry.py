@@ -585,7 +585,11 @@ def tensor_product(G1, G2, *Gs):
     """
     if Gs != ():
         return tensor_product(G1, tensor_product(G2, *Gs))
-    assert G1.is_vector() and G2.is_vector(), 'only implemented for vector-valued functions'
+    if G1.is_scalar():
+        G1 = G1.as_vector()
+    if G2.is_scalar():
+        G2 = G2.as_vector()
+    assert G1.is_vector() and G2.is_vector(), 'only implemented for scalar- or vector-valued functions'
 
     Gs = (G1, G2)
     nurbs = any(isinstance(G, NurbsFunc) for G in Gs)

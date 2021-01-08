@@ -248,6 +248,19 @@ def test_inner_products():
 # Test boundary condition functions
 ################################################################################
 
+def test_boundary_dofs():
+    kvs = (bspline.make_knots(3, 0.0, 1.0, 5),
+           bspline.make_knots(2, 0.0, 1.0, 8))
+    assert np.array_equal(
+            boundary_dofs(kvs, 'bottom', ravel=True),
+            np.arange(10))
+    assert np.array_equal(
+            boundary_dofs(kvs, 'right'),
+            [ (i,9) for i in range(8) ])
+    assert np.array_equal(
+            boundary_dofs(kvs, 'left', ravel=True),
+            np.arange(0, 80, 10))
+
 def test_dirichlet_bc():
     kvs = (bspline.make_knots(3, 0.0, 1.0, 5), bspline.make_knots(2, 0.0, 1.0, 3))
     # dof indices are (0, ..., 7) x (0, ..., 4)

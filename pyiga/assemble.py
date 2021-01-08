@@ -355,6 +355,15 @@ def slice_indices(ax, idx, shape, ravel=False):
         multi_indices = np.ravel_multi_index(multi_indices.T, shape)
     return multi_indices
 
+def boundary_dofs(kvs, bdspec, ravel=False):
+    """Indices of the dofs which lie on the given boundary of the tensor
+    product basis `kvs`. Output format is as for :func:`slice_indices`.
+    """
+    bdax, bdside = bspline._parse_bdspec(bdspec, len(kvs))
+    idx = (0 if bdside==0 else -1)
+    N = tuple(kv.numdofs for kv in kvs)
+    return slice_indices(bdax, idx, N, ravel=ravel)
+
 def _drop_nans(indices, values):
     isnan = np.isnan(values)
     if np.any(isnan):

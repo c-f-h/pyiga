@@ -747,7 +747,7 @@ class HSpace:
         neighbors = self._cell_neighborhood(l, marked.get(l, set()), truncate=truncate)
         if neighbors:
             marked[l-self.disparity] = marked.get(l-self.disparity, set()) | neighbors
-            self._mark_recursive(l-self.disparity, marked)
+            self._mark_recursive(l-self.disparity, marked, truncate=truncate)
 
     def refine(self, marked, truncate=False):
         """Refine the given cells; `marked` is a dictionary which has the

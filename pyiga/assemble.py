@@ -338,7 +338,7 @@ def inner_products(kvs, f, f_physical=False, geo=None):
 # Incorporating essential boundary conditions
 ################################################################################
 
-def slice_indices(ax, idx, shape, ravel=False):
+def slice_indices(ax, idx, shape, ravel=False, flip=None):
     """Return dof indices for a slice of a tensor product basis with size
     `shape`. The slice is taken across index `idx` on axis `ax`.
 
@@ -349,20 +349,26 @@ def slice_indices(ax, idx, shape, ravel=False):
     if idx < 0:
         idx += shape[ax]     # wrap around
     axdofs = [range(n) for n in shape]
+    if flip is not None:
+        flip = tuple(flip)
+        flip = flip[:ax] + (False,) + flip[ax:]     # insert trivial axis
+        for i, flp in enumerate(flip):
+            if flp:
+                axdofs[i] = reversed(axdofs[i])
     axdofs[ax] = [idx]
     multi_indices = np.array(list(itertools.product(*axdofs)))
     if ravel:
         multi_indices = np.ravel_multi_index(multi_indices.T, shape)
     return multi_indices
 
-def boundary_dofs(kvs, bdspec, ravel=False):
+def boundary_dofs(kvs, bdspec, ravel=False, flip=None):
     """Indices of the dofs which lie on the given boundary of the tensor
     product basis `kvs`. Output format is as for :func:`slice_indices`.
     """
     bdax, bdside = bspline._parse_bdspec(bdspec, len(kvs))
     idx = (0 if bdside==0 else -1)
     N = tuple(kv.numdofs for kv in kvs)
-    return slice_indices(bdax, idx, N, ravel=ravel)
+    return slice_indices(bdax, idx, N, ravel=ravel, flip=flip)
 
 def _drop_nans(indices, values):
     isnan = np.isnan(values)
@@ -1056,3 +1062,143 @@ def stiffness_fast(kvs, geo=None, tol=1e-10, maxiter=100, skipcount=3, tolcount=
         assert False, "Dimensions higher than 3 are currently not implemented."
     return fast_assemble_cy.fast_assemble(asm, kvs, tol, maxiter, skipcount, tolcount, verbose)
 
+################################################################################
+# Multipatch
+################################################################################
+
+class Multipatch:
+    """Represents a multipatch structure, consisting of a number of patches
+    together with their discretizations and the information about shared dofs
+    between patches.
+
+    Args:
+        patches: a list of `(kvs, geo)` pairs, each of which describes a patch
+    """
+    def __init__(self, patches):
+        """Initialize a multipatch structure."""
+        self.patches = patches
+        # number of tensor product dofs per patch
+        self.N = [bspline.numdofs(kvs) for (kvs,_) in self.patches]
+        # offset to the dofs of the i-th patch
+        self.N_ofs = np.concatenate(([0], np.cumsum(self.N)))
+        # per patch, a dict of local-to-shared indices
+        self.shared_per_patch = [dict() for i in range(len(self.patches))]
+        # per shared dof, a set of local dofs (patch, index)
+        self.shared_dofs = []
+
+    @property
+    def numpatches(self):
+        """Number of patches in the multipatch structure."""
+        return len(self.patches)
+
+    @property
+    def numdofs(self):
+        """Number of dofs after eliminating shared dofs.
+
+        May only be called after :func:`finalize`.
+        """
+        return self.M_ofs[-1] + len(self.shared_dofs)
+
+    def join_dofs(self, p1, I1, p2, I2):
+        """Join the dofs `I1` of patch `p1` with the dofs `I2` of patch `p2`."""
+        assert len(I1) == len(I2), 'dof arrays must have the same length'
+        assert p1 != p2, 'patches must be different'
+
+        def add_to_shared(sd, p, i):
+            # add dof (p, i) to the shared dof `sd`
+            self.shared_per_patch[p][i] = sd
+            self.shared_dofs[sd].add((p, i))
+
+        for (i1, i2) in zip(I1, I2):
+            if i1 in self.shared_per_patch[p1]:
+                sd = self.shared_per_patch[p1][i1]
+                add_to_shared(sd, p2, i2)
+            elif i2 in self.shared_per_patch[p2]:
+                sd = self.shared_per_patch[p2][i2]
+                add_to_shared(sd, p1, i1)
+            else:
+                # none of them are shared yet - create a new shared dof
+                sd = self._new_shared_dof()
+                add_to_shared(sd, p1, i1)
+                add_to_shared(sd, p2, i2)
+
+    def join_boundaries(self, p1, bdspec1, p2, bdspec2, flip=None):
+        """Join the dofs lying along boundary `bdspec1` of patch `p1` with
+        those lying along boundary `bdspec2` of patch `p2`.
+
+        See :func:`compute_dirichlet_bc` for the format of the boundary
+        specification.
+
+        If `flip` is given, it should be a sequence of booleans indicating for
+        each coordinate axis of the boundary if the coordinates of `p2` have to
+        be flipped along that axis.
+        """
+        P1, P2 = self.patches[p1], self.patches[p2]
+        dofs1 = boundary_dofs(P1[0], bdspec1, ravel=True)
+        dofs2 = boundary_dofs(P2[0], bdspec2, ravel=True, flip=flip)
+        self.join_dofs(p1, dofs1, p2, dofs2)
+
+    def _new_shared_dof(self):
+        i = len(self.shared_dofs)
+        self.shared_dofs.append(set())
+        return i
+
+    def finalize(self):
+        """After all shared dofs have been declared, call this function to set
+        up the internal data structures.
+        """
+        num_shared = [len(spp) for spp in self.shared_per_patch]
+        # number of local dofs per patch
+        self.M = [n - s for (n, s) in zip(self.N, num_shared)]
+        # local-to-global offset per patch
+        self.M_ofs = np.concatenate(([0], np.cumsum(self.M)))
+
+    def patch_to_global(self, p, j_global=False):
+        """Compute a sparse binary matrix which maps dofs local to patch `p` to
+        the corresponding global dofs.
+
+        Args:
+            p (int): the index of the patch
+            j_global (bool): if False, the matrix has only as many columns as
+                `p` has dofs; if True, the number of columns is the sum of the
+                number of local dofs over all patches
+
+        Returns:
+            a CSR sparse matrix
+        """
+        m_ofs = self.M_ofs[p]
+        n_ofs = self.N_ofs[p] if j_global else 0
+        tpdofs = np.arange(self.N[p])   # local TP indices
+        sdofs = np.array([kv for kv in self.shared_per_patch[p].items()])
+        local_dofs = np.setdiff1d(tpdofs, sdofs[:,0], assume_unique=True)
+        local_idx = np.arange(len(local_dofs))
+
+        shape = (self.numdofs,
+                self.N_ofs[-1] if j_global else self.N[p])
+        I = np.concatenate((m_ofs + local_idx,  self.M_ofs[-1] + sdofs[:,1]))
+        J = np.concatenate((n_ofs + local_dofs, n_ofs + sdofs[:,0]))
+        X = scipy.sparse.coo_matrix((np.ones(len(I)), (I,J)), shape=shape)
+        return X.tocsr()
+
+    def global_to_patch(self, p):
+        """Compute a sparse binary matrix which maps global dofs to local
+        dofs in patch `p`.
+
+        Args:
+            p (int): the index of the patch
+
+        Returns:
+            a CSR sparse matrix
+        """
+        m_ofs = self.M_ofs[p]
+        n_ofs = self.N_ofs[p]
+        tpdofs = np.arange(self.N[p])   # local TP indices
+        sdofs = np.array([kv for kv in self.shared_per_patch[p].items()])
+        local_dofs = np.setdiff1d(tpdofs, sdofs[:,0], assume_unique=True)
+        local_idx = np.arange(len(local_dofs))
+
+        shape = (self.N[p], self.numdofs)
+        I = np.concatenate((local_dofs, sdofs[:,0]))
+        J = np.concatenate((m_ofs + local_idx, self.M_ofs[-1] + sdofs[:,1]))
+        X = scipy.sparse.coo_matrix((np.ones(len(I)), (I,J)), shape=shape)
+        return X.tocsr()

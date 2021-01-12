@@ -429,3 +429,28 @@ def test_solution_1d():
     u = LS.complete(np.linalg.solve(LS.A.A, LS.b))
     u_ex = interpolate(kv, lambda x: 0.5*x*(3-x))
     assert np.linalg.norm(u - u_ex) < 1e-12
+
+################################################################################
+# Test multipatch
+################################################################################
+
+def test_multipatch():
+    kvs = 2 * (bspline.make_knots(2, 0.0, 1.0, 8),)
+    squ = geometry.unit_square()
+    geos = (squ, squ.translate((1,0)), squ.scale((-1,1)).translate((2,1)))
+    patches = [(kvs, g) for g in geos]
+    MP = Multipatch(patches)
+    assert MP.numpatches == 3
+    MP.join_boundaries(0, 'right', 1, 'left')
+    MP.join_boundaries(1, 'top', 2, 'bottom', flip=(True,))
+    MP.finalize()
+    assert MP.numdofs == 90 + 81 + 90 + 2*10 - 1
+    ### test dof matching/transfer matrices
+    u1 = np.arange(100)
+    ug = MP.patch_to_global(1) @ u1
+    u0 = (MP.global_to_patch(0) @ ug).reshape((10, 10))
+    assert np.allclose(u0[:, :-1], 0)
+    assert np.array_equal(u0[:, -1], np.arange(0, 100, 10))
+    u2 = (MP.global_to_patch(2) @ ug).reshape((10, 10))
+    assert np.allclose(u2[1:, :], 0)
+    assert np.array_equal(u2[0, :], np.arange(99, 89, -1))

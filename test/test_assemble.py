@@ -434,16 +434,20 @@ def test_solution_1d():
 # Test multipatch
 ################################################################################
 
-def test_multipatch():
+def _make_Lshape():
     kvs = 2 * (bspline.make_knots(2, 0.0, 1.0, 8),)
     squ = geometry.unit_square()
     geos = (squ, squ.translate((1,0)), squ.scale((-1,1)).translate((2,1)))
     patches = [(kvs, g) for g in geos]
     MP = Multipatch(patches)
-    assert MP.numpatches == 3
     MP.join_boundaries(0, 'right', 1, 'left')
     MP.join_boundaries(1, 'top', 2, 'bottom', flip=(True,))
     MP.finalize()
+    return MP
+
+def test_multipatch():
+    MP = _make_Lshape()
+    assert MP.numpatches == 3
     assert MP.numdofs == 90 + 81 + 90 + 2*10 - 1
     ### test patch-to-global indexing
     idx1 = MP.patch_to_global_idx(1)
@@ -467,3 +471,9 @@ def test_multipatch():
     bcidx, bcvals = MP.compute_dirichlet_bcs([(0, 'top', lambda x,y: 1.0)])
     assert np.array_equal(bcidx, list(range(9*9, 10*9)) + [90+81+90 + 9])
     assert np.allclose(bcvals, 1.0)
+
+def test_detect_interfaces():
+    MP = _make_Lshape()
+    MP2 = Multipatch(MP.patches, automatch=True)
+    assert MP2.numdofs == MP.numdofs
+    assert MP2.shared_per_patch == MP.shared_per_patch

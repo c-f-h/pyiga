@@ -1066,6 +1066,46 @@ def stiffness_fast(kvs, geo=None, tol=1e-10, maxiter=100, skipcount=3, tolcount=
 # Multipatch
 ################################################################################
 
+# helper functions for interface detection
+def _bb_rect(G):
+    # geo bounding box as a Rectangle
+    bb = G.bounding_box()
+    return scipy.spatial.Rectangle(
+        tuple(bb_i[0] for bb_i in bb),
+        tuple(bb_i[1] for bb_i in bb))
+
+def _check_geo_match(G1, G2, grid=4):
+    # check if the two geos match with any possible flip
+    if G1.sdim != G2.sdim or G1.dim != G2.dim:
+        return False, None
+    if not np.allclose(G1.support, G2.support):
+        return False, None
+    grid = [np.linspace(s[0], s[1], grid) for s in G1.support]
+    X1 = G1.grid_eval(grid)
+    all_flips = itertools.product(*(G2.sdim * [(False, True)]))
+    for flip in all_flips:  # try all 2^d possible flips
+        flipped_grid = list(grid)
+        for (i, f) in enumerate(flip):
+            if f: flipped_grid[i] = np.ascontiguousarray(np.flip(flipped_grid[i]))
+        X2 = G2.grid_eval(flipped_grid)
+        if np.allclose(X1, X2):
+            return True, flip
+    return False, None
+
+def _find_matching_boundaries(G1, G2):
+    # find all interfaces which match between G1 and G2
+    assert G1.sdim == G2.sdim and G1.dim == G2.dim
+    all_bds = list(itertools.product(range(G1.sdim), (0,1)))
+    matches = []
+    for bdspec1 in all_bds:
+        bd1 = G1.boundary(bdspec1)
+        for bdspec2 in all_bds:
+            bd2 = G2.boundary(bdspec2)
+            match, flip = _check_geo_match(bd1, bd2)
+            if match:
+                matches.append((bdspec1, bdspec2, flip))
+    return matches
+
 class Multipatch:
     """Represents a multipatch structure, consisting of a number of patches
     together with their discretizations and the information about shared dofs
@@ -1073,8 +1113,10 @@ class Multipatch:
 
     Args:
         patches: a list of `(kvs, geo)` pairs, each of which describes a patch
+        automatch (bool): if True, attempt to automatically determine the
+            matching interfaces between all patches and finalize then
     """
-    def __init__(self, patches):
+    def __init__(self, patches, automatch=False):
         """Initialize a multipatch structure."""
         self.patches = patches
         # number of tensor product dofs per patch
@@ -1085,6 +1127,13 @@ class Multipatch:
         self.shared_per_patch = [dict() for i in range(len(self.patches))]
         # per shared dof, a set of local dofs (patch, index)
         self.shared_dofs = []
+
+        if automatch:
+            connected = self.detect_interfaces()
+            if not connected:
+                print('WARNING: patch graph is not connected - ' +
+                        'interface detection may have failed')
+            self.finalize()
 
     @property
     def numpatches(self):
@@ -1142,6 +1191,36 @@ class Multipatch:
         i = len(self.shared_dofs)
         self.shared_dofs.append(set())
         return i
+
+    def detect_interfaces(self):
+        """Automatically detect matching interfaces between patches and join them.
+
+        Returns:
+            bool: whether the detected patch graph is connected
+        """
+        interfaces = []
+        bbs = [_bb_rect(geo) for (_, geo) in self.patches]
+        diams = [bb.max_distance_rectangle(bb) for bb in bbs]
+
+        # set up a graph of patch connectivity for later checking
+        import networkx as nx
+        patch_graph = nx.Graph()
+        patch_graph.add_nodes_from(range(self.numpatches))
+
+        for p1 in range(self.numpatches):
+            for p2 in range(p1 + 1, self.numpatches):
+                mindist = bbs[p1].min_distance_rectangle(bbs[p2])
+                maxdiam = max(diams[p1], diams[p2])
+                if mindist < 1e-10 * maxdiam:    # do the bounding boxes touch?
+                    matches = _find_matching_boundaries(self.patches[p1][1], self.patches[p2][1])
+                    for (bd1, bd2, flip) in matches:
+                        interfaces.append((p1, bd1, p2, bd2, flip))
+                    if matches:
+                        patch_graph.add_edge(p1, p2)
+
+        for intf in interfaces:
+            self.join_boundaries(*intf)
+        return nx.is_connected(patch_graph)
 
     def finalize(self):
         """After all shared dofs have been declared, call this function to set

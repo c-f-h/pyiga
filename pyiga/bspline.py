@@ -549,6 +549,21 @@ class _BaseGeoFunc:
     def __call__(self, *x):
         return self.eval(*x)
 
+    def bounding_box(self, grid=1):
+        """Compute a bounding box for the image of this geometry.
+
+        By default, only the corners are taken into account. By choosing
+        `grid > 1`, a finer grid can be used (for non-convex geometries).
+
+        Returns:
+            a tuple of `(lower,upper)` limits per dimension
+        """
+        supp = self.support
+        grid = [np.linspace(s[0], s[1], grid+1) for s in supp]
+        X = self.grid_eval(grid)
+        X.shape = (-1, self.dim)
+        return tuple((X[:, d].min(), X[:, d].max()) for d in range(self.dim))
+
 class _BaseSplineFunc(_BaseGeoFunc):
     def eval(self, *x):
         """Evaluate the function at a single point of the parameter domain.

@@ -362,3 +362,7 @@ def test_getitem():
     fy = G[1].grid_eval(grid)
     assert np.allclose(f[..., 0], fx)
     assert np.allclose(f[..., 1], fy)
+
+def test_bounding_box():
+    bb = quarter_annulus().bounding_box()
+    assert np.allclose(bb, [(0,2), (0,2)])

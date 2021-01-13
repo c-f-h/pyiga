@@ -908,6 +908,9 @@ def instantiate_assembler(problem, kvs, args, bfuns, updatable=[]):
             assert num_spaces == 2, 'no more than two spaces allowed'
             return problem(kvs[0], kvs[1], **used_args)
 
+    # if we land here, problem has invalid type
+    raise TypeError("invalid type for 'problem': {}".format(type(problem)))
+
 class Assembler:
     """A high-level interface to an assembler class.
 

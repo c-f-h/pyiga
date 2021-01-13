@@ -27,6 +27,7 @@ The ``notebooks`` directory contains several examples of how to use ``pyiga``:
 
 *  `geometry.ipynb <notebooks/geometry.ipynb>`_: create and manipulate geometry functions
 *  `solve-poisson.ipynb <notebooks/solve-poisson.ipynb>`_: solve a Poisson equation and plot the solution
+*  `multipatch.ipynb <notebooks/multipatch.ipynb>`_: solve a Poisson equation in a multipatch domain
 *  `solve-convdiff.ipynb <notebooks/solve-convdiff.ipynb>`_: solve a convection-diffusion problem with random inclusions
 *  `solve-stokes.ipynb <notebooks/solve-stokes.ipynb>`_: solve stationary Stokes flow and plot the velocity field
 *  `solve-navier-stokes.ipynb <https://nbviewer.jupyter.org/github/c-f-h/pyiga/blob/master/notebooks/solve-navier-stokes.ipynb>`_: solve the instationary Navier-Stokes equations with a time-adaptive Rosenbrock integrator and produce an animation of the result

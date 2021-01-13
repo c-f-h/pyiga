@@ -1202,3 +1202,25 @@ class Multipatch:
         J = np.concatenate((m_ofs + local_idx, self.M_ofs[-1] + sdofs[:,1]))
         X = scipy.sparse.coo_matrix((np.ones(len(I)), (I,J)), shape=shape)
         return X.tocsr()
+
+    def assemble_system(self, problem, rhs, args=None, bfuns=None,
+            symmetric=False, format='csr', layout='blocked', **kwargs):
+        n = self.numdofs
+        A = scipy.sparse.csr_matrix((n, n)).asformat(format)
+        b = np.zeros(n)
+        if args is None:
+            args = dict()
+        for p in range(self.numpatches):
+            X = self.patch_to_global(p)
+            kvs, geo = self.patches[p]
+            args.update(geo=geo)
+            # TODO: vector-valued problems
+            A_p = assemble(problem, kvs, args=args, bfuns=bfuns,
+                    symmetric=symmetric, format=format, layout=layout,
+                    **kwargs)
+            A += X @ A_p @ X.T
+            b_p = assemble(rhs, kvs, args=args, bfuns=bfuns,
+                    symmetric=symmetric, format=format, layout=layout,
+                    **kwargs).ravel()
+            b += X @ b_p
+        return A, b

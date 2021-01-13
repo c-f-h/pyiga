@@ -916,9 +916,9 @@ class Assembler:
     may be more efficient to instantiate the assembler class only once and
     inform it of the changing inputs via the `updatable` argument. You may then
     call :meth:`update` to change these input fields and assemble the problem
-    via :meth:`assemble`.  Instead of calling :meth:`update` explicitly, you
+    via :meth:`.assemble`.  Instead of calling :meth:`update` explicitly, you
     can also simply pass the fields to be updated as additional keyword
-    arguments to :meth:`assemble`.
+    arguments to :meth:`.assemble`.
 
     `updatable` is a list of names of assembler arguments which are to be
     considered updatable. The other arguments have the same meaning as for

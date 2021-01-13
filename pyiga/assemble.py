@@ -1191,27 +1191,17 @@ class Multipatch:
         return X.tocsr()
 
     def global_to_patch(self, p):
-        """Compute a sparse binary matrix which maps global dofs to local
-        dofs in patch `p`.
+        """Compute a sparse binary matrix which maps global dofs to local dofs
+        in patch `p`. This is just the transpose of :meth:`patch_to_global` and
+        also its left-inverse.
 
         Args:
             p (int): the index of the patch
 
         Returns:
-            a CSR sparse matrix
+            a sparse matrix
         """
-        m_ofs = self.M_ofs[p]
-        n_ofs = self.N_ofs[p]
-        tpdofs = np.arange(self.N[p])   # local TP indices
-        sdofs = np.array([kv for kv in self.shared_per_patch[p].items()])
-        local_dofs = np.setdiff1d(tpdofs, sdofs[:,0], assume_unique=True)
-        local_idx = np.arange(len(local_dofs))
-
-        shape = (self.N[p], self.numdofs)
-        I = np.concatenate((local_dofs, sdofs[:,0]))
-        J = np.concatenate((m_ofs + local_idx, self.M_ofs[-1] + sdofs[:,1]))
-        X = scipy.sparse.coo_matrix((np.ones(len(I)), (I,J)), shape=shape)
-        return X.tocsr()
+        return self.patch_to_global(p).T
 
     def assemble_system(self, problem, rhs, args=None, bfuns=None,
             symmetric=False, format='csr', layout='blocked', **kwargs):

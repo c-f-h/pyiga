@@ -454,7 +454,9 @@ def test_multipatch():
     assert np.array_equal(idx1[-1, 1:], 90+81+90 + 10 + np.arange(9))   # top shared
     ### test transfer matrices
     u1 = np.arange(100)
-    ug = MP.patch_to_global(1) @ u1
+    P1 = MP.patch_to_global(1)
+    assert scipy.sparse.linalg.norm(MP.global_to_patch(1) @ P1 - scipy.sparse.eye(100)) == 0
+    ug = P1 @ u1
     u0 = (MP.global_to_patch(0) @ ug).reshape((10, 10))
     assert np.allclose(u0[:, :-1], 0)
     assert np.array_equal(u0[:, -1], np.arange(0, 100, 10))

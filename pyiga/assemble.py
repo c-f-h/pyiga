@@ -1153,6 +1153,23 @@ class Multipatch:
         # local-to-global offset per patch
         self.M_ofs = np.concatenate(([0], np.cumsum(self.M)))
 
+    def patch_to_global_idx(self, p):
+        """Return an array which maps local tensor product indices for patch
+        `p` to global indices.
+        """
+        tpdofs = np.arange(self.N[p])   # local TP indices
+        # construct array with one column for local and one for corresponding
+        # shared indices
+        sdofs = np.array([l_s for l_s in self.shared_per_patch[p].items()])
+        # which TP indices are local (non-shared)?
+        local_dofs = np.setdiff1d(tpdofs, sdofs[:,0], assume_unique=True)
+
+        # reuse tpdofs for the output
+        m_ofs = self.M_ofs[p]   # offset to global indices for this patch
+        tpdofs[local_dofs] = np.arange(m_ofs, m_ofs + local_dofs.shape[0])
+        tpdofs[sdofs[:,0]] = self.M_ofs[-1] + sdofs[:,1]
+        return tpdofs
+
     def patch_to_global(self, p, j_global=False):
         """Compute a sparse binary matrix which maps dofs local to patch `p` to
         the corresponding global dofs.
@@ -1166,17 +1183,10 @@ class Multipatch:
         Returns:
             a CSR sparse matrix
         """
-        m_ofs = self.M_ofs[p]
+        shape = (self.numdofs, self.N_ofs[-1] if j_global else self.N[p])
         n_ofs = self.N_ofs[p] if j_global else 0
-        tpdofs = np.arange(self.N[p])   # local TP indices
-        sdofs = np.array([kv for kv in self.shared_per_patch[p].items()])
-        local_dofs = np.setdiff1d(tpdofs, sdofs[:,0], assume_unique=True)
-        local_idx = np.arange(len(local_dofs))
-
-        shape = (self.numdofs,
-                self.N_ofs[-1] if j_global else self.N[p])
-        I = np.concatenate((m_ofs + local_idx,  self.M_ofs[-1] + sdofs[:,1]))
-        J = np.concatenate((n_ofs + local_dofs, n_ofs + sdofs[:,0]))
+        I = self.patch_to_global_idx(p)
+        J = np.arange(n_ofs, n_ofs + self.N[p])
         X = scipy.sparse.coo_matrix((np.ones(len(I)), (I,J)), shape=shape)
         return X.tocsr()
 

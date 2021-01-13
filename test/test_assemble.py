@@ -445,7 +445,14 @@ def test_multipatch():
     MP.join_boundaries(1, 'top', 2, 'bottom', flip=(True,))
     MP.finalize()
     assert MP.numdofs == 90 + 81 + 90 + 2*10 - 1
-    ### test dof matching/transfer matrices
+    ### test patch-to-global indexing
+    idx1 = MP.patch_to_global_idx(1)
+    assert idx1.size == 100
+    idx1 = idx1.reshape((10, 10))
+    assert np.array_equal(idx1[:-1, 1:].ravel(), 90 + np.arange(9*9))   # local
+    assert np.array_equal(idx1[:, 0], 90+81+90 + np.arange(10))         # left shared
+    assert np.array_equal(idx1[-1, 1:], 90+81+90 + 10 + np.arange(9))   # top shared
+    ### test transfer matrices
     u1 = np.arange(100)
     ug = MP.patch_to_global(1) @ u1
     u0 = (MP.global_to_patch(0) @ ug).reshape((10, 10))

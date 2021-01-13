@@ -1234,3 +1234,25 @@ class Multipatch:
                     **kwargs).ravel()
             b += X @ b_p
         return A, b
+
+    def compute_dirichlet_bcs(self, bdconds):
+        """Performs the same operation as the global function
+        :func:`compute_dirichlet_bcs`, but for a multipatch problem.
+
+        The sequence `bdconds` should contain triples of the form `(patch,
+        bdspec, dir_func)`.
+
+        Returns:
+            A pair `(indices, values)` suitable for passing to
+            :class:`RestrictedLinearSystem`.
+        """
+        bcs = []
+        p2g = dict()        # cache the patch-to-global indices for efficiency
+        for (p, bdspec, g) in bdconds:
+            kvs, geo = self.patches[p]
+            bc = compute_dirichlet_bc(kvs, geo, bdspec, g)
+            if p not in p2g:
+                p2g[p] = self.patch_to_global_idx(p)
+            idx = p2g[p]    # maps local dofs to global dofs
+            bcs.append((idx[bc[0]], bc[1]))
+        return combine_bcs(bcs)

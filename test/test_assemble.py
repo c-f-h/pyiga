@@ -461,3 +461,7 @@ def test_multipatch():
     u2 = (MP.global_to_patch(2) @ ug).reshape((10, 10))
     assert np.allclose(u2[1:, :], 0)
     assert np.array_equal(u2[0, :], np.arange(99, 89, -1))
+    ### test Dirichlet BCs
+    bcidx, bcvals = MP.compute_dirichlet_bcs([(0, 'top', lambda x,y: 1.0)])
+    assert np.array_equal(bcidx, list(range(9*9, 10*9)) + [90+81+90 + 9])
+    assert np.allclose(bcvals, 1.0)

@@ -477,3 +477,29 @@ def test_detect_interfaces():
     MP2 = Multipatch(MP.patches, automatch=True)
     assert MP2.numdofs == MP.numdofs
     assert MP2.shared_per_patch == MP.shared_per_patch
+
+def test_multipatch_assemble():
+    kvs = 2 * (bspline.make_knots(2, 0.0, 1.0, 8),)
+    geos = [geometry.unit_square(), geometry.unit_square().translate((1,0))]
+    MP = Multipatch([(kvs, g) for g in geos], automatch=True)
+    from pyiga import vform
+    def f(x, y): return np.sin(2*x) + np.exp(y)
+    A, b = MP.assemble_system(
+            vform.stiffness_vf(2),
+            vform.L2functional_vf(2, physical=True), f=f)
+    # assemble same problem as a single patch
+    knots_x = np.array(2 * [0.0] + list(np.linspace(0, 1.0, 9))
+            + list(np.linspace(1.0, 2.0, 9)) + 2 * [2.0])
+    kvs2 = (kvs[0], bspline.KnotVector(knots_x, 2))
+    geo2 = geometry.identity(kvs2)
+    A2 = assemble(vform.stiffness_vf(2), kvs2, geo=geo2)
+    b2 = assemble(vform.L2functional_vf(2, physical=True), kvs2, geo=geo2, f=f)
+
+    # construct index which maps between the two discretizations
+    Ix = np.arange(b.size)
+    Ix = np.hstack((
+        Ix[:9*10].reshape((10,9)),      # first patch
+        Ix[2*9*10:].reshape((10,1)),    # second patch
+        Ix[9*10:2*9*10].reshape((10,9)))).ravel()   # interface
+    assert np.allclose(b[Ix], b2.ravel())
+    assert np.allclose(A.A[Ix][:, Ix], A2.A)

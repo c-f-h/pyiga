@@ -62,6 +62,8 @@ class KnotVector:
     def __init__(self, knots, p):
         """Construct an open B-spline knot vector with given `knots` and degree `p`."""
         self.kv = knots
+        # sanity check: knots should be monotonically increasing
+        assert np.all(self.kv[1:] - self.kv[:-1] >= 0), 'knots should be increasing'
         self.p = p
         self._mesh = None    # knots with duplicates removed (on demand)
         self._knots_to_mesh = None   # knot indices to mesh indices (on demand)

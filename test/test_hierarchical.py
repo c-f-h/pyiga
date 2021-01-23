@@ -272,20 +272,20 @@ def test_project_L2():
 
 def test_boundary_HSpace():
     hs = create_example_hspace(p=3, dim=3, n0=6, num_levels=3)
-    bdspecs = hs.bdindices
     u_vec_3D = rand(hs.numdofs)
     u_HS_3D = HSplineFunc(hs, u_vec_3D)
-    grid_3D = 3 * (np.linspace(0, 1, 50),)
-    grid_2D = 2 * (np.linspace(0, 1, 50),)
-    
-    def restrict_grid_3D_to_bdspec_grid_2D(bdspec):
-        grid_3D_bdspec = list(grid_3D)
-        grid_3D_bdspec[bdspec[0]] = np.array([0.,]) if bdspec[1] == 0 else np.array([1.])
-        return  grid_3D_bdspec
-    
+    grid_3D = 3 * (np.linspace(0, 1, 20),)
+    grid_2D = 2 * (np.linspace(0, 1, 20),)
+
+    def restrict_grid_to_boundary(bdspec):
+        bdgrid = list(grid_3D)
+        bdgrid[bdspec[0]] = np.array([0.]) if bdspec[1] == 0 else np.array([1.])
+        return bdgrid
+
+    bdspecs = ['left', 'right', 'top', 'bottom', 'front', 'back']
     for bdspec in bdspecs:
-        bd_HSpace, bd_mapping = hs.boundary_HSpace(bdspec)
+        bd_HSpace, bd_mapping = hs.boundary(bdspec)
         u_vec_2D = u_vec_3D[bd_mapping]
         u_HS_2D = HSplineFunc(bd_HSpace, u_vec_2D)
-        grid_3D_bdspec = restrict_grid_3D_to_bdspec_grid_2D(bdspec)
-        np.allclose(u_HS_3D.grid_eval(grid_3D_bdspec), u_HS_2D.grid_eval(grid_2D))
+        bdgrid = restrict_grid_to_boundary(bspline._parse_bdspec(bdspec, hs.dim))
+        np.allclose(u_HS_3D.grid_eval(bdgrid), u_HS_2D.grid_eval(grid_2D))

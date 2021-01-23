@@ -76,6 +76,11 @@ def _position_index(suplist, sublist):
         k = suplist.index(candidate, k)
         out.append(k)
     return np.array(out)
+    
+def _drop_index_in_tuples(tuples, idx):
+    """Remove `idx`-component from iterable `tuples` of tuples."""
+    type_iterable = type(tuples)
+    return type_iterable(t[:idx] + t[idx+1:] for t in tuples)
 
 def _drop_empty_items(d):
     """Returns a copy of the dict `d` with entries with empty values removed"""
@@ -150,6 +155,22 @@ class HMesh:
         self.active = [set(mesh.cells())]
         self.deactivated = [set()]
         self.P = []
+        
+    @staticmethod
+    def init_from_kvs(kvs, active, deactivated, P=None):
+        """Generate an instance of HMesh by providing sequences `kvs` of knot vectors, `active` of active cells and `deactivated` of deactivated cells per level. Optionally provide prolongators."""
+        out = HMesh(TPMesh(kvs[0]))
+        out.meshes = [TPMesh(kv) for kv in kvs]
+        out.active = active
+        out.deactivated = deactivated
+        out.P = P
+        if not P:
+            out.P = [] # calculate prolongation matrices from kvs
+            for lv in range(len(kvs)-1):
+                out.P.append(tuple(
+                bspline.prolongation(k0, k1).tocsc() for (k0,k1)
+                in zip(out.meshes[lv].kvs, out.meshes[lv+1].kvs)))
+        return out
 
     def add_level(self):
         self.meshes.append(self.meshes[-1].refine())
@@ -358,6 +379,15 @@ class HSpace:
         self.__ravel_global = None
         self.__index_dirichlet = None
         self.__ravel_dirichlet = None
+        
+    @staticmethod
+    def init_from_kvs(kvs, active_cells, deactivated_cells, active_funcs, deactivated_funcs, P=None, truncate=False, disparity=np.inf, bdspecs=None):
+        """Generate an instance of HSpace by providing sequences `kvs` of knot vectors, `active_cells` of active cells, `deactivated_cells` of deactivated cells, `active_funcs` of active basis functions and `deactivated_funcs` of deactivated basis functions per level. Optionally provide prolongators."""
+        out = HSpace(kvs[0], truncate=truncate, disparity=disparity, bdspecs=bdspecs)
+        out.hmesh = HMesh.init_from_kvs(kvs, active_cells, deactivated_cells, P=P)
+        out.actfun = active_funcs
+        out.deactfun = deactivated_funcs
+        return out
 
     def _add_level(self):
         self.hmesh.add_level()
@@ -370,6 +400,11 @@ class HSpace:
         while self.numlevels < L:
             self._add_level()
 
+    @property
+    def bdindices(self):
+        """Available boundary indices."""
+        return tuple((d,0) for d in range(self.dim)) + tuple((d,1) for d in range(self.dim))
+    
     @property
     def numlevels(self):
         """The number of levels in this hierarchical space."""
@@ -484,22 +519,51 @@ class HSpace:
         """
         return self.ravel_indices(self.deactfun)
 
+    def _compute_single_axis_single_level_dirichlet_cells(self, lv, bdspec):
+        assert 0 <= lv < self.numlevels, 'Invalid level.'
+        return set(tuple(iter) for iter in assemble.boundary_cells(self.hmesh.meshes[lv].kvs, bdspec, ravel=False))
+
     def _compute_single_axis_single_level_dirichlet_indices(self, lv, bdspec):
         assert 0 <= lv < self.numlevels, 'Invalid level.'
-        bdax, bdside = bdspec
-        N = tuple(kv.numdofs for kv in self.hmesh.meshes[lv].kvs)
-        return set(tuple(iter) for iter in assemble.slice_indices(bdax, 0 if bdside==0 else -1, N, ravel=False))
+        return set(tuple(iter) for iter in assemble.boundary_dofs(self.hmesh.meshes[lv].kvs, bdspec, ravel=False))
+    
+    def boundary_HSpace(self, bdspec):
+        """Generate a HSpace of dimension self.dim-1 representing the restriction of self to the boundary identified with `bdspec`. Returns this HSpace and a np.array of matrix indices which correspond to the boundary basis functions in self."""
+        # Precompute tensor product cell and function indices
+        TPbdspec_indices = []
+        TPbdspec_cells = []
+        for lv in range(self.numlevels):
+            TPbdspec_cells.append(self._compute_single_axis_single_level_dirichlet_cells(lv, bdspec))
+            TPbdspec_indices.append(self._compute_single_axis_single_level_dirichlet_indices(lv, bdspec))
+            
+        # Compute cell and function indices suited for instances of HSpace
+        Hbdspec_active_indices = []
+        Hbdspec_active_cells = []
+        Hbdspec_deactivated_indices = []
+        Hbdspec_deactivated_cells = []
+        Hbdspec_mapping_indices = []
+        for lv in range(self.numlevels):
+            Hbdspec_mapping_indices.append(self.actfun[lv] & TPbdspec_indices[lv])
+            Hbdspec_active_indices.append(_drop_index_in_tuples(Hbdspec_mapping_indices[lv], bdspec[0]))
+            Hbdspec_active_cells.append(_drop_index_in_tuples(self.hmesh.active[lv] & TPbdspec_cells[lv], bdspec[0]))
+            Hbdspec_deactivated_indices.append(_drop_index_in_tuples(self.deactfun[lv] & TPbdspec_indices[lv], bdspec[0]))
+            Hbdspec_deactivated_cells.append(_drop_index_in_tuples(self.hmesh.deactivated[lv] & TPbdspec_cells[lv], bdspec[0]))
+            
+        Hbdspec_mapping = self._boundary_to_original_matrix_indices(Hbdspec_mapping_indices)
+        kvs = tuple(_drop_index_in_tuples(list(self.hmesh.meshes[lv].kvs for lv in range(self.numlevels)), bdspec[0]))
+        boundary_HSpace = HSpace.init_from_kvs(kvs, Hbdspec_active_cells, Hbdspec_deactivated_cells, Hbdspec_active_indices, Hbdspec_deactivated_indices, P=None, truncate=self.truncate, disparity=self.disparity, bdspecs=None)
+        return boundary_HSpace, Hbdspec_mapping
 
     def _dirichlet_indices(self):
-        # Compute tensor product boundary indices (specified by self.bdspecs)
-        TPbindices = list()
+        # Compute tensor product boundary indices specified by self.bdspecs
+        TPbindices = list() # indices for all bdspec of bdspecs
         for lv in range(self.numlevels):
-            aux = set()
+            aux = set() # collecting bdspecs contributions
             for bdspec in self.bdspecs:
                 aux |= self._compute_single_axis_single_level_dirichlet_indices(lv, bdspec)
             TPbindices.append(aux)
-
-        # Compute boundary indices for virtual hierarchy
+                    
+        # Compute combined boundary indices for virtual hierarchy
         out = []
         out_index = []
         for lv in range(self.numlevels):
@@ -666,10 +730,14 @@ class HSpace:
         # convert them to matrix indices
         return [self.raveled_to_virtual_matrix_indices(lv, chosen_indices[lv])
                 for lv in range(self.numlevels)]
+    
+    def _boundary_to_original_matrix_indices(self, indices):
+        """In contrast to indices_to_smooth, this function takes `indices` and returns np.array of matrix indices."""
+        chosen_indices = self.ravel_indices(indices)
+        return self.raveled_to_virtual_matrix_indices(self.numlevels-1, chosen_indices)
 
     def raveled_to_virtual_matrix_indices(self, lv, indices):
-        # convert indices from levelwise raveled TP indices to matrix indices within the
-        # stiffness matrix on the corresponding virtual multigrid hierarchy level
+        """Convert indices from levelwise raveled TP indices to matrix indices within the stiffness matrix on the corresponding virtual multigrid hierarchy level."""
         available_indices = self.ravel_global
         out = []
         n_lv = 0

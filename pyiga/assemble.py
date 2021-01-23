@@ -370,6 +370,15 @@ def boundary_dofs(kvs, bdspec, ravel=False, flip=None):
     N = tuple(kv.numdofs for kv in kvs)
     return slice_indices(bdax, idx, N, ravel=ravel, flip=flip)
 
+def boundary_cells(kvs, bdspec, ravel=False):
+    """Indices of the cells which lie on the given boundary of the tensor
+    product basis `kvs`. Output format is as for :func:`slice_indices`.
+    """
+    bdax, bdside = bspline._parse_bdspec(bdspec, len(kvs))
+    idx = (0 if bdside==0 else -1)
+    N = tuple(kv.numspans for kv in kvs)
+    return slice_indices(bdax, idx, N, ravel=ravel)
+
 def _drop_nans(indices, values):
     isnan = np.isnan(values)
     if np.any(isnan):

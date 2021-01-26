@@ -47,12 +47,13 @@ def test_block():
     _test_oper(X.T, Y.T)
 
 def test_subspace():
-    P1 = np.vstack((np.eye(2), np.zeros((2,2))))
-    P2 = np.vstack((np.zeros((2,2)), np.eye(2)))
-    B1 = rand(2,2)
-    B2 = rand(2,2)
-    _test_oper(SubspaceOperator((P1,P2), (B1,B2)),
-            scipy.linalg.block_diag(B1, B2))
+    I = np.eye(4)
+    P1, P2 = I[:, :2], I[:, 2:]
+    B1, B2 = rand(2,2),rand(2,2)
+    X = SubspaceOperator((P1,P2), (B1,B2))
+    _test_oper(X,     scipy.linalg.block_diag(B1,   B2))
+    _test_oper(X.T,   scipy.linalg.block_diag(B1.T, B2.T))
+    _test_oper(X.T.T, scipy.linalg.block_diag(B1,   B2))
 
 def test_solver():
     A = rand(3,3)

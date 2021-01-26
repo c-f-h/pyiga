@@ -179,35 +179,50 @@ def BlockOperator(ops):
         return NullOperator(shape)
 
 
-def SubspaceOperator(subspaces, Bs):
-    r"""Implements an abstract subspace correction operator.
+class SubspaceOperator(scipy.sparse.linalg.LinearOperator):
+    def __init__(self, subspaces, Bs):
+        r"""Implements an abstract additive subspace correction operator.
 
-    Args:
-        subspaces (seq): a list of `k` prolongation matrices
-            :math:`P_j \in \mathbb R^{n \times n_j}`
-        Bs (seq): a list of `k` square matrices or instances of :class:`LinearOperator`
-            :math:`B_j \in \mathbb R^{n_j \times n_j}`
+        Args:
+            subspaces (seq): a list of `k` prolongation matrices
+                :math:`P_j \in \mathbb R^{n \times n_j}`
+            Bs (seq): a list of `k` square matrices or instances of :class:`LinearOperator`
+                :math:`B_j \in \mathbb R^{n_j \times n_j}`
 
-    Returns:
-        LinearOperator: operator with shape :math:`n \times n` that implements the action
+        Returns:
+            LinearOperator: operator with shape :math:`n \times n` that implements the action
 
-        .. math::
-            Lx = \sum_{j=1}^k P_j B_j P_j^T x
-    """
-    subspaces, Bs = tuple(subspaces), tuple(Bs)
-    assert len(subspaces) == len(Bs)
-    assert len(Bs) > 0, "No operators given"
-    def apply_ssc(x):
-        if x.ndim > 1: x = np.squeeze(x)
+            .. math::
+                Lx = \sum_{j=1}^k P_j B_j P_j^T x
+        """
+        subspaces, Bs = tuple(subspaces), tuple(Bs)
+        assert len(subspaces) == len(Bs)
+        assert len(Bs) > 0, "No operators given"
+        n = subspaces[0].shape[0]
+        self.subspaces = subspaces
+        self.Bs = Bs
+        self._is_transpose = False
+        super().__init__(shape=(n,n), dtype=Bs[0].dtype)
+
+    def _matvec(self, x):
+        if x.ndim > 1:
+            x = np.squeeze(x)
         y = np.zeros(len(x))
-        for j in range(len(subspaces)):
-            P_j = subspaces[j]
-            y += P_j.dot(Bs[j].dot(P_j.T.dot(x)))
+        if self._is_transpose:
+            for j in range(len(self.subspaces)):
+                P_j = self.subspaces[j]
+                y += P_j.dot(self.Bs[j].T.dot(P_j.T.dot(x)))
+        else:
+            for j in range(len(self.subspaces)):
+                P_j = self.subspaces[j]
+                y += P_j.dot(self.Bs[j].dot(P_j.T.dot(x)))
         return y
-    n = subspaces[0].shape[0]
-    return scipy.sparse.linalg.LinearOperator(
-        shape=(n,n), dtype=Bs[0].dtype, matvec=apply_ssc
-    )
+
+    def _transpose(self):
+        Y = SubspaceOperator(self.subspaces, self.Bs)
+        Y._is_transpose = not self._is_transpose
+        # shape stays the same since we are square
+        return Y
 
 
 class PardisoSolverWrapper(scipy.sparse.linalg.LinearOperator):

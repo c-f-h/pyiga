@@ -180,21 +180,21 @@ def BlockOperator(ops):
 
 
 class SubspaceOperator(scipy.sparse.linalg.LinearOperator):
+    r"""Implements an abstract additive subspace correction operator.
+
+    Args:
+        subspaces (seq): a list of `k` prolongation matrices
+            :math:`P_j \in \mathbb R^{n \times n_j}`
+        Bs (seq): a list of `k` square matrices or instances of :class:`LinearOperator`
+            :math:`B_j \in \mathbb R^{n_j \times n_j}`
+
+    Returns:
+        LinearOperator: operator with shape :math:`n \times n` that implements the action
+
+        .. math::
+            Lx = \sum_{j=1}^k P_j B_j P_j^T x
+    """
     def __init__(self, subspaces, Bs):
-        r"""Implements an abstract additive subspace correction operator.
-
-        Args:
-            subspaces (seq): a list of `k` prolongation matrices
-                :math:`P_j \in \mathbb R^{n \times n_j}`
-            Bs (seq): a list of `k` square matrices or instances of :class:`LinearOperator`
-                :math:`B_j \in \mathbb R^{n_j \times n_j}`
-
-        Returns:
-            LinearOperator: operator with shape :math:`n \times n` that implements the action
-
-            .. math::
-                Lx = \sum_{j=1}^k P_j B_j P_j^T x
-        """
         subspaces, Bs = tuple(subspaces), tuple(Bs)
         assert len(subspaces) == len(Bs)
         assert len(Bs) > 0, "No operators given"

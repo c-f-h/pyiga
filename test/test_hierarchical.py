@@ -288,4 +288,4 @@ def test_boundary_HSpace():
         u_vec_2D = u_vec_3D[bd_mapping]
         u_HS_2D = HSplineFunc(bd_HSpace, u_vec_2D)
         bdgrid = restrict_grid_to_boundary(bspline._parse_bdspec(bdspec, hs.dim))
-        np.allclose(u_HS_3D.grid_eval(bdgrid), u_HS_2D.grid_eval(grid_2D))
+        assert np.allclose(np.squeeze(u_HS_3D.grid_eval(bdgrid)), u_HS_2D.grid_eval(grid_2D))

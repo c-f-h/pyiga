@@ -124,22 +124,24 @@ class CSRRowSlice:
         assert isinstance(A, scipy.sparse.csr_matrix)
         self.A = A
         assert 0 <= row_bounds[0] <= row_bounds[1] <= A.shape[0], 'invalid row bounds'
-        self.slc = row_bounds
         self.shape = (row_bounds[1] - row_bounds[0], A.shape[1])
+        self.indptr = self.A.indptr[row_bounds[0]:row_bounds[1]]
         self.dtype = A.dtype
 
     def _matmat(self, other):
         # adapted from _mul_multivector in scipy's compressed.py
         M, N = self.shape
-        i0, i1 = self.slc
 
-        n_vecs = other.shape[1]  # number of column vectors
+        y = other if other.ndim == 2 else other.reshape((-1, 1))
+        n_vecs = y.shape[1]  # number of column vectors
         result = np.zeros((M, n_vecs), dtype=self.dtype)
 
         scipy.sparse._sparsetools.csr_matvecs(M, N, n_vecs,
-                self.A.indptr[i0:i1], self.A.indices, self.A.data,
-                   other.ravel(), result.ravel())
+                self.indptr, self.A.indices, self.A.data,
+                   y.ravel(), result.ravel())
 
+        if other.ndim == 1:
+            result.shape = (result.shape[0],)
         return result
 
     __mul__ = _matmat

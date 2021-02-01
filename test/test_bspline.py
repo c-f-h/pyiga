@@ -35,6 +35,21 @@ def test_interpolation():
     result = interpolate(kv, f)
     assert np.allclose(coeffs, result)
 
+def test_eq():
+    # Generate example knot vectors
+    kv_ref = make_knots(4, 0.0, 1.0, 25)
+    kv1 = make_knots(4, 0.0, 1.0, 25)
+    kv2 = make_knots(2, 0.0, 1.0, 25)
+    kv3 = make_knots(4, 0.1, 1.0, 25)
+    kv4 = make_knots(4, 0.0, 1.1, 25)
+    kv5 = make_knots(4, 0.0, 1.0, 50)
+    
+    # Check equivalence
+    assert kv_ref == kv1
+    assert not kv_ref == kv2
+    assert not kv_ref == kv3
+    assert not kv_ref == kv4
+    assert not kv_ref == kv5
 
 def test_L2_projection():
     kv = make_knots(3, 0.0, 1.0, 10)

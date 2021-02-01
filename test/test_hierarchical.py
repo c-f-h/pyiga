@@ -289,3 +289,38 @@ def test_boundary_HSpace():
         u_HS_2D = HSplineFunc(bd_HSpace, u_vec_2D)
         bdgrid = restrict_grid_to_boundary(bspline._parse_bdspec(bdspec, hs.dim))
         assert np.allclose(np.squeeze(u_HS_3D.grid_eval(bdgrid)), u_HS_2D.grid_eval(grid_2D))
+
+def test_comparison():
+    hs0 = create_example_hspace(p=3, dim=3, n0=6, num_levels=0)
+    hs1 = create_example_hspace(p=3, dim=3, n0=6, num_levels=1)
+    hs2 = create_example_hspace(p=3, dim=3, n0=6, num_levels=2)
+    hs3 = create_example_hspace(p=3, dim=3, n0=6, num_levels=3)
+    
+    assert hs0 == hs0.copy()
+    assert hs1 == hs1.copy()
+    assert hs2 == hs2.copy()
+    assert hs3 == hs3.copy()
+    
+    assert hs0 <= hs1
+    assert hs1 <= hs2
+    assert hs2 <= hs3
+    assert hs0 <= hs2
+    assert hs1 <= hs3
+    assert hs0 <= hs3
+    
+    assert not hs1 <= hs0
+    assert not hs2 <= hs1
+    assert not hs3 <= hs2
+    assert not hs2 <= hs0
+    assert not hs3 <= hs1
+    assert not hs3 <= hs0
+    
+    hs0_ = hs3.get_virtual_space(0)
+    hs1_ = hs3.get_virtual_space(1)
+    hs2_ = hs3.get_virtual_space(2)
+    hs3_ = hs3.get_virtual_space(3)
+    
+    assert hs0 == hs0_
+    assert hs1 == hs1_
+    assert hs2 == hs2_
+    assert hs3 == hs3_

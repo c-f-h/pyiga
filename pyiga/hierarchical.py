@@ -42,6 +42,7 @@ described in [GV2018]_ and the corresponding implementation in [GeoPDEs]_.
 import numpy as np
 import scipy.sparse
 import itertools
+import copy
 
 from . import bspline, utils, assemble
 from ._hdiscr import HDiscretization
@@ -104,6 +105,9 @@ class TPMesh:
         self.numbf = np.prod(self.numdofs)
         self.meshsupp = tuple(kv.mesh_support_idx_all() for kv in self.kvs)
         self.suppfunc = tuple(_compute_supported_functions(kv,ms) for (kv,ms) in zip(self.kvs, self.meshsupp))
+        
+    def __eq__(self, other):
+        return self.kvs == other.kvs
 
     def refine(self):
         return TPMesh([kv.refine() for kv in self.kvs])
@@ -550,7 +554,15 @@ class HSpace:
 
         Hbdspec_mapping = self._boundary_to_original_matrix_indices(Hbdspec_mapping_indices)
         kvs = tuple(_drop_index_in_tuples(list(self.hmesh.meshes[lv].kvs for lv in range(self.numlevels)), bdspec[0]))
-        boundary_HSpace = HSpace.init_from_kvs(kvs, Hbdspec_active_cells,
+        
+        # Crop empty levels
+        while not Hbdspec_active_cells[-1]:
+            Hbdspec_active_cells.pop()
+            Hbdspec_deactivated_cells.pop()
+            Hbdspec_active_indices.pop()
+            Hbdspec_deactivated_indices.pop()
+        # Generate boundary_HSpace
+        boundary_HSpace = HSpace.init_from_kvs(kvs[:len(Hbdspec_active_cells)], Hbdspec_active_cells,
                 Hbdspec_deactivated_cells, Hbdspec_active_indices,
                 Hbdspec_deactivated_indices, P=None, truncate=self.truncate,
                 disparity=self.disparity, bdspecs=None)
@@ -864,12 +876,81 @@ class HSpace:
         self._clear_cache()
         return marked       # return the actual refined cells
 
-    def get_virtual_space(self, level):
-        assert 0 <= level < self.numlevels, 'Invalid level.'
-        out = HSpace(self.hmesh.meshes[0].kvs)
-        for i in range(level): # refine level-1 times
-            out.refine({i: self.hmesh.deactivated[i]})
+    def get_virtual_space(self, lv):
+        """Get level `lv` HSpace of virtual hierarchy of self. Convenience function. Do not use for actual computations."""
+        if lv == None:
+            lv = self.numlevels - 1
+        assert 0 <= lv < self.numlevels, 'Invalid level.'
+        out = self.copy()
+        if not lv == self.numlevels - 1:
+            out.actfun = out.actfun[:lv+1]
+            out.deactfun = out.deactfun[:lv+1]
+            out.hmesh.active = out.hmesh.active[:lv+1]
+            out.hmesh.deactivated = out.hmesh.deactivated[:lv+1]
+            out.hmesh.meshes = out.hmesh.meshes[:lv+1]
+            out.actfun[lv] |= out.deactfun[lv]
+            out.deactfun[lv] = set()
+            out.hmesh.active[lv] |= out.hmesh.deactivated[lv]
+            out.hmesh.deactivated[lv] = set()
+            out._clear_cache()
         return out
+    
+    def _crop_empty_levels(self):
+        """Convenience function to remove unnecessary levels."""
+        while not self.hmesh.active[-1]:
+            self.hmesh.active.pop()
+            self.hmesh.deactivated.pop()
+            self.actfun.pop()
+            self.deactfun.pop()
+            self.hmesh.meshes.pop()
+        self._clear_cache()
+    
+    def copy(self):
+        """Generate a copy of self"""
+        return copy.deepcopy(self)
+    
+    def __le__(self, other):
+        return self.is_subspace_of(other)
+    
+    def __ge__(self, other):
+        return other.is_subspace_of(self)
+    
+    def is_subspace_of(self, other, check_kv=True):
+        """Determine if `self` is a subspace of `other` by comparing activated and deactivated function indices and knotvectors. Optionally turn off knotvector comparison."""
+        self_levels = self.numlevels
+        other_levels = other.numlevels
+        # Check number of levels
+        if not self_levels <= other_levels:
+            return False
+        # Check knotvectors
+        if check_kv:
+            if not self.hmesh.meshes[:self_levels] == other.hmesh.meshes[:self_levels]:
+                return False
+        # Check indices
+        for lv in range(self_levels):
+            if not self.deactfun[lv] <= other.deactfun[lv]:
+                return False
+        return True
+    
+    def __eq__(self, other):
+        return self.spans_same_space_as(other)
+    
+    def spans_same_space_as(self, other, check_kv=True):
+        """Dtermine if `self` spans the same space as `other` by comparing activated and deactivated function indices and knotvectors. Optionally turn off knotvector comparision."""
+        self_levels = self.numlevels
+        other_levels = other.numlevels
+        # Check number of levels
+        if not self_levels == other_levels:
+            return False
+        # Check knotvectors
+        if check_kv:
+            if not self.hmesh.meshes[:self_levels] == other.hmesh.meshes[:self_levels]:
+                return False
+        # Check indices
+        for lv in range(self_levels):
+            if not self.actfun[lv] == other.actfun[lv] and self.deactfun[lv] == other.deactfun[lv]:
+                return False
+        return True
 
     def refine_region(self, lv, region_function):
         """Refine all active cells on level `lv` whose cell center satisfies `region_function`.
@@ -881,7 +962,7 @@ class HSpace:
 
         def cell_center(c):
             return tuple(0.5*(lo+hi) for (lo,hi) in reversed(self.cell_extents(lv, c)))
-        self.refine({
+        return self.refine({
             lv: tuple(c for c in self.active_cells(lv) if region_function(*cell_center(c)))
         })
 

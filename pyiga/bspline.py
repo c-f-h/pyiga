@@ -73,6 +73,12 @@ class KnotVector:
 
     def __repr__(self):
         return 'KnotVector(%s, %s)' % (repr(self.kv), repr(self.p))
+    
+    def __eq__(self, other):
+        if self.p == other.p and len(self.kv) == len(other.kv):
+            if np.allclose(self.kv, other.kv):
+                return True
+        return False
 
     @property
     def numknots(self):

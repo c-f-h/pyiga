@@ -162,7 +162,10 @@ class HMesh:
 
     @staticmethod
     def init_from_kvs(kvs, active, deactivated, P=None):
-        """Generate an instance of HMesh by providing sequences `kvs` of knot vectors, `active` of active cells and `deactivated` of deactivated cells per level. Optionally provide prolongators."""
+        """Generate an instance of HMesh by providing sequences `kvs` of knot
+        vectors, `active` of active cells and `deactivated` of deactivated
+        cells per level. Optionally provide prolongators.
+        """
         out = HMesh(TPMesh(kvs[0]))
         out.meshes = [TPMesh(kv) for kv in kvs]
         out.active = active
@@ -170,10 +173,10 @@ class HMesh:
         out.P = P
         if not P:
             out.P = [] # calculate prolongation matrices from kvs
-            for lv in range(len(kvs)-1):
+            for lv in range(len(kvs) - 1):
                 out.P.append(tuple(
-                bspline.prolongation(k0, k1).tocsc() for (k0,k1)
-                in zip(out.meshes[lv].kvs, out.meshes[lv+1].kvs)))
+                    bspline.prolongation(k0, k1).tocsc() for (k0,k1)
+                    in zip(out.meshes[lv].kvs, out.meshes[lv+1].kvs)))
         return out
 
     def add_level(self):
@@ -385,8 +388,15 @@ class HSpace:
         self.__ravel_dirichlet = None
 
     @staticmethod
-    def init_from_kvs(kvs, active_cells, deactivated_cells, active_funcs, deactivated_funcs, P=None, truncate=False, disparity=np.inf, bdspecs=None):
-        """Generate an instance of HSpace by providing sequences `kvs` of knot vectors, `active_cells` of active cells, `deactivated_cells` of deactivated cells, `active_funcs` of active basis functions and `deactivated_funcs` of deactivated basis functions per level. Optionally provide prolongators."""
+    def init_from_kvs(kvs, active_cells, deactivated_cells, active_funcs,
+            deactivated_funcs, P=None, truncate=False, disparity=np.inf,
+            bdspecs=None):
+        """Generate an instance of HSpace by providing sequences `kvs` of knot
+        vectors, `active_cells` of active cells, `deactivated_cells` of
+        deactivated cells, `active_funcs` of active basis functions and
+        `deactivated_funcs` of deactivated basis functions per level.
+        Optionally provide prolongators.
+        """
         out = HSpace(kvs[0], truncate=truncate, disparity=disparity, bdspecs=bdspecs)
         out.hmesh = HMesh.init_from_kvs(kvs, active_cells, deactivated_cells, P=P)
         out.actfun = active_funcs
@@ -528,8 +538,8 @@ class HSpace:
 
     def boundary(self, bdspec):
         """Generate a :class:`HSpace` of dimension `self.dim-1` representing the
-        restriction of self to the boundary identified by `bdspec`. Returns
-        this HSpace and a np.array of matrix indices which correspond to the
+        restriction of `self` to the boundary identified by `bdspec`. Returns
+        this HSpace and a `np.array` of matrix indices which correspond to the
         boundary basis functions in self."""
         # Precompute tensor product cell and function indices
         bdspec = bspline._parse_bdspec(bdspec, self.dim)
@@ -562,10 +572,10 @@ class HSpace:
             Hbdspec_active_indices.pop()
             Hbdspec_deactivated_indices.pop()
         # Generate boundary_HSpace
-        boundary_HSpace = HSpace.init_from_kvs(kvs[:len(Hbdspec_active_cells)], Hbdspec_active_cells,
-                Hbdspec_deactivated_cells, Hbdspec_active_indices,
-                Hbdspec_deactivated_indices, P=None, truncate=self.truncate,
-                disparity=self.disparity, bdspecs=None)
+        boundary_HSpace = HSpace.init_from_kvs(kvs[:len(Hbdspec_active_cells)],
+                Hbdspec_active_cells, Hbdspec_deactivated_cells,
+                Hbdspec_active_indices, Hbdspec_deactivated_indices,
+                truncate=self.truncate, disparity=self.disparity)
         return boundary_HSpace, Hbdspec_mapping
 
     def _dirichlet_indices(self):

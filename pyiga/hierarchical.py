@@ -903,7 +903,10 @@ class HSpace:
         return copy.deepcopy(self)
 
     def is_subspace_of(self, other, check_kv=True):
-        """Determine if `self` is a subspace of `other` by comparing activated and deactivated function indices and knotvectors. Optionally turn off knotvector comparison."""
+        """Determine if `self` is a subspace of `other` by comparing activated
+        and deactivated function indices and knotvectors. Optionally turn off
+        knotvector comparison.
+        """
         self_levels = self.numlevels
         other_levels = other.numlevels
         # Check number of levels
@@ -923,7 +926,10 @@ class HSpace:
         return self.spans_same_space_as(other)
 
     def spans_same_space_as(self, other, check_kv=True):
-        """Dtermine if `self` spans the same space as `other` by comparing activated and deactivated function indices and knotvectors. Optionally turn off knotvector comparision."""
+        """Determine if `self` spans the same space as `other` by comparing
+        activated and deactivated function indices and knotvectors. Optionally
+        turn off knotvector comparison.
+        """
         self_levels = self.numlevels
         other_levels = other.numlevels
         # Check number of levels
@@ -956,7 +962,8 @@ class HSpace:
     def prolongate_to(self, fine, check_nestedness=False, check_nestedness_kv=False):
         """Gives the prolongation matrix from `self` to target :class:`HSpace` `fine`,
         where ``self.is_subspace_of(fine)`` is assumed to hold. Optionally perform
-        custom subspace test."""
+        custom subspace test.
+        """
         if check_nestedness:
             if not self.is_subspace_of(fine, check_kv=check_nestedness_kv):
                 return

@@ -983,7 +983,7 @@ class HSpace:
         """
         if check_nestedness:
             if not self.is_subspace_of(fine, check_kv=check_nestedness_kv):
-                return
+                raise RuntimeError('HSpace is not a subspace')
         # tensor product prolongators
         P = [fine.tp_prolongation(lv, kron=True) for lv in range(fine.numlevels-1)]
         # maximum mesh level disparity

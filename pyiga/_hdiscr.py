@@ -100,7 +100,7 @@ class HDiscretization:
             interlevel_ix = hs.ravel_indices(interlevel_ix)
 
             # compute neighbors as matrix indices
-            neighbors = [hs.raveled_to_virtual_matrix_indices(lv, hs.ravel_indices(idx))
+            neighbors = [hs.raveled_to_virtual_canonical_indices(lv, hs.ravel_indices(idx))
                     for lv, idx in enumerate(neighbors)]
 
             # new indices per level as local tensor product indices

@@ -464,8 +464,9 @@ class HSpace:
         return sum(len(ac) for ac in self.active_cells())
 
     def active_functions(self, lv=None, flat=False):
-        """If `lv` is specified, return the set of active functions on that level.
-        Otherwise, return a list containing, for each level, the set of active functions.
+        """If `lv` is specified, return the set of multi-indices of active
+        functions on that level.  Otherwise, return a list containing, for each
+        level, the set of active functions.
 
         If `lv=None` and `flat=True`, return a flat list of `(lv, (i_1, ..., i_d))`
         pairs of all active functions in canonical order, where the first entry is the level
@@ -658,18 +659,18 @@ class HSpace:
         return self.compute_virtual_supports(self.global_indices())
 
     def dirichlet_dofs(self, lv=None):
-        """Matrix indices which lie on the specified Dirichlet boundaries."""
+        """Canonical indices which lie on the specified Dirichlet boundaries."""
         if lv is None:
             lv = self.numlevels - 1
-        return self.raveled_to_virtual_matrix_indices(lv, self.ravel_dirichlet[lv])
+        return self.raveled_to_virtual_canonical_indices(lv, self.ravel_dirichlet[lv])
 
     def non_dirichlet_dofs(self):
-        """Matrix indices which do not lie on the specified Dirichlet boundaries."""
+        """Canonical indices which do not lie on the specified Dirichlet boundaries."""
         return sorted(set(range(self.numdofs)) - set(self.dirichlet_dofs()))
 
     def new_indices(self):
-        """Return a tuple which contains tuples which contain, per level, the raveled
-        (sequential) indices of newly added basis functions in the virtual hierarchy per level."""
+        """Return a tuple which contains tuples which contain, per level, the multi-indices
+        of newly added basis functions in the virtual hierarchy per level."""
         return [
                 [ ( sorted(self.actfun[i] - self.index_dirichlet[lv][i])
                   + sorted(self.deactfun[i] - self.index_dirichlet[lv][i]))
@@ -679,8 +680,8 @@ class HSpace:
                 for lv in range(self.numlevels)]
 
     def trunc_indices(self):
-        """Return a tuple which contains tuples which contain, per level, the raveled
-        (sequential) indices of ``trunc`` basis functions in the virtual hierarchy per level."""
+        """Return a tuple which contains tuples which contain, per level, the multi-indices
+        of ``trunc`` basis functions in the virtual hierarchy per level."""
         indices = self.new_indices()        # start with only the newly added indices
         out = list()
         out_index = list()
@@ -704,8 +705,8 @@ class HSpace:
         return indices
 
     def func_supp_indices(self):
-        """Return a tuple which contains tuples which contain, per level, the raveled
-        (sequential) indices of ``func_supp`` basis functions in the virtual hierarchy per level."""
+        """Return a tuple which contains tuples which contain, per level, the multi-indices
+        of ``func_supp`` basis functions in the virtual hierarchy per level."""
         indices = self.new_indices()        # start with only the newly added indices
         for lv in range(self.numlevels):
             for i in range(self.numlevels):
@@ -716,8 +717,8 @@ class HSpace:
         return indices
 
     def cell_supp_indices(self, remove_dirichlet=True):
-        """Return a tuple which contains tuples which contain, per level, the raveled
-        (sequential) indices of ``cell_supp`` basis functions in the virtual hierarchy per level."""
+        """Return a tuple which contains tuples which contain, per level, the multi-indices
+        of ``cell_supp`` basis functions in the virtual hierarchy per level."""
         indices = self.new_indices()        # start with only the newly added indices
         for lv in range(self.numlevels):    # loop over virtual hierarchy levels
             for i in range(self.numlevels):
@@ -733,17 +734,20 @@ class HSpace:
                         indices[lv][i] = sorted(funcs)
         return indices
 
-    def global_indices(self):
-        """Return a tuple which contains tuples which contain, per level, the raveled
-        (sequential) indices of ``global`` basis functions in the virtual hierarchy per level."""
-        indices = [ [[] for i in range(self.numlevels)] for j in range(self.numlevels) ]
-        for lv in range(self.numlevels):
-            for i in range(self.numlevels):
-                if i == lv:
-                    indices[lv][i] = sorted(self.actfun[i]) + sorted(self.deactfun[i])
-                elif i < lv:
-                    indices[lv][i] = sorted(self.actfun[i])
-        return indices
+    def global_indices(self, vlvl=None):
+        """Return a tuple which contains tuples which contain, per level, the multi-indices
+        of ``global`` basis functions in the virtual hierarchy per level.
+        """
+        if vlvl is None:
+            return [ self.global_indices(vlvl=j) for j in range(self.numlevels) ]
+        else:
+            indices = [[] for i in range(self.numlevels)]
+            for i in range(vlvl + 1):
+                if i == vlvl:
+                    indices[i] = sorted(self.actfun[i]) + sorted(self.deactfun[i])
+                else:
+                    indices[i] = sorted(self.actfun[i])
+            return indices
 
     def indices_to_smooth(self, strategy='func_supp'):
         assert strategy in ("new", "trunc", "func_supp", "cell_supp"), "Invalid smoothing strategy"
@@ -752,7 +756,7 @@ class HSpace:
         # convert them to raveled form
         chosen_indices = [self.ravel_indices(idx) for idx in chosen_indices]
         # convert them to matrix indices
-        return [self.raveled_to_virtual_matrix_indices(lv, chosen_indices[lv])
+        return [self.raveled_to_virtual_canonical_indices(lv, chosen_indices[lv])
                 for lv in range(self.numlevels)]
 
     def _levelwise_to_canonical(self, indices, raveled=False):
@@ -761,19 +765,19 @@ class HSpace:
         """
         if not raveled:
             indices = self.ravel_indices(indices)
-        return self.raveled_to_virtual_matrix_indices(self.numlevels-1, indices)
+        return self.raveled_to_virtual_canonical_indices(self.numlevels-1, indices)
 
-    def raveled_to_virtual_matrix_indices(self, lv, indices):
+    def raveled_to_virtual_canonical_indices(self, lv, indices):
         """Convert indices from levelwise raveled TP indices to matrix indices
         within the stiffness matrix on the corresponding virtual multigrid
         hierarchy level.
         """
-        available_indices = self.ravel_global
+        available_indices = self.ravel_global[lv]
         out = []
         n_lv = 0
         for l in range(self.numlevels):
-            out += list(n_lv + _position_index(list(available_indices[lv][l]), indices[l]))
-            n_lv += len(available_indices[lv][l])
+            out += list(n_lv + _position_index(list(available_indices[l]), indices[l]))
+            n_lv += len(available_indices[l])
         return np.array(out, dtype=int)
 
     def compute_supports(self, functions):
@@ -1003,9 +1007,9 @@ class HSpace:
 
         def replaced_as_canonical(lv):
             # returns canonical indices corresponding to replaced actfuns on level lv
-            out = [np.array([]) for l in range(c_numlevels)]
-            out[lv] = replaced_rav[lv]
-            return self._levelwise_to_canonical(out, raveled=True)
+            levels = [set() for l in range(c_numlevels)]
+            levels[lv] = replaced_rav[lv]
+            return self._levelwise_to_canonical(levels, raveled=True)
 
         c_replaced_can = [replaced_as_canonical(lv) for lv in range(c_numlevels)]
 

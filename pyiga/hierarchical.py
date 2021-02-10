@@ -999,7 +999,8 @@ class HSpace:
         f_actfun = fine.actfun
         # canonical indices corresponding to the active functions
         f_actfun_can = tuple(np.arange(sum(f_numactive[:lv]), sum(f_numactive[:lv+1])) for lv in range(f_numlevels))
-        f_global_rav = fine.ravel_global
+        f_actfun_rav = fine.active_indices()
+        f_deactfun_rav = fine.deactivated_indices()
 
         # replaced coarse basis functions in levelwise raveled format
         replaced_rav = self.ravel_indices(
@@ -1028,8 +1029,8 @@ class HSpace:
             # prolongate to level l > lv
             for l in range(lv + 1, min(f_numlevels, lv + disparity + 1)):
                 # current raveled active/deactivated indices for fine space
-                fa_l = f_global_rav[l][l][:f_numactive[l]]
-                fd_l = f_global_rav[l][l][f_numactive[l]:]
+                fa_l = f_actfun_rav[l]
+                fd_l = f_deactfun_rav[l]
                 if l == lv + 1: # first prolongation is a special case
                     # get prolongation matrix for these indices
                     P_act   = P[l-1][np.ix_(fa_l, replaced_rav[lv])]

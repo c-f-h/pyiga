@@ -562,7 +562,7 @@ class HSpace:
             Hbdspec_deactivated_indices.append(_drop_index_in_tuples(self.deactfun[lv] & TPbdspec_indices[lv], bdspec[0]))
             Hbdspec_deactivated_cells.append(_drop_index_in_tuples(self.hmesh.deactivated[lv] & TPbdspec_cells[lv], bdspec[0]))
 
-        Hbdspec_mapping = self._boundary_to_original_matrix_indices(Hbdspec_mapping_indices)
+        Hbdspec_mapping = self._levelwise_to_canonical(Hbdspec_mapping_indices)
         kvs = tuple(_drop_index_in_tuples(list(self.hmesh.meshes[lv].kvs for lv in range(self.numlevels)), bdspec[0]))
 
         # Crop empty levels
@@ -755,16 +755,19 @@ class HSpace:
         return [self.raveled_to_virtual_matrix_indices(lv, chosen_indices[lv])
                 for lv in range(self.numlevels)]
 
-    def _boundary_to_original_matrix_indices(self, indices, raveled=False):
-        """In contrast to indices_to_smooth, this function takes `indices` and returns np.array of matrix indices."""
+    def _levelwise_to_canonical(self, indices, raveled=False):
+        """Convert a level-list of raveled or non-raveled TP indices to an
+        `np.array` of canonical indices.
+        """
         if not raveled:
-            chosen_indices = self.ravel_indices(indices)
-        else:
-            chosen_indices = indices
-        return self.raveled_to_virtual_matrix_indices(self.numlevels-1, chosen_indices)
+            indices = self.ravel_indices(indices)
+        return self.raveled_to_virtual_matrix_indices(self.numlevels-1, indices)
 
     def raveled_to_virtual_matrix_indices(self, lv, indices):
-        """Convert indices from levelwise raveled TP indices to matrix indices within the stiffness matrix on the corresponding virtual multigrid hierarchy level."""
+        """Convert indices from levelwise raveled TP indices to matrix indices
+        within the stiffness matrix on the corresponding virtual multigrid
+        hierarchy level.
+        """
         available_indices = self.ravel_global
         out = []
         n_lv = 0
@@ -981,62 +984,64 @@ class HSpace:
         P = [fine.tp_prolongation(lv, kron=True) for lv in range(fine.numlevels-1)]
         # maximum mesh level disparity
         disparity = max(self.disparity, fine.disparity)
+
         # numlevels, numdofs and indices for coarse space `self`
         c_numlevels = self.numlevels
-        c_numdofs = self.numdofs
-        c_numactive = self.numactive
         c_actfun = self.actfun
-        c_actfun_mat_level = tuple(np.arange(sum(c_numactive[:lv]), sum(c_numactive[:lv+1])) for lv in range(c_numlevels))
-        #c_global_rav = self.ravel_global
-        #c_deactfun = self.deactfun
+
         # numlevels, numdofs and indices for fine space `fine`
         f_numlevels = fine.numlevels
-        f_numdofs = fine.numdofs
         f_numactive = fine.numactive
         f_actfun = fine.actfun
-        f_actfun_mat_level = tuple(np.arange(sum(f_numactive[:lv]), sum(f_numactive[:lv+1])) for lv in range(f_numlevels))
+        # canonical indices corresponding to the active functions
+        f_actfun_can = tuple(np.arange(sum(f_numactive[:lv]), sum(f_numactive[:lv+1])) for lv in range(f_numlevels))
         f_global_rav = fine.ravel_global
-        #f_deactfun = fine.deactfun
-        # replaced coarse and common basis functions
-        replaced_c_actfun = [c_act - f_act for c_act, f_act in zip(c_actfun, f_actfun[:c_numlevels])]
-        replaced_c_actfun_rav = self.ravel_indices(replaced_c_actfun)
-        #replaced_c_actfun_mat = self._boundary_to_original_matrix_indices(replaced_c_actfun)
-        def replaced_c_actfun_mat_level_func(lv):
-            # gives replaced_c_actfun matrix indices of level `lv`
+
+        # replaced coarse basis functions in levelwise raveled format
+        replaced_rav = self.ravel_indices(
+                [c_act - f_act for c_act, f_act in zip(c_actfun, f_actfun[:c_numlevels])])
+
+        def replaced_as_canonical(lv):
+            # returns canonical indices corresponding to replaced actfuns on level lv
             out = [np.array([]) for l in range(c_numlevels)]
-            out[lv] = replaced_c_actfun_rav[lv]
-            return self._boundary_to_original_matrix_indices(out, raveled=True)
-        replaced_c_actfun_mat_level = [replaced_c_actfun_mat_level_func(lv) for lv in range(c_numlevels)]
+            out[lv] = replaced_rav[lv]
+            return self._levelwise_to_canonical(out, raveled=True)
+
+        c_replaced_can = [replaced_as_canonical(lv) for lv in range(c_numlevels)]
+
+        # common basis functions as canonical indices
         common_actfun = [c_act & f_act for c_act, f_act in zip(c_actfun, f_actfun[:c_numlevels])]
-        common_actfun_c_mat = self._boundary_to_original_matrix_indices(common_actfun)
-        common_actfun_f_mat = fine._boundary_to_original_matrix_indices(common_actfun + [{} for lv in range(f_numlevels - c_numlevels)])
+        common_c = self._levelwise_to_canonical(common_actfun)
+        common_f = fine._levelwise_to_canonical(common_actfun + [set() for lv in range(f_numlevels - c_numlevels)])
+
         # initialize output matrix
-        out = scipy.sparse.lil_matrix((f_numdofs, c_numdofs))
+        out = scipy.sparse.lil_matrix((fine.numdofs, self.numdofs))
         # keep common basis function components
-        out[np.ix_(common_actfun_f_mat, common_actfun_c_mat)] = scipy.sparse.eye(len(common_actfun_c_mat), format='lil')
-        # prolongate replaced_c_actfun to matching f_actfun for each level `lv`
+        out[np.ix_(common_f, common_c)] = scipy.sparse.eye(len(common_c))
+
+        # prolongate replaced actfuns to matching f_actfun for each level `lv`
         for lv in range(c_numlevels if c_numlevels < f_numlevels else c_numlevels - 1):
-            # prolongate to level `l` > `lv`
+            # prolongate to level l > lv
             for l in range(lv + 1, min(f_numlevels, lv + disparity + 1)):
                 # current raveled active/deactivated indices for fine space
-                f_actfun_rav_l = f_global_rav[l][l][:f_numactive[l]]
-                f_deactfun_rav_l = f_global_rav[l][l][f_numactive[l]:]
+                fa_l = f_global_rav[l][l][:f_numactive[l]]
+                fd_l = f_global_rav[l][l][f_numactive[l]:]
                 if l == lv + 1: # first prolongation is a special case
                     # get prolongation matrix for these indices
-                    P_work_act = P[l-1][np.ix_(f_actfun_rav_l, replaced_c_actfun_rav[lv])]
-                    P_work_deact = P[l-1][np.ix_(f_deactfun_rav_l, replaced_c_actfun_rav[lv])]
+                    P_act   = P[l-1][np.ix_(fa_l, replaced_rav[lv])]
+                    P_deact = P[l-1][np.ix_(fd_l, replaced_rav[lv])]
                 else: # standard case: propagate deactivated prolongation
                     # get prolongation matrix for these indices
-                    P_work_act = P[l-1][np.ix_(f_actfun_rav_l, f_deactfun_rav_lm1)] @ P_current
-                    P_work_deact = P[l-1][np.ix_(f_deactfun_rav_l, f_deactfun_rav_lm1)] @ P_current
-                # update output matrix
-                out[np.ix_(f_actfun_mat_level[l],replaced_c_actfun_mat_level[lv])] += P_work_act
-                if len(f_deactfun_rav_l)==0: # no more functions to prolongate on this level
+                    P_act   = P[l-1][np.ix_(fa_l, fd_lm1)] @ P_current
+                    P_deact = P[l-1][np.ix_(fd_l, fd_lm1)] @ P_current
+                # update output matrix for the replaced dofs on this level
+                out[np.ix_(f_actfun_can[l], c_replaced_can[lv])] += P_act
+                if len(fd_l) == 0: # no more functions to prolongate on this level
                     break
                 # propagate deactivated prolongation
-                P_current = P_work_deact
+                P_current = P_deact
                 # provide old deactivated indices for next iteration
-                f_deactfun_rav_lm1 = f_deactfun_rav_l
+                fd_lm1 = fd_l
         return out.tocsr()
 
     def represent_fine(self, lv=None, truncate=None, rows=None, restrict=False):

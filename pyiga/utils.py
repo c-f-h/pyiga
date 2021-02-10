@@ -147,6 +147,37 @@ class CSRRowSlice:
     __mul__ = _matmat
     dot = _matmat
 
+class CSRRowSubset:
+    """A simple class which allows quickly applying a subset of the rows of a
+    CSR matrix to a vector.
+
+    This is required since creating submatrices of scipy sparse matrices is a
+    very heavyweight operation.
+    """
+    def __init__(self, A, rows):
+        assert isinstance(A, scipy.sparse.csr_matrix)
+        self.A = A
+        self.rows = rows
+        self.shape = (len(rows), A.shape[1])
+        self.dtype = A.dtype
+
+    def _matvec(self, other):
+        M, N = self.shape
+        assert other.shape == (N,)
+        result = np.zeros(M, dtype=self.dtype)
+
+        indptr = self.A.indptr
+        y = other.ravel()
+        out = result.ravel()
+        for i, r in enumerate(self.rows):
+            scipy.sparse._sparsetools.csr_matvec(1, N,
+                    indptr[r:r+1], self.A.indices, self.A.data,
+                    y, out[i:i+1])
+        return result
+
+    __mul__ = _matvec
+    dot = _matvec
+
 
 class LazyArray:
     """An interface for lazily evaluating functions over a tensor product grid

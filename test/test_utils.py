@@ -59,3 +59,7 @@ def test_CSRRowSlice():
     assert np.allclose((A @ x)[12:23], CSRRowSlice(A, (12, 23)).dot(x))
     x = rand(100, 7)
     assert np.allclose((A @ x)[12:23], CSRRowSlice(A, (12, 23)).dot(x))
+    #
+    rows = np.array([1, 3, 10, 11, 12, 65])
+    x = rand(100)
+    assert np.allclose((A @ x)[rows], CSRRowSubset(A, rows).dot(x))

@@ -745,9 +745,12 @@ class HSpace:
         return [self.raveled_to_virtual_matrix_indices(lv, chosen_indices[lv])
                 for lv in range(self.numlevels)]
 
-    def _boundary_to_original_matrix_indices(self, indices):
+    def _boundary_to_original_matrix_indices(self, indices, raveled=False):
         """In contrast to indices_to_smooth, this function takes `indices` and returns np.array of matrix indices."""
-        chosen_indices = self.ravel_indices(indices)
+        if not raveled:
+            chosen_indices = self.ravel_indices(indices)
+        else:
+            chosen_indices = indices
         return self.raveled_to_virtual_matrix_indices(self.numlevels-1, chosen_indices)
 
     def raveled_to_virtual_matrix_indices(self, lv, indices):
@@ -965,6 +968,73 @@ class HSpace:
         return self.refine({
             lv: tuple(c for c in self.active_cells(lv) if region_function(*cell_center(c)))
         })
+    
+    def prolongate_to(self, fine, check_nestedness=False, check_nestedness_kv=False):
+        """Gives the prolongation matrix from `self` to target HSpace `fine`, where self.is_subspace_of(fine) is assumed to hold. Optionally perform custom subspace test."""
+        if check_nestedness:
+            if not self.is_subspace_of(fine, check_kv=check_nestedness_kv):
+                return
+        # tensor product prolongators
+        P = [fine.tp_prolongation(lv, kron=True) for lv in range(fine.numlevels-1)]
+        # maximum mesh level disparity
+        disparity = max(self.disparity, fine.disparity)
+        # numlevels, numdofs and indices for coarse space `self`
+        c_numlevels = self.numlevels
+        c_numdofs = self.numdofs
+        c_numactive = self.numactive
+        c_actfun = self.actfun
+        c_actfun_mat_level = tuple(np.arange(sum(c_numactive[:lv]), sum(c_numactive[:lv+1])) for lv in range(c_numlevels))
+        #c_global_rav = self.ravel_global
+        #c_deactfun = self.deactfun
+        # numlevels, numdofs and indices for fine space `fine`
+        f_numlevels = fine.numlevels
+        f_numdofs = fine.numdofs
+        f_numactive = fine.numactive
+        f_actfun = fine.actfun
+        f_actfun_mat_level = tuple(np.arange(sum(f_numactive[:lv]), sum(f_numactive[:lv+1])) for lv in range(f_numlevels))
+        f_global_rav = fine.ravel_global
+        #f_deactfun = fine.deactfun
+        # replaced coarse and common basis functions
+        replaced_c_actfun = [c_act - f_act for c_act, f_act in zip(c_actfun, f_actfun[:c_numlevels])]
+        replaced_c_actfun_rav = self.ravel_indices(replaced_c_actfun)
+        #replaced_c_actfun_mat = self._boundary_to_original_matrix_indices(replaced_c_actfun)
+        def replaced_c_actfun_mat_level_func(lv):
+            # gives replaced_c_actfun matrix indices of level `lv`
+            out = [np.array([]) for l in range(c_numlevels)]
+            out[lv] = replaced_c_actfun_rav[lv]
+            return self._boundary_to_original_matrix_indices(out, raveled=True)
+        replaced_c_actfun_mat_level = [replaced_c_actfun_mat_level_func(lv) for lv in range(c_numlevels)]
+        common_actfun = [c_act & f_act for c_act, f_act in zip(c_actfun, f_actfun[:c_numlevels])]
+        common_actfun_c_mat = self._boundary_to_original_matrix_indices(common_actfun)
+        common_actfun_f_mat = fine._boundary_to_original_matrix_indices(common_actfun + [{} for lv in range(f_numlevels - c_numlevels)])
+        # initialize output matrix
+        out = scipy.sparse.lil_matrix((f_numdofs, c_numdofs))
+        # keep common basis function components
+        out[np.ix_(common_actfun_f_mat, common_actfun_c_mat)] = scipy.sparse.eye(len(common_actfun_c_mat), format='lil')
+        # prolongate replaced_c_actfun to matching f_actfun for each level `lv`
+        for lv in range(c_numlevels if c_numlevels < f_numlevels else c_numlevels - 1):
+            # prolongate to level `l` > `lv`
+            for l in range(lv + 1, min(f_numlevels, lv + disparity + 1)):
+                # current raveled active/deactivated indices for fine space
+                f_actfun_rav_l = f_global_rav[l][l][:f_numactive[l]]
+                f_deactfun_rav_l = f_global_rav[l][l][f_numactive[l]:]
+                if l == lv + 1: # first prolongation is a special case
+                    # get prolongation matrix for these indices
+                    P_work_act = P[l-1][np.ix_(f_actfun_rav_l, replaced_c_actfun_rav[lv])]
+                    P_work_deact = P[l-1][np.ix_(f_deactfun_rav_l, replaced_c_actfun_rav[lv])]
+                else: # standard case: propagate deactivated prolongation
+                    # get prolongation matrix for these indices
+                    P_work_act = P[l-1][np.ix_(f_actfun_rav_l, f_deactfun_rav_lm1)] @ P_current
+                    P_work_deact = P[l-1][np.ix_(f_deactfun_rav_l, f_deactfun_rav_lm1)] @ P_current
+                # update output matrix
+                out[np.ix_(f_actfun_mat_level[l],replaced_c_actfun_mat_level[lv])] += P_work_act
+                if len(f_deactfun_rav_l)==0: # no more functions to prolongate on this level
+                    break
+                # propagate deactivated prolongation
+                P_current = P_work_deact
+                # provide old deactivated indices for next iteration
+                f_deactfun_rav_lm1 = f_deactfun_rav_l 
+        return out.tocsr()
 
     def represent_fine(self, lv=None, truncate=None, rows=None, restrict=False):
         """Compute a matrix which represents HB- or THB-spline basis functions in terms of

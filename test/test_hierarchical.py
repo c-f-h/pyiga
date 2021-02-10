@@ -324,3 +324,16 @@ def test_comparison():
     assert hs1 == hs1_
     assert hs2 == hs2_
     assert hs3 == hs3_
+
+
+def test_prolongate_to_HSpace():
+    hs_fine = create_example_hspace(p=3, dim=2, n0=8, num_levels=5)
+    hs_coarse = hs_fine.copy()
+    for i in reversed(range(hs_fine.numlevels)):
+        hs_fine.refine_region(i, lambda *X: X[0] <= X[1])
+    u_coarse_vec = rand(hs_coarse.numdofs)
+    u_coarse = HSplineFunc(hs_coarse, u_coarse_vec)
+    u_fine_vec = hs_coarse.prolongate_to(hs_fine) @ u_coarse_vec
+    u_fine = HSplineFunc(hs_fine, u_fine_vec)
+    grid = 2 * (np.linspace(0, 1, 20),)
+    assert np.allclose(u_fine.grid_eval(grid), u_coarse.grid_eval(grid))

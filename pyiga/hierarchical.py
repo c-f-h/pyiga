@@ -105,7 +105,7 @@ class TPMesh:
         self.numbf = np.prod(self.numdofs)
         self.meshsupp = tuple(kv.mesh_support_idx_all() for kv in self.kvs)
         self.suppfunc = tuple(_compute_supported_functions(kv,ms) for (kv,ms) in zip(self.kvs, self.meshsupp))
-        
+
     def __eq__(self, other):
         return self.kvs == other.kvs
 
@@ -554,7 +554,7 @@ class HSpace:
 
         Hbdspec_mapping = self._boundary_to_original_matrix_indices(Hbdspec_mapping_indices)
         kvs = tuple(_drop_index_in_tuples(list(self.hmesh.meshes[lv].kvs for lv in range(self.numlevels)), bdspec[0]))
-        
+
         # Crop empty levels
         while not Hbdspec_active_cells[-1]:
             Hbdspec_active_cells.pop()
@@ -897,27 +897,11 @@ class HSpace:
             out.hmesh.deactivated[lv] = set()
             out._clear_cache()
         return out
-    
-    def _crop_empty_levels(self):
-        """Convenience function to remove unnecessary levels."""
-        while not self.hmesh.active[-1]:
-            self.hmesh.active.pop()
-            self.hmesh.deactivated.pop()
-            self.actfun.pop()
-            self.deactfun.pop()
-            self.hmesh.meshes.pop()
-        self._clear_cache()
-    
+
     def copy(self):
         """Generate a copy of self"""
         return copy.deepcopy(self)
-    
-    def __le__(self, other):
-        return self.is_subspace_of(other)
-    
-    def __ge__(self, other):
-        return other.is_subspace_of(self)
-    
+
     def is_subspace_of(self, other, check_kv=True):
         """Determine if `self` is a subspace of `other` by comparing activated and deactivated function indices and knotvectors. Optionally turn off knotvector comparison."""
         self_levels = self.numlevels
@@ -934,10 +918,10 @@ class HSpace:
             if not self.deactfun[lv] <= other.deactfun[lv]:
                 return False
         return True
-    
+
     def __eq__(self, other):
         return self.spans_same_space_as(other)
-    
+
     def spans_same_space_as(self, other, check_kv=True):
         """Dtermine if `self` spans the same space as `other` by comparing activated and deactivated function indices and knotvectors. Optionally turn off knotvector comparision."""
         self_levels = self.numlevels
@@ -968,9 +952,11 @@ class HSpace:
         return self.refine({
             lv: tuple(c for c in self.active_cells(lv) if region_function(*cell_center(c)))
         })
-    
+
     def prolongate_to(self, fine, check_nestedness=False, check_nestedness_kv=False):
-        """Gives the prolongation matrix from `self` to target HSpace `fine`, where self.is_subspace_of(fine) is assumed to hold. Optionally perform custom subspace test."""
+        """Gives the prolongation matrix from `self` to target :class:`HSpace` `fine`,
+        where ``self.is_subspace_of(fine)`` is assumed to hold. Optionally perform
+        custom subspace test."""
         if check_nestedness:
             if not self.is_subspace_of(fine, check_kv=check_nestedness_kv):
                 return
@@ -1033,7 +1019,7 @@ class HSpace:
                 # propagate deactivated prolongation
                 P_current = P_work_deact
                 # provide old deactivated indices for next iteration
-                f_deactfun_rav_lm1 = f_deactfun_rav_l 
+                f_deactfun_rav_lm1 = f_deactfun_rav_l
         return out.tocsr()
 
     def represent_fine(self, lv=None, truncate=None, rows=None, restrict=False):

@@ -295,36 +295,35 @@ def test_comparison():
     hs1 = create_example_hspace(p=3, dim=3, n0=6, num_levels=1)
     hs2 = create_example_hspace(p=3, dim=3, n0=6, num_levels=2)
     hs3 = create_example_hspace(p=3, dim=3, n0=6, num_levels=3)
-    
+
     assert hs0 == hs0.copy()
     assert hs1 == hs1.copy()
     assert hs2 == hs2.copy()
     assert hs3 == hs3.copy()
-    
-    assert hs0 <= hs1
-    assert hs1 <= hs2
-    assert hs2 <= hs3
-    assert hs0 <= hs2
-    assert hs1 <= hs3
-    assert hs0 <= hs3
-    
-    assert not hs1 <= hs0
-    assert not hs2 <= hs1
-    assert not hs3 <= hs2
-    assert not hs2 <= hs0
-    assert not hs3 <= hs1
-    assert not hs3 <= hs0
-    
+
+    assert hs0.is_subspace_of(hs1)
+    assert hs1.is_subspace_of(hs2)
+    assert hs2.is_subspace_of(hs3)
+    assert hs0.is_subspace_of(hs2)
+    assert hs1.is_subspace_of(hs3)
+    assert hs0.is_subspace_of(hs3)
+
+    assert not hs1.is_subspace_of(hs0)
+    assert not hs2.is_subspace_of(hs1)
+    assert not hs3.is_subspace_of(hs2)
+    assert not hs2.is_subspace_of(hs0)
+    assert not hs3.is_subspace_of(hs1)
+    assert not hs3.is_subspace_of(hs0)
+
     hs0_ = hs3.get_virtual_space(0)
     hs1_ = hs3.get_virtual_space(1)
     hs2_ = hs3.get_virtual_space(2)
     hs3_ = hs3.get_virtual_space(3)
-    
+
     assert hs0 == hs0_
     assert hs1 == hs1_
     assert hs2 == hs2_
     assert hs3 == hs3_
-
 
 def test_prolongate_to_HSpace():
     hs_fine = create_example_hspace(p=3, dim=2, n0=8, num_levels=5)
@@ -333,7 +332,8 @@ def test_prolongate_to_HSpace():
         hs_fine.refine_region(i, lambda *X: X[0] <= X[1])
     u_coarse_vec = rand(hs_coarse.numdofs)
     u_coarse = HSplineFunc(hs_coarse, u_coarse_vec)
-    u_fine_vec = hs_coarse.prolongate_to(hs_fine) @ u_coarse_vec
+    P = hs_coarse.prolongate_to(hs_fine, check_nestedness=True, check_nestedness_kv=True)
+    u_fine_vec = P @ u_coarse_vec
     u_fine = HSplineFunc(hs_fine, u_fine_vec)
     grid = 2 * (np.linspace(0, 1, 20),)
     assert np.allclose(u_fine.grid_eval(grid), u_coarse.grid_eval(grid))

@@ -984,8 +984,6 @@ class HSpace:
         if check_nestedness:
             if not self.is_subspace_of(fine, check_kv=check_nestedness_kv):
                 raise RuntimeError('HSpace is not a subspace')
-        # tensor product prolongators
-        P = [fine.tp_prolongation(lv, kron=True) for lv in range(fine.numlevels-1)]
         # maximum mesh level disparity
         disparity = max(self.disparity, fine.disparity)
 
@@ -1024,8 +1022,19 @@ class HSpace:
         # keep common basis function components
         out[np.ix_(common_f, common_c)] = scipy.sparse.eye(len(common_c))
 
+        # determine needed rows for the TP prolongators
+        needed_P_rows = [set() for lv in range(fine.numlevels - 1)]
+        # number of coarse levels from which we need to prolongate
+        coarse_levels = c_numlevels if c_numlevels < f_numlevels else c_numlevels - 1
+        for l in range(1, min(f_numlevels, coarse_levels + disparity + 1)):
+            needed_P_rows[l - 1].update(f_actfun_rav[l])
+            needed_P_rows[l - 1].update(f_deactfun_rav[l])
+        P = [utils.kron_partial(
+                    fine.tp_prolongation(lv), np.array(sorted(needed_P_rows[lv])))
+                for lv in range(fine.numlevels - 1)]
+
         # prolongate replaced actfuns to matching f_actfun for each level `lv`
-        for lv in range(c_numlevels if c_numlevels < f_numlevels else c_numlevels - 1):
+        for lv in range(coarse_levels):
             # prolongate to level l > lv
             for l in range(lv + 1, min(f_numlevels, lv + disparity + 1)):
                 # current raveled active/deactivated indices for fine space

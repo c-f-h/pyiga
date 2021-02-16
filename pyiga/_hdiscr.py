@@ -2,6 +2,43 @@ import numpy as np
 import scipy.sparse
 from . import assemble, compile, mlmatrix
 
+class AssembleCache:
+    """Container class for already assembled tensor product rows of an instance of class HDiscretization.
+    
+    Args:
+        arity: either cache vectors (arity==1) or matrices (arity==2).
+        assembled_rows: list of sets of cached raveled tensor product indices.
+        container: list of csr-vectors (arity==1) or csr-matrices (arity==2).
+        """
+    def __init__(self, arity):
+        assert arity in [1, 2], 'Caching only implemented for vectors and matrices.'
+        self.arity = arity
+        self.assembled_rows = []
+        self.container = []
+        
+    @property
+    def numlevels(self):
+        """Number of cached levels."""
+        return len(self.assembled_rows)
+    
+    def _add_level(self):
+        """Add an empty level."""
+        self.assembled_rows.append(set())
+        self.container.append(None)
+        
+    def guarantee_numlevels(self, L):
+        """Add empty levels, until self.numlevels==L."""
+        while self.numlevels < L:
+            self._add_level()
+            
+    def initiate_level(self, lv, numdofs):
+        """Depending on self.arity, add a proper empty container (matrix or vector) to level lv. Do nothing if not self.container(lv)==None."""
+        self.guarantee_numlevels(lv+1)
+        if not self.container[lv] == None:
+            return
+        else:
+            self.container[lv] = scipy.sparse.csr_matrix(self.arity * (numdofs,))
+
 def _assemble_partial_rows(asm, row_indices):
     """Assemble a submatrix which contains only the given rows."""
     kvs0, kvs1 = asm.kvs
@@ -18,6 +55,7 @@ class HDiscretization:
         hspace (:class:`HSpace`): the HB- or THB-spline space in which to discretize
         vform (:class:`.VForm`): the variational form describing the problem
         asm_args (dict): a dictionary which provides named inputs for the assembler. Most
+        cache: Instance of class AssembleCache.
             problems will require at least a geometry map; this can be given in
             the form ``{'geo': geo}``, where ``geo`` is a geometry function
             defined using the :mod:`pyiga.geometry` module. Further inputs
@@ -27,12 +65,13 @@ class HDiscretization:
             The assemblers both for the matrix and any linear functionals will draw
             their input arguments from this dict.
     """
-    def __init__(self, hspace, vform, asm_args):
+    def __init__(self, hspace, vform, asm_args, cache=None):
         self.hs = hspace
         self.truncate = hspace.truncate
         self.vf = vform
         self.asm_args = asm_args
         self.asm_class = None
+        self.cache=cache
 
     def _assemble_level(self, k, rows=None, bbox=None):
         if rows is not None and len(rows) == 0:
@@ -73,6 +112,7 @@ class HDiscretization:
             return (T.T @ A_hb @ T).tocsr()
         else:
             hs = self.hs
+            cache = self.cache
             # compute dofs interacting with active dofs on each level
             neighbors = hs.cell_supp_indices(remove_dirichlet=False)
             # interactions on the same level are handled separately, so remove them
@@ -93,8 +133,10 @@ class HDiscretization:
                 to_assemble.append(indices | hs.actfun[k])
 
                 # compute a bounding box for the supports of all functions to be assembled
-                bboxes.append(self._bbox_for_functions(k, to_assemble[-1]))
+                if not isinstance(cache, AssembleCache):
+                    bboxes.append(self._bbox_for_functions(k, to_assemble[-1]))
 
+            
             # convert them to raveled form
             to_assemble = hs.ravel_indices(to_assemble)
             interlevel_ix = hs.ravel_indices(interlevel_ix)
@@ -110,8 +152,25 @@ class HDiscretization:
             new = [np.arange(sum(na[:k]), sum(na[:k+1])) for k in range(hs.numlevels)]
 
             kvs = tuple(hs.knotvectors(lv) for lv in range(hs.numlevels))
-            As = [self._assemble_level(k, rows=to_assemble[k], bbox=bboxes[k])
+            
+            if not isinstance(cache, AssembleCache):
+                As = [self._assemble_level(k, rows=to_assemble[k], bbox=bboxes[k])
                     for k in range(hs.numlevels)]
+            else:
+                assert cache.arity == 2, 'No matrix cache.'
+                cache.guarantee_numlevels(hs.numlevels)
+                still_to_assemble = []
+                for k in range(hs.numlevels):
+                    cache.initiate_level(k, np.product(self.hs.mesh(k).numdofs))
+                    still_to_assemble.append(np.sort(np.array(list(set(to_assemble[k]) - cache.assembled_rows[k]))))
+                    
+                still_to_assemble_index = hs.unravel_indices(still_to_assemble)
+                for k in range(hs.numlevels):
+                    bboxes.append(self._bbox_for_functions(k, still_to_assemble_index[k]))
+                    cache.assembled_rows[k] |= set(still_to_assemble[k])
+                    cache.container[k] += self._assemble_level(k, rows=still_to_assemble[k], bbox=bboxes[k])
+                As = cache.container
+                
             # I_hb[k]: maps HB-coefficients to TP coefficients on level k
             I_hb = [hs.represent_fine(lv=k, truncate=False, rows=to_assemble[k]) for k in range(hs.numlevels)]
 

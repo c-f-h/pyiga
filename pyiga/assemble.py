@@ -876,8 +876,8 @@ def assemble(problem, kvs, args=None, bfuns=None, symmetric=False, format='csr',
             space).
 
             This argument is only used if `problem` is given as a string.
-            
-        cache: Instance of class AssembleCache.
+
+        cache: optional instance of :class:`AssembleCache`
 
     For the meaning of the remaining arguments and the format of the output,
     refer to :func:`assemble_entries`.

@@ -4,7 +4,7 @@ from . import assemble, compile, mlmatrix
 
 class AssembleCache:
     """Container class for already assembled tensor product rows of an instance of class HDiscretization.
-    
+
     Args:
         arity: either cache vectors (arity==1) or matrices (arity==2).
         assembled_rows: list of sets of cached raveled tensor product indices.
@@ -15,25 +15,26 @@ class AssembleCache:
         self.arity = arity
         self.assembled_rows = []
         self.container = []
-        
+
     @property
     def numlevels(self):
         """Number of cached levels."""
         return len(self.assembled_rows)
-    
+
     def _add_level(self):
         """Add an empty level."""
         self.assembled_rows.append(set())
         self.container.append(None)
-        
-    def guarantee_numlevels(self, L):
-        """Add empty levels, until self.numlevels==L."""
+
+    def ensure_levels(self, L):
+        """Add empty levels until ``self.numlevels == L``."""
         while self.numlevels < L:
             self._add_level()
-            
+
     def initiate_level(self, lv, numdofs):
-        """Depending on self.arity, add a proper empty container (matrix or vector) to level lv. Do nothing if not self.container(lv)==None."""
-        self.guarantee_numlevels(lv+1)
+        """Depending on `self.arity`, add a proper empty container (matrix or
+        vector) to level lv. Do nothing if not self.container(lv)==None."""
+        self.ensure_levels(lv+1)
         if not self.container[lv] == None:
             return
         else:
@@ -136,7 +137,6 @@ class HDiscretization:
                 if not isinstance(cache, AssembleCache):
                     bboxes.append(self._bbox_for_functions(k, to_assemble[-1]))
 
-            
             # convert them to raveled form
             to_assemble = hs.ravel_indices(to_assemble)
             interlevel_ix = hs.ravel_indices(interlevel_ix)
@@ -152,25 +152,25 @@ class HDiscretization:
             new = [np.arange(sum(na[:k]), sum(na[:k+1])) for k in range(hs.numlevels)]
 
             kvs = tuple(hs.knotvectors(lv) for lv in range(hs.numlevels))
-            
+
             if not isinstance(cache, AssembleCache):
                 As = [self._assemble_level(k, rows=to_assemble[k], bbox=bboxes[k])
                     for k in range(hs.numlevels)]
             else:
                 assert cache.arity == 2, 'No matrix cache.'
-                cache.guarantee_numlevels(hs.numlevels)
+                cache.ensure_levels(hs.numlevels)
                 still_to_assemble = []
                 for k in range(hs.numlevels):
                     cache.initiate_level(k, np.product(self.hs.mesh(k).numdofs))
                     still_to_assemble.append(np.sort(np.array(list(set(to_assemble[k]) - cache.assembled_rows[k]))))
-                    
+
                 still_to_assemble_index = hs.unravel_indices(still_to_assemble)
                 for k in range(hs.numlevels):
                     bboxes.append(self._bbox_for_functions(k, still_to_assemble_index[k]))
                     cache.assembled_rows[k] |= set(still_to_assemble[k])
                     cache.container[k] += self._assemble_level(k, rows=still_to_assemble[k], bbox=bboxes[k])
                 As = cache.container
-                
+
             # I_hb[k]: maps HB-coefficients to TP coefficients on level k
             I_hb = [hs.represent_fine(lv=k, truncate=False, rows=to_assemble[k]) for k in range(hs.numlevels)]
 

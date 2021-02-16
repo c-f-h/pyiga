@@ -8,7 +8,7 @@ class AssembleCache:
     Args:
         arity: either cache vectors (arity==1) or matrices (arity==2).
         assembled_rows: list of sets of cached raveled tensor product indices.
-        container: list of csr-vectors (arity==1) or csr-matrices (arity==2).
+        container: list of vectors (arity==1) or csr-matrices (arity==2).
         """
     def __init__(self, arity):
         assert arity in [1, 2], 'Caching only implemented for vectors and matrices.'
@@ -33,11 +33,13 @@ class AssembleCache:
 
     def initiate_level(self, lv, numdofs):
         """Depending on `self.arity`, add a proper empty container (matrix or
-        vector) to level lv. Do nothing if not self.container(lv)==None."""
+        vector) to level `lv`. Do nothing if ``self.container(lv) is not None``."""
         self.ensure_levels(lv+1)
-        if not self.container[lv] == None:
+        if self.container[lv] is not None:
             return
-        else:
+        if self.arity == 1:
+            self.container[lv] = np.zeros(numdofs)
+        elif self.arity == 2:
             self.container[lv] = scipy.sparse.csr_matrix(self.arity * (numdofs,))
 
 def _assemble_partial_rows(asm, row_indices):
@@ -56,7 +58,6 @@ class HDiscretization:
         hspace (:class:`HSpace`): the HB- or THB-spline space in which to discretize
         vform (:class:`.VForm`): the variational form describing the problem
         asm_args (dict): a dictionary which provides named inputs for the assembler. Most
-        cache: Instance of class AssembleCache.
             problems will require at least a geometry map; this can be given in
             the form ``{'geo': geo}``, where ``geo`` is a geometry function
             defined using the :mod:`pyiga.geometry` module. Further inputs
@@ -65,6 +66,7 @@ class HDiscretization:
 
             The assemblers both for the matrix and any linear functionals will draw
             their input arguments from this dict.
+        cache: optional instance of :class:`AssembleCache`
     """
     def __init__(self, hspace, vform, asm_args, cache=None):
         self.hs = hspace
@@ -72,7 +74,7 @@ class HDiscretization:
         self.vf = vform
         self.asm_args = asm_args
         self.asm_class = None
-        self.cache=cache
+        self.cache = cache
 
     def _assemble_level(self, k, rows=None, bbox=None):
         if rows is not None and len(rows) == 0:
@@ -134,7 +136,7 @@ class HDiscretization:
                 to_assemble.append(indices | hs.actfun[k])
 
                 # compute a bounding box for the supports of all functions to be assembled
-                if not isinstance(cache, AssembleCache):
+                if not cache:
                     bboxes.append(self._bbox_for_functions(k, to_assemble[-1]))
 
             # convert them to raveled form
@@ -153,7 +155,7 @@ class HDiscretization:
 
             kvs = tuple(hs.knotvectors(lv) for lv in range(hs.numlevels))
 
-            if not isinstance(cache, AssembleCache):
+            if not cache:
                 As = [self._assemble_level(k, rows=to_assemble[k], bbox=bboxes[k])
                     for k in range(hs.numlevels)]
             else:

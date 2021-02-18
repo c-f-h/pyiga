@@ -122,6 +122,13 @@ def test_hb_to_thb():
     T_inv = hs.hb_to_thb()
     assert np.allclose((T_inv @ T).A, np.eye(hs.numdofs))
 
+def test_ravel():
+    hs = create_example_hspace(p=3, dim=2, n0=5, disparity=np.inf, num_levels=2)
+    act = hs.active_functions()
+    rav = hs.ravel_indices(act)
+    unrav = hs.unravel_indices(rav)
+    assert act == unrav
+
 def test_truncate():
     hs = create_example_hspace(p=4, dim=2, n0=4, disparity=np.inf, num_levels=3)
     for k in range(hs.numlevels - 1):

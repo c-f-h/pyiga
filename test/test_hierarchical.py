@@ -204,6 +204,29 @@ def test_hierarchical_assemble():
     f2 = assemble.assemble('f * v * dx', hs, f=f, geo=geo)
     assert np.allclose(f_hb, f2)
 
+def test_cached_assemble():
+    # start with uniform space
+    # TODO: check why this fails for p<4 (also in test_hierarchical_assemble)
+    hs = create_example_hspace(p=4, dim=2, n0=4, disparity=1, num_levels=0)
+    geo = geometry.bspline_quarter_annulus()
+
+    from pyiga._hdiscr import AssembleCache
+    cache = AssembleCache()
+
+    for k in range(3):
+        # refine level k and assemble
+        hs.refine_region(k, lambda *X: min(X) > 1 - 0.5**(k + 1))
+        hdiscr = HDiscretization(hs, vform.stiffness_vf(dim=2), {'geo': geo}, cache=cache)
+        A = hdiscr.assemble_matrix()
+
+    assert cache.assembled_rows[0] == set(range(62)) - set((54, 55))
+
+    # compute matrix on the finest level for comparison
+    A_fine = assemble.stiffness(hs.knotvectors(-1), geo=geo)
+    I_hb = hs.represent_fine()
+    A_hb = I_hb.T @ A_fine @ I_hb
+    assert np.allclose(A.A, A_hb.A)
+
 def test_grid_eval():
     hs = create_example_hspace(p=3, dim=2, n0=6, num_levels=3)
     u = rand(hs.numdofs)

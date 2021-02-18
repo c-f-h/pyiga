@@ -517,6 +517,12 @@ class HSpace:
             for lv in range(self.numlevels)
         )
 
+    def unravel_on_level(self, lv, indices):
+        if len(indices) == 0:
+            indices = np.arange(0)  # avoid problems with dtypes of empty arrays
+        tuple_of_arrays = np.unravel_index(indices, self.mesh(lv).numdofs, order='C')
+        return set(tuple_index for tuple_index in zip(*tuple_of_arrays))
+
     def unravel_indices(self, indices):
         """Given a list `indices` which contains, per level, a array of
         raveled function indices on that level, return a list of sets with the
@@ -524,8 +530,7 @@ class HSpace:
 
         See :func:`numpy.unravel_index` for details on the unraveling operation.
         """
-        aux = list(np.array(np.unravel_index(indices[lv], self.mesh(lv).numdofs, order='C')).T if len(indices[lv]) else np.arange(0) for lv in range(self.numlevels))
-        return list(set(tuple(index) for index in indices) for indices in aux)
+        return [self.unravel_on_level(lv, indices[lv]) for lv in range(self.numlevels)]
 
     def active_indices(self):
         """Return a tuple which contains, per level, the raveled (sequential) indices of

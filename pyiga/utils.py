@@ -305,3 +305,17 @@ def progress_bar(enable=True):
         return tqdm.tqdm
     else:
         return _DummyPbar
+
+class RowCachedMatrix:
+    def __init__(self, shape):
+        self.shape = tuple(shape)
+        self.A = scipy.sparse.csr_matrix(self.shape)
+        self.rows = set()
+
+    def missing_rows(self, rows):
+        """Return an array of those given rows which are not yet cached."""
+        return np.array(sorted(set(rows) - self.rows))
+
+    def add_rows(self, rows, B):
+        self.rows.update(rows)
+        self.A += B

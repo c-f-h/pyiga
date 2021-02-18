@@ -1246,6 +1246,37 @@ class HSpace:
         Ps = self.hmesh.P[lv]
         return utils.multi_kron_sparse(Ps) if kron else Ps
 
+    def _act_deact_ravel(self, lv):
+        af = self.ravel_on_level(lv, self.actfun[lv])
+        df = self.ravel_on_level(lv, self.deactfun[lv])
+        indices = np.concatenate((af, df))
+        indices.sort()
+        return indices
+
+    def lean_prolongator(self, lv, return_columns=False, format='csc'):
+        """Compute a prolongation matrix from tensor product level `lv` to
+        `lv+1` which has only those columns filled which correspond to active
+        or deactivated basis functions.
+        """
+        indices = self._act_deact_ravel(lv)
+        P = utils.kron_partial(self.hmesh.P[lv], indices, columnwise=True, format=format)
+        if return_columns:
+            return P, indices
+        else:
+            return P
+
+    def update_prolongator_cache(self, P_cache):
+        for lv in range(self.numlevels - 1):
+            if len(P_cache) <= lv:
+                P, cols = self.lean_prolongator(lv, return_columns=True)
+                P_cache.append(utils.RowCachedMatrix(P.shape))
+                P_cache[-1].add_rows(cols, P)
+            else:
+                indices = self._act_deact_ravel(lv)
+                cols = P_cache[lv].missing_rows(indices)
+                P_update = utils.kron_partial(self.hmesh.P[lv], cols, columnwise=True, format='csc')
+                P_cache[lv].add_rows(cols, P_update)
+
     def incidence_matrix(self):
         """Compute the incidence matrix which contains one row per active basis
         function and one column per active cell in the hierarchical mesh. An

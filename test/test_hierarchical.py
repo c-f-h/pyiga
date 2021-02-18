@@ -195,6 +195,12 @@ def test_hierarchical_assemble():
     A_hb = (I_hb.T @ A_fine @ I_hb)
     assert np.allclose(A.A, A_hb.A)
     #
+    hdiscr = HDiscretization(hs, vform.mass_vf(dim=2), {'geo': geo})
+    M = hdiscr.assemble_matrix()
+    M_fine = assemble.mass(hs.knotvectors(-1), geo=geo)
+    M_hb = (I_hb.T @ M_fine @ I_hb)
+    assert np.allclose(M.A, M_hb.A)
+    #
     A3 = assemble.assemble(vform.stiffness_vf(dim=2), hs, geo=geo)
     assert np.allclose(A.A, A3.A)
     #
@@ -212,10 +218,12 @@ def test_cached_assemble():
 
     cache = []
 
+    hdiscr = HDiscretization(hs, vform.stiffness_vf(dim=2), {'geo': geo}, cache=cache)
+
     for k in range(3):
         # refine level k and assemble
         hs.refine_region(k, lambda *X: min(X) > 1 - 0.5**(k + 1))
-        hdiscr = HDiscretization(hs, vform.stiffness_vf(dim=2), {'geo': geo}, cache=cache)
+        hdiscr.space_updated()
         A = hdiscr.assemble_matrix()
 
     assert cache[0].rows == set(range(62)) - set((54, 55))

@@ -496,6 +496,14 @@ class HSpace:
         """Return the extents (as a tuple of min/max pairs) of the cell `c` on level `lv`."""
         return self.hmesh.meshes[lv].cell_extents(c)
 
+    def ravel_on_level(self, lv, indices):
+        # if the indices are given as sets, order them first
+        if isinstance(indices, set):
+            indices = sorted(indices)
+        return (np.ravel_multi_index(np.array(indices).T, self.mesh(lv).numdofs, order='C')
+                if len(indices)
+                else np.arange(0))
+
     def ravel_indices(self, indices):
         """Given a list `indices` which contains, per level, a list or set of
         function multi-indices on that level, return a list of arrays with the
@@ -508,14 +516,7 @@ class HSpace:
 
         See :func:`numpy.ravel_multi_index` for details on the raveling operation.
         """
-        # if the indices are given as sets, order them first
-        indices = [sorted(ix) if isinstance(ix, set) else ix for ix in indices]
-        return tuple(
-            (np.ravel_multi_index(np.array(indices[lv]).T, self.mesh(lv).numdofs, order='C')
-                if len(indices[lv])
-                else np.arange(0))
-            for lv in range(self.numlevels)
-        )
+        return tuple(self.ravel_on_level(lv, indices[lv]) for lv in range(self.numlevels))
 
     def unravel_on_level(self, lv, indices):
         if len(indices) == 0:

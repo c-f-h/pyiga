@@ -210,8 +210,7 @@ def test_cached_assemble():
     hs = create_example_hspace(p=4, dim=2, n0=4, disparity=1, num_levels=0)
     geo = geometry.bspline_quarter_annulus()
 
-    from pyiga._hdiscr import AssembleCache
-    cache = AssembleCache()
+    cache = []
 
     for k in range(3):
         # refine level k and assemble
@@ -219,7 +218,7 @@ def test_cached_assemble():
         hdiscr = HDiscretization(hs, vform.stiffness_vf(dim=2), {'geo': geo}, cache=cache)
         A = hdiscr.assemble_matrix()
 
-    assert cache.assembled_rows[0] == set(range(62)) - set((54, 55))
+    assert cache[0].rows == set(range(62)) - set((54, 55))
 
     # compute matrix on the finest level for comparison
     A_fine = assemble.stiffness(hs.knotvectors(-1), geo=geo)

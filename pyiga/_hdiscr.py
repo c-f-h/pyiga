@@ -2,45 +2,19 @@ import numpy as np
 import scipy.sparse
 from . import assemble, compile, mlmatrix
 
-class AssembleCache:
-    """Container class for already assembled tensor product rows of an instance of class HDiscretization.
+class RowCachedMatrix:
+    def __init__(self, shape):
+        self.shape = tuple(shape)
+        self.A = scipy.sparse.csr_matrix(self.shape)
+        self.rows = set()
 
-    Args:
-        arity: either cache vectors (arity==1) or matrices (arity==2).
-        assembled_rows: list of sets of cached raveled tensor product indices.
-        container: list of vectors (arity==1) or csr-matrices (arity==2).
-        """
-    def __init__(self, arity):
-        assert arity in [1, 2], 'Caching only implemented for vectors and matrices.'
-        self.arity = arity
-        self.assembled_rows = []
-        self.container = []
+    def missing_rows(self, rows):
+        """Return an array of those given rows which are not yet cached."""
+        return np.array(sorted(set(rows) - self.rows))
 
-    @property
-    def numlevels(self):
-        """Number of cached levels."""
-        return len(self.assembled_rows)
-
-    def _add_level(self):
-        """Add an empty level."""
-        self.assembled_rows.append(set())
-        self.container.append(None)
-
-    def ensure_levels(self, L):
-        """Add empty levels until ``self.numlevels == L``."""
-        while self.numlevels < L:
-            self._add_level()
-
-    def initiate_level(self, lv, numdofs):
-        """Depending on `self.arity`, add a proper empty container (matrix or
-        vector) to level `lv`. Do nothing if ``self.container(lv) is not None``."""
-        self.ensure_levels(lv+1)
-        if self.container[lv] is not None:
-            return
-        if self.arity == 1:
-            self.container[lv] = np.zeros(numdofs)
-        elif self.arity == 2:
-            self.container[lv] = scipy.sparse.csr_matrix(self.arity * (numdofs,))
+    def add_rows(self, rows, B):
+        self.rows.update(rows)
+        self.A += B
 
 def _assemble_partial_rows(asm, row_indices):
     """Assemble a submatrix which contains only the given rows."""
@@ -136,7 +110,7 @@ class HDiscretization:
                 to_assemble.append(indices | hs.actfun[k])
 
                 # compute a bounding box for the supports of all functions to be assembled
-                if not cache:
+                if cache is None:
                     bboxes.append(self._bbox_for_functions(k, to_assemble[-1]))
 
             # convert them to raveled form
@@ -155,23 +129,26 @@ class HDiscretization:
 
             kvs = tuple(hs.knotvectors(lv) for lv in range(hs.numlevels))
 
-            if not cache:
+            if cache is None:
                 As = [self._assemble_level(k, rows=to_assemble[k], bbox=bboxes[k])
                     for k in range(hs.numlevels)]
             else:
-                assert cache.arity == 2, 'No matrix cache.'
-                cache.ensure_levels(hs.numlevels)
-                still_to_assemble = []
-                for k in range(hs.numlevels):
-                    cache.initiate_level(k, np.product(self.hs.mesh(k).numdofs))
-                    still_to_assemble.append(np.sort(np.array(list(set(to_assemble[k]) - cache.assembled_rows[k]))))
+                # fill the cache with empty levels as needed
+                while len(cache) < hs.numlevels:
+                    lv = len(cache)
+                    n = np.product(hs.mesh(lv).numdofs)
+                    cache.append(RowCachedMatrix((n, n)))
 
-                still_to_assemble_index = hs.unravel_indices(still_to_assemble)
+                # assemble missing rows on all levels
                 for k in range(hs.numlevels):
-                    bboxes.append(self._bbox_for_functions(k, still_to_assemble_index[k]))
-                    cache.assembled_rows[k] |= set(still_to_assemble[k])
-                    cache.container[k] += self._assemble_level(k, rows=still_to_assemble[k], bbox=bboxes[k])
-                As = cache.container
+                    # determine the not yet assembled rows that we need
+                    missing = cache[k].missing_rows(to_assemble[k])
+                    missing_index = hs.unravel_on_level(k, missing)
+                    bbox = self._bbox_for_functions(k, missing_index)
+                    # assemble them and add them to the cache
+                    cache[k].add_rows(missing,
+                            self._assemble_level(k, rows=missing, bbox=bbox))
+                As = [cache_lv.A for cache_lv in cache]
 
             # I_hb[k]: maps HB-coefficients to TP coefficients on level k
             I_hb = [hs.represent_fine(lv=k, truncate=False, rows=to_assemble[k]) for k in range(hs.numlevels)]

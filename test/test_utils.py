@@ -37,6 +37,7 @@ def test_BijectiveIndex():
 def test_kron_partial():
     As = (_random_banded(5, 1), _random_banded(4, 2), _random_banded(6, 3))
     X = multi_kron_sparse(As)
+    #
     X_partial = kron_partial(As, rows=list(range(17, 25)))
     assert np.allclose(X[17:25].A, X_partial[17:25].A)
     assert X_partial[:17].nnz == 0
@@ -52,6 +53,14 @@ def test_kron_partial():
     X_partial = kron_partial(As, rows=[], restrict=True)
     assert X_partial.shape == (0, X.shape[1])
     assert X_partial.nnz == 0
+    #
+    X_partial = kron_partial(As, list(range(17, 25)), columnwise=True)
+    assert np.allclose(X[:, 17:25].A, X_partial[:, 17:25].A)
+    assert X_partial[:, :17].nnz == 0
+    assert X_partial[:, 25:(5*4*6)].nnz == 0
+    #
+    X_partial = kron_partial(As, list(range(17, 25)), columnwise=True, restrict=True)
+    assert np.allclose(X[:, 17:25].A, X_partial.A)
 
 def test_CSRRowSlice():
     A = scipy.sparse.rand(100, 100, density=0.05, format='csr')

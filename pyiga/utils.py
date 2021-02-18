@@ -66,23 +66,34 @@ def multi_kron_sparse(As, format='csr'):
     else:
         return scipy.sparse.kron(As[0], multi_kron_sparse(As[1:], format=format), format=format)
 
-def kron_partial(As, rows, restrict=False, format='csr'):
+def kron_partial(As, rows, restrict=False, columnwise=False, format='csr'):
     """Compute a partial Kronecker product between the sparse matrices
     `As = (A_1, ..., A_k)`, filling only the given `rows` in the output matrix.
 
     If `restrict=True`, a smaller matrix is returned which contains only the
     given rows of the original matrix. Otherwise, a matrix with the same shape
     as the full Kronecker product is returned.
+
+    If `columnwise=True`, the second argument is treated as a list of columns
+    instead.
     """
     from .mlmatrix import MLStructure
     # determine the I,J indices of the nonzeros in the given rows
     S = MLStructure.from_kronecker(As)
-    out_shape = (len(rows), S.shape[1]) if restrict else S.shape
 
-    if restrict:
-        I, J, I_idx = S.nonzeros_for_rows(rows, renumber_rows=True)
+    if columnwise:
+        out_shape = (S.shape[0], len(rows)) if restrict else S.shape
+        if restrict:
+            I, J, J_idx = S.nonzeros_for_columns(rows, renumber_cols=True)
+        else:
+            I, J = S.nonzeros_for_columns(rows)
     else:
-        I, J = S.nonzeros_for_rows(rows)
+        out_shape = (len(rows), S.shape[1]) if restrict else S.shape
+        if restrict:
+            I, J, I_idx = S.nonzeros_for_rows(rows, renumber_rows=True)
+        else:
+            I, J = S.nonzeros_for_rows(rows)
+
     if len(I) == 0:     # no nonzeros? return zero matrix
         return scipy.sparse.csr_matrix(out_shape)
 
@@ -97,7 +108,10 @@ def kron_partial(As, rows, restrict=False, format='csr'):
     # compute the Kronecker product as the product of the factors
     entries = functools.reduce(operator.mul, values)
     if restrict:
-        I = I_idx
+        if columnwise:
+            J = J_idx
+        else:
+            I = I_idx
     return scipy.sparse.coo_matrix((entries, (I,J)), shape=out_shape).asformat(format)
 
 def cartesian_product(arrays):

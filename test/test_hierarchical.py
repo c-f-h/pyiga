@@ -183,6 +183,12 @@ def test_incidence():
              [0,0,  0,0,  1,1,1,0],
              [0,0,  0,0,  0,1,1,1]])
 
+def test_cached_represent_fine():
+    hs = create_example_hspace(p=3, dim=2, n0=4, disparity=np.inf, num_levels=3)
+    hdiscr = HDiscretization(hs, vform.stiffness_vf(dim=2), {'geo': geometry.unit_square()})
+    P1 = hs.represent_fine()
+    P2 = hdiscr.represent_fine()
+    assert np.allclose(P1.A, P2.A)
 
 def test_hierarchical_assemble():
     hs = create_example_hspace(p=4, dim=2, n0=4, disparity=1, num_levels=3)
@@ -200,6 +206,8 @@ def test_hierarchical_assemble():
     M_fine = assemble.mass(hs.knotvectors(-1), geo=geo)
     M_hb = (I_hb.T @ M_fine @ I_hb)
     assert np.allclose(M.A, M_hb.A)
+    M_3 = assemble.assemble(vform.mass_vf(dim=2), hs, geo=geo)
+    assert np.allclose(M.A, M_3.A)
     #
     A3 = assemble.assemble(vform.stiffness_vf(dim=2), hs, geo=geo)
     assert np.allclose(A.A, A3.A)
@@ -209,6 +217,17 @@ def test_hierarchical_assemble():
     f_hb = assemble.inner_products(hs.knotvectors(-1), f, f_physical=True, geo=geo).ravel() @ I_hb
     f2 = assemble.assemble('f * v * dx', hs, f=f, geo=geo)
     assert np.allclose(f_hb, f2)
+
+def test_truncated_hierarchical_assemble():
+    hs = create_example_hspace(p=4, dim=2, n0=4, disparity=1, num_levels=3, truncate=True)
+    geo = geometry.bspline_quarter_annulus()
+    hdiscr = HDiscretization(hs, vform.stiffness_vf(dim=2), {'geo': geo})
+    A = hdiscr.assemble_matrix()
+    # compute matrix on the finest level for comparison
+    A_fine = assemble.stiffness(hs.knotvectors(-1), geo=geo)
+    I_hb = hs.represent_fine(truncate=True)
+    A_hb = (I_hb.T @ A_fine @ I_hb)
+    assert np.allclose(A.A, A_hb.A)
 
 def test_cached_assemble():
     # start with uniform space

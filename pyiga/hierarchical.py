@@ -496,6 +496,14 @@ class HSpace:
         """Return the extents (as a tuple of min/max pairs) of the cell `c` on level `lv`."""
         return self.hmesh.meshes[lv].cell_extents(c)
 
+    def ravel_on_level(self, lv, indices):
+        # if the indices are given as sets, order them first
+        if isinstance(indices, set):
+            indices = sorted(indices)
+        return (np.ravel_multi_index(np.array(indices).T, self.mesh(lv).numdofs, order='C')
+                if len(indices)
+                else np.arange(0))
+
     def ravel_indices(self, indices):
         """Given a list `indices` which contains, per level, a list or set of
         function multi-indices on that level, return a list of arrays with the
@@ -508,14 +516,22 @@ class HSpace:
 
         See :func:`numpy.ravel_multi_index` for details on the raveling operation.
         """
-        # if the indices are given as sets, order them first
-        indices = [sorted(ix) if isinstance(ix, set) else ix for ix in indices]
-        return tuple(
-            (np.ravel_multi_index(np.array(indices[lv]).T, self.mesh(lv).numdofs, order='C')
-                if len(indices[lv])
-                else np.arange(0))
-            for lv in range(self.numlevels)
-        )
+        return tuple(self.ravel_on_level(lv, indices[lv]) for lv in range(self.numlevels))
+
+    def unravel_on_level(self, lv, indices):
+        if len(indices) == 0:
+            indices = np.arange(0)  # avoid problems with dtypes of empty arrays
+        tuple_of_arrays = np.unravel_index(indices, self.mesh(lv).numdofs, order='C')
+        return set(tuple_index for tuple_index in zip(*tuple_of_arrays))
+
+    def unravel_indices(self, indices):
+        """Given a list `indices` which contains, per level, a array of
+        raveled function indices on that level, return a list of sets with the
+        corresponding function multi-indices.
+
+        See :func:`numpy.unravel_index` for details on the unraveling operation.
+        """
+        return [self.unravel_on_level(lv, indices[lv]) for lv in range(self.numlevels)]
 
     def active_indices(self):
         """Return a tuple which contains, per level, the raveled (sequential) indices of
@@ -1229,6 +1245,37 @@ class HSpace:
         """
         Ps = self.hmesh.P[lv]
         return utils.multi_kron_sparse(Ps) if kron else Ps
+
+    def _act_deact_ravel(self, lv):
+        af = self.ravel_on_level(lv, self.actfun[lv])
+        df = self.ravel_on_level(lv, self.deactfun[lv])
+        indices = np.concatenate((af, df))
+        indices.sort()
+        return indices
+
+    def lean_prolongator(self, lv, return_columns=False, format='csc'):
+        """Compute a prolongation matrix from tensor product level `lv` to
+        `lv+1` which has only those columns filled which correspond to active
+        or deactivated basis functions.
+        """
+        indices = self._act_deact_ravel(lv)
+        P = utils.kron_partial(self.hmesh.P[lv], indices, columnwise=True, format=format)
+        if return_columns:
+            return P, indices
+        else:
+            return P
+
+    def update_prolongator_cache(self, P_cache):
+        for lv in range(self.numlevels - 1):
+            if len(P_cache) <= lv:
+                P, cols = self.lean_prolongator(lv, return_columns=True)
+                P_cache.append(utils.RowCachedMatrix(P.shape))
+                P_cache[-1].add_rows(cols, P)
+            else:
+                indices = self._act_deact_ravel(lv)
+                cols = P_cache[lv].missing_rows(indices)
+                P_update = utils.kron_partial(self.hmesh.P[lv], cols, columnwise=True, format='csc')
+                P_cache[lv].add_rows(cols, P_update)
 
     def incidence_matrix(self):
         """Compute the incidence matrix which contains one row per active basis

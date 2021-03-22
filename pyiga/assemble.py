@@ -816,7 +816,7 @@ def assemble_vf(vf, kvs, symmetric=False, format='csr', layout='blocked', args=N
     args.update(kwargs)
     return assemble(vf, kvs, symmetric=symmetric, format=format, layout=layout, args=args)
 
-def _assemble_hspace(problem, hs, args, bfuns=None, symmetric=False, format='csr', layout='blocked'):
+def _assemble_hspace(problem, hs, args, bfuns=None, symmetric=False, format='csr', layout='blocked', cache=None):
     if isinstance(problem, str):
         from . import vform
         problem = vform.parse_vf(problem, hs.knotvectors(0), args=args, bfuns=bfuns)
@@ -824,13 +824,13 @@ def _assemble_hspace(problem, hs, args, bfuns=None, symmetric=False, format='csr
     # TODO: nonsymmetric problems
     # TODO: vector-valued problems
     if problem.arity == 2:
-        hdiscr = HDiscretization(hs, problem, asm_args=args)
+        hdiscr = HDiscretization(hs, problem, asm_args=args, cache=cache)
         return hdiscr.assemble_matrix().asformat(format)
     elif problem.arity == 1:
-        hdiscr = HDiscretization(hs, None, asm_args=args)
+        hdiscr = HDiscretization(hs, None, asm_args=args, cache=cache)
         return hdiscr.assemble_functional(problem)
 
-def assemble(problem, kvs, args=None, bfuns=None, symmetric=False, format='csr', layout='blocked', **kwargs):
+def assemble(problem, kvs, args=None, bfuns=None, symmetric=False, format='csr', layout='blocked', cache=None, **kwargs):
     """Assemble a matrix or vector in a function space.
 
     Args:
@@ -877,6 +877,8 @@ def assemble(problem, kvs, args=None, bfuns=None, symmetric=False, format='csr',
 
             This argument is only used if `problem` is given as a string.
 
+        cache: optional instance of :class:`AssembleCache`
+
     For the meaning of the remaining arguments and the format of the output,
     refer to :func:`assemble_entries`.
     """
@@ -887,7 +889,7 @@ def assemble(problem, kvs, args=None, bfuns=None, symmetric=False, format='csr',
     from .hierarchical import HSpace
     if isinstance(kvs, HSpace):
         return _assemble_hspace(problem, kvs, bfuns=bfuns, symmetric=symmetric,
-                format=format, layout=layout, args=args)
+                format=format, layout=layout, args=args, cache=cache)
     else:
         asm = instantiate_assembler(problem, kvs, args, bfuns)
         return assemble_entries(asm, symmetric=symmetric, format=format, layout=layout)

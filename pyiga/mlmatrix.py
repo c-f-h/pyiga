@@ -184,13 +184,17 @@ class MLStructure:
         else:
             return Is, Js
 
-    def nonzeros_for_columns(self, col_indices):
+    def nonzeros_for_columns(self, col_indices, renumber_cols=False):
         """Compute a pair of index arrays `(I,J)` specifying the locations of
         nonzeros (just like :func:`nonzero`), but containing only those
         nonzeros which lie in the given columns.
         """
-        J, I = self.transpose().nonzeros_for_rows(col_indices)
-        return I, J     # swap I and J because of transpose
+        if renumber_cols:
+            J, I, J_idx = self.transpose().nonzeros_for_rows(col_indices, renumber_rows=True)
+            return I, J, J_idx  # swap I and J because of transpose
+        else:
+            J, I = self.transpose().nonzeros_for_rows(col_indices)
+            return I, J         # swap I and J because of transpose
 
     def sequential_bidx(self):
         # returns a version of bidx with ravelled indices

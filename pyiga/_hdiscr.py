@@ -1,6 +1,6 @@
 import numpy as np
 import scipy.sparse
-from . import assemble, compile, mlmatrix
+from . import assemble, compile, mlmatrix, utils
 
 def _assemble_partial_rows(asm, row_indices):
     """Assemble a submatrix which contains only the given rows."""
@@ -26,13 +26,21 @@ class HDiscretization:
 
             The assemblers both for the matrix and any linear functionals will draw
             their input arguments from this dict.
+        cache: optional instance of :class:`AssembleCache`
     """
-    def __init__(self, hspace, vform, asm_args):
+    def __init__(self, hspace, vform, asm_args, cache=None):
         self.hs = hspace
         self.truncate = hspace.truncate
         self.vf = vform
         self.asm_args = asm_args
         self.asm_class = None
+        self.cache = cache
+        self.P_cache = []
+        self.hs.update_prolongator_cache(self.P_cache)
+
+    def space_updated(self):
+        """Must be called when the underlying :class:`HSpace` has changed."""
+        self.hs.update_prolongator_cache(self.P_cache)
 
     def _assemble_level(self, k, rows=None, bbox=None):
         if rows is not None and len(rows) == 0:
@@ -54,6 +62,45 @@ class HDiscretization:
         else:
             return _assemble_partial_rows(asm, rows)
 
+    def represent_fine(self, lv=None, rows=None, restrict=False):
+        # same as HSpace.represent_fine(), but using prolongator cache
+        if lv == None:
+            lv = self.hs.numlevels - 1
+        assert 0 <= lv < self.hs.numlevels, "Invalid level."
+
+        act_indices = list(self.hs.active_indices()[:lv+1])
+        deact_indices = self.hs.deactivated_indices()[lv]
+        # generate list of raveled active indices of virtual level lv
+        act_indices[lv] = np.concatenate((act_indices[lv], deact_indices))
+
+        fmt = 'csr'         # sparse matrix format to use internally
+
+        blocks = []
+        for k in reversed(range(lv+1)):
+            Nj = self.hs.mesh(k).numbf
+            if k == lv:
+                if rows is None:
+                    P = scipy.sparse.eye(Nj, format='csc')
+                else:
+                    if restrict:
+                        # construct restricted slice of identity matrix
+                        n = len(rows)
+                        P = scipy.sparse.coo_matrix(
+                                (np.ones(n), (np.arange(n), rows)),
+                                shape=(n, Nj)).tocsc()
+                    else:
+                        # construct partial identity matrix which is 1 only on the given rows
+                        n = len(rows)
+                        P = scipy.sparse.coo_matrix(
+                                (np.ones(n), (rows, rows)),
+                                shape=(Nj, Nj)).tocsc()
+            else:
+                P = P.dot(self.P_cache[k].A)
+            blocks.append(P[:, act_indices[k]])
+
+        blocks.reverse()
+        return scipy.sparse.bmat([blocks], format='csr')
+
     def assemble_matrix(self):
         """Assemble the stiffness matrix for the hierarchical discretization and return it.
 
@@ -73,6 +120,7 @@ class HDiscretization:
             return (T.T @ A_hb @ T).tocsr()
         else:
             hs = self.hs
+            cache = self.cache
             # compute dofs interacting with active dofs on each level
             neighbors = hs.cell_supp_indices(remove_dirichlet=False)
             # interactions on the same level are handled separately, so remove them
@@ -93,7 +141,8 @@ class HDiscretization:
                 to_assemble.append(indices | hs.actfun[k])
 
                 # compute a bounding box for the supports of all functions to be assembled
-                bboxes.append(self._bbox_for_functions(k, to_assemble[-1]))
+                if cache is None:
+                    bboxes.append(self._bbox_for_functions(k, to_assemble[-1]))
 
             # convert them to raveled form
             to_assemble = hs.ravel_indices(to_assemble)
@@ -110,10 +159,30 @@ class HDiscretization:
             new = [np.arange(sum(na[:k]), sum(na[:k+1])) for k in range(hs.numlevels)]
 
             kvs = tuple(hs.knotvectors(lv) for lv in range(hs.numlevels))
-            As = [self._assemble_level(k, rows=to_assemble[k], bbox=bboxes[k])
+
+            if cache is None:
+                As = [self._assemble_level(k, rows=to_assemble[k], bbox=bboxes[k])
                     for k in range(hs.numlevels)]
+            else:
+                # fill the cache with empty levels as needed
+                while len(cache) < hs.numlevels:
+                    lv = len(cache)
+                    n = np.product(hs.mesh(lv).numdofs)
+                    cache.append(utils.RowCachedMatrix((n, n)))
+
+                # assemble missing rows on all levels
+                for k in range(hs.numlevels):
+                    # determine the not yet assembled rows that we need
+                    missing = cache[k].missing_rows(to_assemble[k])
+                    missing_index = hs.unravel_on_level(k, missing)
+                    bbox = self._bbox_for_functions(k, missing_index)
+                    # assemble them and add them to the cache
+                    cache[k].add_rows(missing,
+                            self._assemble_level(k, rows=missing, bbox=bbox))
+                As = [cache_lv.A for cache_lv in cache]
+
             # I_hb[k]: maps HB-coefficients to TP coefficients on level k
-            I_hb = [hs.represent_fine(lv=k, truncate=False, rows=to_assemble[k]) for k in range(hs.numlevels)]
+            I_hb = [self.represent_fine(lv=k, rows=to_assemble[k]) for k in range(hs.numlevels)]
 
             # the diagonal block consisting of interactions on the same level
             A_hb_new = [As[k][new_loc[k]][:,new_loc[k]]

@@ -404,8 +404,11 @@ Note that the symbol :data:`dx` still includes the geometry Jacobian, and
 therefore you should not multiply your expression with it if you want to
 integrate over the parameter domain instead of the physical domain.  In this
 case, you should multiply your expression with the attribute
-:attr:`HSpace.GaussWeight` instead, which represents the weight for the Gauss
-quadrature. Usually, the weight is automatically subsumed into :data:`dx`.
+:attr:`VForm.GaussWeight` instead, which represents the weight for the Gauss
+quadrature.  When using :ref:`the textual description <sec-stringbased>`, use
+the keyword ``gw`` for this purpose.  When computing integrals over the
+physical domain, the quadrature weight is automatically subsumed into
+:data:`dx` and does not need to be specified explicitly.
 
 
 .. _sec-surface:

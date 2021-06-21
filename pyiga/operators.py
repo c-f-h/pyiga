@@ -152,7 +152,7 @@ def BlockOperator(ops):
         total height of one input column of operators, and its width is the
         total width of one input row.
 
-    See also :func:`numpy.bmat`, which has analogous functionality for
+    See also :func:`numpy.block`, which has analogous functionality for
     dense matrices.
     """
     M, N = len(ops), len(ops[0])

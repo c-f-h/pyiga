@@ -55,6 +55,9 @@ as follows::
     A = assemble.assemble('inner(grad(u), grad(v)) * dx', kvs,
             bfuns=[('u',2), ('v',2)], geo=geo)
 
+Here :func:`.grad` computes the Jacobian matrices of the vector-valued basis
+functions `u` and `v`, and :func:`.inner` computes their Frobenius product.
+
 In addition to the :ref:`sec-supported` described below, the following
 keywords can be used in the string description:
 

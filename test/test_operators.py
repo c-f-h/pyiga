@@ -16,10 +16,12 @@ def _test_oper(A, B):
 def test_null():
     Z = np.zeros((7,3))
     _test_oper(NullOperator(Z.shape), Z)
+    _test_oper(NullOperator(Z.shape).T, Z.T)
 
 def test_identity():
     I = np.eye(7)
     _test_oper(IdentityOperator(7), I)
+    _test_oper(IdentityOperator(7).T, I)
 
 def test_diagonal():
     diag = rand(10)

@@ -1,13 +1,13 @@
 
-.. |travis| image:: https://travis-ci.org/c-f-h/pyiga.svg?branch=master
-    :target: https://travis-ci.org/c-f-h/pyiga
+.. |ghbuild| image:: https://github.com/c-f-h/pyiga/actions/workflows/python-package.yml/badge.svg
+    :target: https://github.com/c-f-h/pyiga/actions/workflows/python-package.yml
 .. |appveyor| image:: https://ci.appveyor.com/api/projects/status/1enc32o4ts2w9w17/branch/master?svg=true
    :target: https://ci.appveyor.com/project/c-f-h/pyiga
 .. |codecov| image:: https://codecov.io/gh/c-f-h/pyiga/branch/master/graph/badge.svg
   :target: https://codecov.io/gh/c-f-h/pyiga
 
-pyiga |travis| |appveyor| |codecov|
-===================================
+pyiga |ghbuild| |appveyor| |codecov|
+====================================
 
 ``pyiga`` is a Python research toolbox for Isogeometric Analysis. Its current highlights are:
 

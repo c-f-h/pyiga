@@ -34,7 +34,9 @@ class HDiscretization:
         self.asm_args = asm_args
         self.asm_class = None
 
-    def _assemble_level(self, k, rows=None, bbox=None):
+    def _assemble_level(self, k, rows=None, bbox=None, symmetric=False):
+        """Assemble a subset of the rows of the full tensor product stiffness
+        matrix on a given level `k`."""
         if rows is not None and len(rows) == 0:
             # work around a Cython bug with contiguity of 0-sized arrays:
             # https://github.com/cython/cython/issues/2093
@@ -50,11 +52,11 @@ class HDiscretization:
             self.asm_class = compile.compile_vform(self.vf, on_demand=True)
         asm = self.asm_class(self.hs.knotvectors(k), **asm_args)
         if rows is None:
-            return assemble.assemble(asm, symmetric=True)
+            return assemble.assemble(asm, symmetric=symmetric)
         else:
             return _assemble_partial_rows(asm, rows)
 
-    def assemble_matrix(self):
+    def assemble_matrix(self, symmetric=False):
         """Assemble the stiffness matrix for the hierarchical discretization and return it.
 
         Returns:
@@ -66,7 +68,7 @@ class HDiscretization:
             # HACK - overwrite truncate flag and replace it afterwards
             try:
                 self.truncate = False
-                A_hb = self.assemble_matrix()
+                A_hb = self.assemble_matrix(symmetric=symmetric)
             finally:
                 self.truncate = True
             T = self.hs.thb_to_hb()
@@ -109,20 +111,6 @@ class HDiscretization:
             na = tuple(len(ii) for ii in new_loc)
             new = [np.arange(sum(na[:k]), sum(na[:k+1])) for k in range(hs.numlevels)]
 
-            As = [self._assemble_level(k, rows=to_assemble[k], bbox=bboxes[k])
-                    for k in range(hs.numlevels)]
-            # I_hb[k]: maps HB-coefficients to TP coefficients on level k
-            I_hb = [hs.represent_fine(lv=k, truncate=False, rows=to_assemble[k]) for k in range(hs.numlevels)]
-
-            # the diagonal block consisting of interactions on the same level
-            A_hb_new = [As[k][new_loc[k]][:,new_loc[k]]
-                    for k in range(hs.numlevels)]
-            # the off-diagonal blocks which describe interactions with coarser levels
-            A_hb_interlevel = [(I_hb[k][interlevel_ix[k]][:, neighbors[k]].T
-                                @ As[k][interlevel_ix[k]][:, new_loc[k]]
-                                @ I_hb[k][new_loc[k]][:, new[k]])
-                               for k in range(hs.numlevels)]
-
             # assemble the matrix from the levelwise contributions
             coo_I, coo_J, values = [], [], []   # blockwise COO data
 
@@ -135,11 +123,33 @@ class HDiscretization:
                 values.append(B.data)
 
             for k in range(hs.numlevels):
-                # store the k-th diagonal block
-                insert_block(A_hb_new[k], new[k], new[k])
+                # compute the needed rows of the tensor product stiffness matrix
+                A_k = self._assemble_level(k, rows=to_assemble[k], bbox=bboxes[k], symmetric=symmetric)
+
+                # matrix which maps HB-coefficients to TP coefficients on level k
+                I_hb_k = hs.represent_fine(lv=k, truncate=False, rows=to_assemble[k])
+
+                # compute the diagonal block consisting of interactions on the same level
+                A_hb_new = A_k[new_loc[k]][:,new_loc[k]]
+
+                # store the diagonal block
+                insert_block(A_hb_new, new[k], new[k])
+
+                # compute the off-diagonal block(s) which describe interactions with coarser levels
+                A_hb_interlevel = (I_hb_k[interlevel_ix[k]][:, neighbors[k]].T
+                                    @ A_k[interlevel_ix[k]][:, new_loc[k]]
+                                    @ I_hb_k[new_loc[k]][:, new[k]])
+
+                if symmetric:
+                    A_hb_interlevel2 = A_hb_interlevel.T
+                else:
+                    A_hb_interlevel2 = (I_hb_k[new_loc[k]][:, new[k]].T
+                                        @ A_k[new_loc[k]][:, interlevel_ix[k]]
+                                        @ I_hb_k[interlevel_ix[k]][:, neighbors[k]])
+
                 # store the two blocks containing interactions with coarser levels
-                insert_block(A_hb_interlevel[k],   neighbors[k], new[k])
-                insert_block(A_hb_interlevel[k].T, new[k], neighbors[k])
+                insert_block(A_hb_interlevel,  neighbors[k], new[k])
+                insert_block(A_hb_interlevel2, new[k], neighbors[k])
 
             # convert the blockwise COO data into a CSR matrix
             coo_I  = np.concatenate(coo_I)

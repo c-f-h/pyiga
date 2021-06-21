@@ -181,7 +181,7 @@ def test_hierarchical_assemble():
     hs = create_example_hspace(p=4, dim=2, n0=4, disparity=1, num_levels=3)
     geo = geometry.bspline_quarter_annulus()
     hdiscr = HDiscretization(hs, vform.stiffness_vf(dim=2), {'geo': geo})
-    A = hdiscr.assemble_matrix()
+    A = hdiscr.assemble_matrix(symmetric=True)
     # compute matrix on the finest level for comparison
     A_fine = assemble.stiffness(hs.knotvectors(-1), geo=geo)
     I_hb = hs.represent_fine()
@@ -196,6 +196,23 @@ def test_hierarchical_assemble():
     f_hb = assemble.inner_products(hs.knotvectors(-1), f, f_physical=True, geo=geo).ravel() @ I_hb
     f2 = assemble.assemble('f * v * dx', hs, f=f, geo=geo)
     assert np.allclose(f_hb, f2)
+
+def _convdiff_vf(dim, conv_vector):
+    from pyiga.vform import VForm, inner, grad, dx
+    vf = VForm(dim=dim)
+    u, v = vf.basisfuns()
+    vf.add((inner(grad(u), grad(v)) + inner(conv_vector, grad(u)) * v) * dx)
+    return vf
+
+def test_hierarchical_assemble_nonsym():
+    hs = create_example_hspace(p=6, dim=2, n0=4, disparity=1, num_levels=2)
+    geo = geometry.bspline_quarter_annulus()
+    A = assemble.assemble(_convdiff_vf(2, (1.0, 1.0)), hs, geo=geo)
+    # compute matrix on the finest level for comparison
+    A_fine = assemble.assemble(_convdiff_vf(2, (1.0, 1.0)), hs.knotvectors(-1), geo=geo)
+    I_hb = hs.represent_fine()
+    A_hb = (I_hb.T @ A_fine @ I_hb)
+    assert np.allclose(A.A, A_hb.A)
 
 def test_grid_eval():
     hs = create_example_hspace(p=3, dim=2, n0=6, num_levels=3)

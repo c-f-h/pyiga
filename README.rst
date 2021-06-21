@@ -12,7 +12,7 @@ pyiga |ghbuild| |appveyor| |codecov|
 ``pyiga`` is a Python research toolbox for Isogeometric Analysis. Its current highlights are:
 
 * Automatic generation of efficient matrix assembling code from a high-level, FEniCS_-like description of the bilinear form. See the section "Assembling custom forms" in the `Documentation`_  as well as the convection-diffusion and Navier-Stokes examples below.
-* Adaptivity via HB- and THB-spline spaces and a local multigrid solver for adaptive IgA (`see the preprint <https://www.ricam.oeaw.ac.at/files/reports/19/rep19-34.pdf>`_). See `adaptive.ipynb <notebooks/adaptive.ipynb>`_ for an example.
+* Adaptivity via HB- and THB-spline spaces and a local multigrid solver for adaptive IgA (`read the paper <http://dx.doi.org/10.1093/imanum/drab041>`_). See `adaptive.ipynb <notebooks/adaptive.ipynb>`_ for an example.
 * Fast assembling by a black-box low-rank assembling algorithm described in
   `this paper <http://dx.doi.org/10.1016/j.cma.2018.01.014>`_
   (or `this technical report <http://www.numa.uni-linz.ac.at/publications/List/2017/2017-02.pdf>`_).

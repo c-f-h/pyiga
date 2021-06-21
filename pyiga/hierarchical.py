@@ -1034,6 +1034,7 @@ class HSpace:
                 for lv in range(fine.numlevels - 1)]
 
         # prolongate replaced actfuns to matching f_actfun for each level `lv`
+        P_current, fd_lm1 = None, None          # variables kept from previous iteration
         for lv in range(coarse_levels):
             # prolongate to level l > lv
             for l in range(lv + 1, min(f_numlevels, lv + disparity + 1)):

@@ -208,8 +208,8 @@ def bsp_mixed_deriv_biform_1d_asym(knotvec1, knotvec2, du, dv, quadgrid=None, nq
     first_points = q[0][::nqp]
     assert len(first_points) == nspans
     # map first_active_at over first quadrature points to get first active basis function index
-    first_act1 = np.vectorize(knotvec1.first_active_at, otypes=(np.int,))(first_points)
-    first_act2 = np.vectorize(knotvec2.first_active_at, otypes=(np.int,))(first_points)
+    first_act1 = np.vectorize(knotvec1.first_active_at, otypes=(int,))(first_points)
+    first_act2 = np.vectorize(knotvec2.first_active_at, otypes=(int,))(first_points)
     I,J = _create_coo_1d_custom(nspans, derivs2.shape[0], derivs1.shape[0], first_act2, first_act1)
 
     return _assemble_matrix_custom(nspans, nqp, derivs2, derivs1, I, J, q[1])

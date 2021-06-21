@@ -131,7 +131,7 @@ cdef pyx_raveled_cartesian_product(arrays, np.int_t[::1] dims):
         # initialize shape
         shp[k] = arrays[k].shape[0]
         if shp[k] == 0:
-            return np.zeros(0, dtype=np.int)
+            return np.zeros(0, dtype=int)
         N *= shp[k]
         # initialize pointer
         arr = arrays[k]
@@ -140,7 +140,7 @@ cdef pyx_raveled_cartesian_product(arrays, np.int_t[::1] dims):
         I[k] = 0
         K[k] = arr_ptrs[k][I[k]]
 
-    out_buf = np.empty(N, dtype=np.int)
+    out_buf = np.empty(N, dtype=int)
     cdef np.int_t[::1] out = out_buf
 
     with nogil:

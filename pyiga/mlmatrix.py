@@ -145,7 +145,7 @@ class MLStructure:
         result = [[] for i in range(num_rows)]
         for s in range(nnz):
             result[bx[s, 0]].append(bx[s, 1])
-        return [np.array(r, dtype=np.int) for r in result]
+        return [np.array(r, dtype=int) for r in result]
 
     def nonzeros_for_rows(self, row_indices, renumber_rows=False):
         """Compute a pair of index arrays `(I,J)` specifying the locations of
@@ -154,9 +154,9 @@ class MLStructure:
         """
         if len(row_indices) == 0:
             if renumber_rows:
-                return np.empty(0, dtype=np.int), np.empty(0, dtype=np.int), np.empty(0, dtype=np.int)
+                return np.empty(0, dtype=int), np.empty(0, dtype=int), np.empty(0, dtype=int)
             else:
-                return np.empty(0, dtype=np.int), np.empty(0, dtype=np.int)
+                return np.empty(0, dtype=int), np.empty(0, dtype=int)
         L = self.L
         lvia = tuple(self._level_rowwise_interactions(k) for k in range(L))
         bs_I = tuple(self.bs[k][0] for k in range(L))
@@ -177,7 +177,7 @@ class MLStructure:
         if len(Js) > 0:
             Js = np.concatenate(Js)
         else:
-            Js = np.empty(0, dtype=np.int)
+            Js = np.empty(0, dtype=int)
 
         if renumber_rows:
             return Is, Js, np.repeat(np.arange(len(row_indices)), counts)

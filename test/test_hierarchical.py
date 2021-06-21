@@ -1,5 +1,5 @@
 from pyiga.hierarchical import *
-from pyiga import bspline, geometry, utils, vform, geometry
+from pyiga import bspline, geometry, utils, vform
 
 from numpy.random import rand
 

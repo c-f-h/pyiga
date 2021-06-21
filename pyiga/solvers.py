@@ -324,6 +324,72 @@ def solve_hmultigrid(hs, A, f, strategy='cell_supp', smoother='gs', smooth_steps
     mg_step = local_mg_step(hs, A, f, Ps, hs.indices_to_smooth(strategy), smoother)
     return iterative_solve(mg_step, A, f, active_dofs=non_dir_dofs, tol=tol, maxiter=maxiter)
 
+def iterative_method(step, A, f, x0=None, active_dofs=None, iter=1):
+    """Perform `iter` sweeps of a basic iterative method to improve a given approximation `x0` to the solution of the linear system Ax=f.
+
+    Args:
+        step (callable): a function which performs the update x_old -> x_new for
+            the iterative method
+        A: matrix or linear operator describing the linear system of equations
+        f (ndarray): the right-hand side
+        x0: the starting vector; 0 is used if not specified
+        active_dofs (list or ndarray): list of active dofs on which the residual
+            is computed. Useful for eliminating Dirichlet dofs without changing
+            the matrix. If not specified, all dofs are active.
+        iter (int): the number of iterations
+
+    Returns:
+        the result `x`
+    """
+    if active_dofs is None:
+        active_dofs = slice(A.shape[0])    # all dofs are active
+    if x0 is None:
+        x = np.zeros(A.shape[0])
+    else:
+        x = x0
+    for i in range(iter):
+        x = step(x)
+    return x
+
+def iterate_hmultigrid(hs, A, f, strategy='cell_supp', smoother='symmetric_gs', smooth_steps=1, x0=None, iter=1):
+    """Performs `iter` local multigrid steps to improve a given approximation `x0` to the solution of a linear scalar problem in a hierarchical spline space.
+
+    Args:
+        hs: the :class:`.HSpace` which describes the HB- or THB-spline space
+        A: the matrix describing the discretization of the problem
+        f: the right-hand side vector
+        strategy (string): how to choose the smoothing sets. Valid options are
+
+            - ``"new"``: only the new dofs per level
+            - ``"trunc"``: all dofs which interact via the truncation operator
+            - ``"cell_supp"``: all dofs whose support intersects that of the
+              new ones (support extension)
+            - ``"func_supp"``
+
+        smoother (string): the multigrid smoother to use. Valid options are
+
+            - ``"gs"``: forward Gauss-Seidel for pre-smoothing, backward
+              Gauss-Seidel for post-smoothing
+            - ``"forward_gs"``: always use forward Gauss-Seidel
+            - ``"backward_gs"``: always use backward Gauss-Seidel
+            - ``"symmetric_gs"``: use complete symmetric Gauss-Seidel sweep for
+              both pre- and post-smoothing
+            - ``"exact"``: use an exact direct solver as a pre-smoother (no
+              post-smoothing)
+
+        smooth_steps (int): the number of pre- and post-smoothing steps
+        x0: the starting vector; 0 is used if not specified
+        iter (int): the number of iterations
+
+    Returns:
+        the result `x`
+    """
+    Ps = hs.virtual_hierarchy_prolongators()
+    # determine non-Dirichlet dofs (for residual computation)
+    non_dir_dofs = hs.non_dirichlet_dofs()
+    mg_step = local_mg_step(hs, A, f, Ps, hs.indices_to_smooth(strategy), smoother)
+    return iterative_method(mg_step, A, f, active_dofs=non_dir_dofs, x0=x0, iter=iter)
+
 
 ## Nonlinear problems
 

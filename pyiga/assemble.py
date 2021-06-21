@@ -152,8 +152,6 @@ def _create_coo_1d_custom(nspans, n_act1, n_act2, first_act1, first_act2):
     return (I, J)
 
 def _assemble_matrix_custom(nspans, nqp, vals1, vals2, I, J, qweights):
-    n_act1 = vals1.shape[0]
-    n_act2 = vals2.shape[0]
     elMats = _assemble_element_matrices(nspans, nqp, vals1, vals2, qweights)
     return scipy.sparse.coo_matrix((elMats.ravel(), (I, J))).tocsr()
 

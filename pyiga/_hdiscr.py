@@ -109,7 +109,6 @@ class HDiscretization:
             na = tuple(len(ii) for ii in new_loc)
             new = [np.arange(sum(na[:k]), sum(na[:k+1])) for k in range(hs.numlevels)]
 
-            kvs = tuple(hs.knotvectors(lv) for lv in range(hs.numlevels))
             As = [self._assemble_level(k, rows=to_assemble[k], bbox=bboxes[k])
                     for k in range(hs.numlevels)]
             # I_hb[k]: maps HB-coefficients to TP coefficients on level k

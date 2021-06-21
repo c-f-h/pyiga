@@ -197,7 +197,6 @@ def local_mg_step(hs, A, f, Ps, lv_inds, smoother='symmetric_gs', smooth_steps=2
             x1 = x.copy()
             P = Ps[lv-1]
             A = As[lv]
-            n_lv = A.shape[0]
             lv_ind = lv_inds[lv]
 
             # pre-smoothing

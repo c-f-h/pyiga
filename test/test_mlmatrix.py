@@ -92,9 +92,9 @@ def test_mlbanded_2d():
     assert np.allclose(X.dot(x), M.dot(x))
     # test matrix constructor
     M2 = MLMatrix(structure=S, matrix=X)
-    assert np.allclose(X, M.asmatrix().A)
+    assert np.allclose(X, M2.asmatrix().A)
     M2 = MLMatrix(structure=S, matrix=scipy.sparse.csr_matrix(X))
-    assert np.allclose(X, M.asmatrix().A)
+    assert np.allclose(X, M2.asmatrix().A)
 
 def test_mlbanded_3d():
     bs = (8, 7, 6)
@@ -125,9 +125,9 @@ def test_mlbanded_3d():
     assert np.allclose(X.dot(x), M.dot(x))
     # test matrix constructor
     M2 = MLMatrix(structure=S, matrix=X)
-    assert np.allclose(X, M.asmatrix().A)
+    assert np.allclose(X, M2.asmatrix().A)
     M2 = MLMatrix(structure=S, matrix=scipy.sparse.csr_matrix(X))
-    assert np.allclose(X, M.asmatrix().A)
+    assert np.allclose(X, M2.asmatrix().A)
 
 def test_mlbanded_4d():
     bs = (7, 6, 5, 4)

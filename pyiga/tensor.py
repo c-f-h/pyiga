@@ -677,8 +677,8 @@ def gta_ls(A, F, R, tol=1e-12, verbose=0, gs=None, spd=False):
         for j in range(d):
             # orthonormalize vs
             y = vs[j] - U[j].dot( U[j].T.dot(vs[j]) )
-            norm_full = np.linalg.norm(vs[j])
             norm_orth = np.linalg.norm(y)
+            #norm_full = np.linalg.norm(vs[j])
             #if norm_orth > 1e-2 * norm_full:
                 # only add if not almost orthogonal to old space
             U[j] = np.column_stack((U[j], y / norm_orth))

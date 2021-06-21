@@ -129,7 +129,6 @@ def BlockDiagonalOperator(*ops):
     """Return a :class:`LinearOperator` with block diagonal structure, with the given
     operators on the diagonal.
     """
-    K = len(ops)
     ranges_i = _sizes_to_ranges(op.shape[0] for op in ops)
     ranges_j = _sizes_to_ranges(op.shape[1] for op in ops)
     shape = (ranges_i[-1].stop, ranges_j[-1].stop)

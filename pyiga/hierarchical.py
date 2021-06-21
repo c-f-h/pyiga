@@ -683,11 +683,8 @@ class HSpace:
         """Return a tuple which contains tuples which contain, per level, the multi-indices
         of ``trunc`` basis functions in the virtual hierarchy per level."""
         indices = self.new_indices()        # start with only the newly added indices
-        out = list()
-        out_index = list()
         aux_dict = dict()
         for lv in range(self.numlevels):
-            aux = list()
             for i in range(self.numlevels):
                 if i == lv:
                     aux_act = list(self.actfun[lv])

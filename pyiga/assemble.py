@@ -87,6 +87,13 @@ Boundary and initial conditions
     :members:
 
 
+Multipatch problems
+-------------------
+
+.. autoclass:: Multipatch
+    :members:
+
+
 Integration
 -----------
 
@@ -1115,12 +1122,18 @@ def _find_matching_boundaries(G1, G2):
 class Multipatch:
     """Represents a multipatch structure, consisting of a number of patches
     together with their discretizations and the information about shared dofs
-    between patches.
+    between patches. Currently, only conforming patches are supported.
 
     Args:
-        patches: a list of `(kvs, geo)` pairs, each of which describes a patch
+        patches: a list of `(kvs, geo)` pairs, each of which describes a patch.
+            Here `kvs` is a tuple of :class:`.KnotVector` instances describing
+            the tensor product spline space used for discretization and `geo`
+            is the geometry map.
         automatch (bool): if True, attempt to automatically determine the
-            matching interfaces between all patches and finalize then
+            matching interfaces between all patches and finalize then. If
+            False, the user has to manually join the patches by calling
+            :meth:`join_boundaries` as often as needed, followed by
+            :meth:`finalize`.
     """
     def __init__(self, patches, automatch=False):
         """Initialize a multipatch structure."""
@@ -1229,7 +1242,8 @@ class Multipatch:
         return nx.is_connected(patch_graph)
 
     def finalize(self):
-        """After all shared dofs have been declared, call this function to set
+        """After all shared dofs have been declared using
+        :meth:`join_boundaries` or :meth:`join_dofs`, call this function to set
         up the internal data structures.
         """
         num_shared = [len(spp) for spp in self.shared_per_patch]
@@ -1290,6 +1304,16 @@ class Multipatch:
 
     def assemble_system(self, problem, rhs, args=None, bfuns=None,
             symmetric=False, format='csr', layout='blocked', **kwargs):
+        """Assemble both the system matrix and the right-hand side vector
+        for a variational problem over the multipatch geometry.
+
+        Here `problem` represents a bilinear form and `rhs` a linear functional.
+        See :func:`assemble` for the precise meaning of the arguments.
+
+        Returns:
+            A pair `(A, b)` consisting of the sparse system matrix and the
+            right-hand side vector.
+        """
         n = self.numdofs
         A = scipy.sparse.csr_matrix((n, n)).asformat(format)
         b = np.zeros(n)

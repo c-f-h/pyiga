@@ -126,6 +126,11 @@ class BasisFun:
         self.asmgen = None  # to be set to AsmGenerator for code generation
     def hash(self):
         return hash((self.name, self.numcomp, self.component, self.space))
+    def __str__(self):
+        s = 'bfun(%s' % self.name
+        if self.component is not None:
+            s += '[%s]' % self.component
+        return s + ')'
 
 class InputField:
     def __init__(self, name, shape, physical, vform, updatable=False):
@@ -351,16 +356,12 @@ class VForm:
         """Add an expression to this VForm."""
         if self.__hash is not None:
             raise RuntimeError('can no longer modify this VForm')
+        if not expr.is_scalar():
+            raise TypeError('all expressions added to a VForm must be scalar')
         if self.vec:
-            if expr.is_scalar():
-                expr = self.substitute_vec_components(expr)
+            expr = self.substitute_vec_components(expr)
             if expr.is_matrix():
                 expr = expr.ravel()
-            if not expr.shape == (self.vec,):
-                raise TypeError('vector assembler requires vector or matrix expression of proper length')
-        else:
-            if not expr.is_scalar():
-                raise TypeError('require scalar expression')
         self.exprs.append(expr)
 
     def replace_vector_bfuns(self, expr, name, comp):
@@ -445,7 +446,7 @@ class VForm:
         return G
 
     def transitive_deps(self, dep_graph, vars):
-        """Return all vars on which the given vars depend directly or indirectly, in linearized order."""
+        """Return the set of all vars on which the given vars depend directly or indirectly."""
         return set_union(networkx.ancestors(dep_graph, var) for var in vars)
 
     def linearize_vars(self, vars):

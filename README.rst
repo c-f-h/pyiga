@@ -31,7 +31,7 @@ The ``notebooks`` directory contains several examples of how to use ``pyiga``:
 *  `solve-convdiff.ipynb <notebooks/solve-convdiff.ipynb>`_: solve a convection-diffusion problem with random inclusions
 *  `solve-stokes.ipynb <notebooks/solve-stokes.ipynb>`_: solve stationary Stokes flow and plot the velocity field
 *  `solve-navier-stokes.ipynb <https://nbviewer.jupyter.org/github/c-f-h/pyiga/blob/master/notebooks/solve-navier-stokes.ipynb>`_: solve the instationary Navier-Stokes equations with a time-adaptive Rosenbrock integrator and produce an animation of the result
-*  `adaptive.ipynb <notebooks/adaptive.ipynb>`_: an adaptive solve-estimate-mark-refine loop using a local multigrid solver.
+*  `adaptive.ipynb <https://nbviewer.jupyter.org/github/c-f-h/pyiga/blob/master/notebooks/adaptive.ipynb>`_: an adaptive solve-estimate-mark-refine loop using a local multigrid solver.
 *  `mantle-convection.ipynb <https://nbviewer.jupyter.org/gist/c-f-h/060f225465ee990faab4941a6cfd2562>`_: Rayleigh-Bénard convection
 
 

@@ -1119,6 +1119,41 @@ def _find_matching_boundaries(G1, G2):
                 matches.append((bdspec1, bdspec2, flip))
     return matches
 
+def detect_interfaces(patches):
+    """Automatically detect matching interfaces between patches.
+
+    Args:
+        patches: a list of patches in the form `(kvs, geo)`
+
+    Returns:
+        A pair `(connected, interfaces)`, where `connected` is a `bool`
+        describing whether the detected patch graph is connected, and
+        `interfaces` is a list of the detected interfaces, each entry of
+        which is suitable for passing to :meth:`join_boundaries`.
+    """
+    interfaces = []
+    bbs = [_bb_rect(geo) for (_, geo) in patches]
+    diams = [bb.max_distance_rectangle(bb) for bb in bbs]
+
+    # set up a graph of patch connectivity for later checking
+    import networkx as nx
+    patch_graph = nx.Graph()
+    patch_graph.add_nodes_from(range(len(patches)))
+
+    for p1 in range(len(patches)):
+        for p2 in range(p1 + 1, len(patches)):
+            mindist = bbs[p1].min_distance_rectangle(bbs[p2])
+            maxdiam = max(diams[p1], diams[p2])
+            if mindist < 1e-10 * maxdiam:    # do the bounding boxes touch?
+                matches = _find_matching_boundaries(patches[p1][1], patches[p2][1])
+                for (bd1, bd2, flip) in matches:
+                    interfaces.append((p1, bd1, p2, bd2, flip))
+                if matches:
+                    patch_graph.add_edge(p1, p2)
+
+    return nx.is_connected(patch_graph), interfaces
+
+
 class Multipatch:
     """Represents a multipatch structure, consisting of a number of patches
     together with their discretizations and the information about shared dofs
@@ -1148,7 +1183,7 @@ class Multipatch:
         self.shared_dofs = []
 
         if automatch:
-            connected, interfaces = self.detect_interfaces()
+            connected, interfaces = detect_interfaces(self.patches)
             if not connected:
                 print('WARNING: patch graph is not connected - ' +
                         'interface detection may have failed')
@@ -1212,37 +1247,6 @@ class Multipatch:
         i = len(self.shared_dofs)
         self.shared_dofs.append(set())
         return i
-
-    def detect_interfaces(self):
-        """Automatically detect matching interfaces between patches.
-
-        Returns:
-            A pair `(connected, interfaces)`, where `connected` is a `bool`
-            describing whether the detected patch graph is connected, and
-            `interfaces` is a list of the detected interfaces, each entry of
-            which is suitable for passing to :meth:`join_boundaries`.
-        """
-        interfaces = []
-        bbs = [_bb_rect(geo) for (_, geo) in self.patches]
-        diams = [bb.max_distance_rectangle(bb) for bb in bbs]
-
-        # set up a graph of patch connectivity for later checking
-        import networkx as nx
-        patch_graph = nx.Graph()
-        patch_graph.add_nodes_from(range(self.numpatches))
-
-        for p1 in range(self.numpatches):
-            for p2 in range(p1 + 1, self.numpatches):
-                mindist = bbs[p1].min_distance_rectangle(bbs[p2])
-                maxdiam = max(diams[p1], diams[p2])
-                if mindist < 1e-10 * maxdiam:    # do the bounding boxes touch?
-                    matches = _find_matching_boundaries(self.patches[p1][1], self.patches[p2][1])
-                    for (bd1, bd2, flip) in matches:
-                        interfaces.append((p1, bd1, p2, bd2, flip))
-                    if matches:
-                        patch_graph.add_edge(p1, p2)
-
-        return nx.is_connected(patch_graph), interfaces
 
     def finalize(self):
         """After all shared dofs have been declared using

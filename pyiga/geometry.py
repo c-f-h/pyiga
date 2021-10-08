@@ -79,6 +79,8 @@ class NurbsFunc(bspline._BaseSplineFunc):
         if not premultiplied:
             self.coeffs[..., :-1] *= self.coeffs[..., -1:]
 
+        self._support_override = None
+
     def output_shape(self):
         if self._isscalar:
             return ()
@@ -172,7 +174,14 @@ class NurbsFunc(bspline._BaseSplineFunc):
     def support(self):
         """Return a sequence of pairs `(lower,upper)`, one per source dimension,
         which describe the extent of the support in the parameter space."""
-        return tuple(kv.support() for kv in self.kvs)
+        if self._support_override:
+            return self._support_override
+        else:
+            return tuple(kv.support() for kv in self.kvs)
+
+    @support.setter
+    def support(self, new_support):
+        self._support_override = new_support
 
     def coeffs_weights(self):
         """Return the non-premultiplied coefficients and weights as a pair of arrays."""

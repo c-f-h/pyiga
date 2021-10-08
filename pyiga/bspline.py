@@ -661,6 +661,8 @@ class BSplineFunc(_BaseSplineFunc):
             dim = dim[0]
         self.dim = dim
 
+        self._support_override = None
+
     def output_shape(self):
         return self.coeffs.shape[self.sdim:]
 
@@ -808,7 +810,14 @@ class BSplineFunc(_BaseSplineFunc):
     def support(self):
         """Return a sequence of pairs `(lower,upper)`, one per source dimension,
         which describe the extent of the support in the parameter space."""
-        return tuple(kv.support() for kv in self.kvs)
+        if self._support_override:
+            return self._support_override
+        else:
+            return tuple(kv.support() for kv in self.kvs)
+
+    @support.setter
+    def support(self, new_support):
+        self._support_override = new_support
 
     def translate(self, offset):
         """Return a version of this geometry translated by the specified offset."""

@@ -1148,10 +1148,12 @@ class Multipatch:
         self.shared_dofs = []
 
         if automatch:
-            connected = self.detect_interfaces()
+            connected, interfaces = self.detect_interfaces()
             if not connected:
                 print('WARNING: patch graph is not connected - ' +
                         'interface detection may have failed')
+            for intf in interfaces:
+                self.join_boundaries(*intf)
             self.finalize()
 
     @property
@@ -1212,10 +1214,13 @@ class Multipatch:
         return i
 
     def detect_interfaces(self):
-        """Automatically detect matching interfaces between patches and join them.
+        """Automatically detect matching interfaces between patches.
 
         Returns:
-            bool: whether the detected patch graph is connected
+            A pair `(connected, interfaces)`, where `connected` is a `bool`
+            describing whether the detected patch graph is connected, and
+            `interfaces` is a list of the detected interfaces, each entry of
+            which is suitable for passing to :meth:`join_boundaries`.
         """
         interfaces = []
         bbs = [_bb_rect(geo) for (_, geo) in self.patches]
@@ -1237,9 +1242,7 @@ class Multipatch:
                     if matches:
                         patch_graph.add_edge(p1, p2)
 
-        for intf in interfaces:
-            self.join_boundaries(*intf)
-        return nx.is_connected(patch_graph)
+        return nx.is_connected(patch_graph), interfaces
 
     def finalize(self):
         """After all shared dofs have been declared using

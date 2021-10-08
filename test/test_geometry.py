@@ -366,3 +366,16 @@ def test_getitem():
 def test_bounding_box():
     bb = quarter_annulus().bounding_box()
     assert np.allclose(bb, [(0,2), (0,2)])
+
+def test_inverse():
+    def check_inverse(geo, x):
+        xi = geo.find_inverse(x)
+        assert np.allclose(x, geo(*xi))
+    check_inverse(quarter_annulus(), [1.2, 1.5])
+    check_inverse(circle(), np.ones(2) / np.sqrt(2))
+    try:
+        # should raise an exception
+        circle().find_inverse((0.7, 0.7))
+        assert False, 'find_inverse should fail for point outside the geometry'
+    except ValueError:
+        pass

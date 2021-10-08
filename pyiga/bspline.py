@@ -572,6 +572,26 @@ class _BaseGeoFunc:
         X.shape = (-1, self.dim)
         return tuple((X[:, d].min(), X[:, d].max()) for d in range(self.dim))
 
+    def find_inverse(self, x, tol=1e-8):
+        """Find the coordinates in the parameter domain which correspond to the
+        physical point `x`.
+        """
+        import scipy.optimize
+
+        supp = np.transpose(self.support)   # two rows (min/max), columns are coordinates
+
+        result = scipy.optimize.least_squares(
+            lambda xi: self(*xi) - x,       # components of cost function
+            np.mean(supp, axis=0),          # starting value (center of parameter domain)
+            bounds=supp,                    # don't leave parameter domain
+            method='dogbox',
+            ftol=tol, xtol=tol, gtol=1e-15
+        )
+        if result.success and np.sqrt(result.cost) < tol:
+            return result.x
+        else:
+            raise ValueError('Could not find coordinates for desired point %s' % (x,))
+
 class _BaseSplineFunc(_BaseGeoFunc):
     def eval(self, *x):
         """Evaluate the function at a single point of the parameter domain.

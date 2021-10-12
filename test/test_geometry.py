@@ -179,6 +179,22 @@ def test_nurbs_boundary():
     assert geos_roughly_equal(geo.boundary('right'),
                               circular_arc(np.pi/2, 2.0))
 
+def test_reduced_support():
+    ## test B-spline patch
+    geo = unit_square()
+    supp = ((0.2, 0.7), (0.4, 0.6))
+    geo.support = supp
+    assert np.allclose(geo.bounding_box(), list(reversed(supp)))    # bounding box is in xy order
+    #
+    bd = geo.boundary('right')
+    assert geos_roughly_equal(bd, line_segment((0.6, 0.2), (0.6, 0.7), support=(0.2, 0.7)))
+    ## test NURBS patch
+    geo = quarter_annulus()
+    geo.support = supp
+    bd = geo.boundary('top')
+    assert np.allclose(bd.bounding_box(),
+            ((0.6177743988536184, 0.7060278844041353), (1.2563259099935216, 1.4358010399925962)))
+
 def test_line_segment():
     L1 = line_segment((1,0), (4,2), support=(1,2))
     assert L1.sdim == 1

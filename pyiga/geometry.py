@@ -161,6 +161,11 @@ class NurbsFunc(bspline._BaseSplineFunc):
             :class:`NurbsFunc`: representation of the boundary side;
             has `sdim` reduced by 1 and the same `dim` as this function
         """
+        if self._support_override:
+            # if we have reduced support, the boundary may not be
+            # interpolatory; return a custom function
+            return bspline._BaseGeoFunc.boundary(self, bdspec)
+
         axis, side = bspline._parse_bdspec(bdspec, self.sdim)
         assert 0 <= axis < self.sdim, 'Invalid axis'
         slices = self.sdim * [slice(None)]

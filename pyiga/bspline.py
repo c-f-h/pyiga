@@ -564,7 +564,7 @@ class _BaseGeoFunc:
         `grid > 1`, a finer grid can be used (for non-convex geometries).
 
         Returns:
-            a tuple of `(lower,upper)` limits per dimension
+            a tuple of `(lower,upper)` limits per dimension (in XY order)
         """
         supp = self.support
         grid = [np.linspace(s[0], s[1], grid+1) for s in supp]
@@ -591,6 +591,31 @@ class _BaseGeoFunc:
             return result.x
         else:
             raise ValueError('Could not find coordinates for desired point %s' % (x,))
+
+    def boundary(self, bdspec):
+        """Return one side of the boundary as a :class:`.UserFunction`.
+
+        Args:
+            bdspec: the side of the boundary to return; see :func:`.compute_dirichlet_bc`
+
+        Returns:
+            :class:`.UserFunction`: representation of the boundary side;
+            has `sdim` reduced by 1 and the same `dim` as this function
+        """
+        axis, side = _parse_bdspec(bdspec, self.sdim)
+        assert 0 <= axis < self.sdim, 'Invalid axis'
+
+        lohi = self.support[axis]
+        fixed_coord = (lohi[0] if side==0 else lohi[1])
+
+        def f(*x):
+            x = list(x)
+            x.insert(len(x) - axis, fixed_coord)
+            return self(*x)
+
+        from .geometry import UserFunction
+        supp = self.support[:axis] + self.support[axis+1:]
+        return UserFunction(f, supp, self.dim)
 
 class _BaseSplineFunc(_BaseGeoFunc):
     def eval(self, *x):
@@ -797,6 +822,11 @@ class BSplineFunc(_BaseSplineFunc):
             :class:`BSplineFunc`: representation of the boundary side;
             has :attr:`sdim` reduced by 1 and the same :attr:`dim` as this function
         """
+        if self._support_override:
+            # if we have reduced support, the boundary may not be
+            # interpolatory; return a custom function
+            return _BaseGeoFunc.boundary(self, bdspec)
+
         axis, side = _parse_bdspec(bdspec, self.sdim)
         assert 0 <= axis < self.sdim, 'Invalid axis'
         slices = self.sdim * [slice(None)]
@@ -817,6 +847,9 @@ class BSplineFunc(_BaseSplineFunc):
 
     @support.setter
     def support(self, new_support):
+        new_support = tuple(new_support)
+        assert len(new_support) == self.sdim, 'wrong number of dimensions'
+        assert all(len(supp_k) == 2 for supp_k in new_support), 'each entry should be a pair (lower,upper)'
         self._support_override = new_support
 
     def translate(self, offset):

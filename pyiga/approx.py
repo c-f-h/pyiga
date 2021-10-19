@@ -10,6 +10,7 @@ from . import utils
 from . import hierarchical
 
 import sys
+import numpy as np
 import scipy.sparse.linalg
 
 def interpolate(kvs, f, geo=None, nodes=None):
@@ -25,17 +26,27 @@ def interpolate(kvs, f, geo=None, nodes=None):
     `nodes` should be a tensor grid (i.e., a sequence of one-dimensional
     arrays) in the parameter domain specifying the interpolation nodes. If not
     specified, the Gréville abscissae are used.
+
+    It is possible to pass an array of function values for `f` instead of a
+    function; they should have the proper shape and correspond to the function
+    values at the `nodes`. In this case, `geo` is ignored.
     """
     if isinstance(kvs, bspline.KnotVector):
         kvs = (kvs,)
     if nodes is None:
         nodes = [kv.greville() for kv in kvs]
 
-    # evaluate f at interpolation nodes
-    if geo is not None:
-        rhs = utils.grid_eval_transformed(f, nodes, geo)
+    # evaluate f at interpolation nodes?
+    if isinstance(f, np.ndarray):
+        # check that leading dimensions match the number of dofs
+        if np.shape(f)[:len(kvs)] != tuple(kv.numdofs for kv in kvs):
+            raise ValueError('array f has wrong shape')
+        rhs = f
     else:
-        rhs = utils.grid_eval(f, nodes)
+        if geo is not None:
+            rhs = utils.grid_eval_transformed(f, nodes, geo)
+        else:
+            rhs = utils.grid_eval(f, nodes)
 
     Cinvs = [operators.make_solver(bspline.collocation(kvs[i], nodes[i]))
                 for i in range(len(kvs))]

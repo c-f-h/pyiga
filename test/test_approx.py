@@ -1,5 +1,5 @@
 from pyiga.approx import *
-from pyiga import bspline, geometry
+from pyiga import bspline, geometry, utils
 import numpy as np
 
 def _test_approx(approx_fun, extra_dims):
@@ -51,6 +51,16 @@ def test_interpolate_physical():
     x1 = interpolate(kvs, f)
     x2 = interpolate(kvs, f, geo=geometry.unit_cube())
     assert np.allclose(x1, x2)
+
+def test_interpolate_array():
+    def f(x, y): return (x + y)**2
+    kvs = 2 * (bspline.make_knots(2, 0.0, 1.0, 10),)
+    nodes = tuple(kv.greville() for kv in kvs)
+    fvals = utils.grid_eval(f, nodes)
+    coeffs = interpolate(kvs, fvals, nodes=nodes)
+    spl = bspline.BSplineFunc(kvs, coeffs)
+    X = np.linspace(0.0, 1.0, 12)
+    assert np.allclose(utils.grid_eval(f, (X, X)), spl.grid_eval((X, X)))
 
 def test_compare_intproj():
     f = lambda x,y: np.cos(x)*np.exp(y)

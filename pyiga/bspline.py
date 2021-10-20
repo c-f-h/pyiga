@@ -520,13 +520,7 @@ def collocation_derivs(kv, nodes, derivs=1):
     m = nodes.size
     n = kv.numdofs
     p = kv.p
-    V = [[] for _ in range(derivs+1)]
-    values = active_deriv(kv, nodes, derivs) # (derivs+1) x (p+1) x n
-    #indices = [kv.first_active_at(u) for u in nodes]
-    indices = pyx_findspans(kv.kv, p, nodes) - p        # faster version
-    for k in range(m):
-        for d in range(derivs+1):
-            V[d].append(values[d, :, k])
+    indices, values = collocation_derivs_info(kv, nodes, derivs)
 
     # compute I, J indices:
     # I: p + 1 entries per row
@@ -534,8 +528,21 @@ def collocation_derivs(kv, nodes, derivs=1):
     # J: arange(indices[k], indices[k] + p + 1) per row
     J = (indices[:, None] + np.arange(p + 1)[None, :]).ravel()
 
-    return [scipy.sparse.coo_matrix((np.concatenate(vals), (I,J)), shape=(m,n)).tocsr()
-            for vals in V]
+    return [scipy.sparse.coo_matrix((values[d].ravel(), (I,J)), shape=(m,n)).tocsr()
+            for d in range(derivs + 1)]
+
+def collocation_derivs_info(kv, nodes, derivs=1):
+    """Similar to :func:`collocation_info`, but the second array also contains
+    coefficients for computing derivatives up to order `derivs`.  It has shape
+    `(derivs + 1) x len(nodes) x (p + 1)`.
+
+    Corresponds to a row-wise representation of the matrices computed by
+    :func:`collocation_derivs`.
+    """
+    nodes = np.ascontiguousarray(nodes) # pyx_findspans requires a contiguous array
+    values = active_deriv(kv, nodes, derivs)    # (derivs+1) x (p+1) x n
+    indices = pyx_findspans(kv.kv, kv.p, nodes) - kv.p
+    return indices, np.asarray(values).swapaxes(-2, -1) # (derivs+1) x n x (p+1)
 
 def interpolate(kv, func, nodes=None):
     """Interpolate function in B-spline basis at given nodes (or Gréville abscissae by default)"""

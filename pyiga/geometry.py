@@ -151,6 +151,23 @@ class NurbsFunc(bspline._BaseSplineFunc):
             H = np.squeeze(H, -2)           # eliminate scalar axis
         return H
 
+    def pointwise_eval(self, points):
+        """Evaluate the NURBS function at an unstructured list of points.
+
+        Args:
+            points: an array or sequence such that `points[i]` is an array containing
+                the coordinates for dimension `i`, where `i = 0, ..., sdim - 1`
+                (in xyz order). All arrays must have the same shape.
+
+        Returns:
+            An `ndarray` containing the function values at the `points`.
+        """
+        vals = bspline.tp_bsp_eval_pointwise(self.kvs, self.coeffs, points)
+        f = vals[..., :-1] / vals[..., -1:]     # divide by weight function
+        if self._isscalar:
+            f = np.squeeze(f, -1)               # eliminate scalar axis
+        return f
+
     def boundary(self, bdspec):
         """Return one side of the boundary as a :class:`NurbsFunc`.
 

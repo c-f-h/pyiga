@@ -59,6 +59,17 @@ def test_evaluation():
         [ 0.   ,  2.   ]]])
     assert abs(exact[1,1] - geo.eval(0.5, 0.3)).max() < 1e-14
     assert abs(exact - values).max() < 1e-14
+    # test pointwise_eval
+    mesh_x, mesh_y = np.meshgrid(x, y, indexing='xy')
+    values2 = geo.pointwise_eval((mesh_x, mesh_y))
+    assert values2.shape == mesh_x.shape + (2,)
+    assert np.allclose(values, values2)
+    # test pointwise_eval for NURBS
+    geo = quarter_annulus()
+    values = geo.grid_eval((y, x))
+    values2 = geo.pointwise_eval((mesh_x, mesh_y))
+    assert values2.shape == mesh_x.shape + (2,)
+    assert np.allclose(values, values2)
     # test calling a geometry function with mixed scalar/array arguments
     x = 0.7
     y = [0.1, 0.33, 0.72]

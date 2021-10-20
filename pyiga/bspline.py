@@ -429,25 +429,42 @@ def single_ev(knotvec, i, u):
 ################################################################################
 
 def collocation(kv, nodes):
-    """Compute collocation matrix for B-spline basis at the given interpolation nodes"""
-    nodes = np.array(nodes, copy=False)
-    m = nodes.size
-    n = kv.numdofs
-    p = kv.p
-    V = []
-    values = active_ev(kv, nodes) # (p+1) x n
-    #indices = [kv.first_active_at(u) for u in nodes]
-    indices = pyx_findspans(kv.kv, p, nodes) - p        # faster version
-    for k in range(m):
-        V.append(values[:, k])
+    """Compute collocation matrix for B-spline basis at the given interpolation nodes.
+
+    Args:
+        kv (:class:`KnotVector`): the B-spline knot vector
+        nodes (array): array of nodes at which to evaluate the B-splines
+
+    Returns:
+        A Scipy CSR matrix with shape `(len(nodes), kv.numdofs)` whose entry at
+        `(i,j)` is the value of the `j`-th B-spline evaluated at `nodes[i]`.
+    """
+    nodes = np.ascontiguousarray(nodes)
+    indices, values = collocation_info(kv, nodes)
+    m, n = nodes.size, kv.numdofs       # collocation matrix size
 
     # compute I, J indices:
     # I: p + 1 entries per row
-    I = np.repeat(np.arange(m), p + 1)
+    I = np.repeat(np.arange(m), kv.p + 1)
     # J: arange(indices[k], indices[k] + p + 1) per row
-    J = (indices[:, None] + np.arange(p + 1)[None, :]).ravel()
+    J = (indices[:, None] + np.arange(kv.p + 1)[None, :]).ravel()
 
-    return scipy.sparse.coo_matrix((np.concatenate(V), (I,J)), shape=(m,n)).tocsr()
+    return scipy.sparse.coo_matrix((values.ravel(), (I,J)), shape=(m,n)).tocsr()
+
+def collocation_info(kv, nodes):
+    """Return two arrays: one containing the index of the first active B-spline
+    per evaluation node, and one containing, per node, the coefficient vector
+    of length `p+1` for the linear combination of basis functions which yields
+    the point evaluation at that node.
+
+    Corresponds to a row-wise representation of the collocation matrix (see
+    :func:`collocation`).
+    """
+    nodes = np.ascontiguousarray(nodes) # pyx_findspans requires a contiguous array
+    values = active_ev(kv, nodes) # (p+1) x n
+    #indices = [kv.first_active_at(u) for u in nodes]
+    indices = pyx_findspans(kv.kv, kv.p, nodes) - kv.p        # faster version
+    return indices, np.asarray(values.T)
 
 def collocation_derivs(kv, nodes, derivs=1):
     """Compute collocation matrix and derivative collocation matrices for B-spline

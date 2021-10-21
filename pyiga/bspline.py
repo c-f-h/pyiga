@@ -471,6 +471,114 @@ def tp_bsp_eval_pointwise(kvs, coeffs, points):
     result.shape = input_shape + output_shape   # bring result into proper shape
     return result
 
+def tp_bsp_jac_pointwise(kvs, coeffs, points):
+    """Evaluate the Jacobian of a tensor-product B-spline function at an
+    unstructured list of points.
+
+    Args:
+        kvs: tuple of :class:`KnotVector` instances representing a
+            tensor-product B-spline basis
+        coeffs (ndarray): coefficient array; see :class:`BSplineFunc` for details
+        points: an array or sequence such that `points[i]` is an array containing
+            the coordinates for dimension `i`, where `i = 0, ..., len(kvs) - 1`
+            (in xyz order). All arrays must have the same shape.
+
+    Returns:
+        An `ndarray` containing the Jacobians of the spline function at the
+        `points`.
+    """
+    if not all(x.shape == points[0].shape for x in points):
+        raise ValueError('All coordinate arrays should have the same shape')
+    XY = tuple(points[d].ravel() for d in range(len(points)))
+    sdim, n = len(XY), len(XY[0])   # source dimension, number of points
+    # collocation info (indices and coefficients) for the evaluation nodes
+    # (NB: axes are in zyx order)
+    coll = [collocation_derivs_info(kvs[d], XY[1-d], derivs=1) for d in range(sdim)]
+    pp1 = tuple(kv.p + 1 for kv in kvs)
+
+    # build einsum index string, e.g.: 'i,j,k,ijk...' for the sum
+    #   sum_ijk (u_i * v_j * w_k * C_ijk)
+    indices = tuple(chr(ord('i') + d) for d in range(sdim))  # i, j, k, ...
+    einsum_str = ','.join(indices) + ',' + ''.join(indices) + '...'
+
+    input_shape = points[0].shape
+    output_shape = coeffs.shape[sdim:] + (sdim,)    # last axis is derivative
+    result = np.empty((n,) + output_shape)
+
+    for k in range(n):
+        Is = tuple(coll[d][0][k] for d in range(sdim))      # index of first active basis function
+        cs = tuple(coll[d][1][0,k] for d in range(sdim))    # coefficient vector for values
+        ds = tuple(coll[d][1][1,k] for d in range(sdim))    # coefficient vector for derivative
+
+        # construct slice of coefficient array containing the active basis functions (p+1 per dimension)
+        slices = tuple(slice(ii, ii+pp) for (ii, pp) in zip(Is, pp1))
+        C_active = coeffs[slices]
+
+        for i in range(sdim):
+            ops = [(ds[j] if j==i else cs[j]) for j in range(sdim)] # deriv. in i-th direction
+            vals = np.einsum(einsum_str, *ops, C_active)
+            result[k, :, sdim - i - 1] = vals   # x-component is the last one
+    result.shape = input_shape + output_shape   # bring result into proper shape
+    return result
+
+def tp_bsp_eval_with_jac_pointwise(kvs, coeffs, points):
+    """Evaluate the values and Jacobians of a tensor-product B-spline
+    function at an unstructured list of points.
+
+    Args:
+        kvs: tuple of :class:`KnotVector` instances representing a
+            tensor-product B-spline basis
+        coeffs (ndarray): coefficient array; see :class:`BSplineFunc` for details
+        points: an array or sequence such that `points[i]` is an array containing
+            the coordinates for dimension `i`, where `i = 0, ..., len(kvs) - 1`
+            (in xyz order). All arrays must have the same shape.
+
+    Returns:
+        A pair of `ndarray`s: one for the values and one for the Jacobians.
+    """
+    if not all(x.shape == points[0].shape for x in points):
+        raise ValueError('All coordinate arrays should have the same shape')
+    XY = tuple(points[d].ravel() for d in range(len(points)))
+    sdim, n = len(XY), len(XY[0])   # source dimension, number of points
+    # collocation info (indices and coefficients) for the evaluation nodes
+    # (NB: axes are in zyx order)
+    coll = [collocation_derivs_info(kvs[d], XY[1-d], derivs=1) for d in range(sdim)]
+    pp1 = tuple(kv.p + 1 for kv in kvs)
+
+    # build einsum index string, e.g.: 'i,j,k,ijk...' for the sum
+    #   sum_ijk (u_i * v_j * w_k * C_ijk)
+    indices = tuple(chr(ord('i') + d) for d in range(sdim))  # i, j, k, ...
+    einsum_str = ','.join(indices) + ',' + ''.join(indices) + '...'
+
+    input_shape = points[0].shape
+    val_shape = coeffs.shape[sdim:]
+    jac_shape = coeffs.shape[sdim:] + (sdim,)    # last axis is derivative
+    result_val = np.empty((n,) + val_shape)
+    result_jac = np.empty((n,) + jac_shape)
+
+    for k in range(n):
+        Is = tuple(coll[d][0][k] for d in range(sdim))      # index of first active basis function
+        cs = tuple(coll[d][1][0,k] for d in range(sdim))    # coefficient vector for values
+        ds = tuple(coll[d][1][1,k] for d in range(sdim))    # coefficient vector for derivative
+
+        # construct slice of coefficient array containing the active basis functions (p+1 per dimension)
+        slices = tuple(slice(ii, ii+pp) for (ii, pp) in zip(Is, pp1))
+        C_active = coeffs[slices]
+
+        # evaluate function value
+        result_val[k] = np.einsum(einsum_str, *cs, C_active)
+
+        # evaluate Jacobian
+        for i in range(sdim):
+            ops = [(ds[j] if j==i else cs[j]) for j in range(sdim)] # deriv. in i-th direction
+            vals = np.einsum(einsum_str, *ops, C_active)
+            result_jac[k, :, sdim - i - 1] = vals   # x-component is the last one
+
+    # bring results into proper shape
+    result_val.shape = input_shape + val_shape
+    result_jac.shape = input_shape + jac_shape
+    return result_val, result_jac
+
 ################################################################################
 
 def collocation(kv, nodes):
@@ -888,6 +996,20 @@ class BSplineFunc(_BaseSplineFunc):
             An `ndarray` containing the function values at the `points`.
         """
         return tp_bsp_eval_pointwise(self.kvs, self.coeffs, points)
+
+    def pointwise_jacobian(self, points):
+        """Evaluate the Jacobian of the B-spline function at an unstructured list of points.
+
+        Args:
+            points: an array or sequence such that `points[i]` is an array containing
+                the coordinates for dimension `i`, where `i = 0, ..., sdim - 1`
+                (in xyz order). All arrays must have the same shape.
+
+        Returns:
+            An `ndarray` containing the Jacobian matrices at the `points`,
+            i.e., a matrix of size `dim x sdim` per evaluation point.
+        """
+        return tp_bsp_jac_pointwise(self.kvs, self.coeffs, points)
 
     def transformed_jacobian(self, geo):
         """Create a function which evaluates the physical (transformed) gradient of the current

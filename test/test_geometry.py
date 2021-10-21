@@ -95,6 +95,22 @@ def test_jacobian():
                        [[ 0.4375, -3.    ],
                         [ 0.9375,  1.    ]]]])
     assert abs(exact - jac).max() < 1e-14
+    # test pointwise evaluation
+    mesh_x, mesh_y = np.meshgrid(x, y, indexing='xy')
+    jac2 = geo.pointwise_jacobian((mesh_x, mesh_y))
+    assert jac2.shape == mesh_x.shape + (2,2)
+    assert np.allclose(jac, jac2)
+
+def test_nurbs_jacobian():
+    geo = quarter_annulus()
+    x = np.array([0.0, 0.3, 0.7, 1.0])
+    y = np.array([0.4, 0.75])
+    jac = geo.grid_jacobian((y, x))
+    # compare to pointwise evaluation
+    mesh_x, mesh_y = np.meshgrid(x, y, indexing='xy')
+    jac2 = geo.pointwise_jacobian((mesh_x, mesh_y))
+    assert jac2.shape == mesh_x.shape + (2,2)
+    assert np.allclose(jac, jac2)
 
 def test_unitsquare():
     S1 = unit_square()

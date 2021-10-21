@@ -14,6 +14,16 @@ from .tensor import apply_tprod
 import functools
 
 
+def _nurbs_jacobian(val, jac):
+    """Compute the NURBS Jacobians given an array of B-spline values and
+    B-spline Jacobians.
+    """
+    V = val[..., :-1, None]     # function values
+    W = val[..., -1:, None]     # weights
+    Vjac = jac[..., :-1, :]     # derivatives of function values
+    Wjac = jac[..., -1:, :]     # derivatives of weights
+    return (Vjac * W - V * Wjac) / (W**2)   # use quotient rule for (V/W)'
+
 class NurbsFunc(bspline._BaseSplineFunc):
     r"""Any function that is given in terms of a tensor product NURBS basis with
     coefficients and weights.
@@ -114,12 +124,8 @@ class NurbsFunc(bspline._BaseSplineFunc):
     def grid_jacobian(self, gridaxes):
         bsp = BSplineFunc(self.kvs, self.coeffs)
         val = bsp.grid_eval(gridaxes)
-        V = val[..., :-1, None]
-        W = val[..., -1:, None]
         jac = bsp.grid_jacobian(gridaxes)   # shape(grid) x (dim+1) x sdim
-        Vjac = jac[..., :-1, :]
-        Wjac = jac[..., -1:, :]
-        J = (Vjac * W - V * Wjac) / (W**2)   # use quotient rule for (V/W)'
+        J = _nurbs_jacobian(val, jac)
         if self._isscalar:
             J = np.squeeze(J, -2)           # eliminate scalar axis
         return J
@@ -167,6 +173,25 @@ class NurbsFunc(bspline._BaseSplineFunc):
         if self._isscalar:
             f = np.squeeze(f, -1)               # eliminate scalar axis
         return f
+
+    def pointwise_jacobian(self, points):
+        """Evaluate the Jacobian of the NURBS function at an unstructured list
+        of points.
+
+        Args:
+            points: an array or sequence such that `points[i]` is an array containing
+                the coordinates for dimension `i`, where `i = 0, ..., sdim - 1`
+                (in xyz order). All arrays must have the same shape.
+
+        Returns:
+            An `ndarray` containing the Jacobian matrices at the `points`,
+            i.e., a matrix of size `dim x sdim` per evaluation point.
+        """
+        val, jac = bspline.tp_bsp_eval_with_jac_pointwise(self.kvs, self.coeffs, points)
+        J = _nurbs_jacobian(val, jac)
+        if self._isscalar:
+            J = np.squeeze(J, -2)           # eliminate scalar axis
+        return J
 
     def boundary(self, bdspec):
         """Return one side of the boundary as a :class:`NurbsFunc`.

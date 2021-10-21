@@ -81,6 +81,18 @@ def test_evaluation():
     geo = twisted_box()
     assert np.allclose(geo(x, y, z), geo.grid_eval((z, y, [x]))[:, :, 0])
 
+def check_jacobian(f, x, jac, delta=1e-6):
+    """Verify the Jacobian at f(x) by finite differences."""
+    x = np.asarray(x)
+    d = len(x)
+    fx = f(*x)
+    for i in range(d):
+        x_delta = x.copy()
+        x_delta[i] += delta
+        fx_delta = f(*x_delta)
+        grad = (fx_delta - fx) / delta
+        assert np.allclose(jac[:, i], grad)
+
 def test_jacobian():
     geo = bspline_quarter_annulus()
     x = np.asarray([0.0, 0.3, 0.7, 1.0])
@@ -95,6 +107,7 @@ def test_jacobian():
                        [[ 0.4375, -3.    ],
                         [ 0.9375,  1.    ]]]])
     assert abs(exact - jac).max() < 1e-14
+    check_jacobian(geo, [0.3, 0.75], jac[0, 1])
     # test pointwise evaluation
     mesh_x, mesh_y = np.meshgrid(x, y, indexing='xy')
     jac2 = geo.pointwise_jacobian((mesh_x, mesh_y))
@@ -106,6 +119,7 @@ def test_nurbs_jacobian():
     x = np.array([0.0, 0.3, 0.7, 1.0])
     y = np.array([0.4, 0.75])
     jac = geo.grid_jacobian((y, x))
+    check_jacobian(geo, [0.7, 0.4], jac[0, 2])
     # compare to pointwise evaluation
     mesh_x, mesh_y = np.meshgrid(x, y, indexing='xy')
     jac2 = geo.pointwise_jacobian((mesh_x, mesh_y))

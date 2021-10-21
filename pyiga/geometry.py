@@ -326,6 +326,45 @@ class UserFunction(bspline._BaseGeoFunc):
         assert self.jac is not None, 'Jacobian not specified in UserFunction'
         return utils.grid_eval(self.jac, grd)
 
+class ComposedFunction(bspline._BaseSplineFunc):
+    def __init__(self, geo2, geo1):
+        """Composition of two functions.
+
+        `geo(x) = geo2(geo1(x))`
+        """
+        assert geo1.dim == geo2.sdim
+        self.geo1 = geo1
+        self.geo2 = geo2
+        self.sdim = geo1.sdim
+        self.dim = geo2.dim
+
+    @property
+    def support(self):
+        return self.geo1.support
+
+    @support.setter
+    def support(self, new_support):
+        self.geo1.support = new_support
+
+    def grid_eval(self, grd):
+        """Evaluate the function over a tensor product grid."""
+        XY = self.geo1.grid_eval(grd)
+        # XY is no longer a TP grid in general, need pointwise eval.
+        # The last axis of XY are the coordinates, need to bring
+        # them to the front.
+        return self.geo2.pointwise_eval(np.rollaxis(XY, -1))
+
+    def grid_jacobian(self, grd):
+        """Evaluate the Jacobian over a tensor product grid."""
+        XY = self.geo1.grid_eval(grd)
+        jac1 = self.geo1.grid_jacobian(grd)
+        jac2 = self.geo2.pointwise_jacobian(np.rollaxis(XY, -1))
+        return np.matmul(jac2, jac1)
+
+    def boundary(self, bdspec):
+        """Return one side of the boundary as a :class:`ComposedFunction`."""
+        return ComposedFunction(self.geo2, self.geo1.boundary(bdspec))
+
 ################################################################################
 # Examples of 2D geometries
 ################################################################################

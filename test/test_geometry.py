@@ -375,6 +375,51 @@ def test_userfunction():
     assert F.sdim == F.dim == 2
     assert geos_roughly_equal(F, quarter_annulus())
 
+def test_composedfunction():
+    geo2 = quarter_annulus()
+    geo1 = unit_square().scale((1.0, 0.1))
+    geo1.coeffs[1, 0] += (0.1, 0.4)
+    geo1.coeffs[0, 0] -= (0.0, 0.1)
+    geo1 = geo1.translate((0.0, 0.3))
+    geo = ComposedFunction(geo2, geo1)
+
+    # check evaluation
+    grid = (np.array([0.0, 0.2, 0.8, 1.0]),
+            np.array([0.0, 0.5, 1.0]))
+    val = geo.grid_eval(grid)
+    for i in range(len(grid[0])):
+        for j in range(len(grid[1])):
+            z = geo1(grid[1][j], grid[0][i])
+            assert np.allclose(val[i,j], geo2(*z))
+
+    # check Jacobian
+    jac = geo.grid_jacobian(grid)
+    check_jacobian(geo, (0.5, 0.8), jac[2, 1])
+
+    # check boundaries
+    bd = geo.boundary('bottom')
+    bdvals = bd.grid_eval((grid[1],))
+    assert np.allclose(bdvals, val[0, :])
+    #
+    bd = geo.boundary('top')
+    bdvals = bd.grid_eval((grid[1],))
+    assert np.allclose(bdvals, val[-1, :])
+    #
+    bd = geo.boundary('left')
+    bdvals = bd.grid_eval((grid[0],))
+    assert np.allclose(bdvals, val[:, 0])
+    #
+    bd = geo.boundary('right')
+    bdvals = bd.grid_eval((grid[0],))
+    assert np.allclose(bdvals, val[:, -1])
+
+    assert bd.sdim == 1 and bd.dim == 2
+
+    # override support
+    new_supp = ((0.2, 0.7), (0.5, 0.6))
+    geo.support = new_supp
+    assert np.array_equal(new_supp, geo.support)
+
 def test_as_nurbs():
     G = bspline_quarter_annulus()
     G2 = G.as_nurbs()

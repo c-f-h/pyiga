@@ -443,6 +443,42 @@ def quarter_annulus(r1=1.0, r2=2.0):
     ])
     return NurbsFunc((kvy,kvx), coeffs, weights=None)
 
+def _combine_boundary_curves(bottom, top, left, right):
+    kvs = (left.kvs[0], bottom.kvs[0])
+    coeffs = np.full((kvs[0].numdofs, kvs[1].numdofs, left.coeffs.shape[1]), np.nan)
+    coeffs[:,  0] = left.coeffs
+    coeffs[:, -1] = right.coeffs
+    coeffs[ 0, :] = bottom.coeffs
+    coeffs[-1, :] = top.coeffs
+    return kvs, coeffs
+
+def disk(r=1.0):
+    """A NURBS representation of a circular disk.
+
+    The parametrization has four boundary singularities where the determinant
+    of the Jacobian becomes 0, at the bottom, top, left and right edges.
+
+    Args:
+        r (float): radius
+
+    Returns:
+        :class:`NurbsFunc` 2D geometry
+    """
+    gR = circular_arc(np.pi / 2)        # upper right arc
+
+    gL = gR.copy()
+    gL.coeffs = np.flipud(gL.coeffs)    # reverse order
+    gL = gL.scale(-1)                   # flip into bottom left arc
+
+    gB = gR.rotate_2d(-np.pi / 2)       # bottom right arc
+    gT = gL.rotate_2d(-np.pi / 2)       # upper left arc
+
+    kvs, coeffs = _combine_boundary_curves(gB, gT, gL, gR)
+    coeffs[1, 1] = (0.0, 0.0, 0.5)  # weight 1/2 makes weight matrix rank 1
+    if r != 1.0:
+        coeffs[:, :, :2] *= r
+    return NurbsFunc(kvs, coeffs, None, premultiplied=True)
+
 ################################################################################
 # Examples of 3D geometries
 ################################################################################

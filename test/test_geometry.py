@@ -293,6 +293,17 @@ def test_semicircle():
     v = geo.grid_eval((np.linspace(0., 1., 50),))
     assert abs(r - np.linalg.norm(v, axis=-1)).max() < 1e-12
 
+def test_disk():
+    r = 1.5
+    geo = disk(r=r)
+    assert np.allclose(geo(0.5, 0.5), (0.0, 0.0))
+    X = np.linspace(0.0, 1.0, 10)
+    for bdspec in ('bottom', 'top', 'left', 'right'):
+        # check that boundary values have norm r
+        bd = geo.boundary(bdspec)
+        vals = bd.grid_eval((X,))
+        assert np.allclose(np.linalg.norm(vals, axis=-1), r)
+
 def test_outer():
     ### outer_sum
     Gy, Gx = line_segment([0,1],[0,2]), line_segment([2,0],[3,0])

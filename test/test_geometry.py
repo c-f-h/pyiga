@@ -39,6 +39,18 @@ def test_identity():
                      bspline.make_knots(3, 5.0, 6.0, 5)])
     assert geos_roughly_equal(geo, geo2)
 
+def test_copy():
+    geo = bspline_quarter_annulus()
+    geo2 = geo.copy()
+    assert geo.kvs == geo2.kvs
+    assert np.array_equal(geo.coeffs, geo2.coeffs)
+    assert geo.coeffs is not geo2.coeffs
+    geo = quarter_annulus()
+    geo2 = geo.copy()
+    assert geo.kvs == geo2.kvs
+    assert np.array_equal(geo.coeffs, geo2.coeffs)
+    assert geo.coeffs is not geo2.coeffs
+
 def test_evaluation():
     geo = bspline_quarter_annulus()
     x = np.asarray([0.0, 0.5, 1.0])

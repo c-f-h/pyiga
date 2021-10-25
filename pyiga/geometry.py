@@ -230,6 +230,14 @@ class NurbsFunc(bspline._BaseSplineFunc):
     def support(self, new_support):
         self._support_override = new_support
 
+    def copy(self):
+        """Return a copy of this geometry."""
+        return NurbsFunc(
+                tuple(kv.copy() for kv in self.kvs),
+                self.coeffs.copy(),
+                None,
+                premultiplied=True)
+
     def coeffs_weights(self):
         """Return the non-premultiplied coefficients and weights as a pair of arrays."""
         W = self.coeffs[..., -1]

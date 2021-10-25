@@ -94,6 +94,10 @@ class KnotVector:
         """Number of nontrivial intervals in the knot vector"""
         return self.mesh.size - 1
 
+    def copy(self):
+        """Return a copy of this knot vector."""
+        return KnotVector(self.kv.copy(), self.p)
+
     def support(self, j=None):
         """Support of the knot vector or, if `j` is passed, of the j-th B-spline"""
         if j is None:
@@ -1055,6 +1059,12 @@ class BSplineFunc(_BaseSplineFunc):
         assert len(new_support) == self.sdim, 'wrong number of dimensions'
         assert all(len(supp_k) == 2 for supp_k in new_support), 'each entry should be a pair (lower,upper)'
         self._support_override = new_support
+
+    def copy(self):
+        """Return a copy of this geometry."""
+        return BSplineFunc(
+                tuple(kv.copy() for kv in self.kvs),
+                self.coeffs.copy())
 
     def translate(self, offset):
         """Return a version of this geometry translated by the specified offset."""

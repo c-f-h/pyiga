@@ -168,7 +168,10 @@ class KnotVector:
             return (self.kv[1:] + self.kv[:-1]) / 2     # cell middle points
         else:
             # running averages over p knots
-            return (np.convolve(self.kv, np.ones(p) / p))[p:-p]
+            g = (np.convolve(self.kv, np.ones(p) / p))[p:-p]
+            # due to rounding errors, some points may not be contained in the
+            # support interval; clamp them manually to avoid problems later on
+            return np.clip(g, self.kv[0], self.kv[-1])
 
     def refine(self, new_knots=None):
         """Return the refinement of this knot vector by inserting `new_knots`,

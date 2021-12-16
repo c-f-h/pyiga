@@ -18,6 +18,12 @@ def test_eval():
     values3 = collocation(kv, x).dot(coeffs)
     assert np.linalg.norm(values - values3) < 1e-10
 
+def test_greville():
+    kv = make_knots(3, 0.9, 1.0, 5)
+    g = kv.greville()
+    assert np.allclose(g, [0.9, 0.90666667, 0.92, 0.94, 0.96, 0.98, 0.99333333, 1.0])
+    assert all(g >= 0.9) and all(g <= 1.0)
+
 def test_interpolation():
     kv = make_knots(3, 0.0, 1.0, 10)
     # create random spline
@@ -43,7 +49,7 @@ def test_eq():
     kv3 = make_knots(4, 0.1, 1.0, 25)
     kv4 = make_knots(4, 0.0, 1.1, 25)
     kv5 = make_knots(4, 0.0, 1.0, 50)
-    
+
     # Check equivalence
     assert kv_ref == kv1
     assert not kv_ref == kv2

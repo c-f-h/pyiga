@@ -330,6 +330,9 @@ class UserFunction(bspline._BaseGeoFunc):
     def eval(self, *x):
         return self.f(*x)
 
+    def pointwise_eval(self, points):
+        return self.eval(*points)
+
     def grid_jacobian(self, grd):
         assert self.jac is not None, 'Jacobian not specified in UserFunction'
         return utils.grid_eval(self.jac, grd)

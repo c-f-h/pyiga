@@ -786,20 +786,8 @@ class _BaseGeoFunc:
             :class:`.UserFunction`: representation of the boundary side;
             has `sdim` reduced by 1 and the same `dim` as this function
         """
-        axis, side = _parse_bdspec(bdspec, self.sdim)
-        assert 0 <= axis < self.sdim, 'Invalid axis'
-
-        lohi = self.support[axis]
-        fixed_coord = (lohi[0] if side==0 else lohi[1])
-
-        def f(*x):
-            x = list(x)
-            x.insert(len(x) - axis, fixed_coord)
-            return self(*x)
-
-        from .geometry import UserFunction
-        supp = self.support[:axis] + self.support[axis+1:]
-        return UserFunction(f, supp, self.dim)
+        from .geometry import _BoundaryFunction
+        return _BoundaryFunction(self, bdspec)
 
 class _BaseSplineFunc(_BaseGeoFunc):
     def eval(self, *x):
@@ -1134,7 +1122,7 @@ class BSplineFunc(_BaseSplineFunc):
         return BSplineFunc(self.kvs, self.coeffs[..., I])
 
 
-class PhysicalGradientFunc:
+class PhysicalGradientFunc(_BaseGeoFunc):
     """A class for function objects which evaluate physical (transformed) gradients of
     scalar functions with geometry transforms.
     """
@@ -1143,6 +1131,7 @@ class PhysicalGradientFunc:
         self.func = func
         self.geo = geo
         self.dim = self.sdim = func.sdim
+        self.support = func.support
 
     def grid_eval(self, gridaxes):
         geojac = self.geo.grid_jacobian(gridaxes)

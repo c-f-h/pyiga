@@ -376,6 +376,44 @@ class ComposedFunction(bspline._BaseSplineFunc):
         """Return one side of the boundary as a :class:`ComposedFunction`."""
         return ComposedFunction(self.geo2, self.geo1.boundary(bdspec))
 
+class _BoundaryFunction(bspline._BaseGeoFunc):
+    """A function which represents the evaluation of the given function `f` at
+    one side of its boundary, thus reducing `sdim` by one.
+    """
+    def __init__(self, f, bdspec):
+        self.f = f
+        axis, side = bspline._parse_bdspec(bdspec, f.sdim)
+        lohi = f.support[axis]
+        self.fixed_coord = (lohi[0] if side==0 else lohi[1])
+        self.axis = axis
+        self.support = f.support[:axis] + f.support[axis+1:]
+        self.dim = f.dim
+        self.sdim = f.sdim - 1
+
+    def eval(self, *x):
+        x = list(x)
+        x.insert(len(x) - self.axis, self.fixed_coord)
+        return self.f(*x)
+
+    def grid_eval(self, gridaxes):
+        gridaxes = list(gridaxes)
+        gridaxes.insert(self.axis, np.array([self.fixed_coord]))
+        vals = utils.grid_eval(self.f, gridaxes)
+        return vals.squeeze(self.axis)
+
+    def grid_jacobian(self, gridaxes, keep_normal=False):
+        gridaxes = list(gridaxes)
+        gridaxes.insert(self.axis, np.array([self.fixed_coord]))
+        jacs = self.f.grid_jacobian(gridaxes)
+        jacs = jacs.squeeze(self.axis)
+        if not keep_normal:
+            # drop the partial derivatives corresponding to the normal
+            # direction
+            ax = jacs.shape[-1] - self.axis - 1
+            jacs = np.concatenate((jacs[..., :ax], jacs[..., ax+1:]),
+                    axis=-1)
+        return jacs
+
 ################################################################################
 # Examples of 2D geometries
 ################################################################################
@@ -425,6 +463,8 @@ def bspline_quarter_annulus(r1=1.0, r2=2.0):
 
 def quarter_annulus(r1=1.0, r2=2.0):
     """A NURBS representation of a quarter annulus in the first quadrant.
+    The 'bottom' and 'top' boundaries (with respect to the reference domain)
+    lie on the x and y axis, respectively.
 
     Args:
         r1 (float): inner radius

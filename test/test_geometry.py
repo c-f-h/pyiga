@@ -148,16 +148,32 @@ def test_boundary():
     bd = geo.boundary((2, 1))
     assert bd.sdim == geo.sdim - 1
     assert bd.dim == geo.dim
-    assert np.allclose(geo.eval(1,1,0), bd.eval(1,0))
+    assert np.allclose(geo.eval(1, 0.7, 0), bd.eval(0.7, 0))
+    grid = 2 * (np.linspace(0, 1, 5),)
+    assert isinstance(bd, BSplineFunc)
+    jacs = bd.grid_jacobian(grid)
+    from pyiga.geometry import _BoundaryFunction
+    jacs2 = _BoundaryFunction(geo, (2, 1)).grid_jacobian(grid)
+    assert np.allclose(jacs, jacs2)
 
 def test_trf_gradient():
     geo = bspline_quarter_annulus()
     u_coeffs = approx.interpolate(geo.kvs, lambda x,y: x-y, geo=geo)
     u = BSplineFunc(geo.kvs, u_coeffs)
     u_grad = u.transformed_jacobian(geo)
+    assert np.allclose(u.support, u_grad.support)
     grd = 2 * (np.linspace(0, 1, 10),)
     grads = u_grad.grid_eval(grd)
     assert np.allclose(grads[:, :, 0], 1) and np.allclose(grads[:, :, 1], -1)
+    ##
+    kvs = 2 * (bspline.make_knots(4, 0.0, 1.0, 3),)
+    u_coeffs = approx.interpolate(kvs, lambda x, y: x**2 - y**3, geo=geo)
+    u = BSplineFunc(kvs, u_coeffs)
+    u_grad = u.transformed_jacobian(geo)
+    grid = (np.linspace(0, 1, 20),)
+    bd_grads = u_grad.boundary('right').grid_eval(grid)
+    assert np.allclose(bd_grads,
+            u_grad.grid_eval(grid + ([1.0],)).squeeze())
 
 def test_nurbs():
     kv = bspline.make_knots(2, 0.0, 1.0, 1)

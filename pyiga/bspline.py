@@ -741,6 +741,14 @@ class _BaseGeoFunc:
     def __call__(self, *x):
         return self.eval(*x)
 
+    def is_scalar(self):
+        """Returns True if the function is scalar-valued."""
+        return len(self.output_shape()) == 0
+
+    def is_vector(self):
+        """Returns True if the function is vector-valued."""
+        return len(self.output_shape()) == 1
+
     def bounding_box(self, grid=1):
         """Compute a bounding box for the image of this geometry.
 
@@ -862,14 +870,6 @@ class BSplineFunc(_BaseSplineFunc):
 
     def output_shape(self):
         return self.coeffs.shape[self.sdim:]
-
-    def is_scalar(self):
-        """Returns True if the function is scalar-valued."""
-        return len(self.coeffs.shape[self.sdim:]) == 0
-
-    def is_vector(self):
-        """Returns True if the function is vector-valued."""
-        return len(self.coeffs.shape[self.sdim:]) == 1
 
     def grid_eval(self, gridaxes):
         """Evaluate the function on a tensor product grid.
@@ -1132,6 +1132,9 @@ class PhysicalGradientFunc(_BaseGeoFunc):
         self.geo = geo
         self.dim = self.sdim = func.sdim
         self.support = func.support
+
+    def output_shape(self):
+        return self.func.output_shape() + (self.sdim,)
 
     def grid_eval(self, gridaxes):
         geojac = self.geo.grid_jacobian(gridaxes)

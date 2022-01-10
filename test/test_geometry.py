@@ -171,7 +171,9 @@ def test_trf_gradient():
     u = BSplineFunc(kvs, u_coeffs)
     u_grad = u.transformed_jacobian(geo)
     grid = (np.linspace(0, 1, 20),)
-    bd_grads = u_grad.boundary('right').grid_eval(grid)
+    u_grad_bd = u_grad.boundary('right')
+    bd_grads = u_grad_bd.grid_eval(grid)
+    assert u_grad_bd.is_vector()
     assert np.allclose(bd_grads,
             u_grad.grid_eval(grid + ([1.0],)).squeeze())
 
@@ -412,6 +414,7 @@ def test_userfunction():
         return (r * (1 - y**2/w), r * (1 - (1-y)**2/w))
     F = UserFunction(f, [[0,1],[0,1]])
     assert F.sdim == F.dim == 2
+    assert F.output_shape() == (2,)
     assert geos_roughly_equal(F, quarter_annulus())
 
 def test_composedfunction():

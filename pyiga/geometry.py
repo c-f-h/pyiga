@@ -99,14 +99,6 @@ class NurbsFunc(bspline._BaseSplineFunc):
             shp[-1] -= 1
             return tuple(shp)
 
-    def is_scalar(self):
-        """Returns True if the function is scalar-valued."""
-        return self.output_shape() == ()
-
-    def is_vector(self):
-        """Returns True if the function is vector-valued."""
-        return len(self.output_shape()) == 1
-
     def grid_eval(self, gridaxes):
         assert len(gridaxes) == self.sdim, "Input has wrong dimension"
         # make sure axes are one-dimensional
@@ -317,12 +309,21 @@ class UserFunction(bspline._BaseGeoFunc):
         if dim is None:
             x0 = tuple(lo for (lo,hi) in reversed(support))
             dim = np.shape(f(*x0))
+            self._output_shape = dim
             if len(dim) == 0:
                 dim = 1
             elif len(dim) == 1:
                 dim = dim[0]
+        else:
+            if np.isscalar(dim):
+                self._output_shape = (dim,)
+            else:
+                self._output_shape = dim
         self.dim = dim
         self.sdim = len(support)
+
+    def output_shape(self):
+        return self._output_shape
 
     def grid_eval(self, grd):
         return utils.grid_eval(self.f, grd)
@@ -389,6 +390,9 @@ class _BoundaryFunction(bspline._BaseGeoFunc):
         self.support = f.support[:axis] + f.support[axis+1:]
         self.dim = f.dim
         self.sdim = f.sdim - 1
+
+    def output_shape(self):
+        return self.f.output_shape()
 
     def eval(self, *x):
         x = list(x)

@@ -64,6 +64,8 @@ def _jac_to_unscaled_normal(jac):
 # Otherwise, the var has a src which is either
 # - an InputField, which means that the variable is passed in as a function when
 #   the assembler is created and evaluated in each needed quadrature point, or
+# - a Parameter, which means that the variable is passed as a constant value
+#   before assembling, or
 # - a string prefixed with '@' which has a special meaning. Currently there is
 #   only one such special var source:
 #   '@gaussweights[i]', where i in range(0,d): the Gauss quadrature weight for
@@ -98,7 +100,7 @@ class AsmVar:
         src_hash = None
         if self.expr:
             src_hash = expr_hashes[self.expr]
-        elif isinstance(self.src, InputField):
+        elif isinstance(self.src, InputField) or isinstance(self.src, Parameter):
             src_hash = self.src.hash()
         elif isinstance(self.src, str):
             src_hash = hash(self.src)
@@ -133,6 +135,8 @@ class BasisFun:
         return s + ')'
 
 class InputField:
+    """A function defined in parametric or physical coordinates which is passed
+    as an input when assembling."""
     def __init__(self, name, shape, physical, vform, updatable=False):
         self.name = name
         self.shape = shape
@@ -141,6 +145,15 @@ class InputField:
         self.updatable = updatable
     def hash(self):
         return hash((self.name, self.shape, self.physical, self.updatable))
+
+class Parameter:
+    """A constant value (scalar, vector, matrix...) which is passed as an input
+    when assembling."""
+    def __init__(self, name, shape):
+        self.name = name
+        self.shape = shape
+    def hash(self):
+        return hash((self.name, self.shape))
 
 class VForm:
     """Abstract representation of a variational form.
@@ -172,6 +185,7 @@ class VForm:
 
         self.basis_funs = None
         self.inputs = []
+        self.params = []
         self.vars = OrderedDict()
         self.exprs = []         # expressions to be added to the result
 
@@ -297,6 +311,14 @@ class VForm:
         inp = InputField(name, shape, physical, self, updatable)
         self.inputs.append(inp)
         return self._input_as_expr(inp)
+
+    def parameter(self, name, shape=()):
+        """Declare a named constant parameter with the given shape and return
+        an expression representing it.
+        """
+        param = Parameter(name, shape)
+        self.params.append(param)
+        return self.declare_sourced_var(name, shape, param)
 
     def _input_as_expr(self, inp, deriv=0):
         """Return an expr which refers to the given InputField with the desired derivative.
@@ -1052,6 +1074,8 @@ class VarRefExpr(Expr):
     def _dx_impl(self, k, times, parametric):
         if not (parametric == self.parametric or sum(self.D) == 0):
             raise RuntimeError('cannot mix physical and parametric derivatives')
+        if times == 0:
+            return self
         if self.is_input_var_expr():
             # For input vars, simply create a symbolic reference to the partial
             # derivative.  Actual derivatives will be substituted in a
@@ -1059,11 +1083,14 @@ class VarRefExpr(Expr):
             Dnew = list(self.D)
             Dnew[k] += times
             return VarRefExpr(self.var, self.I, Dnew, parametric)
+        elif isinstance(self.var.src, Parameter):
+            # parameters are constants, so any derivatives are 0
+            return ConstExpr(0)
         elif self.var.expr:
             # in case of a variable, compute derivative of the underlying expression
             return Dx(self.get_underlying_expr(), k, times, parametric=parametric)
         else:
-            raise TypeError('do not know how to compute derivative of %s' % self.x.var.name)
+            raise TypeError('do not know how to compute derivative of %s' % str(self))
 
     def find_vf(self):
         return self.var.vform

@@ -140,6 +140,17 @@ def test_input_physical():
     exprs_equal(grad(g, dims=(1,2))[1,0], Dx(g[1], 1))
     exprs_equal(grad(g)[1, :], grad(g[1]))
 
+def test_parameter():
+    vf = VForm(2, arity=1)
+    u = vf.basisfuns()
+    a = vf.parameter('a')
+    assert a.shape == ()
+    B = vf.parameter('B', (2, 3))
+    assert B.shape == (2, 3)
+    #
+    assert Dx(a, 1).shape == ()
+    exprs_equal(Dx(B[1, 2] * u, 1), B[1, 2] * Dx(u, 1), simplify=True)
+
 def test_symderiv():
     vf = VForm(3, arity=1)
     u = vf.basisfuns()

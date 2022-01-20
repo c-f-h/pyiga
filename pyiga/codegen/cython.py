@@ -39,7 +39,50 @@ class CodeGen:
         return '\n'.join(self._lines)
 
 
-class AsmGenerator:
+class CodegenVisitor:
+    def gencode(self, expr):
+        """Generate code for a given expression."""
+        dispatch = {
+                vform.ConstExpr: self.gencode_const,
+                vform.VarRefExpr: self.gencode_varref,
+                vform.NegExpr: self.gencode_neg,
+                vform.BuiltinFuncExpr: self.gencode_builtinfunc,
+                vform.ScalarOperExpr: self.gencode_scalaroper,
+                vform.PartialDerivExpr: self.gencode_partialderiv,
+        }
+        return dispatch[type(expr)](expr)
+
+    def gencode_const(self, expr):
+        return repr(expr.value)
+
+    def gencode_varref(self, expr):
+        if expr.I == ():
+            return expr.var.name
+        else:
+            return '{x}[{i}]'.format(x=expr.var.name, i=expr.to_seq())
+
+    def gencode_neg(self, expr):
+        return '-' + self.gencode(expr.x)
+
+    func_to_code = {
+            'abs' : 'fabs',
+    }
+
+    def gencode_builtinfunc(self, expr):
+        f = self.func_to_code.get(expr.funcname, expr.funcname)
+        return '%s(%s)' % (f, self.gencode(expr.x))
+
+    def gencode_scalaroper(self, expr):
+        sep = ' ' + expr.oper + ' '
+        return '(' + sep.join(self.gencode(x) for x in expr.children) + ')'
+
+    def gencode_partialderiv(self, expr):
+        assert not expr.physical, 'cannot generate code for physical derivative'
+        # gen_pderiv is defined in AsmGenerator
+        return self.gen_pderiv(expr.basisfun, expr.D)
+
+
+class AsmGenerator(CodegenVisitor):
     """Generates a Cython assembler class from an abstract :class:`pyiga.vform.VForm`."""
     def __init__(self, vform, classname, code, on_demand=False):
         self.vform = vform
@@ -49,10 +92,6 @@ class AsmGenerator:
         self.dim = self.vform.dim
         self.vec = self.vform.vec
         self.updatable = tuple(inp for inp in vform.inputs if inp.updatable)
-
-        # fixup PartialDerivExprs for code generation
-        for bf in self.vform.basis_funs:
-            bf.asmgen = self
 
     def indent(self, num=1):
         self.code.indent(num)
@@ -113,7 +152,7 @@ class AsmGenerator:
                 self.putf('{name}[{k}] = {rhs}',
                         name=var.name,
                         k=k,
-                        rhs=expr[k].gencode())
+                        rhs=self.gencode(expr[k]))
         elif expr.is_matrix():
             m, n = expr.shape
             for i in range(m):
@@ -123,9 +162,9 @@ class AsmGenerator:
                     self.putf('{name}[{k}] = {rhs}',
                             name=var.name,
                             k=i*m + j,
-                            rhs=expr[i,j].gencode())
+                            rhs=self.gencode(expr[i,j]))
         else:
-            self.put(var.name + ' = ' + expr.gencode())
+            self.put(var.name + ' = ' + self.gencode(expr))
 
     def cython_pragmas(self):
         self.put('@cython.boundscheck(False)')
@@ -174,7 +213,8 @@ class AsmGenerator:
 
         # temp storage for local variables
         for var in local_vars:
-            self.declare_var(var)
+            if var.expr:                # parameters do not have an expression
+                self.declare_var(var)
 
         # temp storage for field variables
         for var in fields:
@@ -199,7 +239,8 @@ class AsmGenerator:
 
         # generate code for computing local variables
         for var in local_vars:
-            self.gen_assign(var, var.expr)
+            if var.expr:                # parameters do not have an expression
+                self.gen_assign(var, var.expr)
 
     def generate_kernel(self):
         # function definition
@@ -246,10 +287,10 @@ class AsmGenerator:
         if self.vec:
             for expr in self.vform.exprs:
                 for i, e_i in enumerate(expr):
-                    self.put(('r[%d] += ' % i) + e_i.gencode())
+                    self.put(('r[%d] += ' % i) + self.gencode(e_i))
         else:
             for expr in self.vform.exprs:
-                self.put('r += ' + expr.gencode())
+                self.put('r += ' + self.gencode(expr))
 
         # end main loop
         for _ in range(self.dim):
@@ -355,6 +396,8 @@ class AsmGenerator:
                 return 'np.ascontiguousarray(%s.grid_hessian(self.gaussgrid))' % s.name
             else:
                 assert False, 'invalid derivative %s for input field %s' % (var.deriv, s.name)
+        elif isinstance(s, vform.Parameter):
+            assert var.deriv == 0
         elif s.startswith('@gaussweights'):
             return s[1:]
         else:

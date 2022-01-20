@@ -60,6 +60,17 @@ def test_codegen_vecfunctional():
     codegen.AsmGenerator(vf, 'TestAsm', code).generate()
     code = codegen.preamble() + '\n' + code.result()
 
+def test_codegen_parameter():
+    from pyiga.vform import VForm, inner, grad, dx
+    code = codegen.CodeGen()
+    dim = 2
+    vf = VForm(dim, arity=1)
+    u = vf.basisfuns()
+    b = vf.parameter('b', shape=(dim,))
+    vf.add(inner(grad(u), b) * dx)
+    codegen.AsmGenerator(vf, 'TestAsm', code).generate()
+    code = codegen.preamble() + '\n' + code.result()
+
 def test_codegen_wave_st2d():
     code = codegen.CodeGen()
     vf = vform.wave_st_vf(2)

@@ -125,7 +125,6 @@ class BasisFun:
         self.numcomp = numcomp  # number of components; None means scalar
         self.component = component  # for vector-valued basis functions
         self.space = space
-        self.asmgen = None  # to be set to AsmGenerator for code generation
     def hash(self):
         return hash((self.name, self.numcomp, self.component, self.space))
     def __str__(self):
@@ -318,7 +317,7 @@ class VForm:
         """
         param = Parameter(name, shape)
         self.params.append(param)
-        return self.declare_sourced_var(name, shape, param)
+        return self.declare_sourced_var(name, shape, param, is_array=False)
 
     def _input_as_expr(self, inp, deriv=0):
         """Return an expr which refers to the given InputField with the desired derivative.
@@ -369,9 +368,9 @@ class VForm:
         """Define a variable with the given name which has the given expr as its value."""
         return self.set_var(name, AsmVar(self, name, expr, shape=None, symmetric=symmetric)).as_expr
 
-    def declare_sourced_var(self, name, shape, src, symmetric=False, deriv=0, depend_dims=None):
+    def declare_sourced_var(self, name, shape, src, symmetric=False, deriv=0, is_array=True, depend_dims=None):
         return self.set_var(name,
-            AsmVar(self, name, src=src, shape=shape, is_array=True,
+            AsmVar(self, name, src=src, shape=shape, is_array=is_array,
                 symmetric=symmetric, deriv=deriv, depend_dims=depend_dims)).as_expr
 
     def add(self, expr):
@@ -931,8 +930,6 @@ class ConstExpr(Expr):
         return abs(self.value - val) < 1e-15
     def hash_key(self):
         return (self.value,)
-    def gencode(self):
-        return repr(self.value)
     def _dx_impl(self, k, times, parametric):
         return as_expr(0) if times > 0 else self
     base_complexity = 0
@@ -1012,12 +1009,6 @@ class VarRefExpr(Expr):
             if self.var.symmetric and i > j:
                 i, j = j, i
             return i * self.var.shape[1] + j
-
-    def gencode(self):
-        if self.I == ():
-            return self.var.name
-        else:
-            return '{x}[{i}]'.format(x=self.var.name, i=self.to_seq())
 
     def is_var_expr(self):
         return True
@@ -1112,8 +1103,6 @@ class NegExpr(Expr):
         self.children = (expr,)
     def __str__(self):
         return '-%s' % str(self.x)
-    def gencode(self):
-        return '-' + self.x.gencode()
     base_complexity = 0 # don't bother extracting subexpressions which are simple negation
 
 class BuiltinFuncExpr(Expr):
@@ -1125,12 +1114,6 @@ class BuiltinFuncExpr(Expr):
         self.children = (expr,)
     def __str__(self):
         return '%s(%s)' % (self.funcname, str(self.x))
-    def gencode(self):
-        f = self.func_to_code.get(self.funcname, self.funcname)
-        return '%s(%s)' % (f, self.x.gencode())
-    func_to_code = {
-            'abs' : 'fabs',
-    }
 
 def OperExpr(oper, x, y):
     # coerce arguments to Expr, in case they are number literals
@@ -1220,10 +1203,6 @@ class ScalarOperExpr(Expr):
         else:
             raise ValueError('do not know how to compute derivative for operation %s' % self.oper)
 
-    def gencode(self):
-        sep = ' ' + self.oper + ' '
-        return '(' + sep.join(x.gencode() for x in self.children) + ')'
-
 _oper_to_func = {
         '+': operator.add,
         '-': operator.sub,
@@ -1295,9 +1274,6 @@ class PartialDerivExpr(Expr):
     def hash_key(self):
         return (self.basisfun.hash(), self.D, self.physical)
 
-    def gencode(self):
-        assert not self.physical, 'cannot generate code for physical derivative'
-        return self.basisfun.asmgen.gen_pderiv(self.basisfun, self.D)
     def depends(self):
         return set((self.basisfun,))
 

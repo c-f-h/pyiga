@@ -332,6 +332,13 @@ def test_assemble_surface_vf():
     f = assemble_vf(vf, kvs, geo=geo_3d.boundary('right')) # outer mantle
     assert np.allclose(f.sum(), (2 * 2 * np.pi) / 4)    # r=2 at outer mantle, one quarter of the full circle
 
+def test_assemble_vf_with_params():
+    geo = geometry.quarter_annulus()
+    kvs = 2 * (bspline.make_knots(3, 0.0, 1.0, 10),)
+    f = assemble('a * inner(grad(u), b) * dx', kvs, geo=geo, a=1.8, b=(-1.5, 0.7))
+    f2 = assemble('1.8 * inner(grad(u), (-1.5, 0.7)) * dx', kvs, geo=geo)
+    assert np.allclose(f, f2)
+
 def test_assemble_string():
     kvs = 2 * (bspline.make_knots(2, 0.0, 1.0, 10),)
     geo = geometry.quarter_annulus()

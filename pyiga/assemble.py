@@ -917,15 +917,25 @@ def instantiate_assembler(problem, kvs, args, bfuns, updatable=[]):
         # (it is valid to specify additional, non-used args)
         used_args = dict()
         for inp in problem.inputs().keys():
-            if not inp in args:
+            if inp not in args:
                 raise ValueError("required input parameter '%s' missing" % inp)
             used_args[inp] = args[inp]
 
         if num_spaces <= 1:
-            return problem(kvs, **used_args)
+            asm = problem(kvs, **used_args)
         else:
             assert num_spaces == 2, 'no more than two spaces allowed'
-            return problem(kvs[0], kvs[1], **used_args)
+            asm = problem(kvs[0], kvs[1], **used_args)
+
+        if hasattr(asm, 'update_params'):
+            params = asm.parameters().keys()
+            param_values = {}
+            for p in params:
+                if p not in args:
+                    raise ValueError("required constant parameter '%s' missing" % p)
+                param_values[p] = args[p]
+            asm.update_params(**param_values)
+        return asm
 
     # if we land here, problem has invalid type
     raise TypeError("invalid type for 'problem': {}".format(type(problem)))

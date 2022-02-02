@@ -492,6 +492,7 @@ class VForm:
     def dependency_analysis(self, do_precompute=True):
         dep_graph = self.dependency_graph()
         self.linear_deps = list(networkx.topological_sort(dep_graph))
+        print([var.name for var in self.linear_deps])
 
         # determine precomputable vars (no dependency on basis functions)
         precomputable = (self.vars_without_dep_on(dep_graph, self.basis_funs)
@@ -1827,11 +1828,15 @@ def parse_vf(expr, kvs, args=dict(), bfuns=None, updatable=[]):
         loc[bfuns[0][0]] = u
         loc[bfuns[1][0]] = v
 
-    # set up used input functions
+    # set up used input functions and constant parameters
     for inp in sorted(set(args.keys()) & words):
         upd = (inp in updatable)
-        shp, phys = _check_input_field(kvs, args[inp])
-        loc[inp] = vf.input(inp, shape=shp, physical=phys, updatable=upd)
+        if callable(args[inp]):     # function - treat as input field
+            shp, phys = _check_input_field(kvs, args[inp])
+            loc[inp] = vf.input(inp, shape=shp, physical=phys, updatable=upd)
+        else:       # constant value or array - treat as parameter
+            shp = np.shape(args[inp])
+            loc[inp] = vf.parameter(inp, shape=shp)
 
     # set up additional terms
     if 'x' in words and 'x' not in args:

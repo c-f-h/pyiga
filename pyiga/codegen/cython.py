@@ -1,5 +1,8 @@
 from jinja2 import Template
 from pyiga import vform
+from functools import reduce
+import operator
+import numpy as np
 
 class CodeGen:
     """Basic code generation helper for Cython."""
@@ -56,10 +59,18 @@ class CodegenVisitor:
         return repr(expr.value)
 
     def gencode_varref(self, expr):
-        if expr.I == ():
-            return expr.var.name
+        if isinstance(expr.var.src, vform.Parameter):
+            par, sz, ofs = self.param_info[expr.var.src.name]
+            if par.shape == ():
+                idx = ofs
+            else:
+                idx = ofs + np.ravel_multi_index(expr.I, par.shape)
+            return 'params[{i}]'.format(i=idx)
         else:
-            return '{x}[{i}]'.format(x=expr.var.name, i=expr.to_seq())
+            if expr.I == ():
+                return expr.var.name
+            else:
+                return '{x}[{i}]'.format(x=expr.var.name, i=expr.to_seq())
 
     def gencode_neg(self, expr):
         return '-' + self.gencode(expr.x)
@@ -262,6 +273,8 @@ class AsmGenerator(CodegenVisitor):
         for bfun in self.vform.basis_funs:
             self.put(self.dimrep('double* VD%s{}' % bfun.name) + ',')
 
+        if self.num_params > 0:
+            self.put('double params[],')    # array for constant parameters
         self.put('double result[]')     # output argument
         self.dedent()
         self.put(') nogil:')
@@ -372,6 +385,9 @@ class AsmGenerator(CodegenVisitor):
         for bfun in self.vform.basis_funs:
             self.put(self.dimrep('values_%s[{0}]' % bfun.name) + ',')
 
+        if self.num_params > 0:
+            self.put('self.params,')
+
         # generate output argument
         self.put('result')
 
@@ -404,13 +420,24 @@ class AsmGenerator(CodegenVisitor):
             assert False, 'invalid source %s for var %s' % (s, var.name)
 
     def generate_metadata(self):
-        # generate an 'inputs' property which returns a name->shape dict
+        # generate an 'inputs' class method which returns a name->shape dict
         self.put('@classmethod')
         self.put('def inputs(cls):')
         self.indent()
         self.put('return {')
         for inp in self.vform.inputs:
             self.putf("    '{name}': {shp},", name=inp.name, shp=inp.shape)
+        self.put('}')
+        self.dedent()
+        self.put('')
+
+        # generate an 'parameters' class method which returns a name->shape dict
+        self.put('@classmethod')
+        self.put('def parameters(cls):')
+        self.indent()
+        self.put('return {')
+        for par in self.vform.params:
+            self.putf("    '{name}': {shp},", name=par.name, shp=par.shape)
         self.put('}')
         self.dedent()
         self.put('')
@@ -499,7 +526,10 @@ class AsmGenerator(CodegenVisitor):
             self.put(self.dimrep('gaussgrid[{}].shape[0]') + ',')
             # generate arguments for input and output fields
             for var in vf.precomp_deps + vf.precomp:
+                print(var.name, var.src, var.expr)
                 self.put(array_var_ref(var) + ',')
+            if self.num_params > 0:
+                self.put('self.params,')
             self.dedent(2)
             self.put(')')
 
@@ -527,6 +557,9 @@ class AsmGenerator(CodegenVisitor):
         self.declare_params(vf.precomp_deps)
         self.put('# output')
         self.declare_params(vf.precomp)
+        if self.num_params > 0:
+            self.put('# constant parameters')
+            self.put('double params[],')    # array for constant parameters
         self.dedent()
         self.put(') nogil:')
 
@@ -547,14 +580,12 @@ class AsmGenerator(CodegenVisitor):
         self.end_function()
 
     def generate_update(self):
-        vf = self.vform
-
         self.putf('def update(self, {args}):',
                 args=', '.join('%s=None' % inp.name for inp in self.updatable))
         self.indent()
 
         # declare/initialize array variables
-        for var in vf.linear_deps:
+        for var in self.vform.linear_deps:
             if not isinstance(var, vform.BasisFun) and var.src in self.updatable:
                 assert var.is_array and var.is_global, 'only global array vars can be updated'
                 self.putf("if {name}:", name=var.src.name)
@@ -563,11 +594,41 @@ class AsmGenerator(CodegenVisitor):
                 self.dedent()
         self.end_function()
 
+    def generate_update_params(self):
+        self.putf('def update_params(self, {args}):',
+                args=', '.join('%s=None' % par.name for par in self.vform.params))
+        self.indent()
+
+        for par in self.vform.params:
+            self.putf("if {name} is not None:", name=par.name)
+            self.indent()
+            self.putf("if np.shape({name}) != {shp}: raise TypeError('{name} has improper shape')",
+                    name=par.name, shp=par.shape)
+            ofs = self.param_info[par.name][2]
+            sz  = self.param_info[par.name][1]
+            self.putf("values = np.ravel({name})", name=par.name)
+            self.putf("for i in range({sz}):", sz=sz)
+            self.indent()
+            self.putf("self.params[{ofs} + i] = values[i]", ofs=ofs)
+            self.dedent()
+            self.dedent()
+        self.end_function()
+
+    def allocate_params(self):
+        ofs = 0
+        self.param_info = {}
+        for par in self.vform.params:
+            sz = reduce(operator.mul, par.shape, 1) # number of scalar entries
+            self.param_info[par.name] = (par, sz, ofs)
+            ofs += sz
+        self.num_params = ofs
+
     # main code generation entry point
 
     def generate(self):
         self.vform.finalize(do_precompute=not self.on_demand)
         self.numderiv = self.vform.find_max_deriv()
+        self.allocate_params()
 
         self.env = {
             'dim': self.vform.dim,
@@ -585,6 +646,10 @@ class AsmGenerator(CodegenVisitor):
                 if var.is_array and var.is_global)
         self.put('')
 
+        if self.num_params > 0:
+            self.putf('cdef double[{np}] params', np=self.num_params)
+            self.put('')
+
         # generate metadata accessors
         self.generate_metadata()
 
@@ -601,6 +666,10 @@ class AsmGenerator(CodegenVisitor):
         if self.updatable:
             self.put('')
             self.generate_update()
+
+        if self.num_params > 0:
+            self.put('')
+            self.generate_update_params()
 
         # end of class definition
         self.dedent()

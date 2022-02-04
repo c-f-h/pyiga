@@ -526,7 +526,6 @@ class AsmGenerator(CodegenVisitor):
             self.put(self.dimrep('gaussgrid[{}].shape[0]') + ',')
             # generate arguments for input and output fields
             for var in vf.precomp_deps + vf.precomp:
-                print(var.name, var.src, var.expr)
                 self.put(array_var_ref(var) + ',')
             if self.num_params > 0:
                 self.put('self.params,')

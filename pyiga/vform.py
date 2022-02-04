@@ -492,7 +492,6 @@ class VForm:
     def dependency_analysis(self, do_precompute=True):
         dep_graph = self.dependency_graph()
         self.linear_deps = list(networkx.topological_sort(dep_graph))
-        print([var.name for var in self.linear_deps])
 
         # determine precomputable vars (no dependency on basis functions)
         precomputable = (self.vars_without_dep_on(dep_graph, self.basis_funs)

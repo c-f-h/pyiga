@@ -33,6 +33,11 @@ cdef class MassAssembler2D(BaseAssembler2D):
             'geo': (2,),
         }
 
+    @classmethod
+    def parameters(cls):
+        return {
+        }
+
     def __init__(self, kvs0, geo):
         self.arity = 2
         self.nqp = max([kv.p for kv in kvs0]) + 1
@@ -175,6 +180,11 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
     def inputs(cls):
         return {
             'geo': (2,),
+        }
+
+    @classmethod
+    def parameters(cls):
+        return {
         }
 
     def __init__(self, kvs0, geo):
@@ -341,6 +351,11 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
     def inputs(cls):
         return {
             'geo': (2,),
+        }
+
+    @classmethod
+    def parameters(cls):
+        return {
         }
 
     def __init__(self, kvs0, geo):
@@ -511,6 +526,11 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
             'geo': (2,),
         }
 
+    @classmethod
+    def parameters(cls):
+        return {
+        }
+
     def __init__(self, kvs0, geo):
         self.arity = 2
         self.nqp = max([kv.p for kv in kvs0]) + 1
@@ -679,6 +699,11 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     def inputs(cls):
         return {
             'geo': (2,),
+        }
+
+    @classmethod
+    def parameters(cls):
+        return {
         }
 
     def __init__(self, kvs0, geo):
@@ -867,6 +892,11 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
             'f': (),
         }
 
+    @classmethod
+    def parameters(cls):
+        return {
+        }
+
     def __init__(self, kvs0, geo, f):
         self.arity = 1
         self.nqp = max([kv.p for kv in kvs0]) + 1
@@ -1005,6 +1035,11 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
             'f': (),
         }
 
+    @classmethod
+    def parameters(cls):
+        return {
+        }
+
     def __init__(self, kvs0, geo, f):
         self.arity = 1
         self.nqp = max([kv.p for kv in kvs0]) + 1
@@ -1138,6 +1173,11 @@ cdef class MassAssembler3D(BaseAssembler3D):
     def inputs(cls):
         return {
             'geo': (3,),
+        }
+
+    @classmethod
+    def parameters(cls):
+        return {
         }
 
     def __init__(self, kvs0, geo):
@@ -1305,6 +1345,11 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
     def inputs(cls):
         return {
             'geo': (3,),
+        }
+
+    @classmethod
+    def parameters(cls):
+        return {
         }
 
     def __init__(self, kvs0, geo):
@@ -1514,6 +1559,11 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
             'geo': (3,),
         }
 
+    @classmethod
+    def parameters(cls):
+        return {
+        }
+
     def __init__(self, kvs0, geo):
         self.arity = 2
         self.nqp = max([kv.p for kv in kvs0]) + 1
@@ -1718,6 +1768,11 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
     def inputs(cls):
         return {
             'geo': (3,),
+        }
+
+    @classmethod
+    def parameters(cls):
+        return {
         }
 
     def __init__(self, kvs0, geo):
@@ -1926,6 +1981,11 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     def inputs(cls):
         return {
             'geo': (3,),
+        }
+
+    @classmethod
+    def parameters(cls):
+        return {
         }
 
     def __init__(self, kvs0, geo):
@@ -2166,6 +2226,11 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
             'f': (),
         }
 
+    @classmethod
+    def parameters(cls):
+        return {
+        }
+
     def __init__(self, kvs0, geo, f):
         self.arity = 1
         self.nqp = max([kv.p for kv in kvs0]) + 1
@@ -2320,6 +2385,11 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
         return {
             'geo': (3,),
             'f': (),
+        }
+
+    @classmethod
+    def parameters(cls):
+        return {
         }
 
     def __init__(self, kvs0, geo, f):

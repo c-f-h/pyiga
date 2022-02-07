@@ -404,7 +404,7 @@ class AsmGenerator(CodegenVisitor):
             self.put(self.dimrep('values_%s[{0}]' % bfun.name) + ',')
 
         if self.num_params > 0:
-            self.put('self.params,')
+            self.put('&self.constants[0],')
 
         # generate output argument
         self.put('result')
@@ -477,6 +477,9 @@ class AsmGenerator(CodegenVisitor):
             self.put('kvs1 = kvs0')
         self.put('self.kvs = (kvs0, kvs1)')
 
+        if self.num_params > 0:
+            self.putf('self.constants = np.zeros({np})', np=self.num_params)
+
         if self.vec:
             numcomp = vf.num_components()
             numcomp += (2 - len(numcomp)) * (0,) # pad to 2
@@ -548,7 +551,7 @@ class AsmGenerator(CodegenVisitor):
             for var in vf.precomp_deps + vf.precomp:
                 self.put(array_var_ref(var) + ',')
             if self.num_params > 0:
-                self.put('self.params,')
+                self.put('&self.constants[0],')
             self.dedent(2)
             self.put(')')
 
@@ -630,7 +633,7 @@ class AsmGenerator(CodegenVisitor):
             self.putf("values = np.ravel({name})", name=par.name)
             self.putf("for i in range({sz}):", sz=sz)
             self.indent()
-            self.putf("self.params[{ofs} + i] = values[i]", ofs=ofs)
+            self.putf("self.constants[{ofs} + i] = values[i]", ofs=ofs)
             self.dedent()
             self.dedent()
         self.end_function()
@@ -659,10 +662,6 @@ class AsmGenerator(CodegenVisitor):
         self.global_info, self.num_globals = allocate_array(global_vars)
         self.declare_array_vars(global_vars)
         self.put('')
-
-        if self.num_params > 0:
-            self.putf('cdef double[{np}] params', np=self.num_params)
-            self.put('')
 
         # generate metadata accessors
         self.generate_metadata()
@@ -723,6 +722,8 @@ cdef class BaseAssembler{{DIM}}D:
     cdef readonly tuple kvs
     cdef object _geo
     cdef tuple gaussgrid
+    cdef double[::1] constants
+    cdef double[{{ dimrepeat(':') }}, ::1] fields
     {%- for k in range(DIM) %}
     cdef double[::1] gaussweights{{k}}
     {%- endfor %}
@@ -869,6 +870,8 @@ cdef class BaseVectorAssembler{{DIM}}D:
     cdef readonly tuple kvs
     cdef object _geo
     cdef tuple gaussgrid
+    cdef double[::1] constants
+    cdef double[{{ dimrepeat(':') }}:1] fields
     {%- for k in range(DIM) %}
     cdef double[::1] gaussweights{{k}}
     {%- endfor %}

@@ -16,6 +16,8 @@ cdef class BaseAssembler1D:
     cdef readonly tuple kvs
     cdef object _geo
     cdef tuple gaussgrid
+    cdef double[::1] constants
+    cdef double[:, ::1] fields
     cdef double[::1] gaussweights0
     cdef size_t[1] bbox_ofs
 
@@ -159,6 +161,8 @@ cdef class BaseVectorAssembler1D:
     cdef readonly tuple kvs
     cdef object _geo
     cdef tuple gaussgrid
+    cdef double[::1] constants
+    cdef double[::1] fields
     cdef double[::1] gaussweights0
 
     def num_components(self):
@@ -330,6 +334,8 @@ cdef class BaseAssembler2D:
     cdef readonly tuple kvs
     cdef object _geo
     cdef tuple gaussgrid
+    cdef double[::1] constants
+    cdef double[:, :, ::1] fields
     cdef double[::1] gaussweights0
     cdef double[::1] gaussweights1
     cdef size_t[2] bbox_ofs
@@ -478,6 +484,8 @@ cdef class BaseVectorAssembler2D:
     cdef readonly tuple kvs
     cdef object _geo
     cdef tuple gaussgrid
+    cdef double[::1] constants
+    cdef double[:, ::1] fields
     cdef double[::1] gaussweights0
     cdef double[::1] gaussweights1
 
@@ -664,6 +672,8 @@ cdef class BaseAssembler3D:
     cdef readonly tuple kvs
     cdef object _geo
     cdef tuple gaussgrid
+    cdef double[::1] constants
+    cdef double[:, :, :, ::1] fields
     cdef double[::1] gaussweights0
     cdef double[::1] gaussweights1
     cdef double[::1] gaussweights2
@@ -817,6 +827,8 @@ cdef class BaseVectorAssembler3D:
     cdef readonly tuple kvs
     cdef object _geo
     cdef tuple gaussgrid
+    cdef double[::1] constants
+    cdef double[:, :, ::1] fields
     cdef double[::1] gaussweights0
     cdef double[::1] gaussweights1
     cdef double[::1] gaussweights2

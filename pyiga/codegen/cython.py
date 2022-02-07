@@ -198,9 +198,8 @@ class AsmGenerator(CodegenVisitor):
         self.put('@cython.initializedcheck(False)')
 
     def field_type(self, var, contiguous=True):
-        dim = self.dim if (var.depend_dims is None) else len(var.depend_dims)
         s = 'double[{X}:1]' if contiguous else 'double[{X}]'
-        return s.format(X=', '.join((dim + len(var.shape)) * ':'))
+        return s.format(X=', '.join((self.dim + len(var.shape)) * ':'))
 
     def declare_var(self, var, ref=False):
         if ref:
@@ -398,7 +397,7 @@ class AsmGenerator(CodegenVisitor):
         for var in self.vform.kernel_deps:
             if var.is_array:
                 self.putf('self.{name} [ {idx} ],', name=var.name,
-                        idx=self.dimrep('g_sta[{0}]:g_end[{0}]', dims=var.depend_dims))
+                        idx=self.dimrep('g_sta[{0}]:g_end[{0}]'))
 
         # generate basis function value arguments
         for bfun in self.vform.basis_funs:
@@ -558,7 +557,7 @@ class AsmGenerator(CodegenVisitor):
 
     def field_var_entry(self, var, idx, first_entry=False):
         """Generate a reference to the current entry in the given field variable."""
-        I = self.dimrep(idx + '{}', dims=var.depend_dims)
+        I = self.dimrep(idx + '{}')
         if first_entry:
             I += (len(var.shape) * ', 0')
         return '_%s[%s]' % (var.name, I)

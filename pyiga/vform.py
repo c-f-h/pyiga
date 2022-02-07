@@ -72,7 +72,7 @@ def _jac_to_unscaled_normal(jac):
 # BasisFun object.
 
 class AsmVar:
-    def __init__(self, vf, name, src, shape, is_array=False, symmetric=False, deriv=None, depend_dims=None):
+    def __init__(self, vf, name, src, shape, is_array=False, symmetric=False, deriv=None):
         self.vform = vf
         self.name = name
         if isinstance(src, Expr):
@@ -88,7 +88,6 @@ class AsmVar:
         self.is_global = False  # is variable needed during assemble, or only setup?
         self.symmetric = (len(self.shape) == 2 and symmetric)
         self.deriv = deriv      # for input fields only
-        self.depend_dims = depend_dims  # for input fields only (which axes does it depend on)
         self.as_expr = make_var_expr(vf, self)
 
     def hash(self, expr_hashes):
@@ -102,7 +101,7 @@ class AsmVar:
             src_hash = hash(self.src)
         else:
             assert False, 'no expr and invalid src'
-        return hash((self.name, src_hash, self.shape, self.symmetric, self.deriv, self.depend_dims))
+        return hash((self.name, src_hash, self.shape, self.symmetric, self.deriv))
 
     def __str__(self):
         return self.name
@@ -360,10 +359,10 @@ class VForm:
         """Define a variable with the given name which has the given expr as its value."""
         return self.set_var(name, AsmVar(self, name, expr, shape=None, symmetric=symmetric)).as_expr
 
-    def declare_sourced_var(self, name, shape, src, symmetric=False, deriv=0, is_array=True, depend_dims=None):
+    def declare_sourced_var(self, name, shape, src, symmetric=False, deriv=0, is_array=True):
         return self.set_var(name,
             AsmVar(self, name, src=src, shape=shape, is_array=is_array,
-                symmetric=symmetric, deriv=deriv, depend_dims=depend_dims)).as_expr
+                symmetric=symmetric, deriv=deriv)).as_expr
 
     def add(self, expr):
         """Add an expression to this VForm."""

@@ -50,6 +50,8 @@ cdef class MassAssembler2D(BaseAssembler2D):
         # NB: we assume all kvs result in the same mesh
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         self.gaussgrid = gaussgrid
+        self.gaussweights0 = gaussweights[0]
+        self.gaussweights1 = gaussweights[1]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
@@ -66,17 +68,12 @@ cdef class MassAssembler2D(BaseAssembler2D):
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=0)
 
         cdef double[:, :, :, ::1] geo_grad_a
-        cdef double[::1] gw1
-        cdef double[::1] gw0
         geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        gw1 = gaussweights[1]
-        gw0 = gaussweights[0]
         self.W = np.empty(N + ())
         MassAssembler2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
+                &self.gaussweights0[0], &self.gaussweights1[0],
                 geo_grad_a,
-                gw1,
-                gw0,
                 self.W,
         )
 
@@ -87,17 +84,15 @@ cdef class MassAssembler2D(BaseAssembler2D):
     cdef void precompute_fields(
             # dimensions
             size_t n0, size_t n1,
+            # Gauss weights
+            double* _gw0, double* _gw1,
             # input
             double[:, :, :, ::1] _geo_grad_a,
-            double[::1] _gw1,
-            double[::1] _gw0,
             # output
             double[:, ::1] _W,
         ) nogil:
         cdef double GaussWeight
         cdef double* geo_grad_a
-        cdef double gw1
-        cdef double gw0
         cdef double W
         cdef size_t i0
         cdef size_t i1
@@ -105,10 +100,8 @@ cdef class MassAssembler2D(BaseAssembler2D):
         for i0 in range(n0):
             for i1 in range(n1):
                 geo_grad_a = &_geo_grad_a[i0, i1, 0, 0]
-                gw1 = _gw1[i1]
-                gw0 = _gw0[i0]
 
-                GaussWeight = (gw0 * gw1)
+                GaussWeight = (_gw0[i0] * _gw1[i1])
                 W = (GaussWeight * fabs(((geo_grad_a[0] * geo_grad_a[3]) - (geo_grad_a[1] * geo_grad_a[2]))))
                 _W[i0, i1] = W
 
@@ -118,6 +111,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
     @staticmethod
     cdef void combine(
             size_t n0, size_t n1,
+            double* _gw0, double* _gw1,
             double[:, :] _W,
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
@@ -167,6 +161,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
 
         MassAssembler2D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1],
+                &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_u[0], values_u[1],
                 values_v[0], values_v[1],
@@ -199,6 +194,8 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         # NB: we assume all kvs result in the same mesh
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         self.gaussgrid = gaussgrid
+        self.gaussweights0 = gaussweights[0]
+        self.gaussweights1 = gaussweights[1]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
@@ -215,17 +212,12 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
 
         cdef double[:, :, :, ::1] geo_grad_a
-        cdef double[::1] gw1
-        cdef double[::1] gw0
         geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        gw1 = gaussweights[1]
-        gw0 = gaussweights[0]
         self.B = np.empty(N + (2, 2))
         StiffnessAssembler2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
+                &self.gaussweights0[0], &self.gaussweights1[0],
                 geo_grad_a,
-                gw1,
-                gw0,
                 self.B,
         )
 
@@ -236,10 +228,10 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
     cdef void precompute_fields(
             # dimensions
             size_t n0, size_t n1,
+            # Gauss weights
+            double* _gw0, double* _gw1,
             # input
             double[:, :, :, ::1] _geo_grad_a,
-            double[::1] _gw1,
-            double[::1] _gw0,
             # output
             double[:, :, :, ::1] _B,
         ) nogil:
@@ -249,8 +241,6 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         cdef double GaussWeight
         cdef double W
         cdef double* geo_grad_a
-        cdef double gw1
-        cdef double gw0
         cdef double* B
         cdef size_t i0
         cdef size_t i1
@@ -258,8 +248,6 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         for i0 in range(n0):
             for i1 in range(n1):
                 geo_grad_a = &_geo_grad_a[i0, i1, 0, 0]
-                gw1 = _gw1[i1]
-                gw0 = _gw0[i0]
                 B = &_B[i0, i1, 0, 0]
 
                 _tmp2 = ((geo_grad_a[0] * geo_grad_a[3]) - (geo_grad_a[1] * geo_grad_a[2]))
@@ -268,7 +256,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
                 JacInv[1] = (_tmp1 * -geo_grad_a[1])
                 JacInv[2] = (_tmp1 * -geo_grad_a[2])
                 JacInv[3] = (_tmp1 * geo_grad_a[0])
-                GaussWeight = (gw0 * gw1)
+                GaussWeight = (_gw0[i0] * _gw1[i1])
                 W = (GaussWeight * fabs(_tmp2))
                 B[0] = (W * ((JacInv[0] * JacInv[0]) + (JacInv[1] * JacInv[1])))
                 B[1] = (W * ((JacInv[0] * JacInv[2]) + (JacInv[1] * JacInv[3])))
@@ -280,6 +268,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
     @staticmethod
     cdef void combine(
             size_t n0, size_t n1,
+            double* _gw0, double* _gw1,
             double[:, :, :, :] _B,
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
@@ -337,6 +326,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
 
         StiffnessAssembler2D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1],
+                &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]],
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_u[0], values_u[1],
                 values_v[0], values_v[1],
@@ -370,6 +360,8 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         # NB: we assume all kvs result in the same mesh
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         self.gaussgrid = gaussgrid
+        self.gaussweights0 = gaussweights[0]
+        self.gaussweights1 = gaussweights[1]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
@@ -385,18 +377,13 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
 
-        cdef double[::1] gw1
-        cdef double[::1] gw0
         cdef double[:, :, :, ::1] geo_grad_a
-        gw1 = gaussweights[1]
-        gw0 = gaussweights[0]
         geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
         self.W = np.empty(N + ())
         self.JacInv = np.empty(N + (2, 2))
         HeatAssembler_ST2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
-                gw1,
-                gw0,
+                &self.gaussweights0[0], &self.gaussweights1[0],
                 geo_grad_a,
                 self.W,
                 self.JacInv,
@@ -409,9 +396,9 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
     cdef void precompute_fields(
             # dimensions
             size_t n0, size_t n1,
+            # Gauss weights
+            double* _gw0, double* _gw1,
             # input
-            double[::1] _gw1,
-            double[::1] _gw0,
             double[:, :, :, ::1] _geo_grad_a,
             # output
             double[:, ::1] _W,
@@ -420,8 +407,6 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         cdef double GaussWeight
         cdef double _tmp2
         cdef double _tmp1
-        cdef double gw1
-        cdef double gw0
         cdef double* geo_grad_a
         cdef double W
         cdef double* JacInv
@@ -430,12 +415,10 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
 
         for i0 in range(n0):
             for i1 in range(n1):
-                gw1 = _gw1[i1]
-                gw0 = _gw0[i0]
                 geo_grad_a = &_geo_grad_a[i0, i1, 0, 0]
                 JacInv = &_JacInv[i0, i1, 0, 0]
 
-                GaussWeight = (gw0 * gw1)
+                GaussWeight = (_gw0[i0] * _gw1[i1])
                 _tmp2 = ((geo_grad_a[0] * geo_grad_a[3]) - (geo_grad_a[1] * geo_grad_a[2]))
                 _tmp1 = (1.0 / _tmp2)
                 W = (GaussWeight * fabs(_tmp2))
@@ -451,6 +434,7 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
     @staticmethod
     cdef void combine(
             size_t n0, size_t n1,
+            double* _gw0, double* _gw1,
             double[:, :] _W,
             double[:, :, :, :] _JacInv,
             double* VDu0, double* VDu1,
@@ -509,6 +493,7 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
 
         HeatAssembler_ST2D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1],
+                &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_u[0], values_u[1],
@@ -543,6 +528,8 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         # NB: we assume all kvs result in the same mesh
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         self.gaussgrid = gaussgrid
+        self.gaussweights0 = gaussweights[0]
+        self.gaussweights1 = gaussweights[1]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
@@ -558,18 +545,13 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=2)
 
-        cdef double[::1] gw1
-        cdef double[::1] gw0
         cdef double[:, :, :, ::1] geo_grad_a
-        gw1 = gaussweights[1]
-        gw0 = gaussweights[0]
         geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
         self.W = np.empty(N + ())
         self.JacInv = np.empty(N + (2, 2))
         WaveAssembler_ST2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
-                gw1,
-                gw0,
+                &self.gaussweights0[0], &self.gaussweights1[0],
                 geo_grad_a,
                 self.W,
                 self.JacInv,
@@ -582,9 +564,9 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
     cdef void precompute_fields(
             # dimensions
             size_t n0, size_t n1,
+            # Gauss weights
+            double* _gw0, double* _gw1,
             # input
-            double[::1] _gw1,
-            double[::1] _gw0,
             double[:, :, :, ::1] _geo_grad_a,
             # output
             double[:, ::1] _W,
@@ -593,8 +575,6 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         cdef double GaussWeight
         cdef double _tmp2
         cdef double _tmp1
-        cdef double gw1
-        cdef double gw0
         cdef double* geo_grad_a
         cdef double W
         cdef double* JacInv
@@ -603,12 +583,10 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
 
         for i0 in range(n0):
             for i1 in range(n1):
-                gw1 = _gw1[i1]
-                gw0 = _gw0[i0]
                 geo_grad_a = &_geo_grad_a[i0, i1, 0, 0]
                 JacInv = &_JacInv[i0, i1, 0, 0]
 
-                GaussWeight = (gw0 * gw1)
+                GaussWeight = (_gw0[i0] * _gw1[i1])
                 _tmp2 = ((geo_grad_a[0] * geo_grad_a[3]) - (geo_grad_a[1] * geo_grad_a[2]))
                 _tmp1 = (1.0 / _tmp2)
                 W = (GaussWeight * fabs(_tmp2))
@@ -624,6 +602,7 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
     @staticmethod
     cdef void combine(
             size_t n0, size_t n1,
+            double* _gw0, double* _gw1,
             double[:, :] _W,
             double[:, :, :, :] _JacInv,
             double* VDu0, double* VDu1,
@@ -684,6 +663,7 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
 
         WaveAssembler_ST2D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1],
+                &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_u[0], values_u[1],
@@ -719,6 +699,8 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         # NB: we assume all kvs result in the same mesh
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         self.gaussgrid = gaussgrid
+        self.gaussweights0 = gaussweights[0]
+        self.gaussweights1 = gaussweights[1]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
@@ -734,18 +716,13 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
 
-        cdef double[::1] gw1
-        cdef double[::1] gw0
         cdef double[:, :, :, ::1] geo_grad_a
-        gw1 = gaussweights[1]
-        gw0 = gaussweights[0]
         geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
         self.W = np.empty(N + ())
         self.JacInv = np.empty(N + (2, 2))
         DivDivAssembler2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
-                gw1,
-                gw0,
+                &self.gaussweights0[0], &self.gaussweights1[0],
                 geo_grad_a,
                 self.W,
                 self.JacInv,
@@ -758,9 +735,9 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     cdef void precompute_fields(
             # dimensions
             size_t n0, size_t n1,
+            # Gauss weights
+            double* _gw0, double* _gw1,
             # input
-            double[::1] _gw1,
-            double[::1] _gw0,
             double[:, :, :, ::1] _geo_grad_a,
             # output
             double[:, ::1] _W,
@@ -769,8 +746,6 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         cdef double GaussWeight
         cdef double _tmp2
         cdef double _tmp1
-        cdef double gw1
-        cdef double gw0
         cdef double* geo_grad_a
         cdef double W
         cdef double* JacInv
@@ -779,12 +754,10 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
 
         for i0 in range(n0):
             for i1 in range(n1):
-                gw1 = _gw1[i1]
-                gw0 = _gw0[i0]
                 geo_grad_a = &_geo_grad_a[i0, i1, 0, 0]
                 JacInv = &_JacInv[i0, i1, 0, 0]
 
-                GaussWeight = (gw0 * gw1)
+                GaussWeight = (_gw0[i0] * _gw1[i1])
                 _tmp2 = ((geo_grad_a[0] * geo_grad_a[3]) - (geo_grad_a[1] * geo_grad_a[2]))
                 _tmp1 = (1.0 / _tmp2)
                 W = (GaussWeight * fabs(_tmp2))
@@ -800,6 +773,7 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     @staticmethod
     cdef void combine(
             size_t n0, size_t n1,
+            double* _gw0, double* _gw1,
             double[:, :] _W,
             double[:, :, :, :] _JacInv,
             double* VDu0, double* VDu1,
@@ -874,6 +848,7 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
 
         DivDivAssembler2D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1],
+                &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_u[0], values_u[1],
@@ -909,6 +884,8 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
         # NB: we assume all kvs result in the same mesh
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         self.gaussgrid = gaussgrid
+        self.gaussweights0 = gaussweights[0]
+        self.gaussweights1 = gaussweights[1]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
@@ -925,18 +902,13 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=0)
 
         cdef double[:, :, :, ::1] geo_grad_a
-        cdef double[::1] gw1
-        cdef double[::1] gw0
         geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        gw1 = gaussweights[1]
-        gw0 = gaussweights[0]
         self.W = np.empty(N + ())
         self.f_a = np.ascontiguousarray(grid_eval(f, self.gaussgrid))
         L2FunctionalAssembler2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
+                &self.gaussweights0[0], &self.gaussweights1[0],
                 geo_grad_a,
-                gw1,
-                gw0,
                 self.W,
         )
 
@@ -947,17 +919,15 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
     cdef void precompute_fields(
             # dimensions
             size_t n0, size_t n1,
+            # Gauss weights
+            double* _gw0, double* _gw1,
             # input
             double[:, :, :, ::1] _geo_grad_a,
-            double[::1] _gw1,
-            double[::1] _gw0,
             # output
             double[:, ::1] _W,
         ) nogil:
         cdef double GaussWeight
         cdef double* geo_grad_a
-        cdef double gw1
-        cdef double gw0
         cdef double W
         cdef size_t i0
         cdef size_t i1
@@ -965,10 +935,8 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
         for i0 in range(n0):
             for i1 in range(n1):
                 geo_grad_a = &_geo_grad_a[i0, i1, 0, 0]
-                gw1 = _gw1[i1]
-                gw0 = _gw0[i0]
 
-                GaussWeight = (gw0 * gw1)
+                GaussWeight = (_gw0[i0] * _gw1[i1])
                 W = (GaussWeight * fabs(((geo_grad_a[0] * geo_grad_a[3]) - (geo_grad_a[1] * geo_grad_a[2]))))
                 _W[i0, i1] = W
 
@@ -978,6 +946,7 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
     @staticmethod
     cdef void combine(
             size_t n0, size_t n1,
+            double* _gw0, double* _gw1,
             double[:, :] _W,
             double[:, :] _f_a,
             double* VDu0, double* VDu1,
@@ -1018,6 +987,7 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
 
         L2FunctionalAssembler2D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1],
+                &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 self.f_a [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_u[0], values_u[1],
@@ -1052,6 +1022,8 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
         # NB: we assume all kvs result in the same mesh
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         self.gaussgrid = gaussgrid
+        self.gaussweights0 = gaussweights[0]
+        self.gaussweights1 = gaussweights[1]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
@@ -1068,18 +1040,13 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=0)
 
         cdef double[:, :, :, ::1] geo_grad_a
-        cdef double[::1] gw1
-        cdef double[::1] gw0
         geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        gw1 = gaussweights[1]
-        gw0 = gaussweights[0]
         self.W = np.empty(N + ())
         self.f_a = np.ascontiguousarray(grid_eval_transformed(f, self.gaussgrid, self._geo))
         L2FunctionalAssemblerPhys2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
+                &self.gaussweights0[0], &self.gaussweights1[0],
                 geo_grad_a,
-                gw1,
-                gw0,
                 self.W,
         )
 
@@ -1090,17 +1057,15 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
     cdef void precompute_fields(
             # dimensions
             size_t n0, size_t n1,
+            # Gauss weights
+            double* _gw0, double* _gw1,
             # input
             double[:, :, :, ::1] _geo_grad_a,
-            double[::1] _gw1,
-            double[::1] _gw0,
             # output
             double[:, ::1] _W,
         ) nogil:
         cdef double GaussWeight
         cdef double* geo_grad_a
-        cdef double gw1
-        cdef double gw0
         cdef double W
         cdef size_t i0
         cdef size_t i1
@@ -1108,10 +1073,8 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
         for i0 in range(n0):
             for i1 in range(n1):
                 geo_grad_a = &_geo_grad_a[i0, i1, 0, 0]
-                gw1 = _gw1[i1]
-                gw0 = _gw0[i0]
 
-                GaussWeight = (gw0 * gw1)
+                GaussWeight = (_gw0[i0] * _gw1[i1])
                 W = (GaussWeight * fabs(((geo_grad_a[0] * geo_grad_a[3]) - (geo_grad_a[1] * geo_grad_a[2]))))
                 _W[i0, i1] = W
 
@@ -1121,6 +1084,7 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
     @staticmethod
     cdef void combine(
             size_t n0, size_t n1,
+            double* _gw0, double* _gw1,
             double[:, :] _W,
             double[:, :] _f_a,
             double* VDu0, double* VDu1,
@@ -1161,6 +1125,7 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
 
         L2FunctionalAssemblerPhys2D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1],
+                &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 self.f_a [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
                 values_u[0], values_u[1],
@@ -1192,6 +1157,9 @@ cdef class MassAssembler3D(BaseAssembler3D):
         # NB: we assume all kvs result in the same mesh
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         self.gaussgrid = gaussgrid
+        self.gaussweights0 = gaussweights[0]
+        self.gaussweights1 = gaussweights[1]
+        self.gaussweights2 = gaussweights[2]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
@@ -1212,20 +1180,12 @@ cdef class MassAssembler3D(BaseAssembler3D):
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=0)
 
         cdef double[:, :, :, :, ::1] geo_grad_a
-        cdef double[::1] gw2
-        cdef double[::1] gw1
-        cdef double[::1] gw0
         geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        gw2 = gaussweights[2]
-        gw1 = gaussweights[1]
-        gw0 = gaussweights[0]
         self.W = np.empty(N + ())
         MassAssembler3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
+                &self.gaussweights0[0], &self.gaussweights1[0], &self.gaussweights2[0],
                 geo_grad_a,
-                gw2,
-                gw1,
-                gw0,
                 self.W,
         )
 
@@ -1236,19 +1196,15 @@ cdef class MassAssembler3D(BaseAssembler3D):
     cdef void precompute_fields(
             # dimensions
             size_t n0, size_t n1, size_t n2,
+            # Gauss weights
+            double* _gw0, double* _gw1, double* _gw2,
             # input
             double[:, :, :, :, ::1] _geo_grad_a,
-            double[::1] _gw2,
-            double[::1] _gw1,
-            double[::1] _gw0,
             # output
             double[:, :, ::1] _W,
         ) nogil:
         cdef double GaussWeight
         cdef double* geo_grad_a
-        cdef double gw2
-        cdef double gw1
-        cdef double gw0
         cdef double W
         cdef size_t i0
         cdef size_t i1
@@ -1258,11 +1214,8 @@ cdef class MassAssembler3D(BaseAssembler3D):
             for i1 in range(n1):
                 for i2 in range(n2):
                     geo_grad_a = &_geo_grad_a[i0, i1, i2, 0, 0]
-                    gw2 = _gw2[i2]
-                    gw1 = _gw1[i1]
-                    gw0 = _gw0[i0]
 
-                    GaussWeight = ((gw0 * gw1) * gw2)
+                    GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
                     W = (GaussWeight * fabs((((geo_grad_a[0] * ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))) - (geo_grad_a[1] * ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6])))) + (geo_grad_a[2] * ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))))))
                     _W[i0, i1, i2] = W
 
@@ -1272,6 +1225,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
     @staticmethod
     cdef void combine(
             size_t n0, size_t n1, size_t n2,
+            double* _gw0, double* _gw1, double* _gw2,
             double[:, :, :] _W,
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
@@ -1332,6 +1286,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
 
         MassAssembler3D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1], g_end[2]-g_sta[2],
+                &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]], &self.gaussweights2[g_sta[2]],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_u[0], values_u[1], values_u[2],
                 values_v[0], values_v[1], values_v[2],
@@ -1364,6 +1319,9 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         # NB: we assume all kvs result in the same mesh
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         self.gaussgrid = gaussgrid
+        self.gaussweights0 = gaussweights[0]
+        self.gaussweights1 = gaussweights[1]
+        self.gaussweights2 = gaussweights[2]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
@@ -1384,20 +1342,12 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=1)
 
         cdef double[:, :, :, :, ::1] geo_grad_a
-        cdef double[::1] gw2
-        cdef double[::1] gw1
-        cdef double[::1] gw0
         geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        gw2 = gaussweights[2]
-        gw1 = gaussweights[1]
-        gw0 = gaussweights[0]
         self.B = np.empty(N + (3, 3))
         StiffnessAssembler3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
+                &self.gaussweights0[0], &self.gaussweights1[0], &self.gaussweights2[0],
                 geo_grad_a,
-                gw2,
-                gw1,
-                gw0,
                 self.B,
         )
 
@@ -1408,11 +1358,10 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
     cdef void precompute_fields(
             # dimensions
             size_t n0, size_t n1, size_t n2,
+            # Gauss weights
+            double* _gw0, double* _gw1, double* _gw2,
             # input
             double[:, :, :, :, ::1] _geo_grad_a,
-            double[::1] _gw2,
-            double[::1] _gw1,
-            double[::1] _gw0,
             # output
             double[:, :, :, :, ::1] _B,
         ) nogil:
@@ -1425,9 +1374,6 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         cdef double GaussWeight
         cdef double W
         cdef double* geo_grad_a
-        cdef double gw2
-        cdef double gw1
-        cdef double gw0
         cdef double* B
         cdef size_t i0
         cdef size_t i1
@@ -1437,9 +1383,6 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
             for i1 in range(n1):
                 for i2 in range(n2):
                     geo_grad_a = &_geo_grad_a[i0, i1, i2, 0, 0]
-                    gw2 = _gw2[i2]
-                    gw1 = _gw1[i1]
-                    gw0 = _gw0[i0]
                     B = &_B[i0, i1, i2, 0, 0]
 
                     _tmp5 = ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))
@@ -1456,7 +1399,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                     JacInv[6] = (_tmp1 * _tmp5)
                     JacInv[7] = (_tmp1 * -((geo_grad_a[0] * geo_grad_a[7]) - (geo_grad_a[1] * geo_grad_a[6])))
                     JacInv[8] = (_tmp1 * ((geo_grad_a[0] * geo_grad_a[4]) - (geo_grad_a[1] * geo_grad_a[3])))
-                    GaussWeight = ((gw0 * gw1) * gw2)
+                    GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
                     W = (GaussWeight * fabs(_tmp2))
                     B[0] = (W * (((JacInv[0] * JacInv[0]) + (JacInv[1] * JacInv[1])) + (JacInv[2] * JacInv[2])))
                     B[1] = (W * (((JacInv[0] * JacInv[3]) + (JacInv[1] * JacInv[4])) + (JacInv[2] * JacInv[5])))
@@ -1471,6 +1414,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
     @staticmethod
     cdef void combine(
             size_t n0, size_t n1, size_t n2,
+            double* _gw0, double* _gw1, double* _gw2,
             double[:, :, :, :, :] _B,
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
@@ -1543,6 +1487,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
 
         StiffnessAssembler3D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1], g_end[2]-g_sta[2],
+                &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]], &self.gaussweights2[g_sta[2]],
                 self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_u[0], values_u[1], values_u[2],
                 values_v[0], values_v[1], values_v[2],
@@ -1576,6 +1521,9 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         # NB: we assume all kvs result in the same mesh
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         self.gaussgrid = gaussgrid
+        self.gaussweights0 = gaussweights[0]
+        self.gaussweights1 = gaussweights[1]
+        self.gaussweights2 = gaussweights[2]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
@@ -1595,21 +1543,13 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=1)
 
-        cdef double[::1] gw2
-        cdef double[::1] gw1
-        cdef double[::1] gw0
         cdef double[:, :, :, :, ::1] geo_grad_a
-        gw2 = gaussweights[2]
-        gw1 = gaussweights[1]
-        gw0 = gaussweights[0]
         geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
         self.W = np.empty(N + ())
         self.JacInv = np.empty(N + (3, 3))
         HeatAssembler_ST3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
-                gw2,
-                gw1,
-                gw0,
+                &self.gaussweights0[0], &self.gaussweights1[0], &self.gaussweights2[0],
                 geo_grad_a,
                 self.W,
                 self.JacInv,
@@ -1622,10 +1562,9 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
     cdef void precompute_fields(
             # dimensions
             size_t n0, size_t n1, size_t n2,
+            # Gauss weights
+            double* _gw0, double* _gw1, double* _gw2,
             # input
-            double[::1] _gw2,
-            double[::1] _gw1,
-            double[::1] _gw0,
             double[:, :, :, :, ::1] _geo_grad_a,
             # output
             double[:, :, ::1] _W,
@@ -1637,9 +1576,6 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         cdef double _tmp3
         cdef double _tmp2
         cdef double _tmp1
-        cdef double gw2
-        cdef double gw1
-        cdef double gw0
         cdef double* geo_grad_a
         cdef double W
         cdef double* JacInv
@@ -1650,13 +1586,10 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    gw2 = _gw2[i2]
-                    gw1 = _gw1[i1]
-                    gw0 = _gw0[i0]
                     geo_grad_a = &_geo_grad_a[i0, i1, i2, 0, 0]
                     JacInv = &_JacInv[i0, i1, i2, 0, 0]
 
-                    GaussWeight = ((gw0 * gw1) * gw2)
+                    GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
                     _tmp5 = ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))
                     _tmp4 = ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6]))
                     _tmp3 = ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))
@@ -1680,6 +1613,7 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
     @staticmethod
     cdef void combine(
             size_t n0, size_t n1, size_t n2,
+            double* _gw0, double* _gw1, double* _gw2,
             double[:, :, :] _W,
             double[:, :, :, :, :] _JacInv,
             double* VDu0, double* VDu1, double* VDu2,
@@ -1753,6 +1687,7 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
 
         HeatAssembler_ST3D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1], g_end[2]-g_sta[2],
+                &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]], &self.gaussweights2[g_sta[2]],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_u[0], values_u[1], values_u[2],
@@ -1787,6 +1722,9 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         # NB: we assume all kvs result in the same mesh
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         self.gaussgrid = gaussgrid
+        self.gaussweights0 = gaussweights[0]
+        self.gaussweights1 = gaussweights[1]
+        self.gaussweights2 = gaussweights[2]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
@@ -1806,21 +1744,13 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=2)
 
-        cdef double[::1] gw2
-        cdef double[::1] gw1
-        cdef double[::1] gw0
         cdef double[:, :, :, :, ::1] geo_grad_a
-        gw2 = gaussweights[2]
-        gw1 = gaussweights[1]
-        gw0 = gaussweights[0]
         geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
         self.W = np.empty(N + ())
         self.JacInv = np.empty(N + (3, 3))
         WaveAssembler_ST3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
-                gw2,
-                gw1,
-                gw0,
+                &self.gaussweights0[0], &self.gaussweights1[0], &self.gaussweights2[0],
                 geo_grad_a,
                 self.W,
                 self.JacInv,
@@ -1833,10 +1763,9 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
     cdef void precompute_fields(
             # dimensions
             size_t n0, size_t n1, size_t n2,
+            # Gauss weights
+            double* _gw0, double* _gw1, double* _gw2,
             # input
-            double[::1] _gw2,
-            double[::1] _gw1,
-            double[::1] _gw0,
             double[:, :, :, :, ::1] _geo_grad_a,
             # output
             double[:, :, ::1] _W,
@@ -1848,9 +1777,6 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         cdef double _tmp3
         cdef double _tmp2
         cdef double _tmp1
-        cdef double gw2
-        cdef double gw1
-        cdef double gw0
         cdef double* geo_grad_a
         cdef double W
         cdef double* JacInv
@@ -1861,13 +1787,10 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    gw2 = _gw2[i2]
-                    gw1 = _gw1[i1]
-                    gw0 = _gw0[i0]
                     geo_grad_a = &_geo_grad_a[i0, i1, i2, 0, 0]
                     JacInv = &_JacInv[i0, i1, i2, 0, 0]
 
-                    GaussWeight = ((gw0 * gw1) * gw2)
+                    GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
                     _tmp5 = ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))
                     _tmp4 = ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6]))
                     _tmp3 = ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))
@@ -1891,6 +1814,7 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
     @staticmethod
     cdef void combine(
             size_t n0, size_t n1, size_t n2,
+            double* _gw0, double* _gw1, double* _gw2,
             double[:, :, :] _W,
             double[:, :, :, :, :] _JacInv,
             double* VDu0, double* VDu1, double* VDu2,
@@ -1966,6 +1890,7 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
 
         WaveAssembler_ST3D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1], g_end[2]-g_sta[2],
+                &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]], &self.gaussweights2[g_sta[2]],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_u[0], values_u[1], values_u[2],
@@ -2001,6 +1926,9 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         # NB: we assume all kvs result in the same mesh
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         self.gaussgrid = gaussgrid
+        self.gaussweights0 = gaussweights[0]
+        self.gaussweights1 = gaussweights[1]
+        self.gaussweights2 = gaussweights[2]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
@@ -2020,21 +1948,13 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=1)
 
-        cdef double[::1] gw2
-        cdef double[::1] gw1
-        cdef double[::1] gw0
         cdef double[:, :, :, :, ::1] geo_grad_a
-        gw2 = gaussweights[2]
-        gw1 = gaussweights[1]
-        gw0 = gaussweights[0]
         geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
         self.W = np.empty(N + ())
         self.JacInv = np.empty(N + (3, 3))
         DivDivAssembler3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
-                gw2,
-                gw1,
-                gw0,
+                &self.gaussweights0[0], &self.gaussweights1[0], &self.gaussweights2[0],
                 geo_grad_a,
                 self.W,
                 self.JacInv,
@@ -2047,10 +1967,9 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     cdef void precompute_fields(
             # dimensions
             size_t n0, size_t n1, size_t n2,
+            # Gauss weights
+            double* _gw0, double* _gw1, double* _gw2,
             # input
-            double[::1] _gw2,
-            double[::1] _gw1,
-            double[::1] _gw0,
             double[:, :, :, :, ::1] _geo_grad_a,
             # output
             double[:, :, ::1] _W,
@@ -2062,9 +1981,6 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         cdef double _tmp9
         cdef double _tmp2
         cdef double _tmp1
-        cdef double gw2
-        cdef double gw1
-        cdef double gw0
         cdef double* geo_grad_a
         cdef double W
         cdef double* JacInv
@@ -2075,13 +1991,10 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    gw2 = _gw2[i2]
-                    gw1 = _gw1[i1]
-                    gw0 = _gw0[i0]
                     geo_grad_a = &_geo_grad_a[i0, i1, i2, 0, 0]
                     JacInv = &_JacInv[i0, i1, i2, 0, 0]
 
-                    GaussWeight = ((gw0 * gw1) * gw2)
+                    GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
                     _tmp11 = ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))
                     _tmp10 = ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6]))
                     _tmp9 = ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))
@@ -2105,6 +2018,7 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     @staticmethod
     cdef void combine(
             size_t n0, size_t n1, size_t n2,
+            double* _gw0, double* _gw1, double* _gw2,
             double[:, :, :] _W,
             double[:, :, :, :, :] _JacInv,
             double* VDu0, double* VDu1, double* VDu2,
@@ -2208,6 +2122,7 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
 
         DivDivAssembler3D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1], g_end[2]-g_sta[2],
+                &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]], &self.gaussweights2[g_sta[2]],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_u[0], values_u[1], values_u[2],
@@ -2243,6 +2158,9 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
         # NB: we assume all kvs result in the same mesh
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         self.gaussgrid = gaussgrid
+        self.gaussweights0 = gaussweights[0]
+        self.gaussweights1 = gaussweights[1]
+        self.gaussweights2 = gaussweights[2]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
@@ -2263,21 +2181,13 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=0)
 
         cdef double[:, :, :, :, ::1] geo_grad_a
-        cdef double[::1] gw2
-        cdef double[::1] gw1
-        cdef double[::1] gw0
         geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        gw2 = gaussweights[2]
-        gw1 = gaussweights[1]
-        gw0 = gaussweights[0]
         self.W = np.empty(N + ())
         self.f_a = np.ascontiguousarray(grid_eval(f, self.gaussgrid))
         L2FunctionalAssembler3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
+                &self.gaussweights0[0], &self.gaussweights1[0], &self.gaussweights2[0],
                 geo_grad_a,
-                gw2,
-                gw1,
-                gw0,
                 self.W,
         )
 
@@ -2288,19 +2198,15 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
     cdef void precompute_fields(
             # dimensions
             size_t n0, size_t n1, size_t n2,
+            # Gauss weights
+            double* _gw0, double* _gw1, double* _gw2,
             # input
             double[:, :, :, :, ::1] _geo_grad_a,
-            double[::1] _gw2,
-            double[::1] _gw1,
-            double[::1] _gw0,
             # output
             double[:, :, ::1] _W,
         ) nogil:
         cdef double GaussWeight
         cdef double* geo_grad_a
-        cdef double gw2
-        cdef double gw1
-        cdef double gw0
         cdef double W
         cdef size_t i0
         cdef size_t i1
@@ -2310,11 +2216,8 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
             for i1 in range(n1):
                 for i2 in range(n2):
                     geo_grad_a = &_geo_grad_a[i0, i1, i2, 0, 0]
-                    gw2 = _gw2[i2]
-                    gw1 = _gw1[i1]
-                    gw0 = _gw0[i0]
 
-                    GaussWeight = ((gw0 * gw1) * gw2)
+                    GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
                     W = (GaussWeight * fabs((((geo_grad_a[0] * ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))) - (geo_grad_a[1] * ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6])))) + (geo_grad_a[2] * ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))))))
                     _W[i0, i1, i2] = W
 
@@ -2324,6 +2227,7 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
     @staticmethod
     cdef void combine(
             size_t n0, size_t n1, size_t n2,
+            double* _gw0, double* _gw1, double* _gw2,
             double[:, :, :] _W,
             double[:, :, :] _f_a,
             double* VDu0, double* VDu1, double* VDu2,
@@ -2370,6 +2274,7 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
 
         L2FunctionalAssembler3D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1], g_end[2]-g_sta[2],
+                &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]], &self.gaussweights2[g_sta[2]],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 self.f_a [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_u[0], values_u[1], values_u[2],
@@ -2404,6 +2309,9 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
         # NB: we assume all kvs result in the same mesh
         gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)
         self.gaussgrid = gaussgrid
+        self.gaussweights0 = gaussweights[0]
+        self.gaussweights1 = gaussweights[1]
+        self.gaussweights2 = gaussweights[2]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
@@ -2424,21 +2332,13 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=0)
 
         cdef double[:, :, :, :, ::1] geo_grad_a
-        cdef double[::1] gw2
-        cdef double[::1] gw1
-        cdef double[::1] gw0
         geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        gw2 = gaussweights[2]
-        gw1 = gaussweights[1]
-        gw0 = gaussweights[0]
         self.W = np.empty(N + ())
         self.f_a = np.ascontiguousarray(grid_eval_transformed(f, self.gaussgrid, self._geo))
         L2FunctionalAssemblerPhys3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
+                &self.gaussweights0[0], &self.gaussweights1[0], &self.gaussweights2[0],
                 geo_grad_a,
-                gw2,
-                gw1,
-                gw0,
                 self.W,
         )
 
@@ -2449,19 +2349,15 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
     cdef void precompute_fields(
             # dimensions
             size_t n0, size_t n1, size_t n2,
+            # Gauss weights
+            double* _gw0, double* _gw1, double* _gw2,
             # input
             double[:, :, :, :, ::1] _geo_grad_a,
-            double[::1] _gw2,
-            double[::1] _gw1,
-            double[::1] _gw0,
             # output
             double[:, :, ::1] _W,
         ) nogil:
         cdef double GaussWeight
         cdef double* geo_grad_a
-        cdef double gw2
-        cdef double gw1
-        cdef double gw0
         cdef double W
         cdef size_t i0
         cdef size_t i1
@@ -2471,11 +2367,8 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
             for i1 in range(n1):
                 for i2 in range(n2):
                     geo_grad_a = &_geo_grad_a[i0, i1, i2, 0, 0]
-                    gw2 = _gw2[i2]
-                    gw1 = _gw1[i1]
-                    gw0 = _gw0[i0]
 
-                    GaussWeight = ((gw0 * gw1) * gw2)
+                    GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
                     W = (GaussWeight * fabs((((geo_grad_a[0] * ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))) - (geo_grad_a[1] * ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6])))) + (geo_grad_a[2] * ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))))))
                     _W[i0, i1, i2] = W
 
@@ -2485,6 +2378,7 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
     @staticmethod
     cdef void combine(
             size_t n0, size_t n1, size_t n2,
+            double* _gw0, double* _gw1, double* _gw2,
             double[:, :, :] _W,
             double[:, :, :] _f_a,
             double* VDu0, double* VDu1, double* VDu2,
@@ -2531,6 +2425,7 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
 
         L2FunctionalAssemblerPhys3D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1], g_end[2]-g_sta[2],
+                &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]], &self.gaussweights2[g_sta[2]],
                 self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 self.f_a [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
                 values_u[0], values_u[1], values_u[2],

@@ -52,6 +52,7 @@ class CodegenVisitor:
                 vform.BuiltinFuncExpr: self.gencode_builtinfunc,
                 vform.ScalarOperExpr: self.gencode_scalaroper,
                 vform.PartialDerivExpr: self.gencode_partialderiv,
+                vform.GaussWeightExpr: self.gencode_gaussweight,
         }
         return dispatch[type(expr)](expr)
 
@@ -91,6 +92,20 @@ class CodegenVisitor:
         assert not expr.physical, 'cannot generate code for physical derivative'
         # gen_pderiv is defined in AsmGenerator
         return self.gen_pderiv(expr.basisfun, expr.D)
+
+    def gencode_gaussweight(self, expr):
+        ax = expr.axis
+        return '_gw{0}[i{0}]'.format(ax)
+
+
+def allocate_array(entries):
+    ofs = 0
+    info = {}
+    for entry in entries:
+        sz = reduce(operator.mul, entry.shape, 1) # number of scalar entries
+        info[entry.name] = (entry, sz, ofs)
+        ofs += sz
+    return info, ofs
 
 
 class AsmGenerator(CodegenVisitor):
@@ -261,6 +276,7 @@ class AsmGenerator(CodegenVisitor):
         self.indent(2)
         # dimension arguments
         self.put(self.dimrep('size_t n{}') + ',')
+        self.put(self.dimrep('double* _gw{}') + ',')
 
         array_params = [var for var in self.vform.kernel_deps if var.is_array]
         local_vars   = [var for var in self.vform.kernel_deps if not var.is_array]
@@ -375,6 +391,9 @@ class AsmGenerator(CodegenVisitor):
         # generate dimension arguments
         self.put(self.dimrep('g_end[{0}]-g_sta[{0}]') + ',')
 
+        # generate Gauss weights arguments
+        self.put(self.dimrep('&self.gaussweights{0}[g_sta[{0}]]') + ',')
+
         # generate array variable arguments
         for var in self.vform.kernel_deps:
             if var.is_array:
@@ -414,8 +433,6 @@ class AsmGenerator(CodegenVisitor):
                 assert False, 'invalid derivative %s for input field %s' % (var.deriv, s.name)
         elif isinstance(s, vform.Parameter):
             assert var.deriv == 0
-        elif s.startswith('@gaussweights'):
-            return s[1:]
         else:
             assert False, 'invalid source %s for var %s' % (s, var.name)
 
@@ -483,6 +500,8 @@ class AsmGenerator(CodegenVisitor):
             self.put('gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)')
 
         self.put('self.gaussgrid = gaussgrid')
+        for k in range(self.dim):
+            self.putf('self.gaussweights{k} = gaussweights[{k}]', k=k)
         self.put('N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions')
 
         if self.on_demand:
@@ -524,6 +543,8 @@ class AsmGenerator(CodegenVisitor):
             self.indent(2)
             # generate size arguments
             self.put(self.dimrep('gaussgrid[{}].shape[0]') + ',')
+            # generate Gauss weight arguments
+            self.put(self.dimrep('&self.gaussweights{}[0]') + ',')
             # generate arguments for input and output fields
             for var in vf.precomp_deps + vf.precomp:
                 self.put(array_var_ref(var) + ',')
@@ -552,6 +573,8 @@ class AsmGenerator(CodegenVisitor):
         self.indent(2)
         self.put('# dimensions')
         self.put(self.dimrep('size_t n{}') + ',')
+        self.put('# Gauss weights')
+        self.put(self.dimrep('double* _gw{}') + ',')
         self.put('# input')
         self.declare_params(vf.precomp_deps)
         self.put('# output')
@@ -613,21 +636,12 @@ class AsmGenerator(CodegenVisitor):
             self.dedent()
         self.end_function()
 
-    def allocate_params(self):
-        ofs = 0
-        self.param_info = {}
-        for par in self.vform.params:
-            sz = reduce(operator.mul, par.shape, 1) # number of scalar entries
-            self.param_info[par.name] = (par, sz, ofs)
-            ofs += sz
-        self.num_params = ofs
-
     # main code generation entry point
 
     def generate(self):
         self.vform.finalize(do_precompute=not self.on_demand)
         self.numderiv = self.vform.find_max_deriv()
-        self.allocate_params()
+        self.param_info, self.num_params = allocate_array(self.vform.params)
 
         self.env = {
             'dim': self.vform.dim,
@@ -641,8 +655,10 @@ class AsmGenerator(CodegenVisitor):
         self.indent()
 
         # declare array storage for global variables
-        self.declare_array_vars(var for var in self.vform.kernel_deps
-                if var.is_array and var.is_global)
+        global_vars = [var for var in self.vform.kernel_deps
+                if var.is_array and var.is_global]
+        self.global_info, self.num_globals = allocate_array(global_vars)
+        self.declare_array_vars(global_vars)
         self.put('')
 
         if self.num_params > 0:
@@ -708,6 +724,9 @@ cdef class BaseAssembler{{DIM}}D:
     cdef readonly tuple kvs
     cdef object _geo
     cdef tuple gaussgrid
+    {%- for k in range(DIM) %}
+    cdef double[::1] gaussweights{{k}}
+    {%- endfor %}
     cdef size_t[{{DIM}}] bbox_ofs
 
     cdef void entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j, double result[]) nogil:
@@ -851,6 +870,9 @@ cdef class BaseVectorAssembler{{DIM}}D:
     cdef readonly tuple kvs
     cdef object _geo
     cdef tuple gaussgrid
+    {%- for k in range(DIM) %}
+    cdef double[::1] gaussweights{{k}}
+    {%- endfor %}
 
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]

@@ -16,6 +16,7 @@ cdef class BaseAssembler1D:
     cdef readonly tuple kvs
     cdef object _geo
     cdef tuple gaussgrid
+    cdef double[::1] gaussweights0
     cdef size_t[1] bbox_ofs
 
     cdef void entry_impl(self, size_t[1] i, size_t[1] j, double result[]) nogil:
@@ -158,6 +159,7 @@ cdef class BaseVectorAssembler1D:
     cdef readonly tuple kvs
     cdef object _geo
     cdef tuple gaussgrid
+    cdef double[::1] gaussweights0
 
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
@@ -328,6 +330,8 @@ cdef class BaseAssembler2D:
     cdef readonly tuple kvs
     cdef object _geo
     cdef tuple gaussgrid
+    cdef double[::1] gaussweights0
+    cdef double[::1] gaussweights1
     cdef size_t[2] bbox_ofs
 
     cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
@@ -474,6 +478,8 @@ cdef class BaseVectorAssembler2D:
     cdef readonly tuple kvs
     cdef object _geo
     cdef tuple gaussgrid
+    cdef double[::1] gaussweights0
+    cdef double[::1] gaussweights1
 
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
@@ -658,6 +664,9 @@ cdef class BaseAssembler3D:
     cdef readonly tuple kvs
     cdef object _geo
     cdef tuple gaussgrid
+    cdef double[::1] gaussweights0
+    cdef double[::1] gaussweights1
+    cdef double[::1] gaussweights2
     cdef size_t[3] bbox_ofs
 
     cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
@@ -808,6 +817,9 @@ cdef class BaseVectorAssembler3D:
     cdef readonly tuple kvs
     cdef object _geo
     cdef tuple gaussgrid
+    cdef double[::1] gaussweights0
+    cdef double[::1] gaussweights1
+    cdef double[::1] gaussweights2
 
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]

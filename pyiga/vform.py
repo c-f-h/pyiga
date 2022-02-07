@@ -65,11 +65,7 @@ def _jac_to_unscaled_normal(jac):
 # - an InputField, which means that the variable is passed in as a function when
 #   the assembler is created and evaluated in each needed quadrature point, or
 # - a Parameter, which means that the variable is passed as a constant value
-#   before assembling, or
-# - a string prefixed with '@' which has a special meaning. Currently there is
-#   only one such special var source:
-#   '@gaussweights[i]', where i in range(0,d): the Gauss quadrature weight for
-#       the i-th coordinate axis
+#   before assembling.
 #
 # Note that basis functions (u, v) are not represented as AsmVars; instead,
 # their expressions have the type PartialDerivExpr and store a reference to a
@@ -242,11 +238,7 @@ class VForm:
         return self.__hash
 
     def _gaussweight(self):
-        gw = [
-            self.declare_sourced_var('gw%d' % i, shape=(), src='@gaussweights[%d]' % i,
-                depend_dims=(i,))
-            for i in range(self.dim)
-        ]
+        gw = [GaussWeightExpr(i) for i in range(self.dim)]
         return reduce(operator.mul, gw)
 
     def basisfuns(self, components=(None,None), spaces=(0,0)):
@@ -869,6 +861,7 @@ class Expr:
                                                        for ii in i])
 
     def hash_key(self):
+        """A tuple of values which uniquely identifies an instance of this expression."""
         return ()
 
     def hash(self, child_hashes):
@@ -1351,6 +1344,16 @@ class MatMatExpr(Expr):
     def at(self, i, j):
         return reduce(operator.add,
             (self.x[i, k] * self.y[k, j] for k in range(self.x.shape[1])))
+
+class GaussWeightExpr(Expr):
+    def __init__(self, axis):
+        self.axis = axis
+        self.shape = ()
+        self.children = ()
+    def hash_key(self):
+        return (self.axis,)
+    def __str__(self):
+        return 'gw%d' % self.axis
 
 class VolumeMeasureExpr(Expr):
     def __init__(self):

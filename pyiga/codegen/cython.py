@@ -190,6 +190,10 @@ class AsmGenerator(CodegenVisitor):
             var, sz, ofs = self.global_info[var.name]
             idx = ofs + storage_index(var, I)
             return 'fields[{i}]'.format(i=idx)
+        elif var.name in self.temp_info:
+            var, sz, ofs = self.temp_info[var.name]
+            idx = ofs + storage_index(var, I)
+            return 'temp_fields[{i}]'.format(i=idx)
         elif isinstance(var.src, vform.Parameter):
             par, sz, ofs = self.param_info[var.src.name]
             idx = ofs + storage_index(par, I)
@@ -229,17 +233,8 @@ class AsmGenerator(CodegenVisitor):
         self.put('@cython.wraparound(False)')
         self.put('@cython.initializedcheck(False)')
 
-    def field_type(self, var):
-        # NB: no longer depends on var, everything is linearized
+    def field_type(self):   # array type for field variables
         return 'double[{X}, ::1]'.format(X=self.dimrep(':'))
-
-    def declare_params(self, params):
-        for var in params:
-            self.putf('{type} _{name},', type=self.field_type(var), name=var.name)
-
-    def declare_array_vars(self, vars):
-        for var in vars:
-            self.putf('cdef {type} {name}', type=self.field_type(var), name=var.name)
 
     def load_field_var(self, var, idx):
         """Load the current entry of a field var into the corresponding local variable."""
@@ -262,17 +257,15 @@ class AsmGenerator(CodegenVisitor):
             elif var.is_vector() or var.is_matrix():
                 self.declare_vec(var.name, storage_size(var))
 
-    def start_loop_with_fields(self, fields_in, local_vars=[]):
+    def start_loop_with_fields(self, local_vars=[], temp=False):
         # temp storage for local variables
         for var in local_vars:
             if var.expr:                # parameters do not have an expression
                 self.declare_var(var)
 
-        # temp storage for field variables
-        for var in fields_in:
-            self.declare_var(var, ref=True)
-
         self.declare_pointer('fields')
+        if temp:
+            self.declare_pointer('temp_fields')
 
         # declare iteration indices
         for k in range(self.dim):
@@ -283,11 +276,9 @@ class AsmGenerator(CodegenVisitor):
         for k in range(self.dim):
             self.code.for_loop('i%d' % k, 'n%d' % k)
 
-        # generate assignments for field variables
-        for var in fields_in:
-            self.load_field_var(var, 'i')
-
         self.putf('fields = &_fields[{idx}, 0]', idx=self.dimrep('i{}'))
+        if temp:
+            self.putf('temp_fields = &_temp_fields[{idx}, 0]', idx=self.dimrep('i{}'))
         self.put('')
 
         # generate code for computing local variables
@@ -331,7 +322,7 @@ class AsmGenerator(CodegenVisitor):
         ############################################################
         # main loop over all Gauss points
         local_vars = [var for var in self.vform.kernel_deps if not var.is_array]
-        self.start_loop_with_fields([], local_vars=local_vars)
+        self.start_loop_with_fields(local_vars=local_vars)
 
         # if needed, generate custom code for the bilinear form a(u,v)
         self.generate_biform_custom()
@@ -551,7 +542,9 @@ class AsmGenerator(CodegenVisitor):
         self.put('')
 
         # declare array storage for non-global variables
-        self.declare_array_vars(self.precomp_array_deps)
+        if self.vform.precomp:
+            self.putf('cdef {typ} temp_fields', typ=self.field_type())
+            self.putf('temp_fields = np.empty(N + ({nt},))', nt=self.num_temp)
 
         # declare/initialize array variables
         for var in vf.linear_deps:
@@ -561,15 +554,16 @@ class AsmGenerator(CodegenVisitor):
                     src = self.parse_src(var)
                     if var.is_global:
                         var, sz, ofs = self.global_info[var.name]
-                        # TODO: deal with symmetric matrix indexing
-
-                        # NB: Cython (as of 0.29.20) can't assign an ndarray to a slice
-                        # of a typed memoryview, so we use the underlying ndarray via .base
-                        self.putf('self.fields.base[{dims}, {ofs}:{end}] = {src}.reshape(N + (-1,))',
-                                dims=self.dimrep(':'), ofs=ofs, end=ofs+sz, src=src)
+                        arr = 'self.fields'
                     else:
-                        # TODO: deal with symmetric matrix indexing
-                        self.putf("{name} = {src}.reshape(N + (-1,))", name=var.name, src=src)
+                        var, sz, ofs = self.temp_info[var.name]
+                        arr = 'temp_fields'
+                    # TODO: deal with symmetric matrix indexing
+
+                    # NB: Cython (as of 0.29.20) can't assign an ndarray to a slice
+                    # of a typed memoryview, so we use the underlying ndarray via .base
+                    self.putf('{arr}.base[{dims}, {ofs}:{end}] = {src}.reshape(N + (-1,))',
+                            arr=arr, dims=self.dimrep(':'), ofs=ofs, end=ofs+sz, src=src)
                 elif var.expr:  # custom precomputed field var
                     assert var.is_global    # is already handled in 'fields'
                 else:
@@ -584,9 +578,7 @@ class AsmGenerator(CodegenVisitor):
             # generate Gauss weight arguments
             self.put(self.dimrep('&self.gaussweights{}[0]') + ',')
             # generate arguments for input fields
-            for var in self.precomp_array_deps:
-                self.put(var.name + ',')
-
+            self.put('temp_fields,')
             self.put('self.fields,')
             if self.num_params > 0:
                 self.put('&self.constants[0],')
@@ -616,9 +608,9 @@ class AsmGenerator(CodegenVisitor):
         self.put('# Gauss weights')
         self.put(self.dimrep('double* _gw{}') + ',')
         self.put('# input')
-        self.declare_params(self.precomp_array_deps)
+        self.put(self.field_type() + ' _temp_fields,')
         self.put('# output')
-        self.put('double[' + self.dimrep(':') + ', ::1] _fields,')
+        self.put(self.field_type() + ' _fields,')
         if self.num_params > 0:
             self.put('# constant parameters')
             self.put('double params[],')    # array for constant parameters
@@ -626,7 +618,7 @@ class AsmGenerator(CodegenVisitor):
         self.put(') nogil:')
 
         # start main loop
-        self.start_loop_with_fields(self.precomp_array_deps, local_vars=vf.precomp_locals)
+        self.start_loop_with_fields(local_vars=vf.precomp_locals, temp=True)
 
         # generate assignment statements
         for var in vf.precomp:
@@ -689,6 +681,7 @@ class AsmGenerator(CodegenVisitor):
         # globals are passed in 'fields' automatically; collect the rest
         self.precomp_array_deps = [var for var in self.vform.precomp_deps
                 if var.is_array and not var.is_global]
+        self.temp_info, self.num_temp = allocate_array(self.precomp_array_deps)
 
         self.env = {
             'dim': self.vform.dim,

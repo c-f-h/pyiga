@@ -551,8 +551,7 @@ class AsmGenerator(CodegenVisitor):
         self.put('')
 
         # declare array storage for non-global variables
-        self.declare_array_vars(var for var in self.vform.precomp_deps
-                if var.is_array and not var.is_global)
+        self.declare_array_vars(self.precomp_array_deps)
 
         # declare/initialize array variables
         for var in vf.linear_deps:
@@ -585,9 +584,8 @@ class AsmGenerator(CodegenVisitor):
             # generate Gauss weight arguments
             self.put(self.dimrep('&self.gaussweights{}[0]') + ',')
             # generate arguments for input fields
-            for var in vf.precomp_deps:
-                if not var.is_global:
-                    self.put(var.name + ',')
+            for var in self.precomp_array_deps:
+                self.put(var.name + ',')
 
             self.put('self.fields,')
             if self.num_params > 0:
@@ -607,7 +605,6 @@ class AsmGenerator(CodegenVisitor):
 
     def generate_precomp(self):
         vf = self.vform
-        array_deps = [var for var in vf.precomp_deps if not var.is_global]
 
         # function header
         self.cython_pragmas()
@@ -619,7 +616,7 @@ class AsmGenerator(CodegenVisitor):
         self.put('# Gauss weights')
         self.put(self.dimrep('double* _gw{}') + ',')
         self.put('# input')
-        self.declare_params(array_deps)
+        self.declare_params(self.precomp_array_deps)
         self.put('# output')
         self.put('double[' + self.dimrep(':') + ', ::1] _fields,')
         if self.num_params > 0:
@@ -629,7 +626,7 @@ class AsmGenerator(CodegenVisitor):
         self.put(') nogil:')
 
         # start main loop
-        self.start_loop_with_fields(array_deps, local_vars=vf.precomp_locals)
+        self.start_loop_with_fields(self.precomp_array_deps, local_vars=vf.precomp_locals)
 
         # generate assignment statements
         for var in vf.precomp:
@@ -688,6 +685,10 @@ class AsmGenerator(CodegenVisitor):
         global_vars = [var for var in self.vform.kernel_deps
                 if var.is_array and var.is_global]
         self.global_info, self.num_globals = allocate_array(global_vars)
+
+        # globals are passed in 'fields' automatically; collect the rest
+        self.precomp_array_deps = [var for var in self.vform.precomp_deps
+                if var.is_array and not var.is_global]
 
         self.env = {
             'dim': self.vform.dim,

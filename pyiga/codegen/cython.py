@@ -60,18 +60,8 @@ class CodegenVisitor:
         return repr(expr.value)
 
     def gencode_varref(self, expr):
-        if isinstance(expr.var.src, vform.Parameter):
-            par, sz, ofs = self.param_info[expr.var.src.name]
-            if par.shape == ():
-                idx = ofs
-            else:
-                idx = ofs + np.ravel_multi_index(expr.I, par.shape)
-            return 'params[{i}]'.format(i=idx)
-        else:
-            if expr.I == ():
-                return expr.var.name
-            else:
-                return '{x}[{i}]'.format(x=expr.var.name, i=expr.to_seq())
+        assert expr.is_scalar()
+        return self.var_ref(expr.var, expr.I)
 
     def gencode_neg(self, expr):
         return '-' + self.gencode(expr.x)
@@ -97,12 +87,38 @@ class CodegenVisitor:
         ax = expr.axis
         return '_gw{0}[i{0}]'.format(ax)
 
+def storage_size(var):
+    """Size of the flattened storage of a field variable."""
+    if len(var.shape) == 2 and var.symmetric:
+        m, n = var.shape
+        assert m == n
+        return m * (m + 1) // 2
+    else:
+        return reduce(operator.mul, var.shape, 1) # number of scalar entries
+
+def sym_index_to_seq(n, i, j):
+    """Convert index (i,j) into a n x n symmetric matrix into a sequential index."""
+    if i > j:           # make sure j >= i
+        i, j = j, i
+    idx = sum(n - k for k in range(0, i))   # diagonal index on row i
+    return idx + (j - i)
+
+def storage_index(var, I):
+    """Index into the flattened storage of a field variable."""
+    if var.shape == ():
+        assert I == ()
+        return 0
+    else:
+        if len(var.shape) == 2 and var.symmetric:
+            return sym_index_to_seq(var.shape[0], *I)
+        else:
+            return np.ravel_multi_index(I, var.shape)
 
 def allocate_array(entries):
     ofs = 0
     info = {}
     for entry in entries:
-        sz = reduce(operator.mul, entry.shape, 1) # number of scalar entries
+        sz = storage_size(entry)
         info[entry.name] = (entry, sz, ofs)
         ofs += sz
     return info, ofs
@@ -169,37 +185,70 @@ class AsmGenerator(CodegenVisitor):
     def declare_vec(self, name, size):
         self.putf('cdef double {name}[{size}]', name=name, size=size)
 
+    def var_ref(self, var, I):
+        if var.name in self.global_info:
+            var, sz, ofs = self.global_info[var.name]
+            idx = ofs + storage_index(var, I)
+            return 'fields[{i}]'.format(i=idx)
+        elif isinstance(var.src, vform.Parameter):
+            par, sz, ofs = self.param_info[var.src.name]
+            idx = ofs + storage_index(par, I)
+            return 'params[{i}]'.format(i=idx)
+        else:   # it's a non-global, referred to by name
+            if var.is_scalar():
+                return var.name
+            else:
+                return '{name}[{k}]'.format(name=var.name, k=storage_index(var, I))
+
     def gen_assign(self, var, expr):
         """Assign the result of an expression into a local variable; may be scalar,
         vector- or matrix-valued.
         """
-        if expr.is_vector():
+        self.put('# ' + var.name)
+        if expr.is_scalar():
+            self.put(self.var_ref(var, ()) + ' = ' + self.gencode(expr))
+        elif expr.is_vector():
             for k in range(expr.shape[0]):
-                self.putf('{name}[{k}] = {rhs}',
-                        name=var.name,
-                        k=k,
-                        rhs=self.gencode(expr[k]))
+                lhs = self.var_ref(var, (k,))
+                rhs = self.gencode(expr[k])
+                self.put(lhs + ' = ' + rhs)
         elif expr.is_matrix():
             m, n = expr.shape
             for i in range(m):
                 for j in range(n):
                     if var.symmetric and i > j:
                         continue
-                    self.putf('{name}[{k}] = {rhs}',
-                            name=var.name,
-                            k=i*m + j,
-                            rhs=self.gencode(expr[i,j]))
+                    lhs = self.var_ref(var, (i, j))
+                    rhs = self.gencode(expr[i,j])
+                    self.put(lhs + ' = ' + rhs)
         else:
-            self.put(var.name + ' = ' + self.gencode(expr))
+            assert False, 'unsupported shape'
 
     def cython_pragmas(self):
         self.put('@cython.boundscheck(False)')
         self.put('@cython.wraparound(False)')
         self.put('@cython.initializedcheck(False)')
 
-    def field_type(self, var, contiguous=True):
-        s = 'double[{X}:1]' if contiguous else 'double[{X}]'
-        return s.format(X=', '.join((self.dim + len(var.shape)) * ':'))
+    def field_type(self, var):
+        # NB: no longer depends on var, everything is linearized
+        return 'double[{X}, ::1]'.format(X=self.dimrep(':'))
+
+    def declare_params(self, params):
+        for var in params:
+            self.putf('{type} _{name},', type=self.field_type(var), name=var.name)
+
+    def declare_array_vars(self, vars):
+        for var in vars:
+            self.putf('cdef {type} {name}', type=self.field_type(var), name=var.name)
+
+    def load_field_var(self, var, idx):
+        """Load the current entry of a field var into the corresponding local variable."""
+        if var.is_scalar():
+            self.putf('{name} = {entry}', name=var.name,
+                    entry=self.field_var_entry(var, idx))
+        elif var.is_vector() or var.is_matrix():
+            self.putf('{name} = &{entry}', name=var.name,
+                entry=self.field_var_entry(var, idx, first_entry=True))
 
     def declare_var(self, var, ref=False):
         if ref:
@@ -208,42 +257,22 @@ class AsmGenerator(CodegenVisitor):
             elif var.is_vector() or var.is_matrix():
                 self.declare_pointer(var.name)
         else:   # no ref - declare local storage
-            if var.is_vector():
-                self.declare_vec(var.name, var.shape[0])
-            elif var.is_matrix():
-                self.declare_vec(var.name, var.shape[0]*var.shape[1])
-            else:
+            if var.is_scalar():
                 self.declare_scalar(var.name)
+            elif var.is_vector() or var.is_matrix():
+                self.declare_vec(var.name, storage_size(var))
 
-    def declare_params(self, params, contiguous=True):
-        for var in params:
-            self.putf('{type} _{name},', type=self.field_type(var, contiguous=contiguous), name=var.name)
-
-    def declare_array_vars(self, vars):
-        for var in vars:
-            self.putf('cdef {type} {name}', type=self.field_type(var), name=var.name)
-
-    def load_field_var(self, var, idx, ref_only=False):
-        """Load the current entry of a field var into the corresponding local variable."""
-        if var.is_scalar():
-            if not ref_only:
-                self.putf('{name} = {entry}', name=var.name,
-                    entry=self.field_var_entry(var, idx))
-        elif var.is_vector() or var.is_matrix():
-            self.putf('{name} = &{entry}', name=var.name,
-                entry=self.field_var_entry(var, idx, first_entry=True))
-
-    def start_loop_with_fields(self, fields_in, fields_out=[], local_vars=[]):
-        fields = fields_in + fields_out
-
+    def start_loop_with_fields(self, fields_in, local_vars=[]):
         # temp storage for local variables
         for var in local_vars:
             if var.expr:                # parameters do not have an expression
                 self.declare_var(var)
 
         # temp storage for field variables
-        for var in fields:
+        for var in fields_in:
             self.declare_var(var, ref=True)
+
+        self.declare_pointer('fields')
 
         # declare iteration indices
         for k in range(self.dim):
@@ -257,9 +286,8 @@ class AsmGenerator(CodegenVisitor):
         # generate assignments for field variables
         for var in fields_in:
             self.load_field_var(var, 'i')
-        for var in fields_out:
-            # these have no values yet, only get a reference
-            self.load_field_var(var, 'i', ref_only=True)
+
+        self.putf('fields = &_fields[{idx}, 0]', idx=self.dimrep('i{}'))
         self.put('')
 
         # generate code for computing local variables
@@ -277,19 +305,15 @@ class AsmGenerator(CodegenVisitor):
         self.put(self.dimrep('size_t n{}') + ',')
         self.put(self.dimrep('double* _gw{}') + ',')
 
-        array_params = [var for var in self.vform.kernel_deps if var.is_array]
-        local_vars   = [var for var in self.vform.kernel_deps if not var.is_array]
-
-        # parameters
-        # We will usually get slices of arrays which are therefore not contiguous.
-        self.declare_params(array_params, contiguous=False)
+        # input: 'fields' contains all global arrays
+        self.put('double[' + self.dimrep(':') + ', :] _fields,')
+        if self.num_params > 0:
+            self.put('double params[],')    # array for constant parameters
 
         # arrays for basis function values/derivatives
         for bfun in self.vform.basis_funs:
             self.put(self.dimrep('double* VD%s{}' % bfun.name) + ',')
 
-        if self.num_params > 0:
-            self.put('double params[],')    # array for constant parameters
         self.put('double result[]')     # output argument
         self.dedent()
         self.put(') nogil:')
@@ -306,7 +330,8 @@ class AsmGenerator(CodegenVisitor):
 
         ############################################################
         # main loop over all Gauss points
-        self.start_loop_with_fields(array_params, local_vars=local_vars)
+        local_vars = [var for var in self.vform.kernel_deps if not var.is_array]
+        self.start_loop_with_fields([], local_vars=local_vars)
 
         # if needed, generate custom code for the bilinear form a(u,v)
         self.generate_biform_custom()
@@ -393,18 +418,14 @@ class AsmGenerator(CodegenVisitor):
         # generate Gauss weights arguments
         self.put(self.dimrep('&self.gaussweights{0}[g_sta[{0}]]') + ',')
 
-        # generate array variable arguments
-        for var in self.vform.kernel_deps:
-            if var.is_array:
-                self.putf('self.{name} [ {idx} ],', name=var.name,
-                        idx=self.dimrep('g_sta[{0}]:g_end[{0}]'))
+        self.putf('self.fields[{idx}],',
+                idx=self.dimrep('g_sta[{0}]:g_end[{0}]'))
+        if self.num_params > 0:
+            self.put('&self.constants[0],')
 
         # generate basis function value arguments
         for bfun in self.vform.basis_funs:
             self.put(self.dimrep('values_%s[{0}]' % bfun.name) + ',')
-
-        if self.num_params > 0:
-            self.put('&self.constants[0],')
 
         # generate output argument
         self.put('result')
@@ -431,7 +452,7 @@ class AsmGenerator(CodegenVisitor):
             else:
                 assert False, 'invalid derivative %s for input field %s' % (var.deriv, s.name)
         elif isinstance(s, vform.Parameter):
-            assert var.deriv == 0
+            assert False, 'parameters should not be stored in arrays'
         else:
             assert False, 'invalid source %s for var %s' % (s, var.name)
 
@@ -477,9 +498,6 @@ class AsmGenerator(CodegenVisitor):
             self.put('kvs1 = kvs0')
         self.put('self.kvs = (kvs0, kvs1)')
 
-        if self.num_params > 0:
-            self.putf('self.constants = np.zeros({np})', np=self.num_params)
-
         if self.vec:
             numcomp = vf.num_components()
             numcomp += (2 - len(numcomp)) * (0,) # pad to 2
@@ -506,6 +524,17 @@ class AsmGenerator(CodegenVisitor):
             self.putf('self.gaussweights{k} = gaussweights[{k}]', k=k)
         self.put('N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions')
 
+        # initialize storage for fields and constants
+        self.put('')
+        self.put('# Fields:')
+        for var in self.global_info:    # put some comments for readability
+            _, sz, ofs = self.global_info[var]
+            self.putf('#  - {var}: ofs={ofs} sz={sz}', var=var, ofs=ofs, sz=sz)
+
+        self.putf('self.fields = np.empty(N + ({nf},))', nf=self.num_globals)
+        if self.num_params > 0:
+            self.putf('self.constants = np.zeros({np})', np=self.num_params)
+
         if self.on_demand:
             self.put('self.bbox_ofs[:] = tuple(bb[0] * self.nqp for bb in bbox)')
 
@@ -525,19 +554,27 @@ class AsmGenerator(CodegenVisitor):
         self.declare_array_vars(var for var in self.vform.precomp_deps
                 if var.is_array and not var.is_global)
 
-        def array_var_ref(var):
-            assert var.is_array
-            return ('self.' if var.is_global else '') + var.name
-
         # declare/initialize array variables
         for var in vf.linear_deps:
             # exclude basis function nodes
             if not isinstance(var, vform.BasisFun) and var.is_array:
-                arr = array_var_ref(var)
-                if var.src:
-                    self.putf("{arr} = {src}", arr=arr, src=self.parse_src(var))
+                if var.src:     # array gets its data from an input function
+                    src = self.parse_src(var)
+                    if var.is_global:
+                        var, sz, ofs = self.global_info[var.name]
+                        # TODO: deal with symmetric matrix indexing
+
+                        # NB: Cython (as of 0.29.20) can't assign an ndarray to a slice
+                        # of a typed memoryview, so we use the underlying ndarray via .base
+                        self.putf('self.fields.base[{dims}, {ofs}:{end}] = {src}.reshape(N + (-1,))',
+                                dims=self.dimrep(':'), ofs=ofs, end=ofs+sz, src=src)
+                    else:
+                        # TODO: deal with symmetric matrix indexing
+                        self.putf("{name} = {src}.reshape(N + (-1,))", name=var.name, src=src)
                 elif var.expr:  # custom precomputed field var
-                    self.putf("{arr} = np.empty(N + {shape})", arr=arr, shape=var.shape)
+                    assert var.is_global    # is already handled in 'fields'
+                else:
+                    assert False    # we should not reach this
 
         if vf.precomp:
             # call precompute function
@@ -547,9 +584,12 @@ class AsmGenerator(CodegenVisitor):
             self.put(self.dimrep('gaussgrid[{}].shape[0]') + ',')
             # generate Gauss weight arguments
             self.put(self.dimrep('&self.gaussweights{}[0]') + ',')
-            # generate arguments for input and output fields
-            for var in vf.precomp_deps + vf.precomp:
-                self.put(array_var_ref(var) + ',')
+            # generate arguments for input fields
+            for var in vf.precomp_deps:
+                if not var.is_global:
+                    self.put(var.name + ',')
+
+            self.put('self.fields,')
             if self.num_params > 0:
                 self.put('&self.constants[0],')
             self.dedent(2)
@@ -562,11 +602,12 @@ class AsmGenerator(CodegenVisitor):
         """Generate a reference to the current entry in the given field variable."""
         I = self.dimrep(idx + '{}')
         if first_entry:
-            I += (len(var.shape) * ', 0')
+            I += ', 0'
         return '_%s[%s]' % (var.name, I)
 
     def generate_precomp(self):
         vf = self.vform
+        array_deps = [var for var in vf.precomp_deps if not var.is_global]
 
         # function header
         self.cython_pragmas()
@@ -578,9 +619,9 @@ class AsmGenerator(CodegenVisitor):
         self.put('# Gauss weights')
         self.put(self.dimrep('double* _gw{}') + ',')
         self.put('# input')
-        self.declare_params(vf.precomp_deps)
+        self.declare_params(array_deps)
         self.put('# output')
-        self.declare_params(vf.precomp)
+        self.put('double[' + self.dimrep(':') + ', ::1] _fields,')
         if self.num_params > 0:
             self.put('# constant parameters')
             self.put('double params[],')    # array for constant parameters
@@ -588,15 +629,11 @@ class AsmGenerator(CodegenVisitor):
         self.put(') nogil:')
 
         # start main loop
-        self.start_loop_with_fields(vf.precomp_deps, fields_out=vf.precomp, local_vars=vf.precomp_locals)
+        self.start_loop_with_fields(array_deps, local_vars=vf.precomp_locals)
 
         # generate assignment statements
         for var in vf.precomp:
             self.gen_assign(var, var.expr)
-            if var.is_scalar():
-                # for scalars, we need to explicitly copy the computed value into
-                # the field array; vectors and matrices use pointers directly
-                self.putf('{entry} = {name}', entry=self.field_var_entry(var, 'i'), name=var.name)
 
         # end main loop
         for _ in range(self.dim):
@@ -643,7 +680,14 @@ class AsmGenerator(CodegenVisitor):
     def generate(self):
         self.vform.finalize(do_precompute=not self.on_demand)
         self.numderiv = self.vform.find_max_deriv()
+
+        # determine layout of global 'constants' array
         self.param_info, self.num_params = allocate_array(self.vform.params)
+
+        # determine layout of global 'fields' array
+        global_vars = [var for var in self.vform.kernel_deps
+                if var.is_array and var.is_global]
+        self.global_info, self.num_globals = allocate_array(global_vars)
 
         self.env = {
             'dim': self.vform.dim,
@@ -655,13 +699,6 @@ class AsmGenerator(CodegenVisitor):
         self.putf('cdef class {classname}({base}{dim}D):',
                 classname=self.classname, base=baseclass)
         self.indent()
-
-        # declare array storage for global variables
-        global_vars = [var for var in self.vform.kernel_deps
-                if var.is_array and var.is_global]
-        self.global_info, self.num_globals = allocate_array(global_vars)
-        self.declare_array_vars(global_vars)
-        self.put('')
 
         # generate metadata accessors
         self.generate_metadata()
@@ -871,7 +908,7 @@ cdef class BaseVectorAssembler{{DIM}}D:
     cdef object _geo
     cdef tuple gaussgrid
     cdef double[::1] constants
-    cdef double[{{ dimrepeat(':') }}:1] fields
+    cdef double[{{ dimrepeat(':') }}, ::1] fields
     {%- for k in range(DIM) %}
     cdef double[::1] gaussweights{{k}}
     {%- endfor %}

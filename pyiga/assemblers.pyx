@@ -25,8 +25,6 @@ from pyiga.assemble_tools import compute_values_derivs
 from pyiga.utils import LazyCachingArray, grid_eval, grid_eval_transformed
 
 cdef class MassAssembler2D(BaseAssembler2D):
-    cdef double[:, ::1] W
-
     @classmethod
     def inputs(cls):
         return {
@@ -54,6 +52,10 @@ cdef class MassAssembler2D(BaseAssembler2D):
         self.gaussweights1 = gaussweights[1]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        # Fields:
+        #  - W: ofs=0 sz=1
+        self.fields = np.empty(N + (1,))
+
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
@@ -67,14 +69,13 @@ cdef class MassAssembler2D(BaseAssembler2D):
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=0)
 
-        cdef double[:, :, :, ::1] geo_grad_a
-        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        self.W = np.empty(N + ())
+        cdef double[:, :, ::1] geo_grad_a
+        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         MassAssembler2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
                 &self.gaussweights0[0], &self.gaussweights1[0],
                 geo_grad_a,
-                self.W,
+                self.fields,
         )
 
     @cython.boundscheck(False)
@@ -87,23 +88,25 @@ cdef class MassAssembler2D(BaseAssembler2D):
             # Gauss weights
             double* _gw0, double* _gw1,
             # input
-            double[:, :, :, ::1] _geo_grad_a,
+            double[:, :, ::1] _geo_grad_a,
             # output
-            double[:, ::1] _W,
+            double[:, :, ::1] _fields,
         ) nogil:
         cdef double GaussWeight
         cdef double* geo_grad_a
-        cdef double W
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
 
         for i0 in range(n0):
             for i1 in range(n1):
-                geo_grad_a = &_geo_grad_a[i0, i1, 0, 0]
+                geo_grad_a = &_geo_grad_a[i0, i1, 0]
+                fields = &_fields[i0, i1, 0]
 
+                # GaussWeight
                 GaussWeight = (_gw0[i0] * _gw1[i1])
-                W = (GaussWeight * fabs(((geo_grad_a[0] * geo_grad_a[3]) - (geo_grad_a[1] * geo_grad_a[2]))))
-                _W[i0, i1] = W
+                # W
+                fields[0] = (GaussWeight * fabs(((geo_grad_a[0] * geo_grad_a[3]) - (geo_grad_a[1] * geo_grad_a[2]))))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -112,22 +115,22 @@ cdef class MassAssembler2D(BaseAssembler2D):
     cdef void combine(
             size_t n0, size_t n1,
             double* _gw0, double* _gw1,
-            double[:, :] _W,
+            double[:, :, :] _fields,
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
             double result[]
         ) nogil:
         cdef double r = 0.0
 
-        cdef double W
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
 
         for i0 in range(n0):
             for i1 in range(n1):
-                W = _W[i0, i1]
+                fields = &_fields[i0, i1, 0]
 
-                r += (((VDu0[1*i0+0] * VDu1[1*i1+0]) * (VDv0[1*i0+0] * VDv1[1*i1+0])) * W)
+                r += (((VDu0[1*i0+0] * VDu1[1*i1+0]) * (VDv0[1*i0+0] * VDv1[1*i1+0])) * fields[0])
         result[0] = r
 
     @cython.boundscheck(False)
@@ -162,15 +165,13 @@ cdef class MassAssembler2D(BaseAssembler2D):
         MassAssembler2D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1],
                 &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]],
-                self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
+                self.fields[g_sta[0]:g_end[0], g_sta[1]:g_end[1]],
                 values_u[0], values_u[1],
                 values_v[0], values_v[1],
                 result
         )
 
 cdef class StiffnessAssembler2D(BaseAssembler2D):
-    cdef double[:, :, :, ::1] B
-
     @classmethod
     def inputs(cls):
         return {
@@ -198,6 +199,10 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         self.gaussweights1 = gaussweights[1]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        # Fields:
+        #  - B: ofs=0 sz=3
+        self.fields = np.empty(N + (3,))
+
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
@@ -211,14 +216,13 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
 
-        cdef double[:, :, :, ::1] geo_grad_a
-        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        self.B = np.empty(N + (2, 2))
+        cdef double[:, :, ::1] geo_grad_a
+        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         StiffnessAssembler2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
                 &self.gaussweights0[0], &self.gaussweights1[0],
                 geo_grad_a,
-                self.B,
+                self.fields,
         )
 
     @cython.boundscheck(False)
@@ -231,9 +235,9 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
             # Gauss weights
             double* _gw0, double* _gw1,
             # input
-            double[:, :, :, ::1] _geo_grad_a,
+            double[:, :, ::1] _geo_grad_a,
             # output
-            double[:, :, :, ::1] _B,
+            double[:, :, ::1] _fields,
         ) nogil:
         cdef double _tmp2
         cdef double _tmp1
@@ -241,26 +245,32 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         cdef double GaussWeight
         cdef double W
         cdef double* geo_grad_a
-        cdef double* B
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
 
         for i0 in range(n0):
             for i1 in range(n1):
-                geo_grad_a = &_geo_grad_a[i0, i1, 0, 0]
-                B = &_B[i0, i1, 0, 0]
+                geo_grad_a = &_geo_grad_a[i0, i1, 0]
+                fields = &_fields[i0, i1, 0]
 
+                # _tmp2
                 _tmp2 = ((geo_grad_a[0] * geo_grad_a[3]) - (geo_grad_a[1] * geo_grad_a[2]))
+                # _tmp1
                 _tmp1 = (1.0 / _tmp2)
+                # JacInv
                 JacInv[0] = (_tmp1 * geo_grad_a[3])
                 JacInv[1] = (_tmp1 * -geo_grad_a[1])
                 JacInv[2] = (_tmp1 * -geo_grad_a[2])
                 JacInv[3] = (_tmp1 * geo_grad_a[0])
+                # GaussWeight
                 GaussWeight = (_gw0[i0] * _gw1[i1])
+                # W
                 W = (GaussWeight * fabs(_tmp2))
-                B[0] = (W * ((JacInv[0] * JacInv[0]) + (JacInv[1] * JacInv[1])))
-                B[1] = (W * ((JacInv[0] * JacInv[2]) + (JacInv[1] * JacInv[3])))
-                B[3] = (W * ((JacInv[2] * JacInv[2]) + (JacInv[3] * JacInv[3])))
+                # B
+                fields[0] = (W * ((JacInv[0] * JacInv[0]) + (JacInv[1] * JacInv[1])))
+                fields[1] = (W * ((JacInv[0] * JacInv[2]) + (JacInv[1] * JacInv[3])))
+                fields[2] = (W * ((JacInv[2] * JacInv[2]) + (JacInv[3] * JacInv[3])))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -269,7 +279,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
     cdef void combine(
             size_t n0, size_t n1,
             double* _gw0, double* _gw1,
-            double[:, :, :, :] _B,
+            double[:, :, :] _fields,
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
             double result[]
@@ -280,19 +290,23 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         cdef double _dv_10
         cdef double _du_01
         cdef double _du_10
-        cdef double* B
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
 
         for i0 in range(n0):
             for i1 in range(n1):
-                B = &_B[i0, i1, 0, 0]
+                fields = &_fields[i0, i1, 0]
 
+                # _dv_01
                 _dv_01 = (VDv0[2*i0+1] * VDv1[2*i1+0])
+                # _dv_10
                 _dv_10 = (VDv0[2*i0+0] * VDv1[2*i1+1])
+                # _du_01
                 _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
+                # _du_10
                 _du_10 = (VDu0[2*i0+0] * VDu1[2*i1+1])
-                r += ((((B[0] * _du_10) + (B[1] * _du_01)) * _dv_10) + (((B[1] * _du_10) + (B[3] * _du_01)) * _dv_01))
+                r += ((((fields[0] * _du_10) + (fields[1] * _du_01)) * _dv_10) + (((fields[1] * _du_10) + (fields[2] * _du_01)) * _dv_01))
         result[0] = r
 
     @cython.boundscheck(False)
@@ -327,16 +341,13 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         StiffnessAssembler2D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1],
                 &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]],
-                self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
+                self.fields[g_sta[0]:g_end[0], g_sta[1]:g_end[1]],
                 values_u[0], values_u[1],
                 values_v[0], values_v[1],
                 result
         )
 
 cdef class HeatAssembler_ST2D(BaseAssembler2D):
-    cdef double[:, ::1] W
-    cdef double[:, :, :, ::1] JacInv
-
     @classmethod
     def inputs(cls):
         return {
@@ -364,6 +375,11 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         self.gaussweights1 = gaussweights[1]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        # Fields:
+        #  - W: ofs=0 sz=1
+        #  - JacInv: ofs=1 sz=4
+        self.fields = np.empty(N + (5,))
+
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
@@ -377,16 +393,13 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
 
-        cdef double[:, :, :, ::1] geo_grad_a
-        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        self.W = np.empty(N + ())
-        self.JacInv = np.empty(N + (2, 2))
+        cdef double[:, :, ::1] geo_grad_a
+        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         HeatAssembler_ST2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
                 &self.gaussweights0[0], &self.gaussweights1[0],
                 geo_grad_a,
-                self.W,
-                self.JacInv,
+                self.fields,
         )
 
     @cython.boundscheck(False)
@@ -399,34 +412,36 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
             # Gauss weights
             double* _gw0, double* _gw1,
             # input
-            double[:, :, :, ::1] _geo_grad_a,
+            double[:, :, ::1] _geo_grad_a,
             # output
-            double[:, ::1] _W,
-            double[:, :, :, ::1] _JacInv,
+            double[:, :, ::1] _fields,
         ) nogil:
         cdef double GaussWeight
         cdef double _tmp2
         cdef double _tmp1
         cdef double* geo_grad_a
-        cdef double W
-        cdef double* JacInv
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
 
         for i0 in range(n0):
             for i1 in range(n1):
-                geo_grad_a = &_geo_grad_a[i0, i1, 0, 0]
-                JacInv = &_JacInv[i0, i1, 0, 0]
+                geo_grad_a = &_geo_grad_a[i0, i1, 0]
+                fields = &_fields[i0, i1, 0]
 
+                # GaussWeight
                 GaussWeight = (_gw0[i0] * _gw1[i1])
+                # _tmp2
                 _tmp2 = ((geo_grad_a[0] * geo_grad_a[3]) - (geo_grad_a[1] * geo_grad_a[2]))
+                # _tmp1
                 _tmp1 = (1.0 / _tmp2)
-                W = (GaussWeight * fabs(_tmp2))
-                _W[i0, i1] = W
-                JacInv[0] = (_tmp1 * geo_grad_a[3])
-                JacInv[1] = (_tmp1 * -geo_grad_a[1])
-                JacInv[2] = (_tmp1 * -geo_grad_a[2])
-                JacInv[3] = (_tmp1 * geo_grad_a[0])
+                # W
+                fields[0] = (GaussWeight * fabs(_tmp2))
+                # JacInv
+                fields[1] = (_tmp1 * geo_grad_a[3])
+                fields[2] = (_tmp1 * -geo_grad_a[1])
+                fields[3] = (_tmp1 * -geo_grad_a[2])
+                fields[4] = (_tmp1 * geo_grad_a[0])
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -435,8 +450,7 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
     cdef void combine(
             size_t n0, size_t n1,
             double* _gw0, double* _gw1,
-            double[:, :] _W,
-            double[:, :, :, :] _JacInv,
+            double[:, :, :] _fields,
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
             double result[]
@@ -446,20 +460,21 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         cdef double _dv_10
         cdef double _du_01
         cdef double _du_10
-        cdef double W
-        cdef double* JacInv
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
 
         for i0 in range(n0):
             for i1 in range(n1):
-                W = _W[i0, i1]
-                JacInv = &_JacInv[i0, i1, 0, 0]
+                fields = &_fields[i0, i1, 0]
 
+                # _dv_10
                 _dv_10 = (VDv0[2*i0+0] * VDv1[2*i1+1])
+                # _du_01
                 _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
+                # _du_10
                 _du_10 = (VDu0[2*i0+0] * VDu1[2*i1+1])
-                r += ((((JacInv[0] * _du_10) * (JacInv[0] * _dv_10)) + (_du_01 * (VDv0[2*i0+0] * VDv1[2*i1+0]))) * W)
+                r += ((((fields[1] * _du_10) * (fields[1] * _dv_10)) + (_du_01 * (VDv0[2*i0+0] * VDv1[2*i1+0]))) * fields[0])
         result[0] = r
 
     @cython.boundscheck(False)
@@ -494,17 +509,13 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         HeatAssembler_ST2D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1],
                 &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]],
-                self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
-                self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
+                self.fields[g_sta[0]:g_end[0], g_sta[1]:g_end[1]],
                 values_u[0], values_u[1],
                 values_v[0], values_v[1],
                 result
         )
 
 cdef class WaveAssembler_ST2D(BaseAssembler2D):
-    cdef double[:, ::1] W
-    cdef double[:, :, :, ::1] JacInv
-
     @classmethod
     def inputs(cls):
         return {
@@ -532,6 +543,11 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         self.gaussweights1 = gaussweights[1]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        # Fields:
+        #  - W: ofs=0 sz=1
+        #  - JacInv: ofs=1 sz=4
+        self.fields = np.empty(N + (5,))
+
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
@@ -545,16 +561,13 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=2)
 
-        cdef double[:, :, :, ::1] geo_grad_a
-        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        self.W = np.empty(N + ())
-        self.JacInv = np.empty(N + (2, 2))
+        cdef double[:, :, ::1] geo_grad_a
+        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         WaveAssembler_ST2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
                 &self.gaussweights0[0], &self.gaussweights1[0],
                 geo_grad_a,
-                self.W,
-                self.JacInv,
+                self.fields,
         )
 
     @cython.boundscheck(False)
@@ -567,34 +580,36 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
             # Gauss weights
             double* _gw0, double* _gw1,
             # input
-            double[:, :, :, ::1] _geo_grad_a,
+            double[:, :, ::1] _geo_grad_a,
             # output
-            double[:, ::1] _W,
-            double[:, :, :, ::1] _JacInv,
+            double[:, :, ::1] _fields,
         ) nogil:
         cdef double GaussWeight
         cdef double _tmp2
         cdef double _tmp1
         cdef double* geo_grad_a
-        cdef double W
-        cdef double* JacInv
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
 
         for i0 in range(n0):
             for i1 in range(n1):
-                geo_grad_a = &_geo_grad_a[i0, i1, 0, 0]
-                JacInv = &_JacInv[i0, i1, 0, 0]
+                geo_grad_a = &_geo_grad_a[i0, i1, 0]
+                fields = &_fields[i0, i1, 0]
 
+                # GaussWeight
                 GaussWeight = (_gw0[i0] * _gw1[i1])
+                # _tmp2
                 _tmp2 = ((geo_grad_a[0] * geo_grad_a[3]) - (geo_grad_a[1] * geo_grad_a[2]))
+                # _tmp1
                 _tmp1 = (1.0 / _tmp2)
-                W = (GaussWeight * fabs(_tmp2))
-                _W[i0, i1] = W
-                JacInv[0] = (_tmp1 * geo_grad_a[3])
-                JacInv[1] = (_tmp1 * -geo_grad_a[1])
-                JacInv[2] = (_tmp1 * -geo_grad_a[2])
-                JacInv[3] = (_tmp1 * geo_grad_a[0])
+                # W
+                fields[0] = (GaussWeight * fabs(_tmp2))
+                # JacInv
+                fields[1] = (_tmp1 * geo_grad_a[3])
+                fields[2] = (_tmp1 * -geo_grad_a[1])
+                fields[3] = (_tmp1 * -geo_grad_a[2])
+                fields[4] = (_tmp1 * geo_grad_a[0])
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -603,8 +618,7 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
     cdef void combine(
             size_t n0, size_t n1,
             double* _gw0, double* _gw1,
-            double[:, :] _W,
-            double[:, :, :, :] _JacInv,
+            double[:, :, :] _fields,
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
             double result[]
@@ -615,21 +629,23 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         cdef double _dv_01
         cdef double _du_10
         cdef double _du_02
-        cdef double W
-        cdef double* JacInv
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
 
         for i0 in range(n0):
             for i1 in range(n1):
-                W = _W[i0, i1]
-                JacInv = &_JacInv[i0, i1, 0, 0]
+                fields = &_fields[i0, i1, 0]
 
+                # _dv_11
                 _dv_11 = (VDv0[3*i0+1] * VDv1[3*i1+1])
+                # _dv_01
                 _dv_01 = (VDv0[3*i0+1] * VDv1[3*i1+0])
+                # _du_10
                 _du_10 = (VDu0[3*i0+0] * VDu1[3*i1+1])
+                # _du_02
                 _du_02 = (VDu0[3*i0+2] * VDu1[3*i1+0])
-                r += (((_du_02 * _dv_01) + ((JacInv[0] * _du_10) * (JacInv[0] * _dv_11))) * W)
+                r += (((_du_02 * _dv_01) + ((fields[1] * _du_10) * (fields[1] * _dv_11))) * fields[0])
         result[0] = r
 
     @cython.boundscheck(False)
@@ -664,17 +680,13 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         WaveAssembler_ST2D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1],
                 &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]],
-                self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
-                self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
+                self.fields[g_sta[0]:g_end[0], g_sta[1]:g_end[1]],
                 values_u[0], values_u[1],
                 values_v[0], values_v[1],
                 result
         )
 
 cdef class DivDivAssembler2D(BaseVectorAssembler2D):
-    cdef double[:, ::1] W
-    cdef double[:, :, :, ::1] JacInv
-
     @classmethod
     def inputs(cls):
         return {
@@ -703,6 +715,11 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         self.gaussweights1 = gaussweights[1]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        # Fields:
+        #  - W: ofs=0 sz=1
+        #  - JacInv: ofs=1 sz=4
+        self.fields = np.empty(N + (5,))
+
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
@@ -716,16 +733,13 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
 
-        cdef double[:, :, :, ::1] geo_grad_a
-        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        self.W = np.empty(N + ())
-        self.JacInv = np.empty(N + (2, 2))
+        cdef double[:, :, ::1] geo_grad_a
+        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         DivDivAssembler2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
                 &self.gaussweights0[0], &self.gaussweights1[0],
                 geo_grad_a,
-                self.W,
-                self.JacInv,
+                self.fields,
         )
 
     @cython.boundscheck(False)
@@ -738,34 +752,36 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
             # Gauss weights
             double* _gw0, double* _gw1,
             # input
-            double[:, :, :, ::1] _geo_grad_a,
+            double[:, :, ::1] _geo_grad_a,
             # output
-            double[:, ::1] _W,
-            double[:, :, :, ::1] _JacInv,
+            double[:, :, ::1] _fields,
         ) nogil:
         cdef double GaussWeight
         cdef double _tmp2
         cdef double _tmp1
         cdef double* geo_grad_a
-        cdef double W
-        cdef double* JacInv
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
 
         for i0 in range(n0):
             for i1 in range(n1):
-                geo_grad_a = &_geo_grad_a[i0, i1, 0, 0]
-                JacInv = &_JacInv[i0, i1, 0, 0]
+                geo_grad_a = &_geo_grad_a[i0, i1, 0]
+                fields = &_fields[i0, i1, 0]
 
+                # GaussWeight
                 GaussWeight = (_gw0[i0] * _gw1[i1])
+                # _tmp2
                 _tmp2 = ((geo_grad_a[0] * geo_grad_a[3]) - (geo_grad_a[1] * geo_grad_a[2]))
+                # _tmp1
                 _tmp1 = (1.0 / _tmp2)
-                W = (GaussWeight * fabs(_tmp2))
-                _W[i0, i1] = W
-                JacInv[0] = (_tmp1 * geo_grad_a[3])
-                JacInv[1] = (_tmp1 * -geo_grad_a[1])
-                JacInv[2] = (_tmp1 * -geo_grad_a[2])
-                JacInv[3] = (_tmp1 * geo_grad_a[0])
+                # W
+                fields[0] = (GaussWeight * fabs(_tmp2))
+                # JacInv
+                fields[1] = (_tmp1 * geo_grad_a[3])
+                fields[2] = (_tmp1 * -geo_grad_a[1])
+                fields[3] = (_tmp1 * -geo_grad_a[2])
+                fields[4] = (_tmp1 * geo_grad_a[0])
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -774,8 +790,7 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     cdef void combine(
             size_t n0, size_t n1,
             double* _gw0, double* _gw1,
-            double[:, :] _W,
-            double[:, :, :, :] _JacInv,
+            double[:, :, :] _fields,
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
             double result[]
@@ -790,28 +805,34 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         cdef double _du_10
         cdef double _tmp5
         cdef double _tmp3
-        cdef double W
-        cdef double* JacInv
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
 
         for i0 in range(n0):
             for i1 in range(n1):
-                W = _W[i0, i1]
-                JacInv = &_JacInv[i0, i1, 0, 0]
+                fields = &_fields[i0, i1, 0]
 
+                # _dv_01
                 _dv_01 = (VDv0[2*i0+1] * VDv1[2*i1+0])
+                # _dv_10
                 _dv_10 = (VDv0[2*i0+0] * VDv1[2*i1+1])
-                _tmp6 = ((JacInv[1] * _dv_10) + (JacInv[3] * _dv_01))
-                _tmp4 = ((JacInv[0] * _dv_10) + (JacInv[2] * _dv_01))
+                # _tmp6
+                _tmp6 = ((fields[2] * _dv_10) + (fields[4] * _dv_01))
+                # _tmp4
+                _tmp4 = ((fields[1] * _dv_10) + (fields[3] * _dv_01))
+                # _du_01
                 _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
+                # _du_10
                 _du_10 = (VDu0[2*i0+0] * VDu1[2*i1+1])
-                _tmp5 = ((JacInv[1] * _du_10) + (JacInv[3] * _du_01))
-                _tmp3 = ((JacInv[0] * _du_10) + (JacInv[2] * _du_01))
-                r[0] += ((_tmp3 * _tmp4) * W)
-                r[1] += ((_tmp5 * _tmp4) * W)
-                r[2] += ((_tmp3 * _tmp6) * W)
-                r[3] += ((_tmp5 * _tmp6) * W)
+                # _tmp5
+                _tmp5 = ((fields[2] * _du_10) + (fields[4] * _du_01))
+                # _tmp3
+                _tmp3 = ((fields[1] * _du_10) + (fields[3] * _du_01))
+                r[0] += ((_tmp3 * _tmp4) * fields[0])
+                r[1] += ((_tmp5 * _tmp4) * fields[0])
+                r[2] += ((_tmp3 * _tmp6) * fields[0])
+                r[3] += ((_tmp5 * _tmp6) * fields[0])
         result[0] = r[0]
         result[1] = r[1]
         result[2] = r[2]
@@ -849,17 +870,13 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         DivDivAssembler2D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1],
                 &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]],
-                self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
-                self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
+                self.fields[g_sta[0]:g_end[0], g_sta[1]:g_end[1]],
                 values_u[0], values_u[1],
                 values_v[0], values_v[1],
                 result
         )
 
 cdef class L2FunctionalAssembler2D(BaseAssembler2D):
-    cdef double[:, ::1] W
-    cdef double[:, ::1] f_a
-
     @classmethod
     def inputs(cls):
         return {
@@ -888,6 +905,11 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
         self.gaussweights1 = gaussweights[1]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        # Fields:
+        #  - W: ofs=0 sz=1
+        #  - f_a: ofs=1 sz=1
+        self.fields = np.empty(N + (2,))
+
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
@@ -901,15 +923,14 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=0)
 
-        cdef double[:, :, :, ::1] geo_grad_a
-        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        self.W = np.empty(N + ())
-        self.f_a = np.ascontiguousarray(grid_eval(f, self.gaussgrid))
+        cdef double[:, :, ::1] geo_grad_a
+        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
+        self.fields.base[:, :, 1:2] = np.ascontiguousarray(grid_eval(f, self.gaussgrid)).reshape(N + (-1,))
         L2FunctionalAssembler2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
                 &self.gaussweights0[0], &self.gaussweights1[0],
                 geo_grad_a,
-                self.W,
+                self.fields,
         )
 
     @cython.boundscheck(False)
@@ -922,23 +943,25 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
             # Gauss weights
             double* _gw0, double* _gw1,
             # input
-            double[:, :, :, ::1] _geo_grad_a,
+            double[:, :, ::1] _geo_grad_a,
             # output
-            double[:, ::1] _W,
+            double[:, :, ::1] _fields,
         ) nogil:
         cdef double GaussWeight
         cdef double* geo_grad_a
-        cdef double W
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
 
         for i0 in range(n0):
             for i1 in range(n1):
-                geo_grad_a = &_geo_grad_a[i0, i1, 0, 0]
+                geo_grad_a = &_geo_grad_a[i0, i1, 0]
+                fields = &_fields[i0, i1, 0]
 
+                # GaussWeight
                 GaussWeight = (_gw0[i0] * _gw1[i1])
-                W = (GaussWeight * fabs(((geo_grad_a[0] * geo_grad_a[3]) - (geo_grad_a[1] * geo_grad_a[2]))))
-                _W[i0, i1] = W
+                # W
+                fields[0] = (GaussWeight * fabs(((geo_grad_a[0] * geo_grad_a[3]) - (geo_grad_a[1] * geo_grad_a[2]))))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -947,24 +970,21 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
     cdef void combine(
             size_t n0, size_t n1,
             double* _gw0, double* _gw1,
-            double[:, :] _W,
-            double[:, :] _f_a,
+            double[:, :, :] _fields,
             double* VDu0, double* VDu1,
             double result[]
         ) nogil:
         cdef double r = 0.0
 
-        cdef double W
-        cdef double f_a
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
 
         for i0 in range(n0):
             for i1 in range(n1):
-                W = _W[i0, i1]
-                f_a = _f_a[i0, i1]
+                fields = &_fields[i0, i1, 0]
 
-                r += ((f_a * (VDu0[1*i0+0] * VDu1[1*i1+0])) * W)
+                r += ((fields[1] * (VDu0[1*i0+0] * VDu1[1*i1+0])) * fields[0])
         result[0] = r
 
     @cython.boundscheck(False)
@@ -988,16 +1008,12 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
         L2FunctionalAssembler2D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1],
                 &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]],
-                self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
-                self.f_a [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
+                self.fields[g_sta[0]:g_end[0], g_sta[1]:g_end[1]],
                 values_u[0], values_u[1],
                 result
         )
 
 cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
-    cdef double[:, ::1] W
-    cdef double[:, ::1] f_a
-
     @classmethod
     def inputs(cls):
         return {
@@ -1026,6 +1042,11 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
         self.gaussweights1 = gaussweights[1]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        # Fields:
+        #  - W: ofs=0 sz=1
+        #  - f_a: ofs=1 sz=1
+        self.fields = np.empty(N + (2,))
+
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
@@ -1039,15 +1060,14 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=0)
 
-        cdef double[:, :, :, ::1] geo_grad_a
-        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        self.W = np.empty(N + ())
-        self.f_a = np.ascontiguousarray(grid_eval_transformed(f, self.gaussgrid, self._geo))
+        cdef double[:, :, ::1] geo_grad_a
+        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
+        self.fields.base[:, :, 1:2] = np.ascontiguousarray(grid_eval_transformed(f, self.gaussgrid, self._geo)).reshape(N + (-1,))
         L2FunctionalAssemblerPhys2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
                 &self.gaussweights0[0], &self.gaussweights1[0],
                 geo_grad_a,
-                self.W,
+                self.fields,
         )
 
     @cython.boundscheck(False)
@@ -1060,23 +1080,25 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
             # Gauss weights
             double* _gw0, double* _gw1,
             # input
-            double[:, :, :, ::1] _geo_grad_a,
+            double[:, :, ::1] _geo_grad_a,
             # output
-            double[:, ::1] _W,
+            double[:, :, ::1] _fields,
         ) nogil:
         cdef double GaussWeight
         cdef double* geo_grad_a
-        cdef double W
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
 
         for i0 in range(n0):
             for i1 in range(n1):
-                geo_grad_a = &_geo_grad_a[i0, i1, 0, 0]
+                geo_grad_a = &_geo_grad_a[i0, i1, 0]
+                fields = &_fields[i0, i1, 0]
 
+                # GaussWeight
                 GaussWeight = (_gw0[i0] * _gw1[i1])
-                W = (GaussWeight * fabs(((geo_grad_a[0] * geo_grad_a[3]) - (geo_grad_a[1] * geo_grad_a[2]))))
-                _W[i0, i1] = W
+                # W
+                fields[0] = (GaussWeight * fabs(((geo_grad_a[0] * geo_grad_a[3]) - (geo_grad_a[1] * geo_grad_a[2]))))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1085,24 +1107,21 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
     cdef void combine(
             size_t n0, size_t n1,
             double* _gw0, double* _gw1,
-            double[:, :] _W,
-            double[:, :] _f_a,
+            double[:, :, :] _fields,
             double* VDu0, double* VDu1,
             double result[]
         ) nogil:
         cdef double r = 0.0
 
-        cdef double W
-        cdef double f_a
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
 
         for i0 in range(n0):
             for i1 in range(n1):
-                W = _W[i0, i1]
-                f_a = _f_a[i0, i1]
+                fields = &_fields[i0, i1, 0]
 
-                r += ((f_a * (VDu0[1*i0+0] * VDu1[1*i1+0])) * W)
+                r += ((fields[1] * (VDu0[1*i0+0] * VDu1[1*i1+0])) * fields[0])
         result[0] = r
 
     @cython.boundscheck(False)
@@ -1126,14 +1145,11 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
         L2FunctionalAssemblerPhys2D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1],
                 &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]],
-                self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
-                self.f_a [ g_sta[0]:g_end[0], g_sta[1]:g_end[1] ],
+                self.fields[g_sta[0]:g_end[0], g_sta[1]:g_end[1]],
                 values_u[0], values_u[1],
                 result
         )
 cdef class MassAssembler3D(BaseAssembler3D):
-    cdef double[:, :, ::1] W
-
     @classmethod
     def inputs(cls):
         return {
@@ -1162,6 +1178,10 @@ cdef class MassAssembler3D(BaseAssembler3D):
         self.gaussweights2 = gaussweights[2]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        # Fields:
+        #  - W: ofs=0 sz=1
+        self.fields = np.empty(N + (1,))
+
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
@@ -1179,14 +1199,13 @@ cdef class MassAssembler3D(BaseAssembler3D):
         self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=0)
 
-        cdef double[:, :, :, :, ::1] geo_grad_a
-        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        self.W = np.empty(N + ())
+        cdef double[:, :, :, ::1] geo_grad_a
+        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         MassAssembler3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
                 &self.gaussweights0[0], &self.gaussweights1[0], &self.gaussweights2[0],
                 geo_grad_a,
-                self.W,
+                self.fields,
         )
 
     @cython.boundscheck(False)
@@ -1199,13 +1218,13 @@ cdef class MassAssembler3D(BaseAssembler3D):
             # Gauss weights
             double* _gw0, double* _gw1, double* _gw2,
             # input
-            double[:, :, :, :, ::1] _geo_grad_a,
+            double[:, :, :, ::1] _geo_grad_a,
             # output
-            double[:, :, ::1] _W,
+            double[:, :, :, ::1] _fields,
         ) nogil:
         cdef double GaussWeight
         cdef double* geo_grad_a
-        cdef double W
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
@@ -1213,11 +1232,13 @@ cdef class MassAssembler3D(BaseAssembler3D):
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    geo_grad_a = &_geo_grad_a[i0, i1, i2, 0, 0]
+                    geo_grad_a = &_geo_grad_a[i0, i1, i2, 0]
+                    fields = &_fields[i0, i1, i2, 0]
 
+                    # GaussWeight
                     GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
-                    W = (GaussWeight * fabs((((geo_grad_a[0] * ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))) - (geo_grad_a[1] * ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6])))) + (geo_grad_a[2] * ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))))))
-                    _W[i0, i1, i2] = W
+                    # W
+                    fields[0] = (GaussWeight * fabs((((geo_grad_a[0] * ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))) - (geo_grad_a[1] * ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6])))) + (geo_grad_a[2] * ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))))))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1226,14 +1247,14 @@ cdef class MassAssembler3D(BaseAssembler3D):
     cdef void combine(
             size_t n0, size_t n1, size_t n2,
             double* _gw0, double* _gw1, double* _gw2,
-            double[:, :, :] _W,
+            double[:, :, :, :] _fields,
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
             double result[]
         ) nogil:
         cdef double r = 0.0
 
-        cdef double W
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
@@ -1241,9 +1262,9 @@ cdef class MassAssembler3D(BaseAssembler3D):
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    W = _W[i0, i1, i2]
+                    fields = &_fields[i0, i1, i2, 0]
 
-                    r += (((VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0]) * (VDv0[1*i0+0] * VDv1[1*i1+0] * VDv2[1*i2+0])) * W)
+                    r += (((VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0]) * (VDv0[1*i0+0] * VDv1[1*i1+0] * VDv2[1*i2+0])) * fields[0])
         result[0] = r
 
     @cython.boundscheck(False)
@@ -1287,15 +1308,13 @@ cdef class MassAssembler3D(BaseAssembler3D):
         MassAssembler3D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1], g_end[2]-g_sta[2],
                 &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]], &self.gaussweights2[g_sta[2]],
-                self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
+                self.fields[g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2]],
                 values_u[0], values_u[1], values_u[2],
                 values_v[0], values_v[1], values_v[2],
                 result
         )
 
 cdef class StiffnessAssembler3D(BaseAssembler3D):
-    cdef double[:, :, :, :, ::1] B
-
     @classmethod
     def inputs(cls):
         return {
@@ -1324,6 +1343,10 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         self.gaussweights2 = gaussweights[2]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        # Fields:
+        #  - B: ofs=0 sz=6
+        self.fields = np.empty(N + (6,))
+
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
@@ -1341,14 +1364,13 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=1)
 
-        cdef double[:, :, :, :, ::1] geo_grad_a
-        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        self.B = np.empty(N + (3, 3))
+        cdef double[:, :, :, ::1] geo_grad_a
+        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         StiffnessAssembler3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
                 &self.gaussweights0[0], &self.gaussweights1[0], &self.gaussweights2[0],
                 geo_grad_a,
-                self.B,
+                self.fields,
         )
 
     @cython.boundscheck(False)
@@ -1361,9 +1383,9 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
             # Gauss weights
             double* _gw0, double* _gw1, double* _gw2,
             # input
-            double[:, :, :, :, ::1] _geo_grad_a,
+            double[:, :, :, ::1] _geo_grad_a,
             # output
-            double[:, :, :, :, ::1] _B,
+            double[:, :, :, ::1] _fields,
         ) nogil:
         cdef double _tmp5
         cdef double _tmp4
@@ -1374,7 +1396,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         cdef double GaussWeight
         cdef double W
         cdef double* geo_grad_a
-        cdef double* B
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
@@ -1382,14 +1404,20 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    geo_grad_a = &_geo_grad_a[i0, i1, i2, 0, 0]
-                    B = &_B[i0, i1, i2, 0, 0]
+                    geo_grad_a = &_geo_grad_a[i0, i1, i2, 0]
+                    fields = &_fields[i0, i1, i2, 0]
 
+                    # _tmp5
                     _tmp5 = ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))
+                    # _tmp4
                     _tmp4 = ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6]))
+                    # _tmp3
                     _tmp3 = ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))
+                    # _tmp2
                     _tmp2 = (((geo_grad_a[0] * _tmp3) - (geo_grad_a[1] * _tmp4)) + (geo_grad_a[2] * _tmp5))
+                    # _tmp1
                     _tmp1 = (1.0 / _tmp2)
+                    # JacInv
                     JacInv[0] = (_tmp1 * _tmp3)
                     JacInv[1] = (_tmp1 * -((geo_grad_a[1] * geo_grad_a[8]) - (geo_grad_a[2] * geo_grad_a[7])))
                     JacInv[2] = (_tmp1 * ((geo_grad_a[1] * geo_grad_a[5]) - (geo_grad_a[2] * geo_grad_a[4])))
@@ -1399,14 +1427,17 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                     JacInv[6] = (_tmp1 * _tmp5)
                     JacInv[7] = (_tmp1 * -((geo_grad_a[0] * geo_grad_a[7]) - (geo_grad_a[1] * geo_grad_a[6])))
                     JacInv[8] = (_tmp1 * ((geo_grad_a[0] * geo_grad_a[4]) - (geo_grad_a[1] * geo_grad_a[3])))
+                    # GaussWeight
                     GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
+                    # W
                     W = (GaussWeight * fabs(_tmp2))
-                    B[0] = (W * (((JacInv[0] * JacInv[0]) + (JacInv[1] * JacInv[1])) + (JacInv[2] * JacInv[2])))
-                    B[1] = (W * (((JacInv[0] * JacInv[3]) + (JacInv[1] * JacInv[4])) + (JacInv[2] * JacInv[5])))
-                    B[2] = (W * (((JacInv[0] * JacInv[6]) + (JacInv[1] * JacInv[7])) + (JacInv[2] * JacInv[8])))
-                    B[4] = (W * (((JacInv[3] * JacInv[3]) + (JacInv[4] * JacInv[4])) + (JacInv[5] * JacInv[5])))
-                    B[5] = (W * (((JacInv[3] * JacInv[6]) + (JacInv[4] * JacInv[7])) + (JacInv[5] * JacInv[8])))
-                    B[8] = (W * (((JacInv[6] * JacInv[6]) + (JacInv[7] * JacInv[7])) + (JacInv[8] * JacInv[8])))
+                    # B
+                    fields[0] = (W * (((JacInv[0] * JacInv[0]) + (JacInv[1] * JacInv[1])) + (JacInv[2] * JacInv[2])))
+                    fields[1] = (W * (((JacInv[0] * JacInv[3]) + (JacInv[1] * JacInv[4])) + (JacInv[2] * JacInv[5])))
+                    fields[2] = (W * (((JacInv[0] * JacInv[6]) + (JacInv[1] * JacInv[7])) + (JacInv[2] * JacInv[8])))
+                    fields[3] = (W * (((JacInv[3] * JacInv[3]) + (JacInv[4] * JacInv[4])) + (JacInv[5] * JacInv[5])))
+                    fields[4] = (W * (((JacInv[3] * JacInv[6]) + (JacInv[4] * JacInv[7])) + (JacInv[5] * JacInv[8])))
+                    fields[5] = (W * (((JacInv[6] * JacInv[6]) + (JacInv[7] * JacInv[7])) + (JacInv[8] * JacInv[8])))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1415,7 +1446,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
     cdef void combine(
             size_t n0, size_t n1, size_t n2,
             double* _gw0, double* _gw1, double* _gw2,
-            double[:, :, :, :, :] _B,
+            double[:, :, :, :] _fields,
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
             double result[]
@@ -1428,7 +1459,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         cdef double _du_001
         cdef double _du_010
         cdef double _du_100
-        cdef double* B
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
@@ -1436,15 +1467,21 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    B = &_B[i0, i1, i2, 0, 0]
+                    fields = &_fields[i0, i1, i2, 0]
 
+                    # _dv_001
                     _dv_001 = (VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0])
+                    # _dv_010
                     _dv_010 = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
+                    # _dv_100
                     _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
+                    # _du_001
                     _du_001 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
+                    # _du_010
                     _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
+                    # _du_100
                     _du_100 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
-                    r += ((((((B[0] * _du_100) + (B[1] * _du_010)) + (B[2] * _du_001)) * _dv_100) + ((((B[1] * _du_100) + (B[4] * _du_010)) + (B[5] * _du_001)) * _dv_010)) + ((((B[2] * _du_100) + (B[5] * _du_010)) + (B[8] * _du_001)) * _dv_001))
+                    r += ((((((fields[0] * _du_100) + (fields[1] * _du_010)) + (fields[2] * _du_001)) * _dv_100) + ((((fields[1] * _du_100) + (fields[3] * _du_010)) + (fields[4] * _du_001)) * _dv_010)) + ((((fields[2] * _du_100) + (fields[4] * _du_010)) + (fields[5] * _du_001)) * _dv_001))
         result[0] = r
 
     @cython.boundscheck(False)
@@ -1488,16 +1525,13 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         StiffnessAssembler3D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1], g_end[2]-g_sta[2],
                 &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]], &self.gaussweights2[g_sta[2]],
-                self.B [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
+                self.fields[g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2]],
                 values_u[0], values_u[1], values_u[2],
                 values_v[0], values_v[1], values_v[2],
                 result
         )
 
 cdef class HeatAssembler_ST3D(BaseAssembler3D):
-    cdef double[:, :, ::1] W
-    cdef double[:, :, :, :, ::1] JacInv
-
     @classmethod
     def inputs(cls):
         return {
@@ -1526,6 +1560,11 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         self.gaussweights2 = gaussweights[2]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        # Fields:
+        #  - W: ofs=0 sz=1
+        #  - JacInv: ofs=1 sz=9
+        self.fields = np.empty(N + (10,))
+
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
@@ -1543,16 +1582,13 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=1)
 
-        cdef double[:, :, :, :, ::1] geo_grad_a
-        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        self.W = np.empty(N + ())
-        self.JacInv = np.empty(N + (3, 3))
+        cdef double[:, :, :, ::1] geo_grad_a
+        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         HeatAssembler_ST3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
                 &self.gaussweights0[0], &self.gaussweights1[0], &self.gaussweights2[0],
                 geo_grad_a,
-                self.W,
-                self.JacInv,
+                self.fields,
         )
 
     @cython.boundscheck(False)
@@ -1565,10 +1601,9 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
             # Gauss weights
             double* _gw0, double* _gw1, double* _gw2,
             # input
-            double[:, :, :, :, ::1] _geo_grad_a,
+            double[:, :, :, ::1] _geo_grad_a,
             # output
-            double[:, :, ::1] _W,
-            double[:, :, :, :, ::1] _JacInv,
+            double[:, :, :, ::1] _fields,
         ) nogil:
         cdef double GaussWeight
         cdef double _tmp5
@@ -1577,8 +1612,7 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         cdef double _tmp2
         cdef double _tmp1
         cdef double* geo_grad_a
-        cdef double W
-        cdef double* JacInv
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
@@ -1586,26 +1620,33 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    geo_grad_a = &_geo_grad_a[i0, i1, i2, 0, 0]
-                    JacInv = &_JacInv[i0, i1, i2, 0, 0]
+                    geo_grad_a = &_geo_grad_a[i0, i1, i2, 0]
+                    fields = &_fields[i0, i1, i2, 0]
 
+                    # GaussWeight
                     GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
+                    # _tmp5
                     _tmp5 = ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))
+                    # _tmp4
                     _tmp4 = ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6]))
+                    # _tmp3
                     _tmp3 = ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))
+                    # _tmp2
                     _tmp2 = (((geo_grad_a[0] * _tmp3) - (geo_grad_a[1] * _tmp4)) + (geo_grad_a[2] * _tmp5))
+                    # _tmp1
                     _tmp1 = (1.0 / _tmp2)
-                    W = (GaussWeight * fabs(_tmp2))
-                    _W[i0, i1, i2] = W
-                    JacInv[0] = (_tmp1 * _tmp3)
-                    JacInv[1] = (_tmp1 * -((geo_grad_a[1] * geo_grad_a[8]) - (geo_grad_a[2] * geo_grad_a[7])))
-                    JacInv[2] = (_tmp1 * ((geo_grad_a[1] * geo_grad_a[5]) - (geo_grad_a[2] * geo_grad_a[4])))
-                    JacInv[3] = (_tmp1 * -_tmp4)
-                    JacInv[4] = (_tmp1 * ((geo_grad_a[0] * geo_grad_a[8]) - (geo_grad_a[2] * geo_grad_a[6])))
-                    JacInv[5] = (_tmp1 * -((geo_grad_a[0] * geo_grad_a[5]) - (geo_grad_a[2] * geo_grad_a[3])))
-                    JacInv[6] = (_tmp1 * _tmp5)
-                    JacInv[7] = (_tmp1 * -((geo_grad_a[0] * geo_grad_a[7]) - (geo_grad_a[1] * geo_grad_a[6])))
-                    JacInv[8] = (_tmp1 * ((geo_grad_a[0] * geo_grad_a[4]) - (geo_grad_a[1] * geo_grad_a[3])))
+                    # W
+                    fields[0] = (GaussWeight * fabs(_tmp2))
+                    # JacInv
+                    fields[1] = (_tmp1 * _tmp3)
+                    fields[2] = (_tmp1 * -((geo_grad_a[1] * geo_grad_a[8]) - (geo_grad_a[2] * geo_grad_a[7])))
+                    fields[3] = (_tmp1 * ((geo_grad_a[1] * geo_grad_a[5]) - (geo_grad_a[2] * geo_grad_a[4])))
+                    fields[4] = (_tmp1 * -_tmp4)
+                    fields[5] = (_tmp1 * ((geo_grad_a[0] * geo_grad_a[8]) - (geo_grad_a[2] * geo_grad_a[6])))
+                    fields[6] = (_tmp1 * -((geo_grad_a[0] * geo_grad_a[5]) - (geo_grad_a[2] * geo_grad_a[3])))
+                    fields[7] = (_tmp1 * _tmp5)
+                    fields[8] = (_tmp1 * -((geo_grad_a[0] * geo_grad_a[7]) - (geo_grad_a[1] * geo_grad_a[6])))
+                    fields[9] = (_tmp1 * ((geo_grad_a[0] * geo_grad_a[4]) - (geo_grad_a[1] * geo_grad_a[3])))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1614,8 +1655,7 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
     cdef void combine(
             size_t n0, size_t n1, size_t n2,
             double* _gw0, double* _gw1, double* _gw2,
-            double[:, :, :] _W,
-            double[:, :, :, :, :] _JacInv,
+            double[:, :, :, :] _fields,
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
             double result[]
@@ -1627,8 +1667,7 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         cdef double _du_001
         cdef double _du_010
         cdef double _du_100
-        cdef double W
-        cdef double* JacInv
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
@@ -1636,15 +1675,19 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    W = _W[i0, i1, i2]
-                    JacInv = &_JacInv[i0, i1, i2, 0, 0]
+                    fields = &_fields[i0, i1, i2, 0]
 
+                    # _dv_010
                     _dv_010 = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
+                    # _dv_100
                     _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
+                    # _du_001
                     _du_001 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
+                    # _du_010
                     _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
+                    # _du_100
                     _du_100 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
-                    r += ((((((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) * ((JacInv[0] * _dv_100) + (JacInv[3] * _dv_010))) + (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) * ((JacInv[1] * _dv_100) + (JacInv[4] * _dv_010)))) + (_du_001 * (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+0]))) * W)
+                    r += ((((((fields[1] * _du_100) + (fields[4] * _du_010)) * ((fields[1] * _dv_100) + (fields[4] * _dv_010))) + (((fields[2] * _du_100) + (fields[5] * _du_010)) * ((fields[2] * _dv_100) + (fields[5] * _dv_010)))) + (_du_001 * (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+0]))) * fields[0])
         result[0] = r
 
     @cython.boundscheck(False)
@@ -1688,17 +1731,13 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         HeatAssembler_ST3D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1], g_end[2]-g_sta[2],
                 &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]], &self.gaussweights2[g_sta[2]],
-                self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
-                self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
+                self.fields[g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2]],
                 values_u[0], values_u[1], values_u[2],
                 values_v[0], values_v[1], values_v[2],
                 result
         )
 
 cdef class WaveAssembler_ST3D(BaseAssembler3D):
-    cdef double[:, :, ::1] W
-    cdef double[:, :, :, :, ::1] JacInv
-
     @classmethod
     def inputs(cls):
         return {
@@ -1727,6 +1766,11 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         self.gaussweights2 = gaussweights[2]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        # Fields:
+        #  - W: ofs=0 sz=1
+        #  - JacInv: ofs=1 sz=9
+        self.fields = np.empty(N + (10,))
+
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
@@ -1744,16 +1788,13 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=2)
 
-        cdef double[:, :, :, :, ::1] geo_grad_a
-        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        self.W = np.empty(N + ())
-        self.JacInv = np.empty(N + (3, 3))
+        cdef double[:, :, :, ::1] geo_grad_a
+        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         WaveAssembler_ST3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
                 &self.gaussweights0[0], &self.gaussweights1[0], &self.gaussweights2[0],
                 geo_grad_a,
-                self.W,
-                self.JacInv,
+                self.fields,
         )
 
     @cython.boundscheck(False)
@@ -1766,10 +1807,9 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
             # Gauss weights
             double* _gw0, double* _gw1, double* _gw2,
             # input
-            double[:, :, :, :, ::1] _geo_grad_a,
+            double[:, :, :, ::1] _geo_grad_a,
             # output
-            double[:, :, ::1] _W,
-            double[:, :, :, :, ::1] _JacInv,
+            double[:, :, :, ::1] _fields,
         ) nogil:
         cdef double GaussWeight
         cdef double _tmp5
@@ -1778,8 +1818,7 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         cdef double _tmp2
         cdef double _tmp1
         cdef double* geo_grad_a
-        cdef double W
-        cdef double* JacInv
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
@@ -1787,26 +1826,33 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    geo_grad_a = &_geo_grad_a[i0, i1, i2, 0, 0]
-                    JacInv = &_JacInv[i0, i1, i2, 0, 0]
+                    geo_grad_a = &_geo_grad_a[i0, i1, i2, 0]
+                    fields = &_fields[i0, i1, i2, 0]
 
+                    # GaussWeight
                     GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
+                    # _tmp5
                     _tmp5 = ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))
+                    # _tmp4
                     _tmp4 = ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6]))
+                    # _tmp3
                     _tmp3 = ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))
+                    # _tmp2
                     _tmp2 = (((geo_grad_a[0] * _tmp3) - (geo_grad_a[1] * _tmp4)) + (geo_grad_a[2] * _tmp5))
+                    # _tmp1
                     _tmp1 = (1.0 / _tmp2)
-                    W = (GaussWeight * fabs(_tmp2))
-                    _W[i0, i1, i2] = W
-                    JacInv[0] = (_tmp1 * _tmp3)
-                    JacInv[1] = (_tmp1 * -((geo_grad_a[1] * geo_grad_a[8]) - (geo_grad_a[2] * geo_grad_a[7])))
-                    JacInv[2] = (_tmp1 * ((geo_grad_a[1] * geo_grad_a[5]) - (geo_grad_a[2] * geo_grad_a[4])))
-                    JacInv[3] = (_tmp1 * -_tmp4)
-                    JacInv[4] = (_tmp1 * ((geo_grad_a[0] * geo_grad_a[8]) - (geo_grad_a[2] * geo_grad_a[6])))
-                    JacInv[5] = (_tmp1 * -((geo_grad_a[0] * geo_grad_a[5]) - (geo_grad_a[2] * geo_grad_a[3])))
-                    JacInv[6] = (_tmp1 * _tmp5)
-                    JacInv[7] = (_tmp1 * -((geo_grad_a[0] * geo_grad_a[7]) - (geo_grad_a[1] * geo_grad_a[6])))
-                    JacInv[8] = (_tmp1 * ((geo_grad_a[0] * geo_grad_a[4]) - (geo_grad_a[1] * geo_grad_a[3])))
+                    # W
+                    fields[0] = (GaussWeight * fabs(_tmp2))
+                    # JacInv
+                    fields[1] = (_tmp1 * _tmp3)
+                    fields[2] = (_tmp1 * -((geo_grad_a[1] * geo_grad_a[8]) - (geo_grad_a[2] * geo_grad_a[7])))
+                    fields[3] = (_tmp1 * ((geo_grad_a[1] * geo_grad_a[5]) - (geo_grad_a[2] * geo_grad_a[4])))
+                    fields[4] = (_tmp1 * -_tmp4)
+                    fields[5] = (_tmp1 * ((geo_grad_a[0] * geo_grad_a[8]) - (geo_grad_a[2] * geo_grad_a[6])))
+                    fields[6] = (_tmp1 * -((geo_grad_a[0] * geo_grad_a[5]) - (geo_grad_a[2] * geo_grad_a[3])))
+                    fields[7] = (_tmp1 * _tmp5)
+                    fields[8] = (_tmp1 * -((geo_grad_a[0] * geo_grad_a[7]) - (geo_grad_a[1] * geo_grad_a[6])))
+                    fields[9] = (_tmp1 * ((geo_grad_a[0] * geo_grad_a[4]) - (geo_grad_a[1] * geo_grad_a[3])))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1815,8 +1861,7 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
     cdef void combine(
             size_t n0, size_t n1, size_t n2,
             double* _gw0, double* _gw1, double* _gw2,
-            double[:, :, :] _W,
-            double[:, :, :, :, :] _JacInv,
+            double[:, :, :, :] _fields,
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
             double result[]
@@ -1829,8 +1874,7 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         cdef double _du_010
         cdef double _du_100
         cdef double _du_002
-        cdef double W
-        cdef double* JacInv
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
@@ -1838,16 +1882,21 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    W = _W[i0, i1, i2]
-                    JacInv = &_JacInv[i0, i1, i2, 0, 0]
+                    fields = &_fields[i0, i1, i2, 0]
 
+                    # _dv_011
                     _dv_011 = (VDv0[3*i0+1] * VDv1[3*i1+1] * VDv2[3*i2+0])
+                    # _dv_101
                     _dv_101 = (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+1])
+                    # _dv_001
                     _dv_001 = (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+0])
+                    # _du_010
                     _du_010 = (VDu0[3*i0+0] * VDu1[3*i1+1] * VDu2[3*i2+0])
+                    # _du_100
                     _du_100 = (VDu0[3*i0+0] * VDu1[3*i1+0] * VDu2[3*i2+1])
+                    # _du_002
                     _du_002 = (VDu0[3*i0+2] * VDu1[3*i1+0] * VDu2[3*i2+0])
-                    r += (((_du_002 * _dv_001) + ((((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) * ((JacInv[0] * _dv_101) + (JacInv[3] * _dv_011))) + (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) * ((JacInv[1] * _dv_101) + (JacInv[4] * _dv_011))))) * W)
+                    r += (((_du_002 * _dv_001) + ((((fields[1] * _du_100) + (fields[4] * _du_010)) * ((fields[1] * _dv_101) + (fields[4] * _dv_011))) + (((fields[2] * _du_100) + (fields[5] * _du_010)) * ((fields[2] * _dv_101) + (fields[5] * _dv_011))))) * fields[0])
         result[0] = r
 
     @cython.boundscheck(False)
@@ -1891,17 +1940,13 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         WaveAssembler_ST3D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1], g_end[2]-g_sta[2],
                 &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]], &self.gaussweights2[g_sta[2]],
-                self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
-                self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
+                self.fields[g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2]],
                 values_u[0], values_u[1], values_u[2],
                 values_v[0], values_v[1], values_v[2],
                 result
         )
 
 cdef class DivDivAssembler3D(BaseVectorAssembler3D):
-    cdef double[:, :, ::1] W
-    cdef double[:, :, :, :, ::1] JacInv
-
     @classmethod
     def inputs(cls):
         return {
@@ -1931,6 +1976,11 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         self.gaussweights2 = gaussweights[2]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        # Fields:
+        #  - W: ofs=0 sz=1
+        #  - JacInv: ofs=1 sz=9
+        self.fields = np.empty(N + (10,))
+
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
@@ -1948,16 +1998,13 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=1)
 
-        cdef double[:, :, :, :, ::1] geo_grad_a
-        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        self.W = np.empty(N + ())
-        self.JacInv = np.empty(N + (3, 3))
+        cdef double[:, :, :, ::1] geo_grad_a
+        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         DivDivAssembler3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
                 &self.gaussweights0[0], &self.gaussweights1[0], &self.gaussweights2[0],
                 geo_grad_a,
-                self.W,
-                self.JacInv,
+                self.fields,
         )
 
     @cython.boundscheck(False)
@@ -1970,10 +2017,9 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
             # Gauss weights
             double* _gw0, double* _gw1, double* _gw2,
             # input
-            double[:, :, :, :, ::1] _geo_grad_a,
+            double[:, :, :, ::1] _geo_grad_a,
             # output
-            double[:, :, ::1] _W,
-            double[:, :, :, :, ::1] _JacInv,
+            double[:, :, :, ::1] _fields,
         ) nogil:
         cdef double GaussWeight
         cdef double _tmp11
@@ -1982,8 +2028,7 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         cdef double _tmp2
         cdef double _tmp1
         cdef double* geo_grad_a
-        cdef double W
-        cdef double* JacInv
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
@@ -1991,26 +2036,33 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    geo_grad_a = &_geo_grad_a[i0, i1, i2, 0, 0]
-                    JacInv = &_JacInv[i0, i1, i2, 0, 0]
+                    geo_grad_a = &_geo_grad_a[i0, i1, i2, 0]
+                    fields = &_fields[i0, i1, i2, 0]
 
+                    # GaussWeight
                     GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
+                    # _tmp11
                     _tmp11 = ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))
+                    # _tmp10
                     _tmp10 = ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6]))
+                    # _tmp9
                     _tmp9 = ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))
+                    # _tmp2
                     _tmp2 = (((geo_grad_a[0] * _tmp9) - (geo_grad_a[1] * _tmp10)) + (geo_grad_a[2] * _tmp11))
+                    # _tmp1
                     _tmp1 = (1.0 / _tmp2)
-                    W = (GaussWeight * fabs(_tmp2))
-                    _W[i0, i1, i2] = W
-                    JacInv[0] = (_tmp1 * _tmp9)
-                    JacInv[1] = (_tmp1 * -((geo_grad_a[1] * geo_grad_a[8]) - (geo_grad_a[2] * geo_grad_a[7])))
-                    JacInv[2] = (_tmp1 * ((geo_grad_a[1] * geo_grad_a[5]) - (geo_grad_a[2] * geo_grad_a[4])))
-                    JacInv[3] = (_tmp1 * -_tmp10)
-                    JacInv[4] = (_tmp1 * ((geo_grad_a[0] * geo_grad_a[8]) - (geo_grad_a[2] * geo_grad_a[6])))
-                    JacInv[5] = (_tmp1 * -((geo_grad_a[0] * geo_grad_a[5]) - (geo_grad_a[2] * geo_grad_a[3])))
-                    JacInv[6] = (_tmp1 * _tmp11)
-                    JacInv[7] = (_tmp1 * -((geo_grad_a[0] * geo_grad_a[7]) - (geo_grad_a[1] * geo_grad_a[6])))
-                    JacInv[8] = (_tmp1 * ((geo_grad_a[0] * geo_grad_a[4]) - (geo_grad_a[1] * geo_grad_a[3])))
+                    # W
+                    fields[0] = (GaussWeight * fabs(_tmp2))
+                    # JacInv
+                    fields[1] = (_tmp1 * _tmp9)
+                    fields[2] = (_tmp1 * -((geo_grad_a[1] * geo_grad_a[8]) - (geo_grad_a[2] * geo_grad_a[7])))
+                    fields[3] = (_tmp1 * ((geo_grad_a[1] * geo_grad_a[5]) - (geo_grad_a[2] * geo_grad_a[4])))
+                    fields[4] = (_tmp1 * -_tmp10)
+                    fields[5] = (_tmp1 * ((geo_grad_a[0] * geo_grad_a[8]) - (geo_grad_a[2] * geo_grad_a[6])))
+                    fields[6] = (_tmp1 * -((geo_grad_a[0] * geo_grad_a[5]) - (geo_grad_a[2] * geo_grad_a[3])))
+                    fields[7] = (_tmp1 * _tmp11)
+                    fields[8] = (_tmp1 * -((geo_grad_a[0] * geo_grad_a[7]) - (geo_grad_a[1] * geo_grad_a[6])))
+                    fields[9] = (_tmp1 * ((geo_grad_a[0] * geo_grad_a[4]) - (geo_grad_a[1] * geo_grad_a[3])))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -2019,8 +2071,7 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     cdef void combine(
             size_t n0, size_t n1, size_t n2,
             double* _gw0, double* _gw1, double* _gw2,
-            double[:, :, :] _W,
-            double[:, :, :, :, :] _JacInv,
+            double[:, :, :, :] _fields,
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
             double result[]
@@ -2039,8 +2090,7 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         cdef double _tmp6
         cdef double _tmp5
         cdef double _tmp3
-        cdef double W
-        cdef double* JacInv
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
@@ -2048,30 +2098,41 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    W = _W[i0, i1, i2]
-                    JacInv = &_JacInv[i0, i1, i2, 0, 0]
+                    fields = &_fields[i0, i1, i2, 0]
 
+                    # _dv_001
                     _dv_001 = (VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0])
+                    # _dv_010
                     _dv_010 = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
+                    # _dv_100
                     _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
-                    _tmp8 = (((JacInv[2] * _dv_100) + (JacInv[5] * _dv_010)) + (JacInv[8] * _dv_001))
-                    _tmp7 = (((JacInv[1] * _dv_100) + (JacInv[4] * _dv_010)) + (JacInv[7] * _dv_001))
-                    _tmp4 = (((JacInv[0] * _dv_100) + (JacInv[3] * _dv_010)) + (JacInv[6] * _dv_001))
+                    # _tmp8
+                    _tmp8 = (((fields[3] * _dv_100) + (fields[6] * _dv_010)) + (fields[9] * _dv_001))
+                    # _tmp7
+                    _tmp7 = (((fields[2] * _dv_100) + (fields[5] * _dv_010)) + (fields[8] * _dv_001))
+                    # _tmp4
+                    _tmp4 = (((fields[1] * _dv_100) + (fields[4] * _dv_010)) + (fields[7] * _dv_001))
+                    # _du_001
                     _du_001 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
+                    # _du_010
                     _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
+                    # _du_100
                     _du_100 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
-                    _tmp6 = (((JacInv[2] * _du_100) + (JacInv[5] * _du_010)) + (JacInv[8] * _du_001))
-                    _tmp5 = (((JacInv[1] * _du_100) + (JacInv[4] * _du_010)) + (JacInv[7] * _du_001))
-                    _tmp3 = (((JacInv[0] * _du_100) + (JacInv[3] * _du_010)) + (JacInv[6] * _du_001))
-                    r[0] += ((_tmp3 * _tmp4) * W)
-                    r[1] += ((_tmp5 * _tmp4) * W)
-                    r[2] += ((_tmp6 * _tmp4) * W)
-                    r[3] += ((_tmp3 * _tmp7) * W)
-                    r[4] += ((_tmp5 * _tmp7) * W)
-                    r[5] += ((_tmp6 * _tmp7) * W)
-                    r[6] += ((_tmp3 * _tmp8) * W)
-                    r[7] += ((_tmp5 * _tmp8) * W)
-                    r[8] += ((_tmp6 * _tmp8) * W)
+                    # _tmp6
+                    _tmp6 = (((fields[3] * _du_100) + (fields[6] * _du_010)) + (fields[9] * _du_001))
+                    # _tmp5
+                    _tmp5 = (((fields[2] * _du_100) + (fields[5] * _du_010)) + (fields[8] * _du_001))
+                    # _tmp3
+                    _tmp3 = (((fields[1] * _du_100) + (fields[4] * _du_010)) + (fields[7] * _du_001))
+                    r[0] += ((_tmp3 * _tmp4) * fields[0])
+                    r[1] += ((_tmp5 * _tmp4) * fields[0])
+                    r[2] += ((_tmp6 * _tmp4) * fields[0])
+                    r[3] += ((_tmp3 * _tmp7) * fields[0])
+                    r[4] += ((_tmp5 * _tmp7) * fields[0])
+                    r[5] += ((_tmp6 * _tmp7) * fields[0])
+                    r[6] += ((_tmp3 * _tmp8) * fields[0])
+                    r[7] += ((_tmp5 * _tmp8) * fields[0])
+                    r[8] += ((_tmp6 * _tmp8) * fields[0])
         result[0] = r[0]
         result[1] = r[1]
         result[2] = r[2]
@@ -2123,17 +2184,13 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         DivDivAssembler3D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1], g_end[2]-g_sta[2],
                 &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]], &self.gaussweights2[g_sta[2]],
-                self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
-                self.JacInv [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
+                self.fields[g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2]],
                 values_u[0], values_u[1], values_u[2],
                 values_v[0], values_v[1], values_v[2],
                 result
         )
 
 cdef class L2FunctionalAssembler3D(BaseAssembler3D):
-    cdef double[:, :, ::1] W
-    cdef double[:, :, ::1] f_a
-
     @classmethod
     def inputs(cls):
         return {
@@ -2163,6 +2220,11 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
         self.gaussweights2 = gaussweights[2]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        # Fields:
+        #  - W: ofs=0 sz=1
+        #  - f_a: ofs=1 sz=1
+        self.fields = np.empty(N + (2,))
+
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
@@ -2180,15 +2242,14 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
         self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=0)
 
-        cdef double[:, :, :, :, ::1] geo_grad_a
-        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        self.W = np.empty(N + ())
-        self.f_a = np.ascontiguousarray(grid_eval(f, self.gaussgrid))
+        cdef double[:, :, :, ::1] geo_grad_a
+        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
+        self.fields.base[:, :, :, 1:2] = np.ascontiguousarray(grid_eval(f, self.gaussgrid)).reshape(N + (-1,))
         L2FunctionalAssembler3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
                 &self.gaussweights0[0], &self.gaussweights1[0], &self.gaussweights2[0],
                 geo_grad_a,
-                self.W,
+                self.fields,
         )
 
     @cython.boundscheck(False)
@@ -2201,13 +2262,13 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
             # Gauss weights
             double* _gw0, double* _gw1, double* _gw2,
             # input
-            double[:, :, :, :, ::1] _geo_grad_a,
+            double[:, :, :, ::1] _geo_grad_a,
             # output
-            double[:, :, ::1] _W,
+            double[:, :, :, ::1] _fields,
         ) nogil:
         cdef double GaussWeight
         cdef double* geo_grad_a
-        cdef double W
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
@@ -2215,11 +2276,13 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    geo_grad_a = &_geo_grad_a[i0, i1, i2, 0, 0]
+                    geo_grad_a = &_geo_grad_a[i0, i1, i2, 0]
+                    fields = &_fields[i0, i1, i2, 0]
 
+                    # GaussWeight
                     GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
-                    W = (GaussWeight * fabs((((geo_grad_a[0] * ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))) - (geo_grad_a[1] * ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6])))) + (geo_grad_a[2] * ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))))))
-                    _W[i0, i1, i2] = W
+                    # W
+                    fields[0] = (GaussWeight * fabs((((geo_grad_a[0] * ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))) - (geo_grad_a[1] * ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6])))) + (geo_grad_a[2] * ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))))))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -2228,15 +2291,13 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
     cdef void combine(
             size_t n0, size_t n1, size_t n2,
             double* _gw0, double* _gw1, double* _gw2,
-            double[:, :, :] _W,
-            double[:, :, :] _f_a,
+            double[:, :, :, :] _fields,
             double* VDu0, double* VDu1, double* VDu2,
             double result[]
         ) nogil:
         cdef double r = 0.0
 
-        cdef double W
-        cdef double f_a
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
@@ -2244,10 +2305,9 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    W = _W[i0, i1, i2]
-                    f_a = _f_a[i0, i1, i2]
+                    fields = &_fields[i0, i1, i2, 0]
 
-                    r += ((f_a * (VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0])) * W)
+                    r += ((fields[1] * (VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0])) * fields[0])
         result[0] = r
 
     @cython.boundscheck(False)
@@ -2275,16 +2335,12 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
         L2FunctionalAssembler3D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1], g_end[2]-g_sta[2],
                 &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]], &self.gaussweights2[g_sta[2]],
-                self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
-                self.f_a [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
+                self.fields[g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2]],
                 values_u[0], values_u[1], values_u[2],
                 result
         )
 
 cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
-    cdef double[:, :, ::1] W
-    cdef double[:, :, ::1] f_a
-
     @classmethod
     def inputs(cls):
         return {
@@ -2314,6 +2370,11 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
         self.gaussweights2 = gaussweights[2]
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
+        # Fields:
+        #  - W: ofs=0 sz=1
+        #  - f_a: ofs=1 sz=1
+        self.fields = np.empty(N + (2,))
+
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
         self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
@@ -2331,15 +2392,14 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
         self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=0)
 
-        cdef double[:, :, :, :, ::1] geo_grad_a
-        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid))
-        self.W = np.empty(N + ())
-        self.f_a = np.ascontiguousarray(grid_eval_transformed(f, self.gaussgrid, self._geo))
+        cdef double[:, :, :, ::1] geo_grad_a
+        geo_grad_a = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
+        self.fields.base[:, :, :, 1:2] = np.ascontiguousarray(grid_eval_transformed(f, self.gaussgrid, self._geo)).reshape(N + (-1,))
         L2FunctionalAssemblerPhys3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
                 &self.gaussweights0[0], &self.gaussweights1[0], &self.gaussweights2[0],
                 geo_grad_a,
-                self.W,
+                self.fields,
         )
 
     @cython.boundscheck(False)
@@ -2352,13 +2412,13 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
             # Gauss weights
             double* _gw0, double* _gw1, double* _gw2,
             # input
-            double[:, :, :, :, ::1] _geo_grad_a,
+            double[:, :, :, ::1] _geo_grad_a,
             # output
-            double[:, :, ::1] _W,
+            double[:, :, :, ::1] _fields,
         ) nogil:
         cdef double GaussWeight
         cdef double* geo_grad_a
-        cdef double W
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
@@ -2366,11 +2426,13 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    geo_grad_a = &_geo_grad_a[i0, i1, i2, 0, 0]
+                    geo_grad_a = &_geo_grad_a[i0, i1, i2, 0]
+                    fields = &_fields[i0, i1, i2, 0]
 
+                    # GaussWeight
                     GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
-                    W = (GaussWeight * fabs((((geo_grad_a[0] * ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))) - (geo_grad_a[1] * ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6])))) + (geo_grad_a[2] * ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))))))
-                    _W[i0, i1, i2] = W
+                    # W
+                    fields[0] = (GaussWeight * fabs((((geo_grad_a[0] * ((geo_grad_a[4] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[7]))) - (geo_grad_a[1] * ((geo_grad_a[3] * geo_grad_a[8]) - (geo_grad_a[5] * geo_grad_a[6])))) + (geo_grad_a[2] * ((geo_grad_a[3] * geo_grad_a[7]) - (geo_grad_a[4] * geo_grad_a[6]))))))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -2379,15 +2441,13 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
     cdef void combine(
             size_t n0, size_t n1, size_t n2,
             double* _gw0, double* _gw1, double* _gw2,
-            double[:, :, :] _W,
-            double[:, :, :] _f_a,
+            double[:, :, :, :] _fields,
             double* VDu0, double* VDu1, double* VDu2,
             double result[]
         ) nogil:
         cdef double r = 0.0
 
-        cdef double W
-        cdef double f_a
+        cdef double* fields
         cdef size_t i0
         cdef size_t i1
         cdef size_t i2
@@ -2395,10 +2455,9 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
         for i0 in range(n0):
             for i1 in range(n1):
                 for i2 in range(n2):
-                    W = _W[i0, i1, i2]
-                    f_a = _f_a[i0, i1, i2]
+                    fields = &_fields[i0, i1, i2, 0]
 
-                    r += ((f_a * (VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0])) * W)
+                    r += ((fields[1] * (VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0])) * fields[0])
         result[0] = r
 
     @cython.boundscheck(False)
@@ -2426,8 +2485,7 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
         L2FunctionalAssemblerPhys3D.combine(
                 g_end[0]-g_sta[0], g_end[1]-g_sta[1], g_end[2]-g_sta[2],
                 &self.gaussweights0[g_sta[0]], &self.gaussweights1[g_sta[1]], &self.gaussweights2[g_sta[2]],
-                self.W [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
-                self.f_a [ g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2] ],
+                self.fields[g_sta[0]:g_end[0], g_sta[1]:g_end[1], g_sta[2]:g_end[2]],
                 values_u[0], values_u[1], values_u[2],
                 result
         )

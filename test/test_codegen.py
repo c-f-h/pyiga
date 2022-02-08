@@ -1,5 +1,6 @@
 from pyiga.codegen import cython as codegen
 from pyiga import vform
+import numpy as np
 
 def my_stiffness_vf(dim):
     # same as stiffness_vf(), but slower implementation
@@ -79,3 +80,13 @@ def test_codegen_wave_st2d():
     assert (not vf.vec) and vf.arity == 2 and vf.spacetime
     codegen.AsmGenerator(vf, 'TestAsm', code).generate()
     code = codegen.preamble() + '\n' + code.result()
+
+def test_sym_index():
+    n = 4
+    idx = [[ codegen.sym_index_to_seq(n, i, j) for j in range(n) ]
+            for i in range(n) ]
+    assert np.array_equal(idx,
+            [[0, 1, 2, 3],
+             [1, 4, 5, 6],
+             [2, 5, 7, 8],
+             [3, 6, 8, 9]])

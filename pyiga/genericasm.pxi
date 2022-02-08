@@ -162,7 +162,7 @@ cdef class BaseVectorAssembler1D:
     cdef object _geo
     cdef tuple gaussgrid
     cdef double[::1] constants
-    cdef double[::1] fields
+    cdef double[:, ::1] fields
     cdef double[::1] gaussweights0
 
     def num_components(self):
@@ -485,7 +485,7 @@ cdef class BaseVectorAssembler2D:
     cdef object _geo
     cdef tuple gaussgrid
     cdef double[::1] constants
-    cdef double[:, ::1] fields
+    cdef double[:, :, ::1] fields
     cdef double[::1] gaussweights0
     cdef double[::1] gaussweights1
 
@@ -828,7 +828,7 @@ cdef class BaseVectorAssembler3D:
     cdef object _geo
     cdef tuple gaussgrid
     cdef double[::1] constants
-    cdef double[:, :, ::1] fields
+    cdef double[:, :, :, ::1] fields
     cdef double[::1] gaussweights0
     cdef double[::1] gaussweights1
     cdef double[::1] gaussweights2

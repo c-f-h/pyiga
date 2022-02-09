@@ -558,7 +558,8 @@ class AsmGenerator(CodegenVisitor):
                     else:
                         var, sz, ofs = self.temp_info[var.name]
                         arr = 'temp_fields'
-                    # TODO: deal with symmetric matrix indexing
+
+                    assert not var.symmetric, 'symmetric input matrices not currently supported'
 
                     # NB: Cython (as of 0.29.20) can't assign an ndarray to a slice
                     # of a typed memoryview, so we use the underlying ndarray via .base

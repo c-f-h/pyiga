@@ -96,13 +96,6 @@ def storage_size(var):
     else:
         return reduce(operator.mul, var.shape, 1) # number of scalar entries
 
-def sym_index_to_seq(n, i, j):
-    """Convert index (i,j) into a n x n symmetric matrix into a sequential index."""
-    if i > j:           # make sure j >= i
-        i, j = j, i
-    idx = sum(n - k for k in range(0, i))   # diagonal index on row i
-    return idx + (j - i)
-
 def storage_index(var, I):
     """Index into the flattened storage of a field variable."""
     if var.shape == ():
@@ -110,7 +103,7 @@ def storage_index(var, I):
         return 0
     else:
         if len(var.shape) == 2 and var.symmetric:
-            return sym_index_to_seq(var.shape[0], *I)
+            return vform.sym_index_to_seq(var.shape[0], *I)
         else:
             return np.ravel_multi_index(I, var.shape)
 

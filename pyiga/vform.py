@@ -24,15 +24,13 @@ def _D_to_indices(D):
         indices.append(i)
     return tuple(indices)
 
-def _hessian_index(n, i, j):
-    """Return the index for derivative d_xi_xj into the linearized Hessian vector."""
-    if i > j:
+def sym_index_to_seq(n, i, j):
+    """Convert index (i,j) into a n x n symmetric matrix into a sequential
+    index which lies in `range(0, n * (n + 1) // 2)`."""
+    if i > j:           # make sure j >= i
         i, j = j, i
-    H = np.zeros((n,n), dtype=int)
-    I,J = np.triu_indices(n)
-    n_i = len(I)
-    H[I,J] = np.arange(n_i)
-    return H[i,j]
+    idx = sum(n - k for k in range(0, i))   # diagonal index on row i
+    return idx + (j - i)
 
 def _integer_power(x, y):
     if y < 0:
@@ -624,7 +622,7 @@ class VForm:
         elif sum(e.D) == 2:
             H = e._para_hess()
             i,j = _D_to_indices(e.D)
-            return H[_hessian_index(len(e.D), i, j)]
+            return H[sym_index_to_seq(len(e.D), i, j)]
         else:
             assert False, 'higher order physical derivatives not implemented'
 

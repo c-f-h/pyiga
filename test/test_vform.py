@@ -237,3 +237,13 @@ def test_parse():
     vf = parse_vf('f * v * ds', kvs[:1], {'f': geometry.circular_arc(1.4)[0]})
 
     vf = parse_vf('inner(f, v) * ds', kvs, bfuns=[('v',2)], args={'f': lambda x, y: (-y, x)})
+
+def test_sym_index():
+    n = 4
+    idx = [[ sym_index_to_seq(n, i, j) for j in range(n) ]
+            for i in range(n) ]
+    assert np.array_equal(idx,
+            [[0, 1, 2, 3],
+             [1, 4, 5, 6],
+             [2, 5, 7, 8],
+             [3, 6, 8, 9]])

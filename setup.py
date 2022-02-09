@@ -93,7 +93,4 @@ setup(
         'future;python_version<"3.0"',
         'futures;python_version<"3.0"'   # backport of concurrent.futures to Py2
     ],
-
-    tests_require = 'nose',
-    test_suite = 'nose.collector'
 )

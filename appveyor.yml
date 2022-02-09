@@ -18,13 +18,15 @@ init:
 install:
   - "set PATH=%MINICONDA%;%MINICONDA%\\Scripts;%PATH%"
   - conda config --set always_yes yes --set changeps1 no
-  - "conda create -q -n test-environment python=%PYTHON_VERSION% wheel setuptools Cython nose %MSVC_RUNTIME% numpy scipy matplotlib"
+  - "conda create -q -n test-environment python=%PYTHON_VERSION% wheel setuptools Cython pytest %MSVC_RUNTIME% numpy scipy matplotlib"
   - activate test-environment
 
 build: off
 
 test_script:
-  - python setup.py nosetests --verbosity=2
+  - python setup.py install
+  - python setup.py build_ext -i
+  - python -m pytest -v
 
 after_test:
   # build the wheels

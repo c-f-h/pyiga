@@ -524,7 +524,8 @@ class AsmGenerator(CodegenVisitor):
 
         self.put('')
 
-        for sp in (0,1):        # TODO: do this only for used_spaces? crashes currently
+        # BaseAssembler always uses S1 for i and S0 for j for a bilinear form
+        for sp in (0,1):
             kvs = 'kvs%d' % sp
             self.putf('assert len({kvs}) == {dim}, "Assembler requires {dim} knot vectors"', kvs=kvs)
             self.putf('self.S{sp}_ndofs[:] = [kv.numdofs for kv in {kvs}]', sp=sp, kvs=kvs)

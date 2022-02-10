@@ -4,6 +4,21 @@ from functools import reduce
 import operator
 import numpy as np
 
+# Some notes on AsmVars:
+#
+# - AsmVars with a src:
+#   - InputField: var is computed during init and then stored either in `fields`
+#       (for kernel deps) or in `temp_fields` (only used during precompute)
+#   - Parameter: var is allocated in `constants` and must be set before assembling
+#       (there are no `temp_constants` since storage overhead is trivial)
+#
+# - AsmVars with an expr:
+#   - are computed either in precompute or in kernel
+#   - are allocated in `fields` or `constants` if precomputed AND a kernel dependency
+#       (is_global=True)
+#   - may be local vars in precompute or kernel (no global storage) if only used
+#       in one of the two functions
+
 class CodeGen:
     """Basic code generation helper for Cython."""
     def __init__(self):
@@ -187,10 +202,10 @@ class AsmGenerator(CodegenVisitor):
             var, sz, ofs = self.temp_info[var.name]
             idx = ofs + storage_index(var, I)
             return 'temp_fields[{i}]'.format(i=idx)
-        elif isinstance(var.src, vform.Parameter):
-            par, sz, ofs = self.param_info[var.src.name]
+        elif var.name in self.constant_info:
+            par, sz, ofs = self.constant_info[var.name]
             idx = ofs + storage_index(par, I)
-            return 'params[{i}]'.format(i=idx)
+            return 'constants[{i}]'.format(i=idx)
         else:   # it's a non-global, referred to by name
             if var.is_scalar():
                 return var.name
@@ -253,8 +268,13 @@ class AsmGenerator(CodegenVisitor):
     def start_loop_with_fields(self, local_vars=[], temp=False):
         # temp storage for local variables
         for var in local_vars:
-            if var.expr:                # parameters do not have an expression
+            if var.expr and not var.is_global:  # globals already have storage
                 self.declare_var(var)
+
+        # generate assignment statements for constants
+        for var in local_vars:
+            if var.expr and var.scope == vform.Scope.CONSTANT:
+                self.gen_assign(var, var.expr)
 
         self.declare_pointer('fields')
         if temp:
@@ -274,9 +294,9 @@ class AsmGenerator(CodegenVisitor):
             self.putf('temp_fields = &_temp_fields[{idx}, 0]', idx=self.dimrep('i{}'))
         self.put('')
 
-        # generate code for computing local variables
+        # generate code for computing field variables
         for var in local_vars:
-            if var.expr:                # parameters do not have an expression
+            if var.expr and var.scope != vform.Scope.CONSTANT:
                 self.gen_assign(var, var.expr)
 
     def generate_kernel(self):
@@ -291,8 +311,8 @@ class AsmGenerator(CodegenVisitor):
 
         # input: 'fields' contains all global arrays
         self.put('double[' + self.dimrep(':') + ', :] _fields,')
-        if self.num_params > 0:
-            self.put('double params[],')    # array for constant parameters
+        if self.num_constants > 0:
+            self.put('double constants[],')    # array for constant parameters
 
         # arrays for basis function values/derivatives
         for bfun in self.vform.basis_funs:
@@ -314,7 +334,8 @@ class AsmGenerator(CodegenVisitor):
 
         ############################################################
         # main loop over all Gauss points
-        local_vars = [var for var in self.vform.kernel_deps if not var.is_array]
+        # exclude globals, they have already been computed at this point
+        local_vars = [var for var in self.vform.kernel_deps if not var.is_global]
         self.start_loop_with_fields(local_vars=local_vars)
 
         # if needed, generate custom code for the bilinear form a(u,v)
@@ -404,7 +425,7 @@ class AsmGenerator(CodegenVisitor):
 
         self.putf('self.fields[{idx}],',
                 idx=self.dimrep('g_sta[{0}]:g_end[{0}]'))
-        if self.num_params > 0:
+        if self.num_constants > 0:
             self.put('&self.constants[0],')
 
         # generate basis function value arguments
@@ -516,8 +537,8 @@ class AsmGenerator(CodegenVisitor):
             self.putf('#  - {var}: ofs={ofs} sz={sz}', var=var, ofs=ofs, sz=sz)
 
         self.putf('self.fields = np.empty(N + ({nf},))', nf=self.num_globals)
-        if self.num_params > 0:
-            self.putf('self.constants = np.zeros({np})', np=self.num_params)
+        if self.num_constants > 0:
+            self.putf('self.constants = np.zeros({np})', np=self.num_constants)
 
         if self.on_demand:
             self.put('self.bbox_ofs[:] = tuple(bb[0] * self.nqp for bb in bbox)')
@@ -540,29 +561,24 @@ class AsmGenerator(CodegenVisitor):
             self.putf('cdef {typ} temp_fields', typ=self.field_type())
             self.putf('temp_fields = np.empty(N + ({nt},))', nt=self.num_temp)
 
-        # declare/initialize array variables
+        # declare/initialize array variables from InputFields
         for var in vf.linear_deps:
-            # exclude basis function nodes
-            if not isinstance(var, vform.BasisFun) and var.is_array:
-                if var.src:     # array gets its data from an input function
-                    src = self.parse_src(var)
-                    if var.is_global:
-                        var, sz, ofs = self.global_info[var.name]
-                        arr = 'self.fields'
-                    else:
-                        var, sz, ofs = self.temp_info[var.name]
-                        arr = 'temp_fields'
-
-                    assert not var.symmetric, 'symmetric input matrices not currently supported'
-
-                    # NB: Cython (as of 0.29.20) can't assign an ndarray to a slice
-                    # of a typed memoryview, so we use the underlying ndarray via .base
-                    self.putf('{arr}.base[{dims}, {ofs}:{end}] = {src}.reshape(N + (-1,))',
-                            arr=arr, dims=self.dimrep(':'), ofs=ofs, end=ofs+sz, src=src)
-                elif var.expr:  # custom precomputed field var
-                    assert var.is_global    # is already handled in 'fields'
+            # exclude basis function nodes and non-InputFields
+            if not isinstance(var, vform.BasisFun) and var.src and isinstance(var.src, vform.InputField):
+                src = self.parse_src(var)
+                if var.is_global:
+                    var, sz, ofs = self.global_info[var.name]
+                    arr = 'self.fields'
                 else:
-                    assert False    # we should not reach this
+                    var, sz, ofs = self.temp_info[var.name]
+                    arr = 'temp_fields'
+
+                assert not var.symmetric, 'symmetric input matrices not currently supported'
+
+                # NB: Cython (as of 0.29.20) can't assign an ndarray to a slice
+                # of a typed memoryview, so we use the underlying ndarray via .base
+                self.putf('{arr}.base[{dims}, {ofs}:{end}] = {src}.reshape(N + (-1,))',
+                        arr=arr, dims=self.dimrep(':'), ofs=ofs, end=ofs+sz, src=src)
 
         if vf.precomp:
             # call precompute function
@@ -575,7 +591,7 @@ class AsmGenerator(CodegenVisitor):
             # generate arguments for input fields
             self.put('temp_fields,')
             self.put('self.fields,')
-            if self.num_params > 0:
+            if self.num_constants > 0:
                 self.put('&self.constants[0],')
             self.dedent(2)
             self.put(')')
@@ -606,18 +622,14 @@ class AsmGenerator(CodegenVisitor):
         self.put(self.field_type() + ' _temp_fields,')
         self.put('# output')
         self.put(self.field_type() + ' _fields,')
-        if self.num_params > 0:
+        if self.num_constants > 0:
             self.put('# constant parameters')
-            self.put('double params[],')    # array for constant parameters
+            self.put('double constants[],')    # array for constant parameters
         self.dedent()
         self.put(') nogil:')
 
         # start main loop
-        self.start_loop_with_fields(local_vars=vf.precomp_locals, temp=True)
-
-        # generate assignment statements
-        for var in vf.precomp:
-            self.gen_assign(var, var.expr)
+        self.start_loop_with_fields(local_vars=vf.precomp, temp=True)
 
         # end main loop
         for _ in range(self.dim):
@@ -632,7 +644,7 @@ class AsmGenerator(CodegenVisitor):
         # declare/initialize array variables
         for var in self.vform.linear_deps:
             if not isinstance(var, vform.BasisFun) and var.src in self.updatable:
-                assert var.is_array and var.is_global, 'only global array vars can be updated'
+                assert var.scope == vform.Scope.FIELD and var.is_global, 'only global array vars can be updated'
                 self.putf("if {name}:", name=var.src.name)
                 self.indent()
                 self.putf("{arr} = {src}", arr='self.'+var.name, src=self.parse_src(var))
@@ -649,8 +661,8 @@ class AsmGenerator(CodegenVisitor):
             self.indent()
             self.putf("if np.shape({name}) != {shp}: raise TypeError('{name} has improper shape')",
                     name=par.name, shp=par.shape)
-            ofs = self.param_info[par.name][2]
-            sz  = self.param_info[par.name][1]
+            ofs = self.constant_info[par.name][2]
+            sz  = self.constant_info[par.name][1]
             self.putf("values = np.ravel({name})", name=par.name)
             self.putf("for i in range({sz}):", sz=sz)
             self.indent()
@@ -665,17 +677,21 @@ class AsmGenerator(CodegenVisitor):
         self.vform.finalize(do_precompute=not self.on_demand)
         self.numderiv = self.vform.find_max_deriv()
 
-        # determine layout of global 'constants' array
-        self.param_info, self.num_params = allocate_array(self.vform.params)
+        # determine layout of global 'constants' array.
+        # global constants are parameters and constants computed during precompute.
+        constants = self.vform.params + [var for var in self.vform.kernel_deps
+                if var.scope == vform.Scope.CONSTANT and var.expr and var.is_global]
+        self.constant_info, self.num_constants = allocate_array(constants)
 
-        # determine layout of global 'fields' array
+        # determine layout of global 'fields' array.
+        # globals are either input fields or fields computed during precompute.
         global_vars = [var for var in self.vform.kernel_deps
-                if var.is_array and var.is_global]
+                if var.scope == vform.Scope.FIELD and var.is_global]
         self.global_info, self.num_globals = allocate_array(global_vars)
 
         # globals are passed in 'fields' automatically; collect the rest
         self.precomp_array_deps = [var for var in self.vform.precomp_deps
-                if var.is_array and not var.is_global]
+                if var.scope == vform.Scope.FIELD and not var.is_global]
         self.temp_info, self.num_temp = allocate_array(self.precomp_array_deps)
 
         self.env = {
@@ -683,6 +699,9 @@ class AsmGenerator(CodegenVisitor):
             'geo_dim': self.vform.geo_dim,
             'maxderiv': self.numderiv,
         }
+        for var in self.constant_info:
+            _, sz, ofs = self.constant_info[var]
+            self.putf('#  - {var}: ofs={ofs} sz={sz}', var=var, ofs=ofs, sz=sz)
 
         baseclass = 'BaseVectorAssembler' if self.vec else 'BaseAssembler'
         self.putf('cdef class {classname}({base}{dim}D):',
@@ -706,7 +725,7 @@ class AsmGenerator(CodegenVisitor):
             self.put('')
             self.generate_update()
 
-        if self.num_params > 0:
+        if self.num_constants > 0:
             self.put('')
             self.generate_update_params()
 

@@ -4,6 +4,7 @@ For a detailed user guide, see :doc:`/guide/vforms`.
 """
 from collections import OrderedDict, defaultdict
 from functools import reduce
+from enum import IntEnum
 import operator
 import numpy as np
 import networkx
@@ -52,6 +53,12 @@ def _jac_to_unscaled_normal(jac):
     else:
         assert False, 'do not know how to compute normal vector for Jacobian shape {}'.format(jac.shape)
 
+class Scope(IntEnum):
+    """An enum describing what an expr or var depends on."""
+    CONSTANT = 0        # globally constant
+    FIELD    = 1        # changes per quadrature node, but does not depend on basis functions
+    BASISFUN = 2        # depends on basis functions
+
 # Each AsmVar represents a named variable within the expression tree and has
 # either an Expr (`expr`) or a source (`src`) determining how it is defined.
 #
@@ -70,19 +77,20 @@ def _jac_to_unscaled_normal(jac):
 # BasisFun object.
 
 class AsmVar:
-    def __init__(self, vf, name, src, shape, is_array=False, symmetric=False, deriv=None):
+    def __init__(self, vf, name, src, shape, symmetric=False, deriv=None):
         self.vform = vf
         self.name = name
         if isinstance(src, Expr):
             self.expr = src
             self.shape = src.shape
             self.src = None
+            self.scope = self.expr.scope()
         else:
             self.src = src
             self.expr = None
             assert shape is not None
             self.shape = shape
-        self.is_array = is_array
+            self.scope = self.src.scope
         self.is_global = False  # is variable needed during assemble, or only setup?
         self.symmetric = (len(self.shape) == 2 and symmetric)
         self.deriv = deriv      # for input fields only
@@ -118,6 +126,7 @@ class BasisFun:
         self.numcomp = numcomp  # number of components; None means scalar
         self.component = component  # for vector-valued basis functions
         self.space = space
+        self.scope = Scope.BASISFUN
     def hash(self):
         return hash((self.name, self.numcomp, self.component, self.space))
     def __str__(self):
@@ -135,6 +144,7 @@ class InputField:
         self.physical = physical
         self.vform = vform
         self.updatable = updatable
+        self.scope = Scope.FIELD
     def hash(self):
         return hash((self.name, self.shape, self.physical, self.updatable))
 
@@ -144,6 +154,7 @@ class Parameter:
     def __init__(self, name, shape):
         self.name = name
         self.shape = shape
+        self.scope = Scope.CONSTANT
     def hash(self):
         return hash((self.name, self.shape))
 
@@ -306,7 +317,7 @@ class VForm:
         """
         param = Parameter(name, shape)
         self.params.append(param)
-        return self.declare_sourced_var(name, shape, param, is_array=False)
+        return self.declare_sourced_var(name, shape, param)
 
     def _input_as_expr(self, inp, deriv=0):
         """Return an expr which refers to the given InputField with the desired derivative.
@@ -357,10 +368,9 @@ class VForm:
         """Define a variable with the given name which has the given expr as its value."""
         return self.set_var(name, AsmVar(self, name, expr, shape=None, symmetric=symmetric)).as_expr
 
-    def declare_sourced_var(self, name, shape, src, symmetric=False, deriv=0, is_array=True):
+    def declare_sourced_var(self, name, shape, src, symmetric=False, deriv=0):
         return self.set_var(name,
-            AsmVar(self, name, src=src, shape=shape, is_array=is_array,
-                symmetric=symmetric, deriv=deriv)).as_expr
+            AsmVar(self, name, src=src, shape=shape, symmetric=symmetric, deriv=deriv)).as_expr
 
     def add(self, expr):
         """Add an expression to this VForm."""
@@ -496,22 +506,16 @@ class VForm:
             # this ensures kernel_deps will not depend on dependencies of precomputed vars
             dep_graph.remove_edges_from(list(dep_graph.in_edges([var])))
 
-        # compute linearized list of vars the kernel depends on
+        # compute linearized list of vars (excluding basis functions) the kernel depends on
         kernel_deps = set_union(expr.depends() for expr in self.exprs)
         self.kernel_deps = self.transitive_closure(dep_graph, kernel_deps,
                 exclude=set(self.basis_funs))
 
         for var in self.kernel_deps:
-            # ensure precomputed kernel deps get array storage
-            if var in self.precomp:
-                var.is_array = True
-            # make arrays for kernel dependencies global (store as class member)
-            if var.is_array:
+            # globals are either input fields the kernel depends on or variables
+            # which are computed in the precompute function
+            if var in self.precomp or isinstance(var.src, InputField):
                 var.is_global = True
-
-        # separate precomp into locals (not used in kernel, only during precompute) and true dependencies
-        self.precomp_locals = [v for v in self.precomp if not v.is_global]
-        self.precomp        = [v for v in self.precomp if v.is_global]
 
     def all_exprs(self, type=None, once=True):
         """Deep, depth-first iteration of all expressions with dependencies.
@@ -794,6 +798,9 @@ class Expr:
     def depends(self):
         return set_union(x.depends() for x in self.children)
 
+    def scope(self):
+        return max(c.scope() for c in self.children)
+
     def is_var_expr(self):
         return False
     def is_input_var_expr(self):
@@ -922,6 +929,8 @@ class ConstExpr(Expr):
         return (self.value,)
     def _dx_impl(self, k, times, parametric):
         return as_expr(0) if times > 0 else self
+    def scope(self):
+        return Scope.CONSTANT
     base_complexity = 0
 
 class LiteralVectorExpr(Expr):
@@ -976,6 +985,9 @@ class VarRefExpr(Expr):
 
     def depends(self):
         return set((self.var,))
+
+    def scope(self):
+        return self.var.scope
 
     def __str__(self):
         if len(self.I) > 0:
@@ -1267,6 +1279,9 @@ class PartialDerivExpr(Expr):
     def depends(self):
         return set((self.basisfun,))
 
+    def scope(self):
+        return Scope.BASISFUN
+
     def without_derivs(self):
         """Return the underlying basis function without derivatives."""
         return PartialDerivExpr(self.basisfun, len(self.D) * (0,), physical=False)
@@ -1349,6 +1364,8 @@ class GaussWeightExpr(Expr):
         self.children = ()
     def hash_key(self):
         return (self.axis,)
+    def scope(self):
+        return Scope.FIELD
     def __str__(self):
         return 'gw%d' % self.axis
 
@@ -1356,6 +1373,8 @@ class VolumeMeasureExpr(Expr):
     def __init__(self):
         self.shape = ()
         self.children = ()
+    def scope(self):
+        return Scope.FIELD
     def __str__(self):
         return 'dx'
 
@@ -1363,6 +1382,8 @@ class SurfaceMeasureExpr(Expr):
     def __init__(self):
         self.shape = ()
         self.children = ()
+    def scope(self):
+        return Scope.FIELD
     def __str__(self):
         return 'ds'
 

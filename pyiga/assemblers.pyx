@@ -436,10 +436,10 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
                 GaussWeight = (_gw0[i0] * _gw1[i1])
                 # _tmp2
                 _tmp2 = ((temp_fields[0] * temp_fields[3]) - (temp_fields[1] * temp_fields[2]))
-                # _tmp1
-                _tmp1 = (1.0 / _tmp2)
                 # W
                 fields[0] = (GaussWeight * fabs(_tmp2))
+                # _tmp1
+                _tmp1 = (1.0 / _tmp2)
                 # JacInv
                 fields[1] = (_tmp1 * temp_fields[3])
                 fields[2] = (_tmp1 * -temp_fields[1])
@@ -605,10 +605,10 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
                 GaussWeight = (_gw0[i0] * _gw1[i1])
                 # _tmp2
                 _tmp2 = ((temp_fields[0] * temp_fields[3]) - (temp_fields[1] * temp_fields[2]))
-                # _tmp1
-                _tmp1 = (1.0 / _tmp2)
                 # W
                 fields[0] = (GaussWeight * fabs(_tmp2))
+                # _tmp1
+                _tmp1 = (1.0 / _tmp2)
                 # JacInv
                 fields[1] = (_tmp1 * temp_fields[3])
                 fields[2] = (_tmp1 * -temp_fields[1])
@@ -778,10 +778,10 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
                 GaussWeight = (_gw0[i0] * _gw1[i1])
                 # _tmp2
                 _tmp2 = ((temp_fields[0] * temp_fields[3]) - (temp_fields[1] * temp_fields[2]))
-                # _tmp1
-                _tmp1 = (1.0 / _tmp2)
                 # W
                 fields[0] = (GaussWeight * fabs(_tmp2))
+                # _tmp1
+                _tmp1 = (1.0 / _tmp2)
                 # JacInv
                 fields[1] = (_tmp1 * temp_fields[3])
                 fields[2] = (_tmp1 * -temp_fields[1])
@@ -1643,10 +1643,10 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
                     _tmp3 = ((temp_fields[4] * temp_fields[8]) - (temp_fields[5] * temp_fields[7]))
                     # _tmp2
                     _tmp2 = (((temp_fields[0] * _tmp3) - (temp_fields[1] * _tmp4)) + (temp_fields[2] * _tmp5))
-                    # _tmp1
-                    _tmp1 = (1.0 / _tmp2)
                     # W
                     fields[0] = (GaussWeight * fabs(_tmp2))
+                    # _tmp1
+                    _tmp1 = (1.0 / _tmp2)
                     # JacInv
                     fields[1] = (_tmp1 * _tmp3)
                     fields[2] = (_tmp1 * -((temp_fields[1] * temp_fields[8]) - (temp_fields[2] * temp_fields[7])))
@@ -1850,10 +1850,10 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
                     _tmp3 = ((temp_fields[4] * temp_fields[8]) - (temp_fields[5] * temp_fields[7]))
                     # _tmp2
                     _tmp2 = (((temp_fields[0] * _tmp3) - (temp_fields[1] * _tmp4)) + (temp_fields[2] * _tmp5))
-                    # _tmp1
-                    _tmp1 = (1.0 / _tmp2)
                     # W
                     fields[0] = (GaussWeight * fabs(_tmp2))
+                    # _tmp1
+                    _tmp1 = (1.0 / _tmp2)
                     # JacInv
                     fields[1] = (_tmp1 * _tmp3)
                     fields[2] = (_tmp1 * -((temp_fields[1] * temp_fields[8]) - (temp_fields[2] * temp_fields[7])))
@@ -2061,10 +2061,10 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
                     _tmp9 = ((temp_fields[4] * temp_fields[8]) - (temp_fields[5] * temp_fields[7]))
                     # _tmp2
                     _tmp2 = (((temp_fields[0] * _tmp9) - (temp_fields[1] * _tmp10)) + (temp_fields[2] * _tmp11))
-                    # _tmp1
-                    _tmp1 = (1.0 / _tmp2)
                     # W
                     fields[0] = (GaussWeight * fabs(_tmp2))
+                    # _tmp1
+                    _tmp1 = (1.0 / _tmp2)
                     # JacInv
                     fields[1] = (_tmp1 * _tmp9)
                     fields[2] = (_tmp1 * -((temp_fields[1] * temp_fields[8]) - (temp_fields[2] * temp_fields[7])))

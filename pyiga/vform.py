@@ -479,27 +479,15 @@ class VForm:
         deps = set(vars) | self.transitive_deps(dep_graph, vars)
         return self.linearize_vars(deps - exclude)
 
-    def vars_without_dep_on(self, dep_graph, exclude):
-        """Return a linearized list of all expr vars which do not depend on the given vars."""
-        nodes = set(dep_graph.nodes())
-        # remove 'exlude' vars and anything that depends on them
-        for var in exclude:
-            nodes.discard(var)
-            nodes -= networkx.descendants(dep_graph, var)
-        return self.linearize_vars(nodes)
-
     def dependency_analysis(self, do_precompute=True):
         dep_graph = self.dependency_graph()
         self.linear_deps = list(networkx.topological_sort(dep_graph))
 
         # determine precomputable vars (no dependency on basis functions)
-        precomputable = (self.vars_without_dep_on(dep_graph, self.basis_funs)
-                if do_precompute else [])
-        # only expression-based vars can be precomputed
-        self.precomp = [v for v in precomputable if v.expr]
-        # find deps of precomp vars which are pre-given (have src)
-        pdeps = self.transitive_closure(dep_graph, self.precomp)
-        self.precomp_deps = [v for v in pdeps if v.src]
+        if do_precompute:
+            self.precomp = [v for v in self.linear_deps if v.scope != Scope.BASISFUN]
+        else:
+            self.precomp = []
 
         for var in self.precomp:
             # remove all dependencies since it's now precomputed

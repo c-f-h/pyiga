@@ -689,9 +689,9 @@ class AsmGenerator(CodegenVisitor):
                 if var.scope == vform.Scope.FIELD and var.is_global]
         self.global_info, self.num_globals = allocate_array(global_vars)
 
-        # globals are passed in 'fields' automatically; collect the rest
-        self.precomp_array_deps = [var for var in self.vform.precomp_deps
-                if var.scope == vform.Scope.FIELD and not var.is_global]
+        # collect input fields needed for precompute which are not in 'fields' yet
+        self.precomp_array_deps = [var for var in self.vform.precomp
+                if var.scope == vform.Scope.FIELD and var.src and not var.is_global]
         self.temp_info, self.num_temp = allocate_array(self.precomp_array_deps)
 
         self.env = {

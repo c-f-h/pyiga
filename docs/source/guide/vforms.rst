@@ -359,6 +359,31 @@ write expressions such as ::
 The first example also shows that multiplication of a scalar with a vector works as
 expected, i.e., the vector is multiplied componentwise with the scalar.
 
+The above approach has the disadvantage that the assembler needs to be
+recompiled every time a constant changes. It is possible to instead define
+constant parameters which are unknown at compile-time and specified only when
+assembling.  Such constants are defined, analogously to the input fields in the
+previous section, using the :meth:`VForm.parameter` method::
+
+    >>> vf = vform.VForm(2)
+    >>> b = vf.parameter('b', shape=(2,))
+
+    >>> b.shape
+    (2,)
+
+Again, scalar, vector-valued and matrix-valued parameters are supported. Before
+assembling, these parameters must be set using the ``update_params()`` method of
+the assembler class, analogously to the ``update()`` method for input fields
+described in the previous section.
+
+When using the :ref:`string-based interface <sec-stringbased>`, such constants
+may be defined simply by passing them as keyword arguments into the assemble
+function::
+
+    f = assemble.assemble('inner(b, grad(v)) * dx',
+                          kvs, geo=geo, b=(2.0, -1.0))
+
+
 Defining linear (unary) forms
 -----------------------------
 

@@ -4,7 +4,8 @@
 # 1D Assemblers
 ################################################################################
 
-cdef class BaseAssembler1D:
+# members which are shared by the scalar and vector base assembler
+cdef class _CommonBase1D:
     cdef readonly int arity
     cdef int nqp
     cdef size_t[1] S0_ndofs
@@ -19,8 +20,12 @@ cdef class BaseAssembler1D:
     cdef double[::1] constants
     cdef double[:, ::1] fields
     cdef double[::1] gaussweights0
-    cdef size_t[1] bbox_ofs
+    cdef size_t[1] bbox_ofs   # bounding box for on-demand assemblers
+    # vector assemblers only:
+    cdef size_t[2] numcomp          # number of vector components for trial and test functions
 
+
+cdef class BaseAssembler1D(_CommonBase1D):
     cdef void entry_impl(self, size_t[1] i, size_t[1] j, double result[]) nogil:
         pass
 
@@ -148,23 +153,7 @@ cdef double _entry_func_1d(size_t i, size_t j, void * data):
 
 
 
-cdef class BaseVectorAssembler1D:
-    cdef readonly int arity
-    cdef int nqp
-    cdef size_t[1] S0_ndofs
-    cdef ssize_t[:,::1] S0_meshsupp0
-    cdef double[:, :, ::1] S0_C0
-    cdef size_t[1] S1_ndofs
-    cdef ssize_t[:,::1] S1_meshsupp0
-    cdef double[:, :, ::1] S1_C0
-    cdef size_t[2] numcomp  # number of vector components for trial and test functions
-    cdef readonly tuple kvs
-    cdef object _geo
-    cdef tuple gaussgrid
-    cdef double[::1] constants
-    cdef double[:, ::1] fields
-    cdef double[::1] gaussweights0
-
+cdef class BaseVectorAssembler1D(_CommonBase1D):
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
 
@@ -318,7 +307,8 @@ cdef void _asm_core_vec_1d_kernel(
 # 2D Assemblers
 ################################################################################
 
-cdef class BaseAssembler2D:
+# members which are shared by the scalar and vector base assembler
+cdef class _CommonBase2D:
     cdef readonly int arity
     cdef int nqp
     cdef size_t[2] S0_ndofs
@@ -338,8 +328,12 @@ cdef class BaseAssembler2D:
     cdef double[:, :, ::1] fields
     cdef double[::1] gaussweights0
     cdef double[::1] gaussweights1
-    cdef size_t[2] bbox_ofs
+    cdef size_t[2] bbox_ofs   # bounding box for on-demand assemblers
+    # vector assemblers only:
+    cdef size_t[2] numcomp          # number of vector components for trial and test functions
 
+
+cdef class BaseAssembler2D(_CommonBase2D):
     cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
         pass
 
@@ -467,28 +461,7 @@ cdef double _entry_func_2d(size_t i, size_t j, void * data):
 
 
 
-cdef class BaseVectorAssembler2D:
-    cdef readonly int arity
-    cdef int nqp
-    cdef size_t[2] S0_ndofs
-    cdef ssize_t[:,::1] S0_meshsupp0
-    cdef double[:, :, ::1] S0_C0
-    cdef ssize_t[:,::1] S0_meshsupp1
-    cdef double[:, :, ::1] S0_C1
-    cdef size_t[2] S1_ndofs
-    cdef ssize_t[:,::1] S1_meshsupp0
-    cdef double[:, :, ::1] S1_C0
-    cdef ssize_t[:,::1] S1_meshsupp1
-    cdef double[:, :, ::1] S1_C1
-    cdef size_t[2] numcomp  # number of vector components for trial and test functions
-    cdef readonly tuple kvs
-    cdef object _geo
-    cdef tuple gaussgrid
-    cdef double[::1] constants
-    cdef double[:, :, ::1] fields
-    cdef double[::1] gaussweights0
-    cdef double[::1] gaussweights1
-
+cdef class BaseVectorAssembler2D(_CommonBase2D):
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
 
@@ -652,7 +625,8 @@ cdef void _asm_core_vec_2d_kernel(
 # 3D Assemblers
 ################################################################################
 
-cdef class BaseAssembler3D:
+# members which are shared by the scalar and vector base assembler
+cdef class _CommonBase3D:
     cdef readonly int arity
     cdef int nqp
     cdef size_t[3] S0_ndofs
@@ -677,8 +651,12 @@ cdef class BaseAssembler3D:
     cdef double[::1] gaussweights0
     cdef double[::1] gaussweights1
     cdef double[::1] gaussweights2
-    cdef size_t[3] bbox_ofs
+    cdef size_t[3] bbox_ofs   # bounding box for on-demand assemblers
+    # vector assemblers only:
+    cdef size_t[2] numcomp          # number of vector components for trial and test functions
 
+
+cdef class BaseAssembler3D(_CommonBase3D):
     cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
         pass
 
@@ -806,33 +784,7 @@ cdef double _entry_func_3d(size_t i, size_t j, void * data):
 
 
 
-cdef class BaseVectorAssembler3D:
-    cdef readonly int arity
-    cdef int nqp
-    cdef size_t[3] S0_ndofs
-    cdef ssize_t[:,::1] S0_meshsupp0
-    cdef double[:, :, ::1] S0_C0
-    cdef ssize_t[:,::1] S0_meshsupp1
-    cdef double[:, :, ::1] S0_C1
-    cdef ssize_t[:,::1] S0_meshsupp2
-    cdef double[:, :, ::1] S0_C2
-    cdef size_t[3] S1_ndofs
-    cdef ssize_t[:,::1] S1_meshsupp0
-    cdef double[:, :, ::1] S1_C0
-    cdef ssize_t[:,::1] S1_meshsupp1
-    cdef double[:, :, ::1] S1_C1
-    cdef ssize_t[:,::1] S1_meshsupp2
-    cdef double[:, :, ::1] S1_C2
-    cdef size_t[2] numcomp  # number of vector components for trial and test functions
-    cdef readonly tuple kvs
-    cdef object _geo
-    cdef tuple gaussgrid
-    cdef double[::1] constants
-    cdef double[:, :, :, ::1] fields
-    cdef double[::1] gaussweights0
-    cdef double[::1] gaussweights1
-    cdef double[::1] gaussweights2
-
+cdef class BaseVectorAssembler3D(_CommonBase3D):
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
 

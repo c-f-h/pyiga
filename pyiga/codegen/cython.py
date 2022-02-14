@@ -754,7 +754,8 @@ tmpl_generic = Template(r'''
 # {{DIM}}D Assemblers
 ################################################################################
 
-cdef class BaseAssembler{{DIM}}D:
+# members which are shared by the scalar and vector base assembler
+cdef class _CommonBase{{DIM}}D:
     cdef readonly int arity
     cdef int nqp
     {%- for S in range(2) %}
@@ -772,8 +773,13 @@ cdef class BaseAssembler{{DIM}}D:
     {%- for k in range(DIM) %}
     cdef double[::1] gaussweights{{k}}
     {%- endfor %}
-    cdef size_t[{{DIM}}] bbox_ofs
+    # on-demand assemblers only:
+    cdef size_t[{{DIM}}] bbox_ofs   # bounding box of indices which will be computed
+    # vector assemblers only:
+    cdef size_t[2] numcomp          # number of vector components for trial and test functions
 
+
+cdef class BaseAssembler{{DIM}}D(_CommonBase{{DIM}}D):
     cdef void entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j, double result[]) nogil:
         pass
 
@@ -901,26 +907,7 @@ cdef double _entry_func_{{DIM}}d(size_t i, size_t j, void * data):
 
 
 
-cdef class BaseVectorAssembler{{DIM}}D:
-    cdef readonly int arity
-    cdef int nqp
-    {%- for S in range(2) %}
-    cdef size_t[{{DIM}}] S{{S}}_ndofs
-    {%- for k in range(DIM) %}
-    cdef ssize_t[:,::1] S{{S}}_meshsupp{{k}}
-    cdef double[:, :, ::1] S{{S}}_C{{k}}
-    {%- endfor %}
-    {%- endfor %}
-    cdef size_t[2] numcomp  # number of vector components for trial and test functions
-    cdef readonly tuple kvs
-    cdef object _geo
-    cdef tuple gaussgrid
-    cdef double[::1] constants
-    cdef double[{{ dimrepeat(':') }}, ::1] fields
-    {%- for k in range(DIM) %}
-    cdef double[::1] gaussweights{{k}}
-    {%- endfor %}
-
+cdef class BaseVectorAssembler{{DIM}}D(_CommonBase{{DIM}}D):
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
 

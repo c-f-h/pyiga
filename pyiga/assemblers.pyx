@@ -19,7 +19,6 @@ from pyiga.assemble_tools_cy cimport (
     BaseAssembler1D, BaseAssembler2D, BaseAssembler3D,
     BaseVectorAssembler1D, BaseVectorAssembler2D, BaseVectorAssembler3D,
     IntInterval, make_intv, intersect_intervals,
-    next_lexicographic1, next_lexicographic2, next_lexicographic3,
 )
 from pyiga.assemble_tools import compute_values_derivs
 from pyiga.utils import LazyCachingArray, grid_eval, grid_eval_transformed
@@ -50,11 +49,6 @@ cdef class MassAssembler2D(BaseAssembler2D):
         self.gaussgrid = gaussgrid
         self.gaussweights0 = gaussweights[0]
         self.gaussweights1 = gaussweights[1]
-        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
-
-        # Fields:
-        #  - W: ofs=0 sz=1
-        self.fields = np.empty(N + (1,))
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
@@ -69,8 +63,14 @@ cdef class MassAssembler2D(BaseAssembler2D):
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=0)
 
-        cdef double[:, :, ::1] temp_fields
-        temp_fields = np.empty(N + (4,))
+        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
+
+        # Fields:
+        #  - W: ofs=0 sz=1
+        self.fields = np.empty(N + (1,))
+        # Temp fields:
+        #  - geo_grad_a: ofs=0 sz=4
+        cdef double[:, :, ::1] temp_fields = np.empty(N + (4,))
         temp_fields.base[:, :, 0:4] = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         MassAssembler2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
@@ -198,11 +198,6 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         self.gaussgrid = gaussgrid
         self.gaussweights0 = gaussweights[0]
         self.gaussweights1 = gaussweights[1]
-        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
-
-        # Fields:
-        #  - B: ofs=0 sz=3
-        self.fields = np.empty(N + (3,))
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
@@ -217,8 +212,14 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
 
-        cdef double[:, :, ::1] temp_fields
-        temp_fields = np.empty(N + (4,))
+        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
+
+        # Fields:
+        #  - B: ofs=0 sz=3
+        self.fields = np.empty(N + (3,))
+        # Temp fields:
+        #  - geo_grad_a: ofs=0 sz=4
+        cdef double[:, :, ::1] temp_fields = np.empty(N + (4,))
         temp_fields.base[:, :, 0:4] = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         StiffnessAssembler2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
@@ -375,12 +376,6 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         self.gaussgrid = gaussgrid
         self.gaussweights0 = gaussweights[0]
         self.gaussweights1 = gaussweights[1]
-        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
-
-        # Fields:
-        #  - W: ofs=0 sz=1
-        #  - JacInv: ofs=1 sz=4
-        self.fields = np.empty(N + (5,))
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
@@ -395,8 +390,15 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
 
-        cdef double[:, :, ::1] temp_fields
-        temp_fields = np.empty(N + (4,))
+        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
+
+        # Fields:
+        #  - W: ofs=0 sz=1
+        #  - JacInv: ofs=1 sz=4
+        self.fields = np.empty(N + (5,))
+        # Temp fields:
+        #  - geo_grad_a: ofs=0 sz=4
+        cdef double[:, :, ::1] temp_fields = np.empty(N + (4,))
         temp_fields.base[:, :, 0:4] = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         HeatAssembler_ST2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
@@ -544,12 +546,6 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         self.gaussgrid = gaussgrid
         self.gaussweights0 = gaussweights[0]
         self.gaussweights1 = gaussweights[1]
-        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
-
-        # Fields:
-        #  - W: ofs=0 sz=1
-        #  - JacInv: ofs=1 sz=4
-        self.fields = np.empty(N + (5,))
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
@@ -564,8 +560,15 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=2)
 
-        cdef double[:, :, ::1] temp_fields
-        temp_fields = np.empty(N + (4,))
+        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
+
+        # Fields:
+        #  - W: ofs=0 sz=1
+        #  - JacInv: ofs=1 sz=4
+        self.fields = np.empty(N + (5,))
+        # Temp fields:
+        #  - geo_grad_a: ofs=0 sz=4
+        cdef double[:, :, ::1] temp_fields = np.empty(N + (4,))
         temp_fields.base[:, :, 0:4] = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         WaveAssembler_ST2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
@@ -717,12 +720,6 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         self.gaussgrid = gaussgrid
         self.gaussweights0 = gaussweights[0]
         self.gaussweights1 = gaussweights[1]
-        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
-
-        # Fields:
-        #  - W: ofs=0 sz=1
-        #  - JacInv: ofs=1 sz=4
-        self.fields = np.empty(N + (5,))
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
@@ -737,8 +734,15 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
 
-        cdef double[:, :, ::1] temp_fields
-        temp_fields = np.empty(N + (4,))
+        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
+
+        # Fields:
+        #  - W: ofs=0 sz=1
+        #  - JacInv: ofs=1 sz=4
+        self.fields = np.empty(N + (5,))
+        # Temp fields:
+        #  - geo_grad_a: ofs=0 sz=4
+        cdef double[:, :, ::1] temp_fields = np.empty(N + (4,))
         temp_fields.base[:, :, 0:4] = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         DivDivAssembler2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
@@ -908,12 +912,6 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
         self.gaussgrid = gaussgrid
         self.gaussweights0 = gaussweights[0]
         self.gaussweights1 = gaussweights[1]
-        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
-
-        # Fields:
-        #  - W: ofs=0 sz=1
-        #  - f_a: ofs=1 sz=1
-        self.fields = np.empty(N + (2,))
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
@@ -928,8 +926,15 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=0)
 
-        cdef double[:, :, ::1] temp_fields
-        temp_fields = np.empty(N + (4,))
+        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
+
+        # Fields:
+        #  - W: ofs=0 sz=1
+        #  - f_a: ofs=1 sz=1
+        self.fields = np.empty(N + (2,))
+        # Temp fields:
+        #  - geo_grad_a: ofs=0 sz=4
+        cdef double[:, :, ::1] temp_fields = np.empty(N + (4,))
         temp_fields.base[:, :, 0:4] = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         self.fields.base[:, :, 1:2] = np.ascontiguousarray(grid_eval(f, self.gaussgrid)).reshape(N + (-1,))
         L2FunctionalAssembler2D.precompute_fields(
@@ -1046,12 +1051,6 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
         self.gaussgrid = gaussgrid
         self.gaussweights0 = gaussweights[0]
         self.gaussweights1 = gaussweights[1]
-        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
-
-        # Fields:
-        #  - W: ofs=0 sz=1
-        #  - f_a: ofs=1 sz=1
-        self.fields = np.empty(N + (2,))
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
@@ -1066,8 +1065,15 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
         self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=0)
 
-        cdef double[:, :, ::1] temp_fields
-        temp_fields = np.empty(N + (4,))
+        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
+
+        # Fields:
+        #  - W: ofs=0 sz=1
+        #  - f_a: ofs=1 sz=1
+        self.fields = np.empty(N + (2,))
+        # Temp fields:
+        #  - geo_grad_a: ofs=0 sz=4
+        cdef double[:, :, ::1] temp_fields = np.empty(N + (4,))
         temp_fields.base[:, :, 0:4] = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         self.fields.base[:, :, 1:2] = np.ascontiguousarray(grid_eval_transformed(f, self.gaussgrid, self._geo)).reshape(N + (-1,))
         L2FunctionalAssemblerPhys2D.precompute_fields(
@@ -1183,11 +1189,6 @@ cdef class MassAssembler3D(BaseAssembler3D):
         self.gaussweights0 = gaussweights[0]
         self.gaussweights1 = gaussweights[1]
         self.gaussweights2 = gaussweights[2]
-        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
-
-        # Fields:
-        #  - W: ofs=0 sz=1
-        self.fields = np.empty(N + (1,))
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
@@ -1206,8 +1207,14 @@ cdef class MassAssembler3D(BaseAssembler3D):
         self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=0)
 
-        cdef double[:, :, :, ::1] temp_fields
-        temp_fields = np.empty(N + (9,))
+        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
+
+        # Fields:
+        #  - W: ofs=0 sz=1
+        self.fields = np.empty(N + (1,))
+        # Temp fields:
+        #  - geo_grad_a: ofs=0 sz=9
+        cdef double[:, :, :, ::1] temp_fields = np.empty(N + (9,))
         temp_fields.base[:, :, :, 0:9] = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         MassAssembler3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
@@ -1349,11 +1356,6 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         self.gaussweights0 = gaussweights[0]
         self.gaussweights1 = gaussweights[1]
         self.gaussweights2 = gaussweights[2]
-        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
-
-        # Fields:
-        #  - B: ofs=0 sz=6
-        self.fields = np.empty(N + (6,))
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
@@ -1372,8 +1374,14 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=1)
 
-        cdef double[:, :, :, ::1] temp_fields
-        temp_fields = np.empty(N + (9,))
+        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
+
+        # Fields:
+        #  - B: ofs=0 sz=6
+        self.fields = np.empty(N + (6,))
+        # Temp fields:
+        #  - geo_grad_a: ofs=0 sz=9
+        cdef double[:, :, :, ::1] temp_fields = np.empty(N + (9,))
         temp_fields.base[:, :, :, 0:9] = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         StiffnessAssembler3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
@@ -1567,12 +1575,6 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         self.gaussweights0 = gaussweights[0]
         self.gaussweights1 = gaussweights[1]
         self.gaussweights2 = gaussweights[2]
-        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
-
-        # Fields:
-        #  - W: ofs=0 sz=1
-        #  - JacInv: ofs=1 sz=9
-        self.fields = np.empty(N + (10,))
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
@@ -1591,8 +1593,15 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=1)
 
-        cdef double[:, :, :, ::1] temp_fields
-        temp_fields = np.empty(N + (9,))
+        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
+
+        # Fields:
+        #  - W: ofs=0 sz=1
+        #  - JacInv: ofs=1 sz=9
+        self.fields = np.empty(N + (10,))
+        # Temp fields:
+        #  - geo_grad_a: ofs=0 sz=9
+        cdef double[:, :, :, ::1] temp_fields = np.empty(N + (9,))
         temp_fields.base[:, :, :, 0:9] = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         HeatAssembler_ST3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
@@ -1774,12 +1783,6 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         self.gaussweights0 = gaussweights[0]
         self.gaussweights1 = gaussweights[1]
         self.gaussweights2 = gaussweights[2]
-        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
-
-        # Fields:
-        #  - W: ofs=0 sz=1
-        #  - JacInv: ofs=1 sz=9
-        self.fields = np.empty(N + (10,))
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
@@ -1798,8 +1801,15 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=2)
 
-        cdef double[:, :, :, ::1] temp_fields
-        temp_fields = np.empty(N + (9,))
+        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
+
+        # Fields:
+        #  - W: ofs=0 sz=1
+        #  - JacInv: ofs=1 sz=9
+        self.fields = np.empty(N + (10,))
+        # Temp fields:
+        #  - geo_grad_a: ofs=0 sz=9
+        cdef double[:, :, :, ::1] temp_fields = np.empty(N + (9,))
         temp_fields.base[:, :, :, 0:9] = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         WaveAssembler_ST3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
@@ -1985,12 +1995,6 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         self.gaussweights0 = gaussweights[0]
         self.gaussweights1 = gaussweights[1]
         self.gaussweights2 = gaussweights[2]
-        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
-
-        # Fields:
-        #  - W: ofs=0 sz=1
-        #  - JacInv: ofs=1 sz=9
-        self.fields = np.empty(N + (10,))
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
@@ -2009,8 +2013,15 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=1)
 
-        cdef double[:, :, :, ::1] temp_fields
-        temp_fields = np.empty(N + (9,))
+        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
+
+        # Fields:
+        #  - W: ofs=0 sz=1
+        #  - JacInv: ofs=1 sz=9
+        self.fields = np.empty(N + (10,))
+        # Temp fields:
+        #  - geo_grad_a: ofs=0 sz=9
+        cdef double[:, :, :, ::1] temp_fields = np.empty(N + (9,))
         temp_fields.base[:, :, :, 0:9] = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         DivDivAssembler3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
@@ -2230,12 +2241,6 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
         self.gaussweights0 = gaussweights[0]
         self.gaussweights1 = gaussweights[1]
         self.gaussweights2 = gaussweights[2]
-        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
-
-        # Fields:
-        #  - W: ofs=0 sz=1
-        #  - f_a: ofs=1 sz=1
-        self.fields = np.empty(N + (2,))
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
@@ -2254,8 +2259,15 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
         self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=0)
 
-        cdef double[:, :, :, ::1] temp_fields
-        temp_fields = np.empty(N + (9,))
+        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
+
+        # Fields:
+        #  - W: ofs=0 sz=1
+        #  - f_a: ofs=1 sz=1
+        self.fields = np.empty(N + (2,))
+        # Temp fields:
+        #  - geo_grad_a: ofs=0 sz=9
+        cdef double[:, :, :, ::1] temp_fields = np.empty(N + (9,))
         temp_fields.base[:, :, :, 0:9] = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         self.fields.base[:, :, :, 1:2] = np.ascontiguousarray(grid_eval(f, self.gaussgrid)).reshape(N + (-1,))
         L2FunctionalAssembler3D.precompute_fields(
@@ -2381,12 +2393,6 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
         self.gaussweights0 = gaussweights[0]
         self.gaussweights1 = gaussweights[1]
         self.gaussweights2 = gaussweights[2]
-        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
-
-        # Fields:
-        #  - W: ofs=0 sz=1
-        #  - f_a: ofs=1 sz=1
-        self.fields = np.empty(N + (2,))
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
@@ -2405,8 +2411,15 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
         self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=0)
 
-        cdef double[:, :, :, ::1] temp_fields
-        temp_fields = np.empty(N + (9,))
+        N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
+
+        # Fields:
+        #  - W: ofs=0 sz=1
+        #  - f_a: ofs=1 sz=1
+        self.fields = np.empty(N + (2,))
+        # Temp fields:
+        #  - geo_grad_a: ofs=0 sz=9
+        cdef double[:, :, :, ::1] temp_fields = np.empty(N + (9,))
         temp_fields.base[:, :, :, 0:9] = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
         self.fields.base[:, :, :, 1:2] = np.ascontiguousarray(grid_eval_transformed(f, self.gaussgrid, self._geo)).reshape(N + (-1,))
         L2FunctionalAssemblerPhys3D.precompute_fields(

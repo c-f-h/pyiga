@@ -527,6 +527,22 @@ class AsmGenerator(CodegenVisitor):
         self.put('self.gaussgrid = gaussgrid')
         for k in range(self.dim):
             self.putf('self.gaussweights{k} = gaussweights[{k}]', k=k)
+
+        if self.on_demand:
+            self.put('self.bbox_ofs[:] = tuple(bb[0] * self.nqp for bb in bbox)')
+
+        self.put('')
+
+        # BaseAssembler always uses S1 for i and S0 for j for a bilinear form
+        for sp in (0,1):
+            self.putf('assert len(kvs{sp}) == {dim}, "Assembler requires {dim} knot vectors"', sp=sp)
+            self.putf('self.S{sp}_ndofs[:] = [kv.numdofs for kv in kvs{sp}]', sp=sp)
+            for k in range(self.dim):
+                self.putf('self.S{sp}_meshsupp{k} = kvs{sp}[{k}].mesh_support_idx_all()', sp=sp, k=k)
+                self.putf('self.S{sp}_C{k} = compute_values_derivs(kvs{sp}[{k}], gaussgrid[{k}], derivs={maxderiv})',
+                        k=k, sp=sp, maxderiv=self.numderiv)
+        self.put('')
+
         self.put('N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions')
 
         # initialize storage for fields and constants
@@ -539,27 +555,14 @@ class AsmGenerator(CodegenVisitor):
         self.putf('self.fields = np.empty(N + ({nf},))', nf=self.num_globals)
         if self.num_constants > 0:
             self.putf('self.constants = np.zeros({np})', np=self.num_constants)
-
-        if self.on_demand:
-            self.put('self.bbox_ofs[:] = tuple(bb[0] * self.nqp for bb in bbox)')
-
-        self.put('')
-
-        # BaseAssembler always uses S1 for i and S0 for j for a bilinear form
-        for sp in (0,1):
-            kvs = 'kvs%d' % sp
-            self.putf('assert len({kvs}) == {dim}, "Assembler requires {dim} knot vectors"', kvs=kvs)
-            self.putf('self.S{sp}_ndofs[:] = [kv.numdofs for kv in {kvs}]', sp=sp, kvs=kvs)
-            for k in range(self.dim):
-                self.putf('self.S{sp}_meshsupp{k} = {kvs}[{k}].mesh_support_idx_all()', sp=sp, k=k, kvs=kvs)
-                self.putf('self.S{sp}_C{k} = compute_values_derivs(kvs{sp}[{k}], gaussgrid[{k}], derivs={maxderiv})',
-                        k=k, sp=sp)
-        self.put('')
-
         # declare array storage for non-global variables
         if self.vform.precomp:
-            self.putf('cdef {typ} temp_fields', typ=self.field_type())
-            self.putf('temp_fields = np.empty(N + ({nt},))', nt=self.num_temp)
+            self.put('# Temp fields:')
+            for var in self.temp_info:    # put some comments for readability
+                _, sz, ofs = self.temp_info[var]
+                self.putf('#  - {var}: ofs={ofs} sz={sz}', var=var, ofs=ofs, sz=sz)
+            self.putf('cdef {typ} temp_fields = np.empty(N + ({nt},))',
+                    typ=self.field_type(), nt=self.num_temp)
 
         # declare/initialize array variables from InputFields
         for var in vf.linear_deps:
@@ -697,7 +700,6 @@ class AsmGenerator(CodegenVisitor):
         self.env = {
             'dim': self.vform.dim,
             'geo_dim': self.vform.geo_dim,
-            'maxderiv': self.numderiv,
         }
         for var in self.constant_info:
             _, sz, ofs = self.constant_info[var]
@@ -1105,7 +1107,6 @@ from pyiga.assemble_tools_cy cimport (
     BaseAssembler1D, BaseAssembler2D, BaseAssembler3D,
     BaseVectorAssembler1D, BaseVectorAssembler2D, BaseVectorAssembler3D,
     IntInterval, make_intv, intersect_intervals,
-    next_lexicographic1, next_lexicographic2, next_lexicographic3,
 )
 from pyiga.assemble_tools import compute_values_derivs
 from pyiga.utils import LazyCachingArray, grid_eval, grid_eval_transformed

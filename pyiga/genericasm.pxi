@@ -20,7 +20,8 @@ cdef class _CommonBase1D:
     cdef double[::1] constants
     cdef double[:, ::1] fields
     cdef double[::1] gaussweights0
-    cdef size_t[1] bbox_ofs   # bounding box for on-demand assemblers
+    # on-demand assemblers only:
+    cdef size_t[1] bbox_ofs   # bounding box of indices which will be computed
     # vector assemblers only:
     cdef size_t[2] numcomp          # number of vector components for trial and test functions
 
@@ -328,7 +329,8 @@ cdef class _CommonBase2D:
     cdef double[:, :, ::1] fields
     cdef double[::1] gaussweights0
     cdef double[::1] gaussweights1
-    cdef size_t[2] bbox_ofs   # bounding box for on-demand assemblers
+    # on-demand assemblers only:
+    cdef size_t[2] bbox_ofs   # bounding box of indices which will be computed
     # vector assemblers only:
     cdef size_t[2] numcomp          # number of vector components for trial and test functions
 
@@ -651,7 +653,8 @@ cdef class _CommonBase3D:
     cdef double[::1] gaussweights0
     cdef double[::1] gaussweights1
     cdef double[::1] gaussweights2
-    cdef size_t[3] bbox_ofs   # bounding box for on-demand assemblers
+    # on-demand assemblers only:
+    cdef size_t[3] bbox_ofs   # bounding box of indices which will be computed
     # vector assemblers only:
     cdef size_t[2] numcomp          # number of vector components for trial and test functions
 

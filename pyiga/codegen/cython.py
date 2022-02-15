@@ -367,7 +367,6 @@ class AsmGenerator(CodegenVisitor):
         self.cython_pragmas()
         self.putf('cdef void entry_impl(self, size_t[{dim}] i, size_t[{dim}] j, double result[]) nogil:')
         self.indent()
-        self.putf('cdef int k')
         self.putf('cdef IntInterval intv')
         self.putf('cdef size_t g_sta[{dim}]')
         self.putf('cdef size_t g_end[{dim}]')
@@ -489,6 +488,7 @@ class AsmGenerator(CodegenVisitor):
 
         used_spaces = sorted(set(bf.space for bf in vf.basis_funs))
         assert len(used_spaces) in (1,2), 'Number of spaces should be 1 or 2'
+        assert all(sp in (0, 1) for sp in used_spaces), 'Space index should be 0 or 1'
         used_kvs = tuple('kvs%d' % sp for sp in used_spaces)
         input_args = ', '.join(inp.name for inp in vf.inputs)
 

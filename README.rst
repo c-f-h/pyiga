@@ -49,12 +49,10 @@ is by installing Anaconda_ (this can be done without administrator privileges).
 
 Clone this repository and execute ::
 
-    $ python setup.py install --user
+    $ python setup.py install
 
 in the main directory. The installation script should now compile the Cython
-extensions and then install the package in your user directory. If you prefer
-to install the package globally, skip the ``--user`` flag; this requires
-administrator rights.
+extensions and then install the package.
 
 If you have Intel MKL installed on your machine, be sure to install the
 **pyMKL** package; if ``pyiga`` detects this package, it will use the
@@ -69,7 +67,7 @@ version, assuming that you have cloned it from Github, you can simply move to
 the project directory and execute ::
 
     $ git pull
-    $ python setup.py install --user
+    $ python setup.py install
 
 Running tests
 -------------
@@ -112,4 +110,4 @@ During compilation, I get an error message involving ``numpy._build_utils``.
 
 Try installing/upgrading setuptools: ::
 
-    $ pip install --upgrade --user setuptools
+    $ pip install --upgrade setuptools

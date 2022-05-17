@@ -396,11 +396,11 @@ class AsmGenerator(CodegenVisitor):
                 self.put('if intv.a >= intv.b: return   # no intersection of support')
 
             if self.on_demand:
-                self.putf('g_sta[{k}] = self.nqp * intv.a - self.bbox_ofs[{k}]    # start of Gauss nodes', k=k)
-                self.putf('g_end[{k}] = self.nqp * intv.b - self.bbox_ofs[{k}]    # end of Gauss nodes', k=k)
+                self.putf('g_sta[{k}] = intv.a - self.bbox_ofs[{k}]    # start of Gauss nodes', k=k)
+                self.putf('g_end[{k}] = intv.b - self.bbox_ofs[{k}]    # end of Gauss nodes', k=k)
             else:
-                self.putf('g_sta[{k}] = self.nqp * intv.a    # start of Gauss nodes', k=k)
-                self.putf('g_end[{k}] = self.nqp * intv.b    # end of Gauss nodes', k=k)
+                self.putf('g_sta[{k}] = intv.a    # start of Gauss nodes', k=k)
+                self.putf('g_end[{k}] = intv.b    # end of Gauss nodes', k=k)
 
             # a_ij = a(phi_j, phi_i)  -- second index (j) corresponds to first (trial) function
             for idx,bfun in idx_bfun:
@@ -538,7 +538,7 @@ class AsmGenerator(CodegenVisitor):
             self.putf('assert len(kvs{sp}) == {dim}, "Assembler requires {dim} knot vectors"', sp=sp)
             self.putf('self.S{sp}_ndofs[:] = [kv.numdofs for kv in kvs{sp}]', sp=sp)
             for k in range(self.dim):
-                self.putf('self.S{sp}_meshsupp{k} = kvs{sp}[{k}].mesh_support_idx_all()', sp=sp, k=k)
+                self.putf('self.S{sp}_meshsupp{k} = self.nqp * kvs{sp}[{k}].mesh_support_idx_all()', sp=sp, k=k)
                 self.putf('self.S{sp}_C{k} = compute_values_derivs(kvs{sp}[{k}], gaussgrid[{k}], derivs={maxderiv})',
                         k=k, sp=sp, maxderiv=self.numderiv)
         self.put('')

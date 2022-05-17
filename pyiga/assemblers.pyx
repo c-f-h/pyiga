@@ -52,15 +52,15 @@ cdef class MassAssembler2D(BaseAssembler2D):
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
-        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
+        self.S0_meshsupp0 = self.nqp * kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=0)
-        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
+        self.S0_meshsupp1 = self.nqp * kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=0)
         assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
         self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
-        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_meshsupp0 = self.nqp * kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=0)
-        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_meshsupp1 = self.nqp * kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=0)
 
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
@@ -148,8 +148,8 @@ cdef class MassAssembler2D(BaseAssembler2D):
                 make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[0] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[0] = intv.a    # start of Gauss nodes
+        g_end[0] = intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ j[0], g_sta[0], 0 ]
         values_v[0] = &self.S0_C0[ i[0], g_sta[0], 0 ]
         intv = intersect_intervals(
@@ -157,8 +157,8 @@ cdef class MassAssembler2D(BaseAssembler2D):
                 make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[1] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[1] = intv.a    # start of Gauss nodes
+        g_end[1] = intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ j[1], g_sta[1], 0 ]
         values_v[1] = &self.S0_C1[ i[1], g_sta[1], 0 ]
 
@@ -200,15 +200,15 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
-        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
+        self.S0_meshsupp0 = self.nqp * kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
-        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
+        self.S0_meshsupp1 = self.nqp * kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
         assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
         self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
-        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_meshsupp0 = self.nqp * kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=1)
-        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_meshsupp1 = self.nqp * kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
 
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
@@ -241,11 +241,11 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
             # output
             double[:, :, ::1] _fields,
         ) nogil:
+        cdef double GaussWeight
         cdef double _tmp2
+        cdef double W
         cdef double _tmp1
         cdef double JacInv[4]
-        cdef double GaussWeight
-        cdef double W
         cdef double* fields
         cdef double* temp_fields
         cdef size_t i0
@@ -256,8 +256,12 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
                 fields = &_fields[i0, i1, 0]
                 temp_fields = &_temp_fields[i0, i1, 0]
 
+                # GaussWeight
+                GaussWeight = (_gw0[i0] * _gw1[i1])
                 # _tmp2
                 _tmp2 = ((temp_fields[0] * temp_fields[3]) - (temp_fields[1] * temp_fields[2]))
+                # W
+                W = (GaussWeight * fabs(_tmp2))
                 # _tmp1
                 _tmp1 = (1.0 / _tmp2)
                 # JacInv
@@ -265,10 +269,6 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
                 JacInv[1] = (_tmp1 * -temp_fields[1])
                 JacInv[2] = (_tmp1 * -temp_fields[2])
                 JacInv[3] = (_tmp1 * temp_fields[0])
-                # GaussWeight
-                GaussWeight = (_gw0[i0] * _gw1[i1])
-                # W
-                W = (GaussWeight * fabs(_tmp2))
                 # B
                 fields[0] = (W * ((JacInv[0] * JacInv[0]) + (JacInv[1] * JacInv[1])))
                 fields[1] = (W * ((JacInv[0] * JacInv[2]) + (JacInv[1] * JacInv[3])))
@@ -288,10 +288,10 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
         ) nogil:
         cdef double r = 0.0
 
-        cdef double _dv_01
-        cdef double _dv_10
-        cdef double _du_01
         cdef double _du_10
+        cdef double _du_01
+        cdef double _dv_10
+        cdef double _dv_01
         cdef double* fields
         cdef size_t i0
         cdef size_t i1
@@ -300,14 +300,14 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
             for i1 in range(n1):
                 fields = &_fields[i0, i1, 0]
 
-                # _dv_01
-                _dv_01 = (VDv0[2*i0+1] * VDv1[2*i1+0])
-                # _dv_10
-                _dv_10 = (VDv0[2*i0+0] * VDv1[2*i1+1])
-                # _du_01
-                _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
                 # _du_10
                 _du_10 = (VDu0[2*i0+0] * VDu1[2*i1+1])
+                # _du_01
+                _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
+                # _dv_10
+                _dv_10 = (VDv0[2*i0+0] * VDv1[2*i1+1])
+                # _dv_01
+                _dv_01 = (VDv0[2*i0+1] * VDv1[2*i1+0])
                 r += ((((fields[0] * _du_10) + (fields[1] * _du_01)) * _dv_10) + (((fields[1] * _du_10) + (fields[2] * _du_01)) * _dv_01))
         result[0] = r
 
@@ -325,8 +325,8 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
                 make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[0] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[0] = intv.a    # start of Gauss nodes
+        g_end[0] = intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ j[0], g_sta[0], 0 ]
         values_v[0] = &self.S0_C0[ i[0], g_sta[0], 0 ]
         intv = intersect_intervals(
@@ -334,8 +334,8 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
                 make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[1] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[1] = intv.a    # start of Gauss nodes
+        g_end[1] = intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ j[1], g_sta[1], 0 ]
         values_v[1] = &self.S0_C1[ i[1], g_sta[1], 0 ]
 
@@ -377,15 +377,15 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
-        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
+        self.S0_meshsupp0 = self.nqp * kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
-        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
+        self.S0_meshsupp1 = self.nqp * kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
         assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
         self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
-        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_meshsupp0 = self.nqp * kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=1)
-        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_meshsupp1 = self.nqp * kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
 
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
@@ -436,10 +436,10 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
                 GaussWeight = (_gw0[i0] * _gw1[i1])
                 # _tmp2
                 _tmp2 = ((temp_fields[0] * temp_fields[3]) - (temp_fields[1] * temp_fields[2]))
-                # W
-                fields[0] = (GaussWeight * fabs(_tmp2))
                 # _tmp1
                 _tmp1 = (1.0 / _tmp2)
+                # W
+                fields[0] = (GaussWeight * fabs(_tmp2))
                 # JacInv
                 fields[1] = (_tmp1 * temp_fields[3])
                 fields[2] = (_tmp1 * -temp_fields[1])
@@ -460,9 +460,9 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
         ) nogil:
         cdef double r = 0.0
 
-        cdef double _dv_10
-        cdef double _du_01
         cdef double _du_10
+        cdef double _du_01
+        cdef double _dv_10
         cdef double* fields
         cdef size_t i0
         cdef size_t i1
@@ -471,12 +471,12 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
             for i1 in range(n1):
                 fields = &_fields[i0, i1, 0]
 
-                # _dv_10
-                _dv_10 = (VDv0[2*i0+0] * VDv1[2*i1+1])
-                # _du_01
-                _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
                 # _du_10
                 _du_10 = (VDu0[2*i0+0] * VDu1[2*i1+1])
+                # _du_01
+                _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
+                # _dv_10
+                _dv_10 = (VDv0[2*i0+0] * VDv1[2*i1+1])
                 r += ((((fields[1] * _du_10) * (fields[1] * _dv_10)) + (_du_01 * (VDv0[2*i0+0] * VDv1[2*i1+0]))) * fields[0])
         result[0] = r
 
@@ -494,8 +494,8 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
                 make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[0] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[0] = intv.a    # start of Gauss nodes
+        g_end[0] = intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ j[0], g_sta[0], 0 ]
         values_v[0] = &self.S0_C0[ i[0], g_sta[0], 0 ]
         intv = intersect_intervals(
@@ -503,8 +503,8 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
                 make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[1] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[1] = intv.a    # start of Gauss nodes
+        g_end[1] = intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ j[1], g_sta[1], 0 ]
         values_v[1] = &self.S0_C1[ i[1], g_sta[1], 0 ]
 
@@ -546,15 +546,15 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
-        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
+        self.S0_meshsupp0 = self.nqp * kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=2)
-        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
+        self.S0_meshsupp1 = self.nqp * kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=2)
         assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
         self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
-        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_meshsupp0 = self.nqp * kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=2)
-        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_meshsupp1 = self.nqp * kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=2)
 
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
@@ -605,10 +605,10 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
                 GaussWeight = (_gw0[i0] * _gw1[i1])
                 # _tmp2
                 _tmp2 = ((temp_fields[0] * temp_fields[3]) - (temp_fields[1] * temp_fields[2]))
-                # W
-                fields[0] = (GaussWeight * fabs(_tmp2))
                 # _tmp1
                 _tmp1 = (1.0 / _tmp2)
+                # W
+                fields[0] = (GaussWeight * fabs(_tmp2))
                 # JacInv
                 fields[1] = (_tmp1 * temp_fields[3])
                 fields[2] = (_tmp1 * -temp_fields[1])
@@ -629,10 +629,10 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
         ) nogil:
         cdef double r = 0.0
 
-        cdef double _dv_11
-        cdef double _dv_01
-        cdef double _du_10
         cdef double _du_02
+        cdef double _du_10
+        cdef double _dv_01
+        cdef double _dv_11
         cdef double* fields
         cdef size_t i0
         cdef size_t i1
@@ -641,14 +641,14 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
             for i1 in range(n1):
                 fields = &_fields[i0, i1, 0]
 
-                # _dv_11
-                _dv_11 = (VDv0[3*i0+1] * VDv1[3*i1+1])
-                # _dv_01
-                _dv_01 = (VDv0[3*i0+1] * VDv1[3*i1+0])
-                # _du_10
-                _du_10 = (VDu0[3*i0+0] * VDu1[3*i1+1])
                 # _du_02
                 _du_02 = (VDu0[3*i0+2] * VDu1[3*i1+0])
+                # _du_10
+                _du_10 = (VDu0[3*i0+0] * VDu1[3*i1+1])
+                # _dv_01
+                _dv_01 = (VDv0[3*i0+1] * VDv1[3*i1+0])
+                # _dv_11
+                _dv_11 = (VDv0[3*i0+1] * VDv1[3*i1+1])
                 r += (((_du_02 * _dv_01) + ((fields[1] * _du_10) * (fields[1] * _dv_11))) * fields[0])
         result[0] = r
 
@@ -666,8 +666,8 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
                 make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[0] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[0] = intv.a    # start of Gauss nodes
+        g_end[0] = intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ j[0], g_sta[0], 0 ]
         values_v[0] = &self.S0_C0[ i[0], g_sta[0], 0 ]
         intv = intersect_intervals(
@@ -675,8 +675,8 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
                 make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[1] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[1] = intv.a    # start of Gauss nodes
+        g_end[1] = intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ j[1], g_sta[1], 0 ]
         values_v[1] = &self.S0_C1[ i[1], g_sta[1], 0 ]
 
@@ -719,15 +719,15 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
-        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
+        self.S0_meshsupp0 = self.nqp * kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
-        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
+        self.S0_meshsupp1 = self.nqp * kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
         assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
         self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
-        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_meshsupp0 = self.nqp * kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=1)
-        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_meshsupp1 = self.nqp * kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
 
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
@@ -778,10 +778,10 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
                 GaussWeight = (_gw0[i0] * _gw1[i1])
                 # _tmp2
                 _tmp2 = ((temp_fields[0] * temp_fields[3]) - (temp_fields[1] * temp_fields[2]))
-                # W
-                fields[0] = (GaussWeight * fabs(_tmp2))
                 # _tmp1
                 _tmp1 = (1.0 / _tmp2)
+                # W
+                fields[0] = (GaussWeight * fabs(_tmp2))
                 # JacInv
                 fields[1] = (_tmp1 * temp_fields[3])
                 fields[2] = (_tmp1 * -temp_fields[1])
@@ -802,14 +802,14 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
         ) nogil:
         cdef double* r = [ 0.0, 0.0, 0.0, 0.0 ]
 
-        cdef double _dv_01
-        cdef double _dv_10
-        cdef double _tmp6
-        cdef double _tmp4
-        cdef double _du_01
         cdef double _du_10
-        cdef double _tmp5
+        cdef double _du_01
+        cdef double _dv_10
+        cdef double _dv_01
         cdef double _tmp3
+        cdef double _tmp4
+        cdef double _tmp5
+        cdef double _tmp6
         cdef double* fields
         cdef size_t i0
         cdef size_t i1
@@ -818,22 +818,22 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
             for i1 in range(n1):
                 fields = &_fields[i0, i1, 0]
 
-                # _dv_01
-                _dv_01 = (VDv0[2*i0+1] * VDv1[2*i1+0])
-                # _dv_10
-                _dv_10 = (VDv0[2*i0+0] * VDv1[2*i1+1])
-                # _tmp6
-                _tmp6 = ((fields[2] * _dv_10) + (fields[4] * _dv_01))
-                # _tmp4
-                _tmp4 = ((fields[1] * _dv_10) + (fields[3] * _dv_01))
-                # _du_01
-                _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
                 # _du_10
                 _du_10 = (VDu0[2*i0+0] * VDu1[2*i1+1])
-                # _tmp5
-                _tmp5 = ((fields[2] * _du_10) + (fields[4] * _du_01))
+                # _du_01
+                _du_01 = (VDu0[2*i0+1] * VDu1[2*i1+0])
+                # _dv_10
+                _dv_10 = (VDv0[2*i0+0] * VDv1[2*i1+1])
+                # _dv_01
+                _dv_01 = (VDv0[2*i0+1] * VDv1[2*i1+0])
                 # _tmp3
                 _tmp3 = ((fields[1] * _du_10) + (fields[3] * _du_01))
+                # _tmp4
+                _tmp4 = ((fields[1] * _dv_10) + (fields[3] * _dv_01))
+                # _tmp5
+                _tmp5 = ((fields[2] * _du_10) + (fields[4] * _du_01))
+                # _tmp6
+                _tmp6 = ((fields[2] * _dv_10) + (fields[4] * _dv_01))
                 r[0] += ((_tmp3 * _tmp4) * fields[0])
                 r[1] += ((_tmp5 * _tmp4) * fields[0])
                 r[2] += ((_tmp3 * _tmp6) * fields[0])
@@ -857,8 +857,8 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
                 make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[0] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[0] = intv.a    # start of Gauss nodes
+        g_end[0] = intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ j[0], g_sta[0], 0 ]
         values_v[0] = &self.S0_C0[ i[0], g_sta[0], 0 ]
         intv = intersect_intervals(
@@ -866,8 +866,8 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
                 make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[1] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[1] = intv.a    # start of Gauss nodes
+        g_end[1] = intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ j[1], g_sta[1], 0 ]
         values_v[1] = &self.S0_C1[ i[1], g_sta[1], 0 ]
 
@@ -910,28 +910,28 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
-        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
+        self.S0_meshsupp0 = self.nqp * kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=0)
-        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
+        self.S0_meshsupp1 = self.nqp * kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=0)
         assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
         self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
-        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_meshsupp0 = self.nqp * kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=0)
-        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_meshsupp1 = self.nqp * kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=0)
 
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         # Fields:
-        #  - W: ofs=0 sz=1
-        #  - f_a: ofs=1 sz=1
+        #  - f_a: ofs=0 sz=1
+        #  - W: ofs=1 sz=1
         self.fields = np.empty(N + (2,))
         # Temp fields:
         #  - geo_grad_a: ofs=0 sz=4
         cdef double[:, :, ::1] temp_fields = np.empty(N + (4,))
+        self.fields.base[:, :, 0:1] = np.ascontiguousarray(grid_eval(f, self.gaussgrid)).reshape(N + (-1,))
         temp_fields.base[:, :, 0:4] = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
-        self.fields.base[:, :, 1:2] = np.ascontiguousarray(grid_eval(f, self.gaussgrid)).reshape(N + (-1,))
         L2FunctionalAssembler2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
                 &self.gaussweights0[0], &self.gaussweights1[0],
@@ -967,7 +967,7 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
                 # GaussWeight
                 GaussWeight = (_gw0[i0] * _gw1[i1])
                 # W
-                fields[0] = (GaussWeight * fabs(((temp_fields[0] * temp_fields[3]) - (temp_fields[1] * temp_fields[2]))))
+                fields[1] = (GaussWeight * fabs(((temp_fields[0] * temp_fields[3]) - (temp_fields[1] * temp_fields[2]))))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -990,7 +990,7 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
             for i1 in range(n1):
                 fields = &_fields[i0, i1, 0]
 
-                r += ((fields[1] * (VDu0[1*i0+0] * VDu1[1*i1+0])) * fields[0])
+                r += ((fields[0] * (VDu0[1*i0+0] * VDu1[1*i1+0])) * fields[1])
         result[0] = r
 
     @cython.boundscheck(False)
@@ -1002,12 +1002,12 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
         cdef size_t g_end[2]
         cdef (double*) values_u[2]
         intv = make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1])
-        g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[0] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[0] = intv.a    # start of Gauss nodes
+        g_end[0] = intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ i[0], g_sta[0], 0 ]
         intv = make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1])
-        g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[1] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[1] = intv.a    # start of Gauss nodes
+        g_end[1] = intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ i[1], g_sta[1], 0 ]
 
         L2FunctionalAssembler2D.combine(
@@ -1048,28 +1048,28 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
 
         assert len(kvs0) == 2, "Assembler requires 2 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
-        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
+        self.S0_meshsupp0 = self.nqp * kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=0)
-        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
+        self.S0_meshsupp1 = self.nqp * kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=0)
         assert len(kvs1) == 2, "Assembler requires 2 knot vectors"
         self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
-        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_meshsupp0 = self.nqp * kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=0)
-        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_meshsupp1 = self.nqp * kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=0)
 
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         # Fields:
-        #  - W: ofs=0 sz=1
-        #  - f_a: ofs=1 sz=1
+        #  - f_a: ofs=0 sz=1
+        #  - W: ofs=1 sz=1
         self.fields = np.empty(N + (2,))
         # Temp fields:
         #  - geo_grad_a: ofs=0 sz=4
         cdef double[:, :, ::1] temp_fields = np.empty(N + (4,))
+        self.fields.base[:, :, 0:1] = np.ascontiguousarray(grid_eval_transformed(f, self.gaussgrid, self._geo)).reshape(N + (-1,))
         temp_fields.base[:, :, 0:4] = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
-        self.fields.base[:, :, 1:2] = np.ascontiguousarray(grid_eval_transformed(f, self.gaussgrid, self._geo)).reshape(N + (-1,))
         L2FunctionalAssemblerPhys2D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0],
                 &self.gaussweights0[0], &self.gaussweights1[0],
@@ -1105,7 +1105,7 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
                 # GaussWeight
                 GaussWeight = (_gw0[i0] * _gw1[i1])
                 # W
-                fields[0] = (GaussWeight * fabs(((temp_fields[0] * temp_fields[3]) - (temp_fields[1] * temp_fields[2]))))
+                fields[1] = (GaussWeight * fabs(((temp_fields[0] * temp_fields[3]) - (temp_fields[1] * temp_fields[2]))))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -1128,7 +1128,7 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
             for i1 in range(n1):
                 fields = &_fields[i0, i1, 0]
 
-                r += ((fields[1] * (VDu0[1*i0+0] * VDu1[1*i1+0])) * fields[0])
+                r += ((fields[0] * (VDu0[1*i0+0] * VDu1[1*i1+0])) * fields[1])
         result[0] = r
 
     @cython.boundscheck(False)
@@ -1140,12 +1140,12 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
         cdef size_t g_end[2]
         cdef (double*) values_u[2]
         intv = make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1])
-        g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[0] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[0] = intv.a    # start of Gauss nodes
+        g_end[0] = intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ i[0], g_sta[0], 0 ]
         intv = make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1])
-        g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[1] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[1] = intv.a    # start of Gauss nodes
+        g_end[1] = intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ i[1], g_sta[1], 0 ]
 
         L2FunctionalAssemblerPhys2D.combine(
@@ -1185,19 +1185,19 @@ cdef class MassAssembler3D(BaseAssembler3D):
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
-        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
+        self.S0_meshsupp0 = self.nqp * kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=0)
-        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
+        self.S0_meshsupp1 = self.nqp * kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=0)
-        self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
+        self.S0_meshsupp2 = self.nqp * kvs0[2].mesh_support_idx_all()
         self.S0_C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=0)
         assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
         self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
-        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_meshsupp0 = self.nqp * kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=0)
-        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_meshsupp1 = self.nqp * kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=0)
-        self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
+        self.S1_meshsupp2 = self.nqp * kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=0)
 
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
@@ -1289,8 +1289,8 @@ cdef class MassAssembler3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[0] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[0] = intv.a    # start of Gauss nodes
+        g_end[0] = intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ j[0], g_sta[0], 0 ]
         values_v[0] = &self.S0_C0[ i[0], g_sta[0], 0 ]
         intv = intersect_intervals(
@@ -1298,8 +1298,8 @@ cdef class MassAssembler3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[1] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[1] = intv.a    # start of Gauss nodes
+        g_end[1] = intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ j[1], g_sta[1], 0 ]
         values_v[1] = &self.S0_C1[ i[1], g_sta[1], 0 ]
         intv = intersect_intervals(
@@ -1307,8 +1307,8 @@ cdef class MassAssembler3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp2[i[2],0], self.S0_meshsupp2[i[2],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[2] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[2] = intv.a    # start of Gauss nodes
+        g_end[2] = intv.b    # end of Gauss nodes
         values_u[2] = &self.S0_C2[ j[2], g_sta[2], 0 ]
         values_v[2] = &self.S0_C2[ i[2], g_sta[2], 0 ]
 
@@ -1351,19 +1351,19 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
-        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
+        self.S0_meshsupp0 = self.nqp * kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
-        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
+        self.S0_meshsupp1 = self.nqp * kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
-        self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
+        self.S0_meshsupp2 = self.nqp * kvs0[2].mesh_support_idx_all()
         self.S0_C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=1)
         assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
         self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
-        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_meshsupp0 = self.nqp * kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=1)
-        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_meshsupp1 = self.nqp * kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
-        self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
+        self.S1_meshsupp2 = self.nqp * kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=1)
 
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
@@ -1396,14 +1396,14 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
             # output
             double[:, :, :, ::1] _fields,
         ) nogil:
-        cdef double _tmp5
-        cdef double _tmp4
+        cdef double GaussWeight
         cdef double _tmp3
+        cdef double _tmp4
+        cdef double _tmp5
         cdef double _tmp2
+        cdef double W
         cdef double _tmp1
         cdef double JacInv[9]
-        cdef double GaussWeight
-        cdef double W
         cdef double* fields
         cdef double* temp_fields
         cdef size_t i0
@@ -1416,14 +1416,18 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                     fields = &_fields[i0, i1, i2, 0]
                     temp_fields = &_temp_fields[i0, i1, i2, 0]
 
-                    # _tmp5
-                    _tmp5 = ((temp_fields[3] * temp_fields[7]) - (temp_fields[4] * temp_fields[6]))
-                    # _tmp4
-                    _tmp4 = ((temp_fields[3] * temp_fields[8]) - (temp_fields[5] * temp_fields[6]))
+                    # GaussWeight
+                    GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
                     # _tmp3
                     _tmp3 = ((temp_fields[4] * temp_fields[8]) - (temp_fields[5] * temp_fields[7]))
+                    # _tmp4
+                    _tmp4 = ((temp_fields[3] * temp_fields[8]) - (temp_fields[5] * temp_fields[6]))
+                    # _tmp5
+                    _tmp5 = ((temp_fields[3] * temp_fields[7]) - (temp_fields[4] * temp_fields[6]))
                     # _tmp2
                     _tmp2 = (((temp_fields[0] * _tmp3) - (temp_fields[1] * _tmp4)) + (temp_fields[2] * _tmp5))
+                    # W
+                    W = (GaussWeight * fabs(_tmp2))
                     # _tmp1
                     _tmp1 = (1.0 / _tmp2)
                     # JacInv
@@ -1436,10 +1440,6 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                     JacInv[6] = (_tmp1 * _tmp5)
                     JacInv[7] = (_tmp1 * -((temp_fields[0] * temp_fields[7]) - (temp_fields[1] * temp_fields[6])))
                     JacInv[8] = (_tmp1 * ((temp_fields[0] * temp_fields[4]) - (temp_fields[1] * temp_fields[3])))
-                    # GaussWeight
-                    GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
-                    # W
-                    W = (GaussWeight * fabs(_tmp2))
                     # B
                     fields[0] = (W * (((JacInv[0] * JacInv[0]) + (JacInv[1] * JacInv[1])) + (JacInv[2] * JacInv[2])))
                     fields[1] = (W * (((JacInv[0] * JacInv[3]) + (JacInv[1] * JacInv[4])) + (JacInv[2] * JacInv[5])))
@@ -1462,12 +1462,12 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
         ) nogil:
         cdef double r = 0.0
 
-        cdef double _dv_001
-        cdef double _dv_010
-        cdef double _dv_100
-        cdef double _du_001
-        cdef double _du_010
         cdef double _du_100
+        cdef double _du_010
+        cdef double _du_001
+        cdef double _dv_100
+        cdef double _dv_010
+        cdef double _dv_001
         cdef double* fields
         cdef size_t i0
         cdef size_t i1
@@ -1478,18 +1478,18 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                 for i2 in range(n2):
                     fields = &_fields[i0, i1, i2, 0]
 
-                    # _dv_001
-                    _dv_001 = (VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0])
-                    # _dv_010
-                    _dv_010 = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
-                    # _dv_100
-                    _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
-                    # _du_001
-                    _du_001 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
-                    # _du_010
-                    _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
                     # _du_100
                     _du_100 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
+                    # _du_010
+                    _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
+                    # _du_001
+                    _du_001 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
+                    # _dv_100
+                    _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
+                    # _dv_010
+                    _dv_010 = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
+                    # _dv_001
+                    _dv_001 = (VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0])
                     r += ((((((fields[0] * _du_100) + (fields[1] * _du_010)) + (fields[2] * _du_001)) * _dv_100) + ((((fields[1] * _du_100) + (fields[3] * _du_010)) + (fields[4] * _du_001)) * _dv_010)) + ((((fields[2] * _du_100) + (fields[4] * _du_010)) + (fields[5] * _du_001)) * _dv_001))
         result[0] = r
 
@@ -1507,8 +1507,8 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[0] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[0] = intv.a    # start of Gauss nodes
+        g_end[0] = intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ j[0], g_sta[0], 0 ]
         values_v[0] = &self.S0_C0[ i[0], g_sta[0], 0 ]
         intv = intersect_intervals(
@@ -1516,8 +1516,8 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[1] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[1] = intv.a    # start of Gauss nodes
+        g_end[1] = intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ j[1], g_sta[1], 0 ]
         values_v[1] = &self.S0_C1[ i[1], g_sta[1], 0 ]
         intv = intersect_intervals(
@@ -1525,8 +1525,8 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp2[i[2],0], self.S0_meshsupp2[i[2],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[2] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[2] = intv.a    # start of Gauss nodes
+        g_end[2] = intv.b    # end of Gauss nodes
         values_u[2] = &self.S0_C2[ j[2], g_sta[2], 0 ]
         values_v[2] = &self.S0_C2[ i[2], g_sta[2], 0 ]
 
@@ -1569,19 +1569,19 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
-        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
+        self.S0_meshsupp0 = self.nqp * kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
-        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
+        self.S0_meshsupp1 = self.nqp * kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
-        self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
+        self.S0_meshsupp2 = self.nqp * kvs0[2].mesh_support_idx_all()
         self.S0_C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=1)
         assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
         self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
-        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_meshsupp0 = self.nqp * kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=1)
-        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_meshsupp1 = self.nqp * kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
-        self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
+        self.S1_meshsupp2 = self.nqp * kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=1)
 
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
@@ -1616,9 +1616,9 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
             double[:, :, :, ::1] _fields,
         ) nogil:
         cdef double GaussWeight
-        cdef double _tmp5
-        cdef double _tmp4
         cdef double _tmp3
+        cdef double _tmp4
+        cdef double _tmp5
         cdef double _tmp2
         cdef double _tmp1
         cdef double* fields
@@ -1635,18 +1635,18 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
 
                     # GaussWeight
                     GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
-                    # _tmp5
-                    _tmp5 = ((temp_fields[3] * temp_fields[7]) - (temp_fields[4] * temp_fields[6]))
-                    # _tmp4
-                    _tmp4 = ((temp_fields[3] * temp_fields[8]) - (temp_fields[5] * temp_fields[6]))
                     # _tmp3
                     _tmp3 = ((temp_fields[4] * temp_fields[8]) - (temp_fields[5] * temp_fields[7]))
+                    # _tmp4
+                    _tmp4 = ((temp_fields[3] * temp_fields[8]) - (temp_fields[5] * temp_fields[6]))
+                    # _tmp5
+                    _tmp5 = ((temp_fields[3] * temp_fields[7]) - (temp_fields[4] * temp_fields[6]))
                     # _tmp2
                     _tmp2 = (((temp_fields[0] * _tmp3) - (temp_fields[1] * _tmp4)) + (temp_fields[2] * _tmp5))
-                    # W
-                    fields[0] = (GaussWeight * fabs(_tmp2))
                     # _tmp1
                     _tmp1 = (1.0 / _tmp2)
+                    # W
+                    fields[0] = (GaussWeight * fabs(_tmp2))
                     # JacInv
                     fields[1] = (_tmp1 * _tmp3)
                     fields[2] = (_tmp1 * -((temp_fields[1] * temp_fields[8]) - (temp_fields[2] * temp_fields[7])))
@@ -1672,11 +1672,11 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
         ) nogil:
         cdef double r = 0.0
 
-        cdef double _dv_010
-        cdef double _dv_100
-        cdef double _du_001
-        cdef double _du_010
         cdef double _du_100
+        cdef double _du_010
+        cdef double _du_001
+        cdef double _dv_100
+        cdef double _dv_010
         cdef double* fields
         cdef size_t i0
         cdef size_t i1
@@ -1687,16 +1687,16 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
                 for i2 in range(n2):
                     fields = &_fields[i0, i1, i2, 0]
 
-                    # _dv_010
-                    _dv_010 = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
-                    # _dv_100
-                    _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
-                    # _du_001
-                    _du_001 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
-                    # _du_010
-                    _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
                     # _du_100
                     _du_100 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
+                    # _du_010
+                    _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
+                    # _du_001
+                    _du_001 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
+                    # _dv_100
+                    _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
+                    # _dv_010
+                    _dv_010 = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
                     r += ((((((fields[1] * _du_100) + (fields[4] * _du_010)) * ((fields[1] * _dv_100) + (fields[4] * _dv_010))) + (((fields[2] * _du_100) + (fields[5] * _du_010)) * ((fields[2] * _dv_100) + (fields[5] * _dv_010)))) + (_du_001 * (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+0]))) * fields[0])
         result[0] = r
 
@@ -1714,8 +1714,8 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[0] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[0] = intv.a    # start of Gauss nodes
+        g_end[0] = intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ j[0], g_sta[0], 0 ]
         values_v[0] = &self.S0_C0[ i[0], g_sta[0], 0 ]
         intv = intersect_intervals(
@@ -1723,8 +1723,8 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[1] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[1] = intv.a    # start of Gauss nodes
+        g_end[1] = intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ j[1], g_sta[1], 0 ]
         values_v[1] = &self.S0_C1[ i[1], g_sta[1], 0 ]
         intv = intersect_intervals(
@@ -1732,8 +1732,8 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp2[i[2],0], self.S0_meshsupp2[i[2],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[2] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[2] = intv.a    # start of Gauss nodes
+        g_end[2] = intv.b    # end of Gauss nodes
         values_u[2] = &self.S0_C2[ j[2], g_sta[2], 0 ]
         values_v[2] = &self.S0_C2[ i[2], g_sta[2], 0 ]
 
@@ -1776,19 +1776,19 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
-        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
+        self.S0_meshsupp0 = self.nqp * kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=2)
-        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
+        self.S0_meshsupp1 = self.nqp * kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=2)
-        self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
+        self.S0_meshsupp2 = self.nqp * kvs0[2].mesh_support_idx_all()
         self.S0_C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=2)
         assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
         self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
-        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_meshsupp0 = self.nqp * kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=2)
-        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_meshsupp1 = self.nqp * kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=2)
-        self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
+        self.S1_meshsupp2 = self.nqp * kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=2)
 
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
@@ -1823,9 +1823,9 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
             double[:, :, :, ::1] _fields,
         ) nogil:
         cdef double GaussWeight
-        cdef double _tmp5
-        cdef double _tmp4
         cdef double _tmp3
+        cdef double _tmp4
+        cdef double _tmp5
         cdef double _tmp2
         cdef double _tmp1
         cdef double* fields
@@ -1842,18 +1842,18 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
 
                     # GaussWeight
                     GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
-                    # _tmp5
-                    _tmp5 = ((temp_fields[3] * temp_fields[7]) - (temp_fields[4] * temp_fields[6]))
-                    # _tmp4
-                    _tmp4 = ((temp_fields[3] * temp_fields[8]) - (temp_fields[5] * temp_fields[6]))
                     # _tmp3
                     _tmp3 = ((temp_fields[4] * temp_fields[8]) - (temp_fields[5] * temp_fields[7]))
+                    # _tmp4
+                    _tmp4 = ((temp_fields[3] * temp_fields[8]) - (temp_fields[5] * temp_fields[6]))
+                    # _tmp5
+                    _tmp5 = ((temp_fields[3] * temp_fields[7]) - (temp_fields[4] * temp_fields[6]))
                     # _tmp2
                     _tmp2 = (((temp_fields[0] * _tmp3) - (temp_fields[1] * _tmp4)) + (temp_fields[2] * _tmp5))
-                    # W
-                    fields[0] = (GaussWeight * fabs(_tmp2))
                     # _tmp1
                     _tmp1 = (1.0 / _tmp2)
+                    # W
+                    fields[0] = (GaussWeight * fabs(_tmp2))
                     # JacInv
                     fields[1] = (_tmp1 * _tmp3)
                     fields[2] = (_tmp1 * -((temp_fields[1] * temp_fields[8]) - (temp_fields[2] * temp_fields[7])))
@@ -1879,12 +1879,12 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
         ) nogil:
         cdef double r = 0.0
 
-        cdef double _dv_011
-        cdef double _dv_101
-        cdef double _dv_001
-        cdef double _du_010
-        cdef double _du_100
         cdef double _du_002
+        cdef double _du_100
+        cdef double _du_010
+        cdef double _dv_001
+        cdef double _dv_101
+        cdef double _dv_011
         cdef double* fields
         cdef size_t i0
         cdef size_t i1
@@ -1895,18 +1895,18 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
                 for i2 in range(n2):
                     fields = &_fields[i0, i1, i2, 0]
 
-                    # _dv_011
-                    _dv_011 = (VDv0[3*i0+1] * VDv1[3*i1+1] * VDv2[3*i2+0])
-                    # _dv_101
-                    _dv_101 = (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+1])
-                    # _dv_001
-                    _dv_001 = (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+0])
-                    # _du_010
-                    _du_010 = (VDu0[3*i0+0] * VDu1[3*i1+1] * VDu2[3*i2+0])
-                    # _du_100
-                    _du_100 = (VDu0[3*i0+0] * VDu1[3*i1+0] * VDu2[3*i2+1])
                     # _du_002
                     _du_002 = (VDu0[3*i0+2] * VDu1[3*i1+0] * VDu2[3*i2+0])
+                    # _du_100
+                    _du_100 = (VDu0[3*i0+0] * VDu1[3*i1+0] * VDu2[3*i2+1])
+                    # _du_010
+                    _du_010 = (VDu0[3*i0+0] * VDu1[3*i1+1] * VDu2[3*i2+0])
+                    # _dv_001
+                    _dv_001 = (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+0])
+                    # _dv_101
+                    _dv_101 = (VDv0[3*i0+1] * VDv1[3*i1+0] * VDv2[3*i2+1])
+                    # _dv_011
+                    _dv_011 = (VDv0[3*i0+1] * VDv1[3*i1+1] * VDv2[3*i2+0])
                     r += (((_du_002 * _dv_001) + ((((fields[1] * _du_100) + (fields[4] * _du_010)) * ((fields[1] * _dv_101) + (fields[4] * _dv_011))) + (((fields[2] * _du_100) + (fields[5] * _du_010)) * ((fields[2] * _dv_101) + (fields[5] * _dv_011))))) * fields[0])
         result[0] = r
 
@@ -1924,8 +1924,8 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[0] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[0] = intv.a    # start of Gauss nodes
+        g_end[0] = intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ j[0], g_sta[0], 0 ]
         values_v[0] = &self.S0_C0[ i[0], g_sta[0], 0 ]
         intv = intersect_intervals(
@@ -1933,8 +1933,8 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[1] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[1] = intv.a    # start of Gauss nodes
+        g_end[1] = intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ j[1], g_sta[1], 0 ]
         values_v[1] = &self.S0_C1[ i[1], g_sta[1], 0 ]
         intv = intersect_intervals(
@@ -1942,8 +1942,8 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
                 make_intv(self.S0_meshsupp2[i[2],0], self.S0_meshsupp2[i[2],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[2] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[2] = intv.a    # start of Gauss nodes
+        g_end[2] = intv.b    # end of Gauss nodes
         values_u[2] = &self.S0_C2[ j[2], g_sta[2], 0 ]
         values_v[2] = &self.S0_C2[ i[2], g_sta[2], 0 ]
 
@@ -1987,19 +1987,19 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
-        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
+        self.S0_meshsupp0 = self.nqp * kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=1)
-        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
+        self.S0_meshsupp1 = self.nqp * kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=1)
-        self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
+        self.S0_meshsupp2 = self.nqp * kvs0[2].mesh_support_idx_all()
         self.S0_C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=1)
         assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
         self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
-        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_meshsupp0 = self.nqp * kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=1)
-        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_meshsupp1 = self.nqp * kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=1)
-        self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
+        self.S1_meshsupp2 = self.nqp * kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=1)
 
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
@@ -2034,9 +2034,9 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
             double[:, :, :, ::1] _fields,
         ) nogil:
         cdef double GaussWeight
-        cdef double _tmp11
-        cdef double _tmp10
         cdef double _tmp9
+        cdef double _tmp10
+        cdef double _tmp11
         cdef double _tmp2
         cdef double _tmp1
         cdef double* fields
@@ -2053,18 +2053,18 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
 
                     # GaussWeight
                     GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
-                    # _tmp11
-                    _tmp11 = ((temp_fields[3] * temp_fields[7]) - (temp_fields[4] * temp_fields[6]))
-                    # _tmp10
-                    _tmp10 = ((temp_fields[3] * temp_fields[8]) - (temp_fields[5] * temp_fields[6]))
                     # _tmp9
                     _tmp9 = ((temp_fields[4] * temp_fields[8]) - (temp_fields[5] * temp_fields[7]))
+                    # _tmp10
+                    _tmp10 = ((temp_fields[3] * temp_fields[8]) - (temp_fields[5] * temp_fields[6]))
+                    # _tmp11
+                    _tmp11 = ((temp_fields[3] * temp_fields[7]) - (temp_fields[4] * temp_fields[6]))
                     # _tmp2
                     _tmp2 = (((temp_fields[0] * _tmp9) - (temp_fields[1] * _tmp10)) + (temp_fields[2] * _tmp11))
-                    # W
-                    fields[0] = (GaussWeight * fabs(_tmp2))
                     # _tmp1
                     _tmp1 = (1.0 / _tmp2)
+                    # W
+                    fields[0] = (GaussWeight * fabs(_tmp2))
                     # JacInv
                     fields[1] = (_tmp1 * _tmp9)
                     fields[2] = (_tmp1 * -((temp_fields[1] * temp_fields[8]) - (temp_fields[2] * temp_fields[7])))
@@ -2090,18 +2090,18 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
         ) nogil:
         cdef double* r = [ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ]
 
-        cdef double _dv_001
-        cdef double _dv_010
-        cdef double _dv_100
-        cdef double _tmp8
-        cdef double _tmp7
-        cdef double _tmp4
-        cdef double _du_001
-        cdef double _du_010
         cdef double _du_100
-        cdef double _tmp6
-        cdef double _tmp5
+        cdef double _du_010
+        cdef double _du_001
+        cdef double _dv_100
+        cdef double _dv_010
+        cdef double _dv_001
         cdef double _tmp3
+        cdef double _tmp4
+        cdef double _tmp5
+        cdef double _tmp6
+        cdef double _tmp7
+        cdef double _tmp8
         cdef double* fields
         cdef size_t i0
         cdef size_t i1
@@ -2112,30 +2112,30 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
                 for i2 in range(n2):
                     fields = &_fields[i0, i1, i2, 0]
 
-                    # _dv_001
-                    _dv_001 = (VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0])
-                    # _dv_010
-                    _dv_010 = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
-                    # _dv_100
-                    _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
-                    # _tmp8
-                    _tmp8 = (((fields[3] * _dv_100) + (fields[6] * _dv_010)) + (fields[9] * _dv_001))
-                    # _tmp7
-                    _tmp7 = (((fields[2] * _dv_100) + (fields[5] * _dv_010)) + (fields[8] * _dv_001))
-                    # _tmp4
-                    _tmp4 = (((fields[1] * _dv_100) + (fields[4] * _dv_010)) + (fields[7] * _dv_001))
-                    # _du_001
-                    _du_001 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
-                    # _du_010
-                    _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
                     # _du_100
                     _du_100 = (VDu0[2*i0+0] * VDu1[2*i1+0] * VDu2[2*i2+1])
-                    # _tmp6
-                    _tmp6 = (((fields[3] * _du_100) + (fields[6] * _du_010)) + (fields[9] * _du_001))
-                    # _tmp5
-                    _tmp5 = (((fields[2] * _du_100) + (fields[5] * _du_010)) + (fields[8] * _du_001))
+                    # _du_010
+                    _du_010 = (VDu0[2*i0+0] * VDu1[2*i1+1] * VDu2[2*i2+0])
+                    # _du_001
+                    _du_001 = (VDu0[2*i0+1] * VDu1[2*i1+0] * VDu2[2*i2+0])
+                    # _dv_100
+                    _dv_100 = (VDv0[2*i0+0] * VDv1[2*i1+0] * VDv2[2*i2+1])
+                    # _dv_010
+                    _dv_010 = (VDv0[2*i0+0] * VDv1[2*i1+1] * VDv2[2*i2+0])
+                    # _dv_001
+                    _dv_001 = (VDv0[2*i0+1] * VDv1[2*i1+0] * VDv2[2*i2+0])
                     # _tmp3
                     _tmp3 = (((fields[1] * _du_100) + (fields[4] * _du_010)) + (fields[7] * _du_001))
+                    # _tmp4
+                    _tmp4 = (((fields[1] * _dv_100) + (fields[4] * _dv_010)) + (fields[7] * _dv_001))
+                    # _tmp5
+                    _tmp5 = (((fields[2] * _du_100) + (fields[5] * _du_010)) + (fields[8] * _du_001))
+                    # _tmp6
+                    _tmp6 = (((fields[3] * _du_100) + (fields[6] * _du_010)) + (fields[9] * _du_001))
+                    # _tmp7
+                    _tmp7 = (((fields[2] * _dv_100) + (fields[5] * _dv_010)) + (fields[8] * _dv_001))
+                    # _tmp8
+                    _tmp8 = (((fields[3] * _dv_100) + (fields[6] * _dv_010)) + (fields[9] * _dv_001))
                     r[0] += ((_tmp3 * _tmp4) * fields[0])
                     r[1] += ((_tmp5 * _tmp4) * fields[0])
                     r[2] += ((_tmp6 * _tmp4) * fields[0])
@@ -2169,8 +2169,8 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
                 make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[0] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[0] = intv.a    # start of Gauss nodes
+        g_end[0] = intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ j[0], g_sta[0], 0 ]
         values_v[0] = &self.S0_C0[ i[0], g_sta[0], 0 ]
         intv = intersect_intervals(
@@ -2178,8 +2178,8 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
                 make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[1] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[1] = intv.a    # start of Gauss nodes
+        g_end[1] = intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ j[1], g_sta[1], 0 ]
         values_v[1] = &self.S0_C1[ i[1], g_sta[1], 0 ]
         intv = intersect_intervals(
@@ -2187,8 +2187,8 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
                 make_intv(self.S0_meshsupp2[i[2],0], self.S0_meshsupp2[i[2],1]),
         )
         if intv.a >= intv.b: return   # no intersection of support
-        g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[2] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[2] = intv.a    # start of Gauss nodes
+        g_end[2] = intv.b    # end of Gauss nodes
         values_u[2] = &self.S0_C2[ j[2], g_sta[2], 0 ]
         values_v[2] = &self.S0_C2[ i[2], g_sta[2], 0 ]
 
@@ -2232,32 +2232,32 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
-        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
+        self.S0_meshsupp0 = self.nqp * kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=0)
-        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
+        self.S0_meshsupp1 = self.nqp * kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=0)
-        self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
+        self.S0_meshsupp2 = self.nqp * kvs0[2].mesh_support_idx_all()
         self.S0_C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=0)
         assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
         self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
-        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_meshsupp0 = self.nqp * kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=0)
-        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_meshsupp1 = self.nqp * kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=0)
-        self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
+        self.S1_meshsupp2 = self.nqp * kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=0)
 
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         # Fields:
-        #  - W: ofs=0 sz=1
-        #  - f_a: ofs=1 sz=1
+        #  - f_a: ofs=0 sz=1
+        #  - W: ofs=1 sz=1
         self.fields = np.empty(N + (2,))
         # Temp fields:
         #  - geo_grad_a: ofs=0 sz=9
         cdef double[:, :, :, ::1] temp_fields = np.empty(N + (9,))
+        self.fields.base[:, :, :, 0:1] = np.ascontiguousarray(grid_eval(f, self.gaussgrid)).reshape(N + (-1,))
         temp_fields.base[:, :, :, 0:9] = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
-        self.fields.base[:, :, :, 1:2] = np.ascontiguousarray(grid_eval(f, self.gaussgrid)).reshape(N + (-1,))
         L2FunctionalAssembler3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
                 &self.gaussweights0[0], &self.gaussweights1[0], &self.gaussweights2[0],
@@ -2295,7 +2295,7 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
                     # GaussWeight
                     GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
                     # W
-                    fields[0] = (GaussWeight * fabs((((temp_fields[0] * ((temp_fields[4] * temp_fields[8]) - (temp_fields[5] * temp_fields[7]))) - (temp_fields[1] * ((temp_fields[3] * temp_fields[8]) - (temp_fields[5] * temp_fields[6])))) + (temp_fields[2] * ((temp_fields[3] * temp_fields[7]) - (temp_fields[4] * temp_fields[6]))))))
+                    fields[1] = (GaussWeight * fabs((((temp_fields[0] * ((temp_fields[4] * temp_fields[8]) - (temp_fields[5] * temp_fields[7]))) - (temp_fields[1] * ((temp_fields[3] * temp_fields[8]) - (temp_fields[5] * temp_fields[6])))) + (temp_fields[2] * ((temp_fields[3] * temp_fields[7]) - (temp_fields[4] * temp_fields[6]))))))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -2320,7 +2320,7 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
                 for i2 in range(n2):
                     fields = &_fields[i0, i1, i2, 0]
 
-                    r += ((fields[1] * (VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0])) * fields[0])
+                    r += ((fields[0] * (VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0])) * fields[1])
         result[0] = r
 
     @cython.boundscheck(False)
@@ -2332,16 +2332,16 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
         cdef size_t g_end[3]
         cdef (double*) values_u[3]
         intv = make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1])
-        g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[0] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[0] = intv.a    # start of Gauss nodes
+        g_end[0] = intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ i[0], g_sta[0], 0 ]
         intv = make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1])
-        g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[1] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[1] = intv.a    # start of Gauss nodes
+        g_end[1] = intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ i[1], g_sta[1], 0 ]
         intv = make_intv(self.S0_meshsupp2[i[2],0], self.S0_meshsupp2[i[2],1])
-        g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[2] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[2] = intv.a    # start of Gauss nodes
+        g_end[2] = intv.b    # end of Gauss nodes
         values_u[2] = &self.S0_C2[ i[2], g_sta[2], 0 ]
 
         L2FunctionalAssembler3D.combine(
@@ -2383,32 +2383,32 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
 
         assert len(kvs0) == 3, "Assembler requires 3 knot vectors"
         self.S0_ndofs[:] = [kv.numdofs for kv in kvs0]
-        self.S0_meshsupp0 = kvs0[0].mesh_support_idx_all()
+        self.S0_meshsupp0 = self.nqp * kvs0[0].mesh_support_idx_all()
         self.S0_C0 = compute_values_derivs(kvs0[0], gaussgrid[0], derivs=0)
-        self.S0_meshsupp1 = kvs0[1].mesh_support_idx_all()
+        self.S0_meshsupp1 = self.nqp * kvs0[1].mesh_support_idx_all()
         self.S0_C1 = compute_values_derivs(kvs0[1], gaussgrid[1], derivs=0)
-        self.S0_meshsupp2 = kvs0[2].mesh_support_idx_all()
+        self.S0_meshsupp2 = self.nqp * kvs0[2].mesh_support_idx_all()
         self.S0_C2 = compute_values_derivs(kvs0[2], gaussgrid[2], derivs=0)
         assert len(kvs1) == 3, "Assembler requires 3 knot vectors"
         self.S1_ndofs[:] = [kv.numdofs for kv in kvs1]
-        self.S1_meshsupp0 = kvs1[0].mesh_support_idx_all()
+        self.S1_meshsupp0 = self.nqp * kvs1[0].mesh_support_idx_all()
         self.S1_C0 = compute_values_derivs(kvs1[0], gaussgrid[0], derivs=0)
-        self.S1_meshsupp1 = kvs1[1].mesh_support_idx_all()
+        self.S1_meshsupp1 = self.nqp * kvs1[1].mesh_support_idx_all()
         self.S1_C1 = compute_values_derivs(kvs1[1], gaussgrid[1], derivs=0)
-        self.S1_meshsupp2 = kvs1[2].mesh_support_idx_all()
+        self.S1_meshsupp2 = self.nqp * kvs1[2].mesh_support_idx_all()
         self.S1_C2 = compute_values_derivs(kvs1[2], gaussgrid[2], derivs=0)
 
         N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions
 
         # Fields:
-        #  - W: ofs=0 sz=1
-        #  - f_a: ofs=1 sz=1
+        #  - f_a: ofs=0 sz=1
+        #  - W: ofs=1 sz=1
         self.fields = np.empty(N + (2,))
         # Temp fields:
         #  - geo_grad_a: ofs=0 sz=9
         cdef double[:, :, :, ::1] temp_fields = np.empty(N + (9,))
+        self.fields.base[:, :, :, 0:1] = np.ascontiguousarray(grid_eval_transformed(f, self.gaussgrid, self._geo)).reshape(N + (-1,))
         temp_fields.base[:, :, :, 0:9] = np.ascontiguousarray(geo.grid_jacobian(self.gaussgrid)).reshape(N + (-1,))
-        self.fields.base[:, :, :, 1:2] = np.ascontiguousarray(grid_eval_transformed(f, self.gaussgrid, self._geo)).reshape(N + (-1,))
         L2FunctionalAssemblerPhys3D.precompute_fields(
                 gaussgrid[0].shape[0], gaussgrid[1].shape[0], gaussgrid[2].shape[0],
                 &self.gaussweights0[0], &self.gaussweights1[0], &self.gaussweights2[0],
@@ -2446,7 +2446,7 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
                     # GaussWeight
                     GaussWeight = ((_gw0[i0] * _gw1[i1]) * _gw2[i2])
                     # W
-                    fields[0] = (GaussWeight * fabs((((temp_fields[0] * ((temp_fields[4] * temp_fields[8]) - (temp_fields[5] * temp_fields[7]))) - (temp_fields[1] * ((temp_fields[3] * temp_fields[8]) - (temp_fields[5] * temp_fields[6])))) + (temp_fields[2] * ((temp_fields[3] * temp_fields[7]) - (temp_fields[4] * temp_fields[6]))))))
+                    fields[1] = (GaussWeight * fabs((((temp_fields[0] * ((temp_fields[4] * temp_fields[8]) - (temp_fields[5] * temp_fields[7]))) - (temp_fields[1] * ((temp_fields[3] * temp_fields[8]) - (temp_fields[5] * temp_fields[6])))) + (temp_fields[2] * ((temp_fields[3] * temp_fields[7]) - (temp_fields[4] * temp_fields[6]))))))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -2471,7 +2471,7 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
                 for i2 in range(n2):
                     fields = &_fields[i0, i1, i2, 0]
 
-                    r += ((fields[1] * (VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0])) * fields[0])
+                    r += ((fields[0] * (VDu0[1*i0+0] * VDu1[1*i1+0] * VDu2[1*i2+0])) * fields[1])
         result[0] = r
 
     @cython.boundscheck(False)
@@ -2483,16 +2483,16 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
         cdef size_t g_end[3]
         cdef (double*) values_u[3]
         intv = make_intv(self.S0_meshsupp0[i[0],0], self.S0_meshsupp0[i[0],1])
-        g_sta[0] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[0] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[0] = intv.a    # start of Gauss nodes
+        g_end[0] = intv.b    # end of Gauss nodes
         values_u[0] = &self.S0_C0[ i[0], g_sta[0], 0 ]
         intv = make_intv(self.S0_meshsupp1[i[1],0], self.S0_meshsupp1[i[1],1])
-        g_sta[1] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[1] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[1] = intv.a    # start of Gauss nodes
+        g_end[1] = intv.b    # end of Gauss nodes
         values_u[1] = &self.S0_C1[ i[1], g_sta[1], 0 ]
         intv = make_intv(self.S0_meshsupp2[i[2],0], self.S0_meshsupp2[i[2],1])
-        g_sta[2] = self.nqp * intv.a    # start of Gauss nodes
-        g_end[2] = self.nqp * intv.b    # end of Gauss nodes
+        g_sta[2] = intv.a    # start of Gauss nodes
+        g_end[2] = intv.b    # end of Gauss nodes
         values_u[2] = &self.S0_C2[ i[2], g_sta[2], 0 ]
 
         L2FunctionalAssemblerPhys3D.combine(

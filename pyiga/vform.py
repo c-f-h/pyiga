@@ -155,6 +155,7 @@ class Parameter:
         self.name = name
         self.shape = shape
         self.scope = Scope.CONSTANT
+        self.symmetric = False          # currently only used for storage_size()
     def hash(self):
         return hash((self.name, self.shape))
 

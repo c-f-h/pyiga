@@ -579,7 +579,7 @@ class AsmGenerator(CodegenVisitor):
                     self.putf('if boundary[0] == {k}:', k=k)
                     self.indent()
                     # restrict quadrature mesh to a single basis function over the first interval
-                    self.putf('self.S{sp}_meshsupp{k} = np.arange(2).reshape((1,2))', sp=sp, k=k)
+                    self.putf('self.S{sp}_meshsupp{k} = np.arange(2, dtype=np.intp).reshape((1,2))', sp=sp, k=k)
                     self.put('if boundary[1] == 0:')
                     self.indent()
                     # restrict to first basis function and first grid point

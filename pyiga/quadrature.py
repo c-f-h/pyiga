@@ -19,3 +19,13 @@ def make_tensor_quadrature(meshes, nqp):
     grid    = tuple(g[0] for g in gauss)
     weights = tuple(g[1] for g in gauss)
     return grid, weights
+
+def make_boundary_quadrature(meshes, nqp, bdspec):
+    """Compute an iterated Gauss quadrature rule restricted to the given boundary."""
+    bdax, bdside = bdspec
+    bdcoord = meshes[bdax][0 if bdside==0 else -1]
+    gauss = [make_iterated_quadrature(mesh, nqp) for mesh in meshes]
+    gauss[bdax] = (np.array([bdcoord]), np.ones((1,)))
+    grid    = tuple(g[0] for g in gauss)
+    weights = tuple(g[1] for g in gauss)
+    return grid, weights

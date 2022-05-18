@@ -173,12 +173,13 @@ class VForm:
             functional and 2 for a bilinear form
         spacetime (bool): whether the form describes a space-time discretization (deprecated)
     """
-    def __init__(self, dim, geo_dim=None, arity=2, spacetime=False):
+    def __init__(self, dim, geo_dim=None, boundary=False, arity=2, spacetime=False):
         self.dim = dim
         if geo_dim is None:
             geo_dim = dim
         self.arity = arity
         self.geo_dim = geo_dim
+        self.is_boundary = bool(boundary)
         self.vec = False
         self.spacetime = bool(spacetime)
         if self.spacetime:
@@ -199,15 +200,30 @@ class VForm:
             return self.GaussWeight * abs(det(self.Jac))
 
         def _surface_weight(self):
-            if not self.is_surface_integral():
+            if self.is_volume_integral():
                 raise ValueError('surface measure not defined for volume integral')
-            return self.GaussWeight * norm(_jac_to_unscaled_normal(self.Jac))
+            return self.GaussWeight * norm(_jac_to_unscaled_normal(self.BJac))
 
         def _surface_normal(self):
-            if not self.is_surface_integral():
-                raise ValueError('normal vector only defined for surface integrals')
-            un = _jac_to_unscaled_normal(self.Jac)
+            if self.is_volume_integral():
+                raise ValueError('surface measure not defined for volume integral')
+            un = _jac_to_unscaled_normal(self.BJac)
             return un / norm(un)
+
+        def _Jac_to_boundary(self):
+            """A constant matrix which reduces the Jacobian to only the boundary part."""
+            if not self.is_boundary_integral():
+                raise ValueError('_Jac_to_boundary only defined for boundary integrals')
+            return self.parameter('Jac_to_boundary', (self.dim, self.dim - 1))
+
+        def _BJac(self):
+            """Boundary Jacobian (shape (k+1) x k)."""
+            if self.is_surface_integral():
+                return self.Jac
+            elif self.is_boundary_integral():
+                return self.Jac @ self.Jac_to_boundary
+            else:
+                raise ValueError('BJac not defined for volume integrals')
 
         # predefined local variables with their generators (created on demand)
         self.predefined_vars = {
@@ -218,6 +234,8 @@ class VForm:
             'W':           _volume_weight,
             'SW':          _surface_weight,
             'normal':      _surface_normal,
+            'Jac_to_boundary': _Jac_to_boundary,
+            'BJac':         _BJac,
         }
         # default input field: geometry transform
         self.Geo = self.input('geo', shape=(geo_dim,))
@@ -225,10 +243,13 @@ class VForm:
         self.__is_finalized = False
 
     def is_volume_integral(self):
-        return self.dim == self.geo_dim
+        return self.dim == self.geo_dim and not self.is_boundary
 
     def is_surface_integral(self):
-        return self.dim == self.geo_dim - 1
+        return self.dim == self.geo_dim - 1 and not self.is_boundary
+
+    def is_boundary_integral(self):
+        return self.is_boundary
 
     def hash(self):
         # A hash to avoid recompiling the same vform over and over again.
@@ -444,8 +465,13 @@ class VForm:
             return self.vars[name].as_expr
         elif name in self.predefined_vars:
             expr = self.predefined_vars[name](self)
-            # define it as a new named variable and return it
-            return self.let(name, expr)
+            if name in self.vars:
+                # the predefined_vars function may have already registered it
+                assert self.vars[name].as_expr is expr
+                return expr
+            else:
+                # define it as a new named variable and return it
+                return self.let(name, expr)
         else:
             msg = "'{0}' object has no attribute '{1}'"
             raise AttributeError(msg.format(type(self).__name__, name))
@@ -1775,7 +1801,7 @@ def _check_input_field(kvs, f):
         result = f(*mid)        # evaluate it at the midpoint
         return np.shape(result), True
 
-def parse_vf(expr, kvs, args=dict(), bfuns=None, updatable=[]):
+def parse_vf(expr, kvs, args=dict(), bfuns=None, boundary=False, updatable=[]):
     from . import bspline
     def is_tp_spl(x):
         return all(isinstance(y, bspline.KnotVector) for y in x)
@@ -1811,17 +1837,17 @@ def parse_vf(expr, kvs, args=dict(), bfuns=None, updatable=[]):
         bfuns = bfuns_new
 
     # determine volume/surface integral
+    geo_dim = dim
     if 'ds' in words:
         if 'dx' in words:
             raise RuntimeError("got both 'dx' and 'ds' - is this a volume or a surface integral?")
-        geo_dim = dim + 1
-    else:       # by default, we assume a volume integral
-        geo_dim = dim
+        if not boundary:
+            geo_dim += 1
 
     arity = len(bfuns)
     if not arity in (1, 2):
         raise ValueError('arity should be 1 or 2')
-    vf = VForm(dim=dim, geo_dim=geo_dim, arity=arity)
+    vf = VForm(dim=dim, geo_dim=geo_dim, boundary=boundary, arity=arity)
 
     # set up basis functions
     components = tuple(bf[1] for bf in bfuns)

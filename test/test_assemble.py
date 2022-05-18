@@ -332,6 +332,53 @@ def test_assemble_surface_vf():
     f = assemble_vf(vf, kvs, geo=geo_3d.boundary('right')) # outer mantle
     assert np.allclose(f.sum(), (2 * 2 * np.pi) / 4)    # r=2 at outer mantle, one quarter of the full circle
 
+def test_assemble_boundary_vector():
+    # set up space and geo
+    kvs = 3 * (bspline.make_knots(3, 0.0, 1.0, 3),)
+
+    # cylinder built on a quarter annulus
+    geo_3d = geometry.tensor_product(
+            geometry.line_segment(0.0, 1.0),
+            geometry.quarter_annulus())
+    f = assemble('v * ds', kvs, geo=geo_3d, boundary='left')
+    assert f.shape == (6, 6, 1)
+    # r=1 at inner mantle, one quarter of the full circle
+    assert np.allclose(f.sum(), (2 * 1 * np.pi) / 4)
+    # r=2 at outer mantle, one quarter of the full circle
+    assert np.allclose(assemble('v * ds', kvs, geo=geo_3d, boundary='right').sum(), (2 * 2 * np.pi) / 4)
+    # bottom and top: squares on x/z and y/z planes
+    assert np.allclose(assemble('v * ds', kvs, geo=geo_3d, boundary='bottom').sum(), 1.0)
+    assert np.allclose(assemble('v * ds', kvs, geo=geo_3d, boundary='top').sum(),    1.0)
+    # front and back: quarter annulus
+    assert np.allclose(assemble('v * ds', kvs, geo=geo_3d, boundary='front').sum(), (2**2-1**2) * np.pi/4)
+    assert np.allclose(assemble('v * ds', kvs, geo=geo_3d, boundary='back').sum(),  (2**2-1**2) * np.pi/4)
+    #
+    # compute average normal vectors over different faces
+    nv = assemble('inner(v, n) * ds', kvs, bfuns=[('v', 3)], geo=geo_3d, boundary='left', layout='packed')
+    assert np.allclose(nv.sum(axis=(0,1,2)), [-1, -1, 0])
+    nv = assemble('inner(v, n) * ds', kvs, bfuns=[('v', 3)], geo=geo_3d, boundary='right', layout='packed')
+    assert np.allclose(nv.sum(axis=(0,1,2)), [2, 2, 0])
+    nv = assemble('inner(v, n) * ds', kvs, bfuns=[('v', 3)], geo=geo_3d, boundary='bottom', layout='packed')
+    assert np.allclose(nv.sum(axis=(0,1,2)), [0, -1, 0])
+    nv = assemble('inner(v, n) * ds', kvs, bfuns=[('v', 3)], geo=geo_3d, boundary='top', layout='packed')
+    assert np.allclose(nv.sum(axis=(0,1,2)), [-1, 0, 0])
+    nv = assemble('inner(v, n) * ds', kvs, bfuns=[('v', 3)], geo=geo_3d, boundary='front', layout='packed')
+    assert np.allclose(nv.sum(axis=(0,1,2)), (2**2-1**2) * np.pi/4 * np.array([0, 0, -1]))
+    nv = assemble('inner(v, n) * ds', kvs, bfuns=[('v', 3)], geo=geo_3d, boundary='back', layout='packed')
+    assert np.allclose(nv.sum(axis=(0,1,2)), (2**2-1**2) * np.pi/4 * np.array([0, 0, 1]))
+    ####
+    # check normal vectors in 2D
+    kvs = 2 * (bspline.make_knots(3, 0.0, 1.0, 3),)
+    geo = geometry.unit_square()
+    nv = assemble('inner(v, n) * ds', kvs, bfuns=[('v', 2)], geo=geo, boundary='left', layout='packed')
+    assert np.allclose(nv.sum(axis=(0,1)), [-1, 0])
+    nv = assemble('inner(v, n) * ds', kvs, bfuns=[('v', 2)], geo=geo, boundary='right', layout='packed')
+    assert np.allclose(nv.sum(axis=(0,1)), [+1, 0])
+    nv = assemble('inner(v, n) * ds', kvs, bfuns=[('v', 2)], geo=geo, boundary='bottom', layout='packed')
+    assert np.allclose(nv.sum(axis=(0,1)), [0, -1])
+    nv = assemble('inner(v, n) * ds', kvs, bfuns=[('v', 2)], geo=geo, boundary='top', layout='packed')
+    assert np.allclose(nv.sum(axis=(0,1)), [0, +1])
+
 def test_assemble_vf_with_params():
     geo = geometry.quarter_annulus()
     kvs = 2 * (bspline.make_knots(3, 0.0, 1.0, 10),)

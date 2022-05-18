@@ -236,6 +236,29 @@ class AsmGenerator(CodegenVisitor):
         else:
             assert False, 'unsupported shape'
 
+    def gen_var_debug_dump(self, var):
+        """Generate code to write the value of `var` to the screen. Requires
+            ``from libc.stdio cimport printf``
+        in the preamble.
+        """
+        def vec_fmt(n):
+            return '[' + ' '.join(['%f' for k in range(n)]) + ']'
+
+        expr = var.expr
+        if expr.is_scalar():
+            self.putf(r'printf("{name}: %f\n", {ref})', name=var.name, ref=self.var_ref(var, ()))
+        elif expr.is_vector():
+            n = expr.shape[0]
+            refs = ', '.join([self.var_ref(var, (k,)) for k in range(n)])
+            self.putf(r'printf("{name}: {fmt}\n", {refs})', name=var.name, fmt=vec_fmt(n), refs=refs)
+        elif expr.is_matrix():
+            m, n = expr.shape
+            refs = ', '.join([self.var_ref(var, (i, j)) for i in range(m) for j in range(n)])
+            fmt = m * vec_fmt(n)
+            self.putf(r'printf("{name}: [{fmt}]\n", {refs})', name=var.name, fmt=fmt, refs=refs)
+        else:
+            assert False, 'unsupported shape'
+
     def cython_pragmas(self):
         self.put('@cython.boundscheck(False)')
         self.put('@cython.wraparound(False)')
@@ -490,10 +513,11 @@ class AsmGenerator(CodegenVisitor):
         assert len(used_spaces) in (1,2), 'Number of spaces should be 1 or 2'
         assert all(sp in (0, 1) for sp in used_spaces), 'Space index should be 0 or 1'
         used_kvs = tuple('kvs%d' % sp for sp in used_spaces)
-        input_args = ', '.join(inp.name for inp in vf.inputs)
+        input_args = ', '.join([inp.name for inp in vf.inputs] + [param.name for param in vf.params])
 
-        self.putf('def __init__(self, {kvs}, {inp}{bbox}):', kvs=', '.join(used_kvs),
+        self.putf('def __init__(self, {kvs}, {inp}{bbox}{boundary}):', kvs=', '.join(used_kvs),
                 bbox = ', bbox' if self.on_demand else '',
+                boundary = ', boundary' if vf.is_boundary_integral() else '',
                 inp=input_args)
         self.indent()
 
@@ -521,8 +545,12 @@ class AsmGenerator(CodegenVisitor):
             # kv.mesh[bb[1]] is the end point of cell bb[1]-1;
             # we need to INCLUDE that end point!
             self.put('gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh[bb[0]:bb[1]+1] for (kv,bb) in zip(kvs0,bbox)], self.nqp)')
+            assert not vf.is_boundary_integral(), 'boundary on demand not implemented'
         else:
-            self.put('gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)')
+            if vf.is_boundary_integral():
+                self.put('gaussgrid, gaussweights = make_boundary_quadrature([kv.mesh for kv in kvs0], self.nqp, boundary)')
+            else:
+                self.put('gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs0], self.nqp)')
 
         self.put('self.gaussgrid = gaussgrid')
         for k in range(self.dim):
@@ -537,10 +565,33 @@ class AsmGenerator(CodegenVisitor):
         for sp in (0,1):
             self.putf('assert len(kvs{sp}) == {dim}, "Assembler requires {dim} knot vectors"', sp=sp)
             self.putf('self.S{sp}_ndofs[:] = [kv.numdofs for kv in kvs{sp}]', sp=sp)
+
+            if vf.is_boundary_integral():
+                # boundary integral has dimension 1 along the normal dimension
+                self.putf('self.S{sp}_ndofs[boundary[0]] = 1', sp=sp)
+
             for k in range(self.dim):
                 self.putf('self.S{sp}_meshsupp{k} = self.nqp * kvs{sp}[{k}].mesh_support_idx_all()', sp=sp, k=k)
                 self.putf('self.S{sp}_C{k} = compute_values_derivs(kvs{sp}[{k}], gaussgrid[{k}], derivs={maxderiv})',
                         k=k, sp=sp, maxderiv=self.numderiv)
+
+                if vf.is_boundary_integral():
+                    self.putf('if boundary[0] == {k}:', k=k)
+                    self.indent()
+                    # restrict quadrature mesh to a single basis function over the first interval
+                    self.putf('self.S{sp}_meshsupp{k} = np.arange(2).reshape((1,2))', sp=sp, k=k)
+                    self.put('if boundary[1] == 0:')
+                    self.indent()
+                    # restrict to first basis function and first grid point
+                    self.putf('self.S{sp}_C{k} = self.S{sp}_C{k}[0:1, 0:1, :]', sp=sp, k=k)
+                    self.dedent()
+                    self.put('else:')
+                    self.indent()
+                    # restrict to last basis function and last grid point
+                    self.putf('self.S{sp}_C{k} = self.S{sp}_C{k}[-1:, -1:, :]', sp=sp, k=k)
+                    self.dedent()
+                    self.dedent()
+
         self.put('')
 
         self.put('N = tuple(gg.shape[0] for gg in gaussgrid)  # grid dimensions')
@@ -555,6 +606,9 @@ class AsmGenerator(CodegenVisitor):
         self.putf('self.fields = np.empty(N + ({nf},))', nf=self.num_globals)
         if self.num_constants > 0:
             self.putf('self.constants = np.zeros({np})', np=self.num_constants)
+            self.putf('self.update_params({prms})',
+                    prms = ', '.join(par.name + '=' + par.name for par in self.vform.params))
+
         # declare array storage for non-global variables
         if self.vform.precomp:
             self.put('# Temp fields:')
@@ -1101,7 +1155,7 @@ from libc.math cimport fabs, sqrt, exp, log, sin, cos, tan
 import numpy as np
 cimport numpy as np
 
-from pyiga.quadrature import make_tensor_quadrature
+from pyiga.quadrature import make_tensor_quadrature, make_boundary_quadrature
 
 from pyiga.assemble_tools_cy cimport (
     BaseAssembler1D, BaseAssembler2D, BaseAssembler3D,

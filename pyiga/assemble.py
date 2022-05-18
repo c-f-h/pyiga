@@ -834,7 +834,7 @@ def _assemble_hspace(problem, hs, args, bfuns=None, symmetric=False, format='csr
         hdiscr = HDiscretization(hs, None, asm_args=args)
         return hdiscr.assemble_functional(problem)
 
-def assemble(problem, kvs, args=None, bfuns=None, symmetric=False, format='csr', layout='blocked', **kwargs):
+def assemble(problem, kvs, args=None, bfuns=None, boundary=None, symmetric=False, format='csr', layout='blocked', **kwargs):
     """Assemble a matrix or vector in a function space.
 
     Args:
@@ -893,15 +893,30 @@ def assemble(problem, kvs, args=None, bfuns=None, symmetric=False, format='csr',
         return _assemble_hspace(problem, kvs, bfuns=bfuns, symmetric=symmetric,
                 format=format, layout=layout, args=args)
     else:
-        asm = instantiate_assembler(problem, kvs, args, bfuns)
+        asm = instantiate_assembler(problem, kvs, args, bfuns, boundary)
         return assemble_entries(asm, symmetric=symmetric, format=format, layout=layout)
 
-def instantiate_assembler(problem, kvs, args, bfuns, updatable=[]):
+def _Jac_to_boundary_matrix(bdspec, dim):
+    """Compute a `dim x (dim-1)` matrix which restricts the Jacobian for a volumetric geometry map
+    to the Jacobian for the boundary `bdspec`. Signs are chosen such that the resulting normal
+    vector points outside assuming that the patch has positive orientation (`det(J) > 0`).
+    """
+    ax, side = bdspec
+    ax = dim - 1 - ax       # last axis refers to x coordinate
+    I = np.eye(dim)
+    # change the signs so that normal vector for lower limit has correct orientation
+    I[:, 0::2] *= -1        # this is sufficient for 2D and 3D; higher dimensions not worked out!
+    B = np.hstack((I[:, :ax], I[:, ax+1:]))
+    if side != 0:           # for the upper limit, we need to flip the normal vector
+        B[:, 0] *= -1
+    return B
+
+def instantiate_assembler(problem, kvs, args, bfuns, boundary=None, updatable=[]):
     from . import vform
 
     # parse string to VForm
     if isinstance(problem, str):
-        problem = vform.parse_vf(problem, kvs, args=args, bfuns=bfuns, updatable=updatable)
+        problem = vform.parse_vf(problem, kvs, args=args, bfuns=bfuns, boundary=bool(boundary), updatable=updatable)
 
     num_spaces = 1          # by default, only one space
 
@@ -916,7 +931,15 @@ def instantiate_assembler(problem, kvs, args, bfuns, updatable=[]):
         # check that all named inputs have been passed and extract the used args
         # (it is valid to specify additional, non-used args)
         used_args = dict()
-        for inp in problem.inputs().keys():
+
+        if boundary:
+            # parse the bdspec and pass both `boundary` and the `Jac_to_boundary` matrix
+            # to the assembler
+            bdspec = bspline._parse_bdspec(boundary, len(kvs))
+            used_args['boundary'] = bdspec
+            args['Jac_to_boundary'] = _Jac_to_boundary_matrix(bdspec, len(kvs))
+
+        for inp in itertools.chain(problem.inputs().keys(), problem.parameters().keys()):
             if inp not in args:
                 raise ValueError("required input parameter '%s' missing" % inp)
             used_args[inp] = args[inp]
@@ -927,14 +950,6 @@ def instantiate_assembler(problem, kvs, args, bfuns, updatable=[]):
             assert num_spaces == 2, 'no more than two spaces allowed'
             asm = problem(kvs[0], kvs[1], **used_args)
 
-        if hasattr(asm, 'update_params'):
-            params = asm.parameters().keys()
-            param_values = {}
-            for p in params:
-                if p not in args:
-                    raise ValueError("required constant parameter '%s' missing" % p)
-                param_values[p] = args[p]
-            asm.update_params(**param_values)
         return asm
 
     # if we land here, problem has invalid type
@@ -956,13 +971,13 @@ class Assembler:
     considered updatable. The other arguments have the same meaning as for
     :func:`assemble`.
     """
-    def __init__(self, problem, kvs, args=None, bfuns=None, symmetric=False, updatable=[], **kwargs):
+    def __init__(self, problem, kvs, args=None, bfuns=None, boundary=None, symmetric=False, updatable=[], **kwargs):
         if args is None:
             args = dict()
         args.update(kwargs)
         self.symmetric = bool(symmetric)
         self.updatable = tuple(updatable)
-        self.asm = instantiate_assembler(problem, kvs, args, bfuns, self.updatable)
+        self.asm = instantiate_assembler(problem, kvs, args, bfuns, boundary, self.updatable)
         if not all(upd_name in self.asm.inputs().keys() for upd_name in self.updatable):
             raise ValueError('Assembler received an updatable argument which is not an assembler input')
 

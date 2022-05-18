@@ -13,7 +13,7 @@ from libc.math cimport fabs, sqrt, exp, log, sin, cos, tan
 import numpy as np
 cimport numpy as np
 
-from pyiga.quadrature import make_tensor_quadrature
+from pyiga.quadrature import make_tensor_quadrature, make_boundary_quadrature
 
 from pyiga.assemble_tools_cy cimport (
     BaseAssembler1D, BaseAssembler2D, BaseAssembler3D,

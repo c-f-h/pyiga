@@ -23,6 +23,7 @@ install:
 build: off
 
 test_script:
+  - pip install networkx==2.6       # last version to support Python 3.7
   - python setup.py install
   - python setup.py build_ext -i
   - python -m pytest -v

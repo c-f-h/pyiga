@@ -379,6 +379,26 @@ def test_assemble_boundary_vector():
     nv = assemble('inner(v, n) * ds', kvs, bfuns=[('v', 2)], geo=geo, boundary='top', layout='packed')
     assert np.allclose(nv.sum(axis=(0,1)), [0, +1])
 
+def test_assemble_boundary_matrix():
+    # set up space and geo
+    kvs = (bspline.make_knots(3, 0.0, 1.0, 3),
+           bspline.make_knots(3, 0.0, 1.0, 4),
+           bspline.make_knots(3, 0.0, 1.0, 5))
+
+    # cylinder built on a quarter annulus
+    geo_3d = geometry.tensor_product(
+            geometry.line_segment(0.0, 1.0),
+            geometry.quarter_annulus())
+    A = assemble('inner(grad(u), grad(v)) * ds', kvs, geo=geo_3d, boundary='left')
+    assert A.shape == (6 * 7, 6 * 7)
+    A = assemble('inner(grad(u), grad(v)) * ds', kvs, geo=geo_3d, boundary='top')
+    assert A.shape == (6 * 8, 6 * 8)
+    # assemble only the tangential components (equivalent to 2D Laplacian since 'front' is plane)
+    A = assemble('inner(cross(n, grad(u)), cross(n, grad(v))) * ds', kvs, geo=geo_3d, boundary='front')
+    assert A.shape == (7 * 8, 7 * 8)
+    A2 = stiffness(kvs[1:], geo=geometry.quarter_annulus())
+    assert np.allclose(A.A, A2.A)
+
 def test_assemble_vf_with_params():
     geo = geometry.quarter_annulus()
     kvs = 2 * (bspline.make_knots(3, 0.0, 1.0, 10),)

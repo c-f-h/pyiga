@@ -525,7 +525,6 @@ class AsmGenerator(CodegenVisitor):
         self.putf('self.nqp = max([kv.p for kv in {kvs}]) + 1', kvs=' + '.join(used_kvs))
         if len(used_spaces) == 1:
             self.put('kvs1 = kvs0')
-        self.put('self.kvs = (kvs0, kvs1)')
 
         if self.vec:
             numcomp = vf.num_components()
@@ -654,6 +653,14 @@ class AsmGenerator(CodegenVisitor):
             self.put(')')
 
         self.initialize_custom_fields()
+
+        if vf.is_boundary_integral():
+            # eliminate the unused knotvector normal to the boundary;
+            # these kvs are used to determine the matrix structure in assemble_entries()
+            self.put('kvs0 = kvs0[:boundary[0]] + kvs0[boundary[0]+1:]')
+            self.put('kvs1 = kvs1[:boundary[0]] + kvs1[boundary[0]+1:]')
+        self.put('self.kvs = (kvs0, kvs1)')
+
         self.end_function()
 
     def field_var_entry(self, var, idx, first_entry=False):

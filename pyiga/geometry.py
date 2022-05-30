@@ -381,12 +381,18 @@ class _BoundaryFunction(bspline._BaseGeoFunc):
     """A function which represents the evaluation of the given function `f` at
     one side of its boundary, thus reducing `sdim` by one.
     """
-    def __init__(self, f, bdspec):
+    def __init__(self, f, bdspec flip = None):
+        
+        if flip is None:
+            flip = self.sdim*(False,)
+        self.flip = tuple(flip)
+        
         self.f = f
         axis, side = bspline._parse_bdspec(bdspec, f.sdim)
         lohi = f.support[axis]
         self.fixed_coord = (lohi[0] if side==0 else lohi[1])
         self.axis = axis
+        self.side = side
         self.support = f.support[:axis] + f.support[axis+1:]
         self.dim = f.dim
         self.sdim = f.sdim - 1
@@ -400,13 +406,13 @@ class _BoundaryFunction(bspline._BaseGeoFunc):
         return self.f(*x)
 
     def grid_eval(self, gridaxes):
-        gridaxes = list(gridaxes)
+        gridaxes = [1 - grid if flp else grid for grid, supp, flp in zip(gridaxes, self.support, self.flip)]
         gridaxes.insert(self.axis, np.array([self.fixed_coord]))
         vals = utils.grid_eval(self.f, gridaxes)
         return vals.squeeze(self.axis)
 
     def grid_jacobian(self, gridaxes, keep_normal=False):
-        gridaxes = list(gridaxes)
+        gridaxes = [1 - grid if flp else grid for grid, supp, flp in zip(gridaxes, self.support, self.flip)]
         gridaxes.insert(self.axis, np.array([self.fixed_coord]))
         jacs = self.f.grid_jacobian(gridaxes)
         jacs = jacs.squeeze(self.axis)
@@ -417,6 +423,25 @@ class _BoundaryFunction(bspline._BaseGeoFunc):
             jacs = np.concatenate((jacs[..., :ax], jacs[..., ax+1:]),
                     axis=-1)
         return jacs
+    
+    def grid_outer_normal(self, gridaxes):
+        gridaxes = [1 - np.flip(grid) if flp else grid for grid, supp, flp in zip(gridaxes, self.support, self.flip)]
+        N = [len(grid) for grid in gridaxes]
+        #gridaxes.insert(self.axis, np.array([self.fixed_coord]))
+        jacs = self.grid_jacobian(gridaxes, keep_normal=False)
+        if self.dim==2 and self.sdim==1:     # line integral
+            x = jacs
+            di=-1 if self.axis != self.side else 1
+            x[:,0]=-x[:,0]
+            x[:,[0,1]]=x[:,[1,0]]
+            return di*x/np.linalg.norm(x,axis=1)[:,None]
+        elif self.dim==3 and self.sdim==2:   # surface integral
+            di=-1 if (self.axis+self.side)%2==0 else 1
+            x, y = jacs[:,:,:,0], jacs[:,:,:,1]
+            un=np.cross(x, y).reshape(N[0],N[1],3,1)
+            return di*un/np.linalg.norm(un,axis=2)[:,:,None]
+        else:
+            assert False, 'do not know how to compute normal vector for Jacobian shape {}'.format(jacs.shape)
 
 ################################################################################
 # Examples of 2D geometries

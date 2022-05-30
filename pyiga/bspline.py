@@ -32,6 +32,30 @@ def _parse_bdspec(bdspec, dim):
                 % (bdspec, dim))
     return bd
 
+def is_sub_space(kv1,kv2):
+    """Checks if the spline space induced by the knot vector kv1 is a subspace of the corresponding spline space induced by kv2 in some subinterval of kv1.
+    
+    Currently only covers cases with the same spline degree `p`.
+    
+    """
+    assert kv1.p == kv2.p
+    
+    a1, b1 = kv1.support()
+    a2, b2 = kv2.support()
+    
+    if a2 < a1 or b2 > b1:
+        return False
+
+    return all([any(np.isclose(k,kv2.mesh)) for k in kv1.mesh if a2 <= k <= b2])
+
+def multi_indices(N, k=0):
+    assert N>0 and k>=0, "N must be positive and k non-negative."
+    if N==1:
+        yield (k,)
+    else:
+        for i in range(k,-1,-1):
+            for j in multi_indices(N-1,k-i):
+                yield (i,) + j
 
 class KnotVector:
     """Represents an open B-spline knot vector together with a spline degree.
@@ -611,6 +635,21 @@ def collocation(kv, nodes):
 
     return scipy.sparse.coo_matrix((values.ravel(), (I,J)), shape=(m,n)).tocsr()
 
+def collocation_tp(kvs, gridaxes):
+    """Compute collocation matrix for Tensor product B-spline basis at the given interpolation grid"""
+    dim=len(kvs)
+    assert len(gridaxes)==dim,"Input has wrong dimension."
+    if not all(np.ndim(ax) == 1 for ax in gridaxes):
+            gridaxes = tuple(np.squeeze(ax) for ax in gridaxes)
+            assert all(ax.ndim == 1 for ax in gridaxes), \
+                "Grid axes should be one-dimensional"
+    
+    Colloc = [bspline.collocation(kvs[d],gridaxes[d]) for d in range(dim)]
+    C = Colloc[0]
+    for d in range(1,dim):
+        C = scipy.sparse.kron(Colloc[d],C)
+    return C
+
 def collocation_info(kv, nodes):
     """Return two arrays: one containing the index of the first active B-spline
     per evaluation node, and one containing, per node, the coefficient vector
@@ -645,6 +684,29 @@ def collocation_derivs(kv, nodes, derivs=1):
 
     return [scipy.sparse.coo_matrix((values[d].ravel(), (I,J)), shape=(m,n)).tocsr()
             for d in range(derivs + 1)]
+
+def collocation_derivs_tp(kvs, gridaxes, derivs=1):
+    """Compute collocation matrix and derivative collocation matrices for Tensor product B-spline
+    basis at the given grid.
+
+    Returns a list of derivs+1 lists containing collocation matrices for derivatives of order derivs as sparse CSR matrices with shape (m,n) where me is the number of gridpoints
+    and n the  overall number of basis functions related to kvs."""
+    dim=len(kvs)
+    assert len(gridaxes)==dim,"Input has wrong dimension."
+    if not all(np.ndim(ax) == 1 for ax in gridaxes):
+            gridaxes = tuple(np.squeeze(ax) for ax in gridaxes)
+            assert all(ax.ndim == 1 for ax in gridaxes), \
+                "Grid axes should be one-dimensional"
+    
+    Colloc = [bspline.collocation_derivs(kvs[d],gridaxes[d],derivs=derivs) for d in range(dim)]
+    D = [[] for k in range(derivs+1)]
+    for k in range(derivs+1):
+        for ind in multi_indices(dim,k):
+            C=Colloc[0][ind[0]]
+            for d in range(1,dim):
+                C = scipy.sparse.kron(Colloc[d][ind[d]],C)
+            D[k].append(C)
+    return D
 
 def collocation_derivs_info(kv, nodes, derivs=1):
     """Similar to :func:`collocation_info`, but the second array also contains

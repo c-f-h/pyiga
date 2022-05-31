@@ -121,6 +121,25 @@ class NurbsFunc(bspline._BaseSplineFunc):
         if self._isscalar:
             J = np.squeeze(J, -2)           # eliminate scalar axis
         return J
+    
+    def grid_outer_normal(self, gridaxes):
+        gridaxes = list(gridaxes)
+        N = [len(grid) for grid in gridaxes]
+        #gridaxes.insert(self.axis, np.array([self.fixed_coord]))
+        jacs = self.grid_jacobian(gridaxes)
+        if self.dim==2 and self.sdim==1:     # line integral
+            x = jacs
+            #di=-1 if self.axis != self.side else 1
+            x[:,0]=-x[:,0]
+            x[:,[0,1]]=x[:,[1,0]]
+            return x/np.linalg.norm(x,axis=1)[:,None]
+        elif self.dim==3 and self.sdim==2:   # surface integral
+            #di=-1 if (self.axis+self.side)%2==0 else 1
+            x, y = jacs[:,:,:,0], jacs[:,:,:,1]
+            un=np.cross(x, y).reshape(N[0],N[1],3,1)
+            return un/np.linalg.norm(un,axis=2)[:,:,None]
+        else:
+            assert False, 'do not know how to compute normal vector for Jacobian shape {}'.format(jacs.shape)
 
     def grid_hessian(self, gridaxes):
         bsp = BSplineFunc(self.kvs, self.coeffs)
@@ -185,7 +204,7 @@ class NurbsFunc(bspline._BaseSplineFunc):
             J = np.squeeze(J, -2)           # eliminate scalar axis
         return J
 
-    def boundary(self, bdspec):
+    def boundary(self, bdspec, flip = None):
         """Return one side of the boundary as a :class:`NurbsFunc`.
 
         Args:
@@ -195,10 +214,14 @@ class NurbsFunc(bspline._BaseSplineFunc):
             :class:`NurbsFunc`: representation of the boundary side;
             has `sdim` reduced by 1 and the same `dim` as this function
         """
+        if flip is None:
+            flip = self.sdim*(False,)
+        self.flip = tuple(flip)
+        
         if self._support_override:
             # if we have reduced support, the boundary may not be
             # interpolatory; return a custom function
-            return bspline._BaseGeoFunc.boundary(self, bdspec)
+            return bspline._BaseGeoFunc.boundary(self, bdspec, flip=flip)
 
         axis, side = bspline._parse_bdspec(bdspec, self.sdim)
         assert 0 <= axis < self.sdim, 'Invalid axis'
@@ -381,11 +404,7 @@ class _BoundaryFunction(bspline._BaseGeoFunc):
     """A function which represents the evaluation of the given function `f` at
     one side of its boundary, thus reducing `sdim` by one.
     """
-    def __init__(self, f, bdspec flip = None):
-        
-        if flip is None:
-            flip = self.sdim*(False,)
-        self.flip = tuple(flip)
+    def __init__(self, f, bdspec, flip = None):
         
         self.f = f
         axis, side = bspline._parse_bdspec(bdspec, f.sdim)
@@ -396,6 +415,10 @@ class _BoundaryFunction(bspline._BaseGeoFunc):
         self.support = f.support[:axis] + f.support[axis+1:]
         self.dim = f.dim
         self.sdim = f.sdim - 1
+        
+        if flip is None:
+            flip = self.sdim*(False,)
+        self.flip = tuple(flip)
 
     def output_shape(self):
         return self.f.output_shape()

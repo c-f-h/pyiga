@@ -644,7 +644,7 @@ def collocation_tp(kvs, gridaxes):
             assert all(ax.ndim == 1 for ax in gridaxes), \
                 "Grid axes should be one-dimensional"
     
-    Colloc = [bspline.collocation(kvs[d],gridaxes[d]) for d in range(dim)]
+    Colloc = [collocation(kvs[d],gridaxes[d]) for d in range(dim)]
     C = Colloc[0]
     for d in range(1,dim):
         C = scipy.sparse.kron(Colloc[d],C)
@@ -698,7 +698,7 @@ def collocation_derivs_tp(kvs, gridaxes, derivs=1):
             assert all(ax.ndim == 1 for ax in gridaxes), \
                 "Grid axes should be one-dimensional"
     
-    Colloc = [bspline.collocation_derivs(kvs[d],gridaxes[d],derivs=derivs) for d in range(dim)]
+    Colloc = [collocation_derivs(kvs[d],gridaxes[d],derivs=derivs) for d in range(dim)]
     D = [[] for k in range(derivs+1)]
     for k in range(derivs+1):
         for ind in multi_indices(dim,k):
@@ -846,7 +846,7 @@ class _BaseGeoFunc:
         else:
             raise ValueError('Could not find coordinates for desired point %s' % (x,))
 
-    def boundary(self, bdspec):
+    def boundary(self, bdspec, flip = None):
         """Return one side of the boundary as a :class:`.UserFunction`.
 
         Args:
@@ -857,7 +857,7 @@ class _BaseGeoFunc:
             has `sdim` reduced by 1 and the same `dim` as this function
         """
         from .geometry import _BoundaryFunction
-        return _BoundaryFunction(self, bdspec)
+        return _BoundaryFunction(self, bdspec, flip=flip)
 
 class _BaseSplineFunc(_BaseGeoFunc):
     def eval(self, *x):
@@ -981,6 +981,25 @@ class BSplineFunc(_BaseSplineFunc):
             ops = [colloc[j][1 if j==i else 0] for j in range(self.sdim)] # deriv. in i-th direction
             grad_components.append(apply_tprod(ops, self.coeffs))   # shape: shape(grid) x self.dim
         return np.stack(grad_components, axis=-1)   # shape: shape(grid) x self.dim x self.sdim
+    
+    def grid_outer_normal(self, gridaxes):
+        gridaxes = list(gridaxes)
+        N = [len(grid) for grid in gridaxes]
+        #gridaxes.insert(self.axis, np.array([self.fixed_coord]))
+        jacs = self.grid_jacobian(gridaxes)
+        if self.dim==2 and self.sdim==1:     # line integral
+            x = jacs
+            #di=-1 if self.axis != self.side else 1
+            x[:,0]=-x[:,0]
+            x[:,[0,1]]=x[:,[1,0]]
+            return x/np.linalg.norm(x,axis=1)[:,None]
+        elif self.dim==3 and self.sdim==2:   # surface integral
+            #di=-1 if (self.axis+self.side)%2==0 else 1
+            x, y = jacs[:,:,:,0], jacs[:,:,:,1]
+            un=np.cross(x, y).reshape(N[0],N[1],3,1)
+            return un/np.linalg.norm(un,axis=2)[:,:,None]
+        else:
+            assert False, 'do not know how to compute normal vector for Jacobian shape {}'.format(jacs.shape)
 
     def grid_hessian(self, gridaxes):
         """Evaluate the Hessian matrix of a scalar or vector function on a tensor product grid.

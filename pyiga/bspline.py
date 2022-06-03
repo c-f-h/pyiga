@@ -38,6 +38,7 @@ def is_sub_space(kv1,kv2):
     Currently only covers cases with the same spline degree `p`.
     
     """
+    assert len()
     assert kv1.p == kv2.p
     
     a1, b1 = kv1.support()
@@ -647,7 +648,7 @@ def collocation_tp(kvs, gridaxes):
     Colloc = [collocation(kvs[d],gridaxes[d]) for d in range(dim)]
     C = Colloc[0]
     for d in range(1,dim):
-        C = scipy.sparse.kron(Colloc[d],C)
+        C = scipy.sparse.kron(C,Colloc[d])
     return C
 
 def collocation_info(kv, nodes):
@@ -704,7 +705,7 @@ def collocation_derivs_tp(kvs, gridaxes, derivs=1):
         for ind in multi_indices(dim,k):
             C=Colloc[0][ind[0]]
             for d in range(1,dim):
-                C = scipy.sparse.kron(Colloc[d][ind[d]],C)
+                C = scipy.sparse.kron(C,Colloc[d][ind[d]])
             D[k].append(C)
     return D
 

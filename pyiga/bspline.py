@@ -38,7 +38,6 @@ def is_sub_space(kv1,kv2):
     Currently only covers cases with the same spline degree `p`.
     
     """
-    assert len()
     assert kv1.p == kv2.p
     
     a1, b1 = kv1.support()

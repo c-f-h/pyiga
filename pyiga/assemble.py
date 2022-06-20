@@ -366,14 +366,35 @@ def slice_indices(ax, idx, shape, ravel=False, flip=None):
         multi_indices = np.ravel_multi_index(multi_indices.T, shape)
     return multi_indices
 
-def boundary_dofs(kvs, bdspec, ravel=False, flip=None):
+def boundary_dofs(kvs, bdspec, ravel=False, flip=None, k=0):
     """Indices of the dofs which lie on the given boundary of the tensor
     product basis `kvs`. Output format is as for :func:`slice_indices`.
     """
     bdax, bdside = bspline._parse_bdspec(bdspec, len(kvs))
-    idx = (0 if bdside==0 else -1)
+    idx = (np.arange(k+1) if bdside==0 else np.arange(-1,-k-2,-1))
     N = tuple(kv.numdofs for kv in kvs)
-    return slice_indices(bdax, idx, N, ravel=ravel, flip=flip)
+    dofs=[slice_indices(bdax, idx, N, ravel=ravel, flip=flip) for idx in idx]
+    return np.concatenate(dofs)
+
+def boundary_kv(kvs, bdspec, flip=None):
+    if flip is None:
+        flip=(len(kvs)-1)*(False,)
+    (ax,_) = bdspec
+    bkvs = (bspline.KnotVector(1-np.flip(kv.kv),kv.p) if flp else kv for kv, flp in zip(kvs[:ax]+kvs[(ax+1):],flip))
+    return tuple(bkvs)
+
+def corner_dof(kvs, cspec):
+    N = tuple(kv.numdofs for kv in kvs)
+    if cspec == (0,0):
+        return 0
+    elif cspec == (0,1):
+        return N[1]-1
+    elif cspec == (1,0):
+        return N[1]*(N[0]-1)
+    elif cspec == (1,1):
+        return N[0]*N[1]-1
+    else:
+        assert False, 'Wrong input specification.'
 
 def boundary_cells(kvs, bdspec, ravel=False):
     """Indices of the cells which lie on the given boundary of the tensor
@@ -1005,6 +1026,12 @@ class Assembler:
 ################################################################################
 # Convenience functions
 ################################################################################
+
+def int_to_bdspec(i):
+    return (i//2,i%2)
+
+def bdspec_to_int(i):
+    return 2*i[0]+i[1]
 
 def _detect_dim(kvs):
     if isinstance(kvs, bspline.KnotVector):

@@ -38,7 +38,6 @@ def is_sub_space(kv1,kv2):
     Currently only covers cases with the same spline degree `p`.
     
     """
-    assert len()
     assert kv1.p == kv2.p
     
     a1, b1 = kv1.support()
@@ -48,6 +47,7 @@ def is_sub_space(kv1,kv2):
         return False
 
     return all([any(np.isclose(k,kv2.mesh)) for k in kv1.mesh if a2 <= k <= b2])
+
 
 def multi_indices(N, k=0):
     assert N>0 and k>=0, "N must be positive and k non-negative."

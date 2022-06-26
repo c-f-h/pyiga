@@ -198,12 +198,14 @@ class KnotVector:
             # support interval; clamp them manually to avoid problems later on
             return np.clip(g, self.kv[0], self.kv[-1])
 
-    def refine(self, new_knots=None):
+    def refine(self, new_knots=None, mult=1):
         """Return the refinement of this knot vector by inserting `new_knots`,
         or performing uniform refinement if none are given."""
         if new_knots is None:
             mesh = self.mesh
             new_knots = (mesh[1:] + mesh[:-1]) / 2
+            if mult>1:
+                new_knots = np.hstack(mult*[new_knots,])
         kvnew = np.sort(np.concatenate((self.kv, new_knots)))
         return KnotVector(kvnew, self.p)
 

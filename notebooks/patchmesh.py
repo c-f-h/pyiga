@@ -149,14 +149,14 @@ class PatchMesh:
         self.interfaces[S0] = (S1, flip)
         self.interfaces[S1] = (S0, flip)
         
-    def refine(self, patches = None):
+    def refine(self, patches = None, mult=1):
         if patches==None:
             patches = np.arange(self.numpatches)
         if np.isscalar(patches):
             patches=(patches,)
         for p in patches:
             (kvs,geo), b = self.patches[p]
-            new_kvs = tuple([kv.refine() for kv in kvs])
+            new_kvs = tuple([kv.refine(mult=mult) for kv in kvs])
             self.patches[p]=((new_kvs, geo), b)
 
     def _reindex_interfaces(self, p, b, old_s, ofs, new_p=None):
@@ -275,22 +275,25 @@ class PatchMesh:
         # find segment where xi_split would need to be inserted to maintain order
         return np.searchsorted(bd_vtx_xi, xi_split) - 1
 
-    def split_patch(self, p, axis = None):
+    def split_patch(self, p, axis = None, mult=1):
         if axis == None:
-            p1_, p2_ = self.split_patch(p, 1)
-            p1, p3 = self.split_patch(p1_, 0)
-            p2, p4 = self.split_patch(p2_, 0)
+            p1_, p2_ = self.split_patch(p, 1,mult=mult)
+            p1, p3 = self.split_patch(p1_, 0,mult=mult)
+            p2, p4 = self.split_patch(p2_, 0,mult=mult)
             return p1, p2, p3, p4
         
         (kvs, geo), boundaries = self.patches[p]
-        kv = kvs[axis].refine()
+        kv = kvs[axis].refine(mult=mult)
 
         #split_xi = sum(kv.support())/2.0
         #split_idx = kv.findspan(split_xi)+1
      
-        split_idx = len(kv.kv) // 2
+        m_idx = len(kv.mesh)//2
+        mesh_ofs = kv.mesh_span_indices()
+        split_idx = mesh_ofs[m_idx]
+        split_mult = mesh_ofs[m_idx]-mesh_ofs[m_idx-1]
         split_xi = kv.kv[split_idx]    # parameter value where we split the KV
-        new_knots1 = np.concatenate((kv.kv[:split_idx], (kv.p+1) * (split_xi,)))
+        new_knots1 = np.concatenate((kv.kv[:split_idx], (kv.p+1-(mult-1)) * (split_xi,)))
 
         #new_knots2 = np.concatenate(((kv.p+1) * (split_xi,), kv.kv[split_idx:]))
         
@@ -374,7 +377,7 @@ class PatchMesh:
         return p, new_p     # return the two indices of the split patches
     
             
-    def split_patches(self, dir_data, patches=None, axis=None):
+    def split_patches(self, dir_data, patches=None, axis=None, mult=1):
         if np.isscalar(patches):
             patches=(patches,)
         if patches==None:
@@ -386,7 +389,7 @@ class PatchMesh:
         assert len(patches)==len(axis), 'Splitting information does not match with the number of given patches to be split.'
         
         for ax, p in zip(np.array(axis), patches):
-            split_dirichlet_data(p, self.numpatches, dir_data, axis=ax), self.split_patch(p,axis=ax)
+            split_dirichlet_data(p, self.numpatches, dir_data, axis=ax), self.split_patch(p,axis=ax,mult=mult)
 
     def boundaries(self, p):
         """Get the boundaries for patch `p`.

@@ -81,7 +81,6 @@ class PatchMesh:
         self.T_nodes = dict()
 
         if patches:
-            
             # add interfaces between patches
             conn, interfaces = assemble.detect_interfaces(patches)
             assert conn, 'patch graph is not connected!'
@@ -277,14 +276,16 @@ class PatchMesh:
 
     def split_patch(self, p, axis = None, mult=1):
         if axis == None:
-            p1_, p2_ = self.split_patch(p, 1,mult=mult)
-            p1, p3 = self.split_patch(p1_, 0,mult=mult)
-            p2, p4 = self.split_patch(p2_, 0,mult=mult)
-            return p1, p2, p3, p4
+            (p1_, p2_), new_kvs_ = self.split_patch(p, 1,mult=mult)
+            (p1, p3), new_kvs1 = self.split_patch(p1_, 0,mult=mult)
+            (p2, p4), new_kvs2 = self.split_patch(p2_, 0,mult=mult)
+            new_kvs = (new_kvs1[0],new_kvs_[1])
+            return (p1, p2, p3, p4), new_kvs
         
         (kvs, geo), boundaries = self.patches[p]
         kv = kvs[axis].refine(mult=mult)
-
+        dim = len(kvs)
+        
         #split_xi = sum(kv.support())/2.0
         #split_idx = kv.findspan(split_xi)+1
      
@@ -294,10 +295,8 @@ class PatchMesh:
         split_mult = mesh_ofs[m_idx]-mesh_ofs[m_idx-1]
         split_xi = kv.kv[split_idx]    # parameter value where we split the KV
         new_knots1 = np.concatenate((kv.kv[:split_idx], (kv.p+1-(mult-1)) * (split_xi,)))
-
-        #new_knots2 = np.concatenate(((kv.p+1) * (split_xi,), kv.kv[split_idx:]))
-        
         new_knots2 = np.concatenate(((kv.p) * (split_xi,), kv.kv[split_idx:]))
+        new_kvs = tuple([bspline.KnotVector(np.concatenate((kv.kv[:split_idx], (kv.p-1) * (split_xi,), kv.kv[split_idx:])),kv.p) if d==axis else kvs[d] for d in range(dim)])
             
         # create new kvs and geo for first patch
         kvs1 = list(kvs)
@@ -374,10 +373,10 @@ class PatchMesh:
         self.patches[p] = ((kvs1, geo1), tuple(boundaries))
         self.patches.append(((kvs2, geo2), tuple(new_boundaries)))
         
-        return p, new_p     # return the two indices of the split patches
+        return (p, new_p), new_kvs     # return the two indices of the split patches
     
             
-    def split_patches(self, dir_data, patches=None, axis=None, mult=1):
+    def split_patches(self, patches=None, axis=None, mult=1, dir_data = None):
         if np.isscalar(patches):
             patches=(patches,)
         if patches==None:
@@ -388,8 +387,18 @@ class PatchMesh:
             axis = len(patches)*(None,)
         assert len(patches)==len(axis), 'Splitting information does not match with the number of given patches to be split.'
         
+        new_patches = dict()
+        new_kvs = dict()
         for ax, p in zip(np.array(axis), patches):
-            split_dirichlet_data(p, self.numpatches, dir_data, axis=ax), self.split_patch(p,axis=ax,mult=mult)
+            if dir_data==None:
+                new_p, new_kvs_ = self.split_patch(p,axis=ax,mult=mult)
+            else:
+                split_dirichlet_data(p, self.numpatches, dir_data, axis=ax)
+                new_p, new_kvs_= self.split_patch(p,axis=ax,mult=mult)
+            new_patches[p] = new_p
+            new_kvs[p] = new_kvs_
+            
+        return new_patches, new_kvs
 
     def boundaries(self, p):
         """Get the boundaries for patch `p`.
@@ -412,7 +421,7 @@ class PatchMesh:
             return None     # no matching segment - must be on the boundary
 
     def draw(self, vertex_idx = False, patch_idx = False, nodes=False, figsize=(8,8)):
-        
+        """draws a visualization of the patchmesh in 2D."""
         fig=plt.figure(figsize=figsize)
         for ((kvs, geo),_) in self.patches:
             vis.plot_geo(geo, gridx=kvs[0].mesh,gridy=kvs[1].mesh, color='lightgray')

@@ -776,6 +776,29 @@ def prolongation(kv1, kv2):
     P[np.abs(P) < 1e-15] = 0.0
     return scipy.sparse.csr_matrix(P)
 
+def prolongation_tp(kvs1, kvs2):
+    """Compute prolongation matrix between Tensor product B-spline bases.
+
+    Given two Tensor product B-spline bases, where the first spans a subspace of the second
+    one, compute the matrix which maps spline coefficients from the first
+    basis to the coefficients of the same function in the second basis.
+
+    Args:
+        kvs1 (tuple(:class:`KnotVector`)): tuple of source B-spline basis knot vectors
+        kvs2 (tuple(:class:`KnotVector`)): tuple of target B-spline basis knot vectors
+
+    Returns:
+        csr_matrix: sparse matrix which prolongs coefficients from `kvs1` to `kvs2`
+    """
+    assert len(kvs1)==len(kvs2), "Number of dimensions does not match!"
+    dim = len(kvs1)
+    
+    Prol = [prolongation(kvs1[d],kvs2[d]) for d in range(dim)]
+    P = Prol[0]
+    for d in range(1,dim):
+        P = scipy.sparse.kron(P, Prol[d])
+    return P
+    
 def knot_insertion(kv, u):
     """Return a sparse matrix of size `(n+1) x n`, with `n = kv.numdofs´, which
     maps coefficients from `kv` to a new knot vector obtained by inserting the

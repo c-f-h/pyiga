@@ -383,18 +383,28 @@ def boundary_kv(kvs, bdspec, flip=None):
     bkvs = (bspline.KnotVector(1-np.flip(kv.kv),kv.p) if flp else kv for kv, flp in zip(kvs[:ax]+kvs[(ax+1):],flip))
     return tuple(bkvs)
 
-def corner_dof(kvs, cspec):
+def corner_dofs(kvs, cspec, k=[0,0], ravel=False):
     N = tuple(kv.numdofs for kv in kvs)
+    assert len(k) == len(kvs), "dimension error."
+    dim = len(kvs)
+    
+    #2D hardcoded for now
     if cspec == (0,0):
-        return 0
+        bdspecs = [(0,0), (1,0)]  #bottom and left
     elif cspec == (0,1):
-        return N[1]-1
+        bdspecs = [(0,0), (1,1)]  #bottom and right
     elif cspec == (1,0):
-        return N[1]*(N[0]-1)
+        bdspecs = [(0,1), (1,0)]  #top and left
     elif cspec == (1,1):
-        return N[0]*N[1]-1
+        bdspecs = [(0,1), (1,1)]  #top and right
     else:
         assert False, 'Wrong input specification.'
+        
+    bdaxes, bdsides = [bdspec[0] for bdspec in bdspecs], [bdspec[1] for bdspec in bdspecs]
+    idx = [np.arange(k_+1) if bdsides[i]==0 else np.arange(-1,-k_-2,-1) for i,k_ in enumerate(k)]
+    dofs=[slice_indices(bdaxes[0], i, N, ravel=ravel) for i in idx[0]]
+    dofs=[dofs_[idx[1]] for dofs_ in dofs]
+    return np.concatenate(dofs)
 
 def boundary_cells(kvs, bdspec, ravel=False):
     """Indices of the cells which lie on the given boundary of the tensor

@@ -376,25 +376,29 @@ class PatchMesh:
         return (p, new_p), new_kvs     # return the two indices of the split patches
     
             
-    def split_patches(self, patches=None, axis=None, mult=1, dir_data = None):
-        if np.isscalar(patches):
-            patches=(patches,)
-        if patches==None:
-            patches = np.arange(self.numpatches)
-        if np.isscalar(axis):
-            axis=len(patches)*(axis,)
-        if axis==None:
-            axis = len(patches)*(None,)
-        assert len(patches)==len(axis), 'Splitting information does not match with the number of given patches to be split.'
+    def split_patches(self, split_info=None, mult=1, dir_data = None):
         
+        if isinstance(split_info, dict):
+            assert max(split_info.keys())<self.numpatches and min(split_info.keys())>=0, "patch index out of bounds."
+        elif isinstance(split_info,int):
+            assert split_info >=0 and split_info < self.dim, "dimension error."
+            split_info = {p:split_info for p in range(self.numpatches)}
+        elif isinstance(split_info, (list, set, np.ndarray)):
+            assert max(split_info)<self.numpatches and min(split_info)>=0, "patch index out of bounds."
+            split_info = {p:None for p in split_info}
+        elif split_info==None:
+            split_info = {p:None for p in range(self.numpatches)}
+        else:
+            assert 0, "unknown input type"
+
         new_patches = dict()
         new_kvs = dict()
-        for ax, p in zip(np.array(axis), patches):
+        for p in split_info.keys():
             if dir_data==None:
-                new_p, new_kvs_ = self.split_patch(p,axis=ax,mult=mult)
+                new_p, new_kvs_ = self.split_patch(p,axis=split_info[p], mult=mult)
             else:
-                split_dirichlet_data(p, self.numpatches, dir_data, axis=ax)
-                new_p, new_kvs_= self.split_patch(p,axis=ax,mult=mult)
+                split_dirichlet_data(p, self.numpatches, dir_data, axis=split_info[p])
+                new_p, new_kvs_= self.split_patch(p, axis=split_info[p], mult=mult)
             new_patches[p] = new_p
             new_kvs[p] = new_kvs_
             

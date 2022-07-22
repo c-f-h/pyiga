@@ -46,7 +46,6 @@ def split_dirichlet_data(p, n, dir_data, axis = None):
                 dir_data.remove((patch, bd, g))
                 dir_data.append((n, bd, g))    
 
-
 # Data structures:
 #
 # - vertices is a list of topological vertices, the entries are their locations
@@ -149,10 +148,18 @@ class PatchMesh:
         self.interfaces[S1] = (S0, flip)
         
     def refine(self, patches = None, mult=1):
-        if patches==None:
+        if isinstance(patches, dict):
+            assert max(patches.keys())<self.numpatches and min(patches.keys())>=0, "patch index out of bounds."
+            patches = patches.keys()
+        elif isinstance(patches, (list, set, np.ndarray)):
+            assert max(patches)<self.numpatches and min(patches)>=0, "patch index out of bounds."
+        elif patches==None:
             patches = np.arange(self.numpatches)
-        if np.isscalar(patches):
+        elif np.isscalar(patches):
             patches=(patches,)
+        else:
+            assert 0, "unknown input type"
+            
         for p in patches:
             (kvs,geo), b = self.patches[p]
             new_kvs = tuple([kv.refine(mult=mult) for kv in kvs])
@@ -376,29 +383,29 @@ class PatchMesh:
         return (p, new_p), new_kvs     # return the two indices of the split patches
     
             
-    def split_patches(self, split_info=None, mult=1, dir_data = None):
+    def split_patches(self, patches=None, mult=1, dir_data = None):
         
-        if isinstance(split_info, dict):
-            assert max(split_info.keys())<self.numpatches and min(split_info.keys())>=0, "patch index out of bounds."
-        elif isinstance(split_info,int):
-            assert split_info >=0 and split_info < self.dim, "dimension error."
-            split_info = {p:split_info for p in range(self.numpatches)}
-        elif isinstance(split_info, (list, set, np.ndarray)):
-            assert max(split_info)<self.numpatches and min(split_info)>=0, "patch index out of bounds."
-            split_info = {p:None for p in split_info}
-        elif split_info==None:
-            split_info = {p:None for p in range(self.numpatches)}
+        if isinstance(patches, dict):
+            assert max(patches.keys())<self.numpatches and min(patches.keys())>=0, "patch index out of bounds."
+        elif isinstance(patches,int):
+            assert patches >=0 and patches < self.dim, "dimension error."
+            patches = {p:patches for p in range(self.numpatches)}
+        elif isinstance(patches, (list, set, np.ndarray)):
+            assert max(patches)<self.numpatches and min(patches)>=0, "patch index out of bounds."
+            patches = {p:None for p in patches}
+        elif patches==None:
+            patches = {p:None for p in range(self.numpatches)}
         else:
             assert 0, "unknown input type"
 
         new_patches = dict()
         new_kvs = dict()
-        for p in split_info.keys():
+        for p in patches.keys():
             if dir_data==None:
-                new_p, new_kvs_ = self.split_patch(p,axis=split_info[p], mult=mult)
+                new_p, new_kvs_ = self.split_patch(p,axis=patches[p], mult=mult)
             else:
-                split_dirichlet_data(p, self.numpatches, dir_data, axis=split_info[p])
-                new_p, new_kvs_= self.split_patch(p, axis=split_info[p], mult=mult)
+                split_dirichlet_data(p, self.numpatches, dir_data, axis=patches[p])
+                new_p, new_kvs_= self.split_patch(p, axis=patches[p], mult=mult)
             new_patches[p] = new_p
             new_kvs[p] = new_kvs_
             

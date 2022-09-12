@@ -27,13 +27,68 @@ def plot_field(field, geo=None, res=80, physical=False, **kwargs):
 
 
 def plot_geo(geo,
-             grid=10, gridx=None, gridy=None,
+             grid=10, gridx=None, gridy=None, gridz=None,
              res=50,
              linewidth=None, color='black'):
     """Plot a wireframe representation of a 2D geometry."""
-    if geo.sdim == 1 and geo.dim == 2:
+    assert (geo.dim == 2 or geo.dim == 3), 'Can only represent geometries in 2D or 3D!' 
+    if geo.sdim == 1:
         return plot_curve(geo, res=res, linewidth=linewidth, color=color)
-    assert geo.dim == geo.sdim == 2, 'Can only plot 2D geometries'
+    if geo.sdim == 2:
+        return plot_surface(geo, grid=grid, gridx=gridx, gridy=gridy, res=res, linewidth=linewidth, color=color)
+    else:
+        if gridx is None: gridx = grid
+        if gridy is None: gridy = grid
+        if gridz is None: gridz = grid
+    supp = geo.support
+
+    # if gridx/gridy is not an array, build an array with given number of ticks
+    if np.isscalar(gridx):
+        gridx = np.linspace(supp[0][0], supp[0][1], gridx)
+    if np.isscalar(gridy):
+        gridy = np.linspace(supp[1][0], supp[1][1], gridy)
+    if np.isscalar(gridz):
+        gridz = np.linspace(supp[1][0], supp[1][1], gridz)
+
+    meshx = np.linspace(supp[0][0], supp[0][1], res)
+    meshy = np.linspace(supp[1][0], supp[1][1], res)
+    meshz = np.linspace(supp[2][0], supp[2][1], res)
+    
+    def plotline(pts, capstyle='butt', color=color):
+        plt.plot(pts[:,0], pts[:,1], pts[:,2], color=color, linewidth=linewidth,
+            solid_joinstyle='round', solid_capstyle=capstyle)
+
+        
+    pts = utils.grid_eval(geo, (gridx, gridy, meshz))
+    for i in range(0, pts.shape[0]):
+        for j in range(0, pts.shape[1]):
+            if i==0 or i == pts.shape[0]-1 or j==0 or j== pts.shape[1]-1:
+                plotline(pts[i,j,:,:], capstyle='round')
+            else:
+                plotline(pts[i,j,:,:])
+    
+    pts = utils.grid_eval(geo, (gridx, meshy, gridz))
+    for i in range(0, pts.shape[2]):
+        for j in range(0, pts.shape[0]):
+            if i==0 or i == pts.shape[2]-1 or j==0 or j== pts.shape[0]-1:
+                plotline(pts[j,:,i,:], capstyle='round')
+            else:
+                plotline(pts[j,:,i,:])
+
+    pts = utils.grid_eval(geo, (meshx, gridy, gridz))
+    for i in range(0, pts.shape[1]):
+        for j in range(0, pts.shape[2]):
+            if i==0 or i == pts.shape[1]-1 or j==0 or j== pts.shape[2]-1:
+                plotline(pts[:,i,j,:], capstyle='round')
+            else:
+                plotline(pts[:,i,j,:])
+    
+def plot_surface(geo,
+                 grid=10, gridx=None, gridy=None,
+                 res=50,
+                 linewidth=None, color='black'):
+    """Plot a 2D or 3D surface."""
+    assert geo.sdim == 2 and (geo.dim == 2 or geo.dim == 3), "Can only plot surfaces."
     if gridx is None: gridx = grid
     if gridy is None: gridy = grid
     supp = geo.support
@@ -47,8 +102,12 @@ def plot_geo(geo,
     meshx = np.linspace(supp[0][0], supp[0][1], res)
     meshy = np.linspace(supp[1][0], supp[1][1], res)
 
-    def plotline(pts, capstyle='butt'):
-        plt.plot(pts[:,0], pts[:,1], color=color, linewidth=linewidth,
+    def plotline(pts, capstyle='butt', color=color):
+        if geo.dim == 3:
+            plt.plot(pts[:,0], pts[:,1], pts[:,2], color=color, linewidth=linewidth,
+                                       solid_joinstyle='round', solid_capstyle=capstyle)
+        if geo.dim == 2:
+            plt.plot(pts[:,0], pts[:,1], color=color, linewidth=linewidth,
                 solid_joinstyle='round', solid_capstyle=capstyle)
 
     pts = utils.grid_eval(geo, (gridx, meshy))
@@ -66,11 +125,14 @@ def plot_geo(geo,
 
 def plot_curve(geo, res=50, linewidth=None, color='black'):
     """Plot a 2D curve."""
-    assert geo.dim == 2 and geo.sdim == 1, 'Can only plot 2D curves'
+    assert (geo.dim == 2 or geo.dim == 3) and geo.sdim == 1, 'Can only plot 2D curves'
     supp = geo.support
     mesh = np.linspace(supp[0][0], supp[0][1], res)
     pts = utils.grid_eval(geo, (mesh,))
-    plt.plot(pts[:,0], pts[:,1], color=color, linewidth=linewidth)
+    if geo.dim == 3:
+        plt.axes(projection='3d').plot3D(pts[:,0], pts[:,1], pts[:,2], color=color, linewidth=linewidth)
+    if geo.dim == 2:
+        plt.plot(pts[:,0], pts[:,1], color=color, linewidth=linewidth)
 
 
 def animate_field(fields, geo, vrange=None, res=(50,50), cmap=None, interval=50, progress=False):

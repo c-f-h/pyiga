@@ -119,7 +119,7 @@ class PatchMesh3D:
         self.vertices.append(pos)
         return len(self.vertices) - 1
     
-    def add_edge(self, vtx1, vtx2):
+    def add_edge(self, vtx1, vtx2): 
         """Add a new edge from vtx1 to vtx2 or return its index if one already exists there."""
         if (vtx1, vtx2) in self.edges:
             return self.edges.index((vtx1, vtx2))
@@ -325,12 +325,15 @@ class PatchMesh3D:
         
         if axis == 0:                           # z-axis
             split_boundaries = [2, 3, 4, 5]     # bottom, top, left and right were split
-            new_vertices = [self.add_vertex(c) for c in corners(geo1)[1,:,:,:].reshape(-1,3)]
+            C = corners(geo1)[1,:,:,:].reshape(-1,3)
+            new_vertices = [self.add_vertex(c) for c in C]
         elif axis == 1:                         # y-axis
             split_boundaries = [0, 1, 4, 5]     # front, back, left and right were split
-            new_vertices = [self.add_vertex(c) for c in corners(geo1)[:,1,:,:].reshape(-1,3)]
+            C = corners(geo1)[:,1,:,:].reshape(-1,3)
+            new_vertices = [self.add_vertex(c) for c in C]
         elif axis == 2:                         # x-axis
             split_boundaries = [0, 1, 2, 3]     # front, back, bottom and top were split
+            C = corners(geo1)[:,:,1,:].reshape(-1,3)
             new_vertices = [self.add_vertex(c) for c in corners(geo1)[:,:,1,:].reshape(-1,3)]
         else:
             assert False, 'unimplemented'
@@ -420,6 +423,49 @@ class PatchMesh3D:
         else:
             return None     # no matching segment - must be on the boundary
         
+    def draw(self, knots = True, vertex_idx = False, edge_idx=False, patch_idx = False, nodes=False, figsize=(8,8)):
+        """draws a visualization of the patchmesh in 2D."""
+        fig=plt.figure(figsize=figsize)
+        ax = plt.axes(projection='3d')
+        ax.grid(False)
+        
+        for ((kvs, geo),_) in self.patches:
+            if knots:
+                vis.plot_geo(geo, gridx=kvs[0].mesh,gridy=kvs[1].mesh, gridz=kvs[2].mesh, color='lightgray')       
+            else:
+                vis.plot_geo(geo, grid=2, color='lightgray')
+            for axis, side in [(axis, side) for axis in range(3) for side in range(2)]:
+                vis.plot_geo(geo.boundary((axis,side)), grid=2)
+           
+        if nodes:
+            ax.scatter(*np.transpose([vtx[[0,2,1]] for vtx in self.vertices]), color='red')
+
+        if patch_idx:
+            for p in range(len(self.patches)):        # annotate patch indices
+                geo = self.patches[p][0][1]
+                center_xi = np.flipud(np.mean(geo.support, axis=1))
+                center = geo(*center_xi)
+                ax.text(*(center[[0,2,1]]), str(p), fontsize=18, color='green')
+            
+        if vertex_idx:
+            for i, vtx in enumerate(self.vertices):   # annotate vertex indices
+                ax.text(*(vtx[[0,2,1]]), str(i), fontsize=18, color='red')
+                
+        if edge_idx:    ### still need to compute real center of the geometry edge
+            for i, (vtx1, vtx2) in enumerate(self.edges):    #annotate edge indices
+                ax.text(*((self.vertices[vtx1] + self.vertices[vtx2])/2)[[0,2,1]], str(i), fontsize=18, color='royalblue')
+                
+        #ax.invert_xaxis()
+        #ax.invert_yaxis()  
+        #ax.invert_zaxis()  
+        
+        #ax.view_init(azim=-30, elev=-25, roll=-180, vertical_axis='y')
+        ax.set_xlabel('x')
+        ax.set_ylabel('z')
+        ax.set_zlabel('y')
+        #ax.set_aspect('equal')
+        plt.show()
+            
     def sanity_check(self):
         for (p, b, s), ((p1, b1, s1), flip) in self.interfaces.items():
             # check that all interface indices make sense

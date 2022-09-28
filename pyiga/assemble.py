@@ -1152,20 +1152,26 @@ def _bb_rect(G):
 def _check_geo_match(G1, G2, grid=4):
     # check if the two geos match with any possible flip
     if G1.sdim != G2.sdim or G1.dim != G2.dim:
-        return False, None
+        return False, (None, None)
     if not np.allclose(G1.support, G2.support):
-        return False, None
+        return False, (None, None)
     grid = [np.linspace(s[0], s[1], grid) for s in G1.support]
     X1 = G1.grid_eval(grid)
-    all_flips = itertools.product(*(G2.sdim * [(False, True)]))
-    for flip in all_flips:  # try all 2^d possible flips
-        flipped_grid = list(grid)
-        for (i, f) in enumerate(flip):
-            if f: flipped_grid[i] = np.ascontiguousarray(np.flip(flipped_grid[i]))
-        X2 = G2.grid_eval(flipped_grid)
-        if np.allclose(X1, X2):
-            return True, flip
-    return False, None
+
+    for k, perm in enumerate(itertools.permutations(np.arange(G1.sdim))):
+        all_flips = itertools.product(*(G2.sdim * [(False, True)]))
+        for flip in all_flips:  # try all 2^d possible flips
+            flipped_grid = list(grid)
+            for (i, f) in enumerate(flip):
+                if f: flipped_grid[i] = np.ascontiguousarray(np.flip(flipped_grid[i]))
+            X2 = G2.grid_eval(flipped_grid).transpose(perm + (G2.sdim,))
+            if np.allclose(X1, X2):
+                if G1.sdim == 1 or k==0:
+                    return True, (None, flip)
+                print(i)
+                print(perm)
+                return True, (perm, flip)
+    return False, (None, None)
 
 def _find_matching_boundaries(G1, G2):
     # find all interfaces which match between G1 and G2
@@ -1176,9 +1182,9 @@ def _find_matching_boundaries(G1, G2):
         bd1 = G1.boundary(bdspec1)
         for bdspec2 in all_bds:
             bd2 = G2.boundary(bdspec2)
-            match, flip = _check_geo_match(bd1, bd2)
+            match, conn_info = _check_geo_match(bd1, bd2)
             if match:
-                matches.append((bdspec1, bdspec2, flip))
+                matches.append((bdspec1, bdspec2, conn_info))
     return matches
 
 def detect_interfaces(patches):
@@ -1208,8 +1214,8 @@ def detect_interfaces(patches):
             maxdiam = max(diams[p1], diams[p2])
             if mindist < 1e-10 * maxdiam:    # do the bounding boxes touch?
                 matches = _find_matching_boundaries(patches[p1][1], patches[p2][1])
-                for (bd1, bd2, flip) in matches:
-                    interfaces.append((p1, bd1, p2, bd2, flip))
+                for (bd1, bd2, conn_info) in matches:
+                    interfaces.append((p1, bd1, p2, bd2, conn_info))
                 if matches:
                     patch_graph.add_edge(p1, p2)
 

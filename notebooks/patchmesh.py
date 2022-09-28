@@ -59,8 +59,7 @@ class PatchMesh:
             for p, patch in enumerate(patches):
                 kvs, geo = patch
                 # add/get vertices (checks for duplicates)
-                vtx = [self.add_vertex(c) for c in corners(geo)]
-                
+                vtx = [self.add_vertex(c) for c in corners(geo, ravel = True)]
                 # add boundaries in fixed order
                 self.add_patch(patch, (
                     [vtx[0], vtx[1]],    # bottom
@@ -430,11 +429,14 @@ class PatchMesh:
         else:
             return None     # no matching segment - must be on the boundary
 
-    def draw2D(self, vertex_idx = False, patch_idx = False, nodes=False, figsize=(8,8)):
+    def draw(self, knots=True, vertex_idx = False, patch_idx = False, nodes=False, figsize=(8,8)):
         """draws a visualization of the patchmesh in 2D."""
         fig=plt.figure(figsize=figsize)
         for ((kvs, geo),_) in self.patches:
-            vis.plot_geo(geo, gridx=kvs[0].mesh,gridy=kvs[1].mesh, color='lightgray')
+            if knots:
+                vis.plot_geo(geo, gridx=kvs[0].mesh,gridy=kvs[1].mesh, color='lightgray')
+            else:
+                vis.plot_geo(geo, grid=2, color='lightgray')
             for x,y in [(x,y) for x in range(2) for y in range(2)]:
                 vis.plot_geo(geo.boundary((x,y)), grid=2)
            

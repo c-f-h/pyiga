@@ -346,7 +346,6 @@ def inner_products(kvs, f, f_physical=False, geo=None):
 def slice_indices(ax, idx, shape, ravel=False, flip=None):
     """Return dof indices for a slice of a tensor product basis with size
     `shape`. The slice is taken across index `idx` on axis `ax`.
-
     The indices are returned either as a `N × dim` array of multiindices or,
     with `ravel=True`, as an array of sequential (raveled) indices.
     """
@@ -366,15 +365,14 @@ def slice_indices(ax, idx, shape, ravel=False, flip=None):
         multi_indices = np.ravel_multi_index(multi_indices.T, shape)
     return multi_indices
 
-def boundary_dofs(kvs, bdspec, ravel=False, flip=None, k=0):
+def boundary_dofs(kvs, bdspec, ravel=False, flip=None):
     """Indices of the dofs which lie on the given boundary of the tensor
     product basis `kvs`. Output format is as for :func:`slice_indices`.
     """
     bdax, bdside = bspline._parse_bdspec(bdspec, len(kvs))
-    idx = (np.arange(k+1) if bdside==0 else np.arange(-1,-k-2,-1))
+    idx = (0 if bdside==0 else -1)
     N = tuple(kv.numdofs for kv in kvs)
-    dofs=[slice_indices(bdax, idx, N, ravel=ravel, flip=flip) for idx in idx]
-    return np.concatenate(dofs)
+    return slice_indices(bdax, idx, N, ravel=ravel, flip=flip)
 
 def boundary_kv(kvs, bdspec, flip=None):
     if flip is None:
@@ -382,11 +380,6 @@ def boundary_kv(kvs, bdspec, flip=None):
     (ax,_) = bdspec
     bkvs = (bspline.KnotVector(1-np.flip(kv.kv),kv.p) if flp else kv for kv, flp in zip(kvs[:ax]+kvs[(ax+1):],flip))
     return tuple(bkvs)
-
-def corner_dofs(kvs, cspec, k=[0,0], ravel=False):
-    N = tuple(kv.numdofs for kv in kvs)
-    assert len(k) == len(kvs), "dimension error."
-    dim = len(kvs)
     
     #2D hardcoded for now
     if cspec == (0,0):
@@ -1238,9 +1231,10 @@ class Multipatch:
             :meth:`join_boundaries` as often as needed, followed by
             :meth:`finalize`.
     """
-    def __init__(self, patches, automatch=False):
+    def __init__(self, patches, b_data, automatch=False):
         """Initialize a multipatch structure."""
         self.patches = patches
+        self.b_data = b_data
         # number of tensor product dofs per patch
         self.N = [bspline.numdofs(kvs) for (kvs,_) in self.patches]
         # offset to the dofs of the i-th patch
@@ -1255,8 +1249,8 @@ class Multipatch:
             if not connected:
                 print('WARNING: patch graph is not connected - ' +
                         'interface detection may have failed')
-            for intf in interfaces:
-                self.join_boundaries(*intf)
+            for (p1, bd1, p2, bd2, conn_info) in interfaces:
+                self.join_boundaries(p1, bd1, p2, bd2, conn_info[1])
             self.finalize()
 
     @property
@@ -1306,9 +1300,9 @@ class Multipatch:
         each coordinate axis of the boundary if the coordinates of `p2` have to
         be flipped along that axis.
         """
-        P1, P2 = self.patches[p1], self.patches[p2]
-        dofs1 = boundary_dofs(P1[0], bdspec1, ravel=True)
-        dofs2 = boundary_dofs(P2[0], bdspec2, ravel=True, flip=flip)
+        kvs1, kvs2 = self.patches[p1][0], self.patches[p2][0]
+        dofs1 = boundary_dofs(kvs1, bdspec1, ravel=True)
+        dofs2 = boundary_dofs(kvs2, bdspec2, ravel=True, flip=flip)
         self.join_dofs(p1, dofs1, p2, dofs2)
 
     def _new_shared_dof(self):
@@ -1332,6 +1326,7 @@ class Multipatch:
         `p` to global indices.
         """
         tpdofs = np.arange(self.N[p])   # local TP indices
+        if len(self.patches)==1: return tpdofs
         # construct array with one column for local and one for corresponding
         # shared indices
         sdofs = np.array([l_s for l_s in self.shared_per_patch[p].items()])
@@ -1392,29 +1387,130 @@ class Multipatch:
         n = self.numdofs
         A = scipy.sparse.csr_matrix((n, n)).asformat(format)
         b = np.zeros(n)
+        N = np.zeros(n)
+        R = np.zeros(n)
+        AR = scipy.sparse.csr_matrix((n, n)).asformat(format)
+        
+        X = dict()
         if args is None:
             args = dict()
         for p in range(self.numpatches):
-            X = self.patch_to_global(p)
+            if p not in X:
+                X[p] = self.patch_to_global(p)
             kvs, geo = self.patches[p]
             args.update(geo=geo)
             # TODO: vector-valued problems
             A_p = assemble(problem, kvs, args=args, bfuns=bfuns,
                     symmetric=symmetric, format=format, layout=layout,
                     **kwargs)
-            A += X @ A_p @ X.T
+            A += X[p] @ A_p @ X[p].T
             b_p = assemble(rhs, kvs, args=args, bfuns=bfuns,
                     symmetric=symmetric, format=format, layout=layout,
                     **kwargs).ravel()
-            b += X @ b_p
-        return A, b
+            b += X[p] @ b_p
+            
+        if 'N' in self.b_data:
+            for (p, bdspec, g_N) in self.b_data['N']:
+                kvs, geo = self.patches[p]
+                bdofs = boundary_dofs(kvs, bdspec, ravel=True)
+                args.update(g_N = g_N)
+                args.update(geo = geo)
 
-    def compute_dirichlet_bcs(self, bdconds):
+                N_e = assemble('g_N * v * ds', kvs, args=args, bfuns=bfuns,
+                        symmetric=symmetric, format=format, layout=layout,
+                        **kwargs, boundary=bdspec).ravel()
+                N +=  X[p][:,bdofs] @ N_e
+            
+        if 'R' in self.b_data:
+            for (p, bdspec, (alpha, beta, g_R)) in self.b_data['R']:
+                kvs, geo = self.patches[p]
+                bdofs = boundary_dofs(kvs, bdspec, ravel=True)
+                args.update(g_R = g_R)
+                args.update(geo = geo)
+    
+                R_e = assemble('g_R * v * ds', kvs, args=args, bfuns=bfuns,
+                        symmetric=symmetric, format=format, layout=layout,
+                        **kwargs, boundary=bdspec).ravel()
+                R +=  X[p][:,bdofs] @ R_e
+
+                AR_e = assemble('u * v * ds', kvs, args=args, bfuns=bfuns,
+                        symmetric=symmetric, format=format, layout=layout,
+                        **kwargs, boundary=bdspec)
+                AR += X[p][:,bdofs] @ AR_e @ X[p][:,bdofs].T
+            
+        return A, b, N, AR, R
+    
+    def assemble_neumann(self, args=None, bfuns=None,
+            symmetric=False, format='csr', layout='blocked', **kwargs):
+        """
+        The sequence b_data['N'] should contain triples of the form `(patch,
+        bdspec, neu_func)` representing the boundary condition 
+        grad(u)*n = neu_func.
+
+        Returns:
+            A vector `N` of size `numdofs` with each element representing 
+            \int_{gamma_N} neu_func * phi * ds
+        """
+        if args is None:
+            args = dict()
+        n = self.numdofs
+        N = np.zeros(n)
+        p2g = dict()        # cache the patch-to-global matrices 
+        for (p, bdspec, g_N) in self.b_data['N']:
+            kvs, geo = self.patches[p]
+            bdofs = boundary_dofs(kvs, bdspec, ravel=True)
+            args.update(g_N = g_N)
+            args.update(geo = geo)
+            if p not in p2g:
+                p2g[p] = self.patch_to_global_idx(p)
+            N_e = assemble('g_N * v * ds', kvs, args=args, bfuns=bfuns,
+                    symmetric=symmetric, format=format, layout=layout,
+                    **kwargs, boundary=bdspec).ravel()
+            N[p2g[p][bdofs]] +=  N_e
+        return N
+    
+    def assemble_robin(self, args=None, bfuns=None,
+            symmetric=False, format='csr', layout='blocked', **kwargs):
+        """
+        The sequence b_data['R'] should contain triples of the form `(patch,
+        bdspec, (alpha, beta, robin_func))` representing the boundary condition 
+        alpha*u + beta*grad(u)*n = robin_func.
+
+        Returns:
+            A pair `(AR, R)` consisting of the vector `R` of size `numdofs` representing 
+            1/beta * \int_{\Gamma_R} robin_func * phi *ds and a matrix `AR` of size `numdofs x numdofs`
+            representing alpha/beta * \int_{\Gamma_R} phi_i * phi_j * ds
+        """
+        if args is None:
+            args = dict()
+        n = self.numdofs
+        R = np.zeros(n)
+        p2g = dict()        # cache the patch-to-global matrices 
+        for (p, bdspec, (alpha, beta, g_R)) in self.b_data['R']:
+            kvs, geo = self.patches[p]
+            bdofs = boundary_dofs(kvs, bdspec, ravel=True)
+            args.update(g_R = g_R)
+            args.update(geo = geo)
+            if p not in p2g:
+                p2g[p] = self.patch_to_global_idx(p)
+            R_e = assemble('g_R * v * ds', kvs, args=args, bfuns=bfuns,
+                    symmetric=symmetric, format=format, layout=layout,
+                    **kwargs, boundary=bdspec).ravel()
+            N[p2g[p][bdofs]] +=  R_e
+            
+            AR_e = assemble('u * v * ds', kvs, args=args, bfuns=bfuns,
+                    symmetric=symmetric, format=format, layout=layout,
+                    **kwargs, boundary=bdspec)
+            AR += AR_e
+        return AR, R
+
+    def compute_dirichlet_bcs(self):
         """Performs the same operation as the global function
         :func:`compute_dirichlet_bcs`, but for a multipatch problem.
 
         The sequence `bdconds` should contain triples of the form `(patch,
-        bdspec, dir_func)`.
+        bdspec, dir_func)` representing the boundary condition 
+        u = dir_func.
 
         Returns:
             A pair `(indices, values)` suitable for passing to
@@ -1422,7 +1518,7 @@ class Multipatch:
         """
         bcs = []
         p2g = dict()        # cache the patch-to-global indices for efficiency
-        for (p, bdspec, g) in bdconds:
+        for (p, bdspec, g) in self.b_data['D']:
             kvs, geo = self.patches[p]
             bc = compute_dirichlet_bc(kvs, geo, bdspec, g)
             if p not in p2g:

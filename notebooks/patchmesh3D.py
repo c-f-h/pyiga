@@ -11,7 +11,7 @@ def bdspec_to_int(bdspec):
 
 def espec_to_int(espec):
     return 4 * espec[0] + 2 * espec[1] + espec[2]    # convert to an edge index (0...11)
-     
+    
 def corners(geo, ravel=False):
     """Return an array containing the locations of the 2^d corners of the given
     geometry."""
@@ -56,8 +56,8 @@ class PatchMesh3D:
         self.patches = []
         self.interfaces = dict()
         
-        self.C_nodes = dict()
-        self.C_edges = dict()
+        self.Nodes = dict()
+        self.Edges = dict()
         #self.T_nodes = dict()
 
         if patches:
@@ -68,7 +68,7 @@ class PatchMesh3D:
             for p,patch in enumerate(patches):
                 kvs, geo = patch
                 # add/get vertices (checks for duplicates)
-                vtx = [self.add_vertex(c) for c in corners(geo, ravel=True)]
+                vtx = [self.add_vertex(c)[0] for c in corners(geo, ravel=True)]
                 edg = [self.add_edge(vtx1, vtx2) for vtx1, vtx2 in edges(vtx)]
                 #edges = [(self.add_vertex(vtx1), self.add_vertex(vtx2)) for (vtx1, vtx2) in edges(geo)]
                 #edges = [self.add_edge(e) for e in edges]
@@ -86,19 +86,19 @@ class PatchMesh3D:
                 for i, v in enumerate(vtx):
                     bin = tuple(('{0:03b}').format(i))
                     bin = tuple(int(z) for z in bin)
-                    if v in self.C_nodes:
-                        self.C_nodes[v][p] = bin
+                    if v in self.Nodes['T0']:
+                        self.Nodes['T0'][v][p] = bin
                     else:
-                        self.C_nodes[v]={p : bin}
+                        self.Nodes['T0'][v]={p : bin}
                         
                 for i, e in enumerate(edg):
                     ax = i//4
                     bin = tuple(('{0:02b}').format(i%4))
                     bin = tuple(int(z) for z in bin)
-                    if e in self.C_edges:
-                        self.C_edges[e][p] = (ax,) + bin
+                    if e in self.Edges['T0']:
+                        self.Edges['T0'][e][p] = (ax,) + bin
                     else:
-                        self.C_edges[e] = {p : (ax,) + bin}
+                        self.Edges['T0'][e] = {p : (ax,) + bin}
 
             for (p0, bd0, p1, bd1, conn_info) in interfaces:
                 self.add_interface(p0, bdspec_to_int(bd0), tuple(), p1, bdspec_to_int(bd1), tuple(), conn_info)
@@ -110,14 +110,14 @@ class PatchMesh3D:
         return len(self.patches)
             
     def add_vertex(self, pos):
-        """Add a new vertex at `pos` or return its index if one already exists there."""
+        """Add a new vertex at `pos` at return new index and `False` or return its index and `True` if one already exists there."""
         if self.vertices:
             distances = [np.linalg.norm(vtxpos - pos) for vtxpos in self.vertices]
             i_min = np.argmin(distances)
             if distances[i_min] < 1e-14:
-                return i_min
+                return i_min, True
         self.vertices.append(pos)
-        return len(self.vertices) - 1
+        return len(self.vertices) - 1, False
     
     def add_edge(self, vtx1, vtx2): 
         """Add a new edge from vtx1 to vtx2 or return its index if one already exists there."""
@@ -257,6 +257,7 @@ class PatchMesh3D:
             # otherwise, we need to insert it, split the segment and insert a new T_node (or corner at the boundary of the domain)
             seg = self._find_boundary_split_index(p, b, xi, new_edge)
             self.split_boundary_segment(p, b, axis, seg, new_edge)
+            self.add_edge(*new_edge) ###T_edge
         else:
             return 
 
@@ -322,21 +323,26 @@ class PatchMesh3D:
         new_boundaries = [bd for bd in boundaries]
 
         new_p =  self.numpatches
+        new_vertices = []
         
         if axis == 0:                           # z-axis
             split_boundaries = [2, 3, 4, 5]     # bottom, top, left and right were split
-            C = corners(geo1)[1,:,:,:].reshape(-1,3)
-            new_vertices = [self.add_vertex(c) for c in C]
+            splitC = corners(geo1)[1,:,:,:].reshape(-1,3)
+            C = corners(geo)
         elif axis == 1:                         # y-axis
             split_boundaries = [0, 1, 4, 5]     # front, back, left and right were split
             C = corners(geo1)[:,1,:,:].reshape(-1,3)
-            new_vertices = [self.add_vertex(c) for c in C]
         elif axis == 2:                         # x-axis
             split_boundaries = [0, 1, 2, 3]     # front, back, bottom and top were split
             C = corners(geo1)[:,:,1,:].reshape(-1,3)
-            new_vertices = [self.add_vertex(c) for c in corners(geo1)[:,:,1,:].reshape(-1,3)]
         else:
-            assert False, 'unimplemented'
+            assert False, 'This axis does not exist.'
+            
+        for i, c in enumerate(C):
+                vtx, is_new = self.add_vertex(c)
+                new_vertices.append(vtx)
+                if is_new:
+                    self.edges.remove(())
 
         new_edges = [(new_vertices[0], new_vertices[1]), (new_vertices[2], new_vertices[3]), (new_vertices[0], new_vertices[2]), (new_vertices[1], new_vertices[3])]
         # move existing interfaces from upper side of old to upper of new patch 
@@ -537,7 +543,7 @@ class BSegments:
         S.boundaries = None
         
         assert self.normal_axis!=ax, "cannot split in this axis since boundary segment is orthogonal."
-        axes = np.setdiff1d(np.arange(3),self.normal_axis)
+        axes = np.setdiff1d(np.arange(3), self.normal_axis)
         if ax==min(axes):
             bds_lower = [(P0,P1),edge,(P0,edge[0]),(P1,edge[1])]
             bds_upper = [edge,(P2,P3),(edge[0],P2),(edge[1],P3)]

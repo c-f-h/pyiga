@@ -204,7 +204,7 @@ class NurbsFunc(bspline._BaseSplineFunc):
             J = np.squeeze(J, -2)           # eliminate scalar axis
         return J
 
-    def boundary(self, bdspec, flip = None):
+    def boundary(self, bdspec, swap=None, flip = None):
         """Return one side of the boundary as a :class:`NurbsFunc`.
 
         Args:
@@ -223,13 +223,17 @@ class NurbsFunc(bspline._BaseSplineFunc):
             # interpolatory; return a custom function
             return bspline._BaseGeoFunc.boundary(self, bdspec, flip=flip)
 
-        axis, side = bspline._parse_bdspec(bdspec, self.sdim)
-        assert 0 <= axis < self.sdim, 'Invalid axis'
+        bdspec = bspline._parse_bdspec(bdspec, self.sdim)
+        axis, sides = tuple(zip(*bdspec))#tuple(ax for ax, _ in bdspec), tuple(-idx for _, idx in bdspec)
+        
+        assert all([0 <= ax < self.sdim for ax in axis]), 'Invalid axis'
         slices = self.sdim * [slice(None)]
-        slices[axis] = (0 if side==0 else -1)
+        for ax, idx in zip(axis, sides):
+            slices[ax] = (idx)
         coeffs = self.coeffs[tuple(slices)]
         kvs = list(self.kvs)
-        del kvs[axis]
+        for ax in axis:
+            del kvs[ax]
         return NurbsFunc(kvs, coeffs, weights=None, premultiplied=True)
 
     @property
@@ -417,14 +421,16 @@ class _BoundaryFunction(bspline._BaseGeoFunc):
     one side of its boundary, thus reducing `sdim` by one.
     """
     def __init__(self, f, bdspec, flip = None):
-        
         self.f = f
-        axis, side = bspline._parse_bdspec(bdspec, f.sdim)
-        lohi = f.support[axis]
-        self.fixed_coord = (lohi[0] if side==0 else lohi[1])
-        self.axis = axis
+        bdspec = bspline._parse_bdspec(bdspec, f.sdim)
+        axis, sides = tuple(zip(*bdspec))
+        ax = axis[0]
+        side = sides[0]
+        lohi = f.support[ax]
+        self.fixed_coord = (lohi[0] if sides==0 else lohi[1])
+        self.axis = ax
         self.side = side
-        self.support = f.support[:axis] + f.support[axis+1:]
+        self.support = f.support[:ax] + f.support[ax+1:]
         self.dim = f.dim
         self.sdim = f.sdim - 1
         

@@ -12,23 +12,23 @@ from .tensor import apply_tprod
 
 def _parse_bdspec(bdspec, dim):
     if bdspec == 'left':
-        bd = (dim - 1, 0)
+        bd = ((dim - 1, 0),)
     elif bdspec == 'right':
-        bd = (dim - 1, 1)
+        bd = ((dim - 1, 1),)
     elif bdspec == 'bottom':
-        bd = (dim - 2, 0)
+        bd = ((dim - 2, 0),)
     elif bdspec == 'top':
-        bd = (dim - 2, 1)
+        bd = ((dim - 2, 1),)
     elif bdspec == 'front':
-        bd = (dim - 3, 0)
+        bd = ((dim - 3, 0),)
     elif bdspec == 'back':
-        bd = (dim - 3, 1)
+        bd = ((dim - 3, 1),)
     else:
-        bd = bdspec
-    if not (len(bd) == 2 and bd[1] in (0,1)):
-        raise ValueError('invalid bdspec ' + str(bd))
-    if bd[0] < 0 or bd[0] >= dim:
-        raise ValueError('invalid bdspec %s for space of dimension %d'
+        bd=bdspec
+        if not all((side in (0,1) for _, side in bd)):
+            raise ValueError('invalid bdspec ' + str(bd))
+        if any(( ax < 0 or ax >= dim for ax, _ in bd)):
+            raise ValueError('invalid bdspec %s for space of dimension %d'
                 % (bdspec, dim))
     return bd
 
@@ -1132,14 +1132,18 @@ class BSplineFunc(_BaseSplineFunc):
             # if we have reduced support, the boundary may not be
             # interpolatory; return a custom function
             return _BaseGeoFunc.boundary(self, bdspec)
+        
+        bdspec = _parse_bdspec(bdspec, self.sdim)
+        axis, sides = tuple(zip(*bdspec))#tuple(ax for ax, _ in bdspec), tuple(-idx for _, idx in bdspec)
 
-        axis, side = _parse_bdspec(bdspec, self.sdim)
-        assert 0 <= axis < self.sdim, 'Invalid axis'
+        assert all([0 <= ax < self.sdim for ax in axis]), 'Invalid axis'
         slices = self.sdim * [slice(None)]
-        slices[axis] = (0 if side==0 else -1)
+        for ax, idx in zip(axis, sides):
+            slices[ax] = (idx)
         coeffs = self.coeffs[tuple(slices)]
         kvs = list(self.kvs)
-        del kvs[axis]
+        for ax in axis:
+            del kvs[ax]
         return BSplineFunc(kvs, coeffs)
 
     @property

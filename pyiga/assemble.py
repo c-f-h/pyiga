@@ -343,36 +343,82 @@ def inner_products(kvs, f, f_physical=False, geo=None):
 # Incorporating essential boundary conditions
 ################################################################################
 
-def slice_indices(ax, idx, shape, ravel=False, flip=None):
+# def slice_indices(ax, idx, shape, ravel=False, flip=None):
+#     """Return dof indices for a slice of a tensor product basis with size
+#     `shape`. The slice is taken across index `idx` on axis `ax`.
+#     The indices are returned either as a `N × dim` array of multiindices or,
+#     with `ravel=True`, as an array of sequential (raveled) indices.
+#     """
+#     shape = tuple(shape)
+#     #assert len(axis) == len(sides) == len(shape) - len(flip)
+#     #for ax,idx in zip(axis,sides):
+#     if idx < 0:
+#         idx += shape[ax]     # wrap around
+#     axdofs = [range(n) for n in shape]
+#     if flip is not None:
+#         flip = tuple(flip)
+#         flip = flip[:ax] + (False,) + flip[ax:]     # insert trivial axis
+#         for i, flp in enumerate(flip):
+#             if flp:
+#                 axdofs[i] = reversed(axdofs[i])
+#     axdofs[ax] = [idx]
+#     multi_indices = np.array(list(itertools.product(*axdofs)))
+#     if ravel:
+#         multi_indices = np.ravel_multi_index(multi_indices.T, shape)
+#     return multi_indices
+def slice_indices(axis, sides, shape, ravel=False, swap=None, flip=None):
     """Return dof indices for a slice of a tensor product basis with size
     `shape`. The slice is taken across index `idx` on axis `ax`.
     The indices are returned either as a `N × dim` array of multiindices or,
     with `ravel=True`, as an array of sequential (raveled) indices.
     """
     shape = tuple(shape)
-    if idx < 0:
-        idx += shape[ax]     # wrap around
-    axdofs = [range(n) for n in shape]
+    dim = len(shape)
+    not_axis = tuple(np.setdiff1d(range(dim),axis))
+    sides=list(sides)
+    
+    for i,ax in enumerate(axis):
+        if sides[i] < 0:
+            sides[i] += shape[ax]     # wrap around
+    axdofs = [np.arange(n) for n in shape]
+
     if flip is not None:
-        flip = tuple(flip)
-        flip = flip[:ax] + (False,) + flip[ax:]     # insert trivial axis
+        flip = list(flip)
+        #flip = flip[:ax] + (False,) + flip[ax:]     # insert trivial axis
+        for ax in axis:
+            flip.insert(ax, False)    # insert trivial axis
         for i, flp in enumerate(flip):
             if flp:
-                axdofs[i] = reversed(axdofs[i])
-    axdofs[ax] = [idx]
+                axdofs[i] = np.flip(axdofs[i])
+    for ax, idx in zip(axis,sides):
+        axdofs[ax]=np.array([idx])
+        
+    axdofs_ = [axdofs[ax] for ax in not_axis]
+    if swap is not None:
+        k=0
+        for i in range(dim):
+            if i in axis:
+                axdofs[i] = axdofs[i]
+            else:
+                axdofs[i]=axdofs_[swap[k]]
+                k += 1
+    #return axdofs
+    
     multi_indices = np.array(list(itertools.product(*axdofs)))
+    if swap is not None:
+        multi_indices[:,not_axis] = multi_indices[:,not_axis][:,swap]
     if ravel:
         multi_indices = np.ravel_multi_index(multi_indices.T, shape)
     return multi_indices
 
-def boundary_dofs(kvs, bdspec, ravel=False, flip=None):
+def boundary_dofs(kvs, bdspec, ravel=False, swap=None, flip=None):
     """Indices of the dofs which lie on the given boundary of the tensor
     product basis `kvs`. Output format is as for :func:`slice_indices`.
     """
-    bdax, bdside = bspline._parse_bdspec(bdspec, len(kvs))
-    idx = (0 if bdside==0 else -1)
+    bd = bspline._parse_bdspec(bdspec, len(kvs))
+    axis, sides = tuple(ax for ax, _ in bd), tuple(-idx for _, idx in bd)
     N = tuple(kv.numdofs for kv in kvs)
-    return slice_indices(bdax, idx, N, ravel=ravel, flip=flip)
+    return slice_indices(axis, sides, N, ravel=ravel, swap=swap, flip=flip)
 
 def boundary_kv(kvs, bdspec, flip=None):
     if flip is None:
@@ -399,14 +445,14 @@ def boundary_kv(kvs, bdspec, flip=None):
     dofs=[dofs_[idx[1]] for dofs_ in dofs]
     return np.concatenate(dofs)
 
-def boundary_cells(kvs, bdspec, ravel=False):
+def boundary_cells(kvs, bdspec, swap=None, ravel=False):
     """Indices of the cells which lie on the given boundary of the tensor
     product basis `kvs`. Output format is as for :func:`slice_indices`.
     """
-    bdax, bdside = bspline._parse_bdspec(bdspec, len(kvs))
-    idx = (0 if bdside==0 else -1)
+    bd = bspline._parse_bdspec(bdspec, len(kvs))
+    axis, sides = tuple(ax for ax, _ in bd), tuple(-idx for _, idx in bd)
     N = tuple(kv.numspans for kv in kvs)
-    return slice_indices(bdax, idx, N, ravel=ravel)
+    return slice_indices(bdax, idx, N, swap=swap, ravel=ravel)
 
 def _drop_nans(indices, values):
     isnan = np.isnan(values)
@@ -452,14 +498,16 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
         boundary and their computed values, respectively.
     """
     bdspec = bspline._parse_bdspec(bdspec, len(kvs))
-    bdax, bdside = bdspec
+    axis, sides = tuple(ax for ax, _ in bdspec), tuple(-idx for _, idx in bdspec)
 
     # get basis for the boundary face
     bdbasis = list(kvs)
     assert len(bdbasis) == geo.sdim, 'Invalid dimension of geometry'
-    del bdbasis[bdax]
+    for ax in axis:
+        del bdbasis[ax]
 
     # get boundary geometry and interpolate dir_func
+    #print(bdspec)
     bdgeo = geo.boundary(bdspec)
     from .approx import interpolate
     if np.isscalar(dir_func):
@@ -469,7 +517,7 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
 
     # compute sequential indices for eliminated dofs
     N = tuple(kv.numdofs for kv in kvs)
-    bdindices = slice_indices(bdax, 0 if bdside==0 else -1, N, ravel=True)
+    bdindices = slice_indices(axis, sides, N, ravel=True)
 
     extra_dims = dircoeffs.ndim - len(bdbasis)
     if extra_dims == 0:
@@ -960,8 +1008,8 @@ def instantiate_assembler(problem, kvs, args, bfuns, boundary=None, updatable=[]
             # parse the bdspec and pass both `boundary` and the `Jac_to_boundary` matrix
             # to the assembler
             bdspec = bspline._parse_bdspec(boundary, len(kvs))
-            used_args['boundary'] = bdspec
-            args['Jac_to_boundary'] = _Jac_to_boundary_matrix(bdspec, len(kvs))
+            used_args['boundary'] = bdspec[0]
+            args['Jac_to_boundary'] = _Jac_to_boundary_matrix(bdspec[0], len(kvs))
 
         for inp in itertools.chain(problem.inputs().keys(), problem.parameters().keys()):
             if inp not in args:
@@ -1159,25 +1207,24 @@ def _check_geo_match(G1, G2, grid=4):
                 if f: flipped_grid[i] = np.ascontiguousarray(np.flip(flipped_grid[i]))
             X2 = G2.grid_eval(flipped_grid).transpose(perm + (G2.sdim,))
             if np.allclose(X1, X2):
-                if G1.sdim == 1 or k==0:
-                    return True, (None, flip)
-                print(i)
-                print(perm)
+                #if G1.sdim == 1 or k==0:
+                    #return True, (None, flip)
                 return True, (perm, flip)
     return False, (None, None)
 
 def _find_matching_boundaries(G1, G2):
     # find all interfaces which match between G1 and G2
     assert G1.sdim == G2.sdim and G1.dim == G2.dim
+    #all_bds = list(itertools.product(range(G1.sdim), (0,1)))
     all_bds = list(itertools.product(range(G1.sdim), (0,1)))
     matches = []
     for bdspec1 in all_bds:
-        bd1 = G1.boundary(bdspec1)
+        bd1 = G1.boundary((bdspec1,))
         for bdspec2 in all_bds:
-            bd2 = G2.boundary(bdspec2)
+            bd2 = G2.boundary((bdspec2,))
             match, conn_info = _check_geo_match(bd1, bd2)
             if match:
-                matches.append((bdspec1, bdspec2, conn_info))
+                matches.append(((bdspec1,), (bdspec2,), conn_info))
     return matches
 
 def detect_interfaces(patches):
@@ -1428,81 +1475,81 @@ class Multipatch:
                 args.update(g_R = g_R)
                 args.update(geo = geo)
     
-                R_e = assemble('g_R * v * ds', kvs, args=args, bfuns=bfuns,
+                R_e = 1/beta * assemble('g_R * v * ds', kvs, args=args, bfuns=bfuns,
                         symmetric=symmetric, format=format, layout=layout,
                         **kwargs, boundary=bdspec).ravel()
                 R +=  X[p][:,bdofs] @ R_e
 
-                AR_e = assemble('u * v * ds', kvs, args=args, bfuns=bfuns,
+                AR_e = alpha/beta * assemble('u * v * ds', kvs, args=args, bfuns=bfuns,
                         symmetric=symmetric, format=format, layout=layout,
                         **kwargs, boundary=bdspec)
                 AR += X[p][:,bdofs] @ AR_e @ X[p][:,bdofs].T
             
         return A, b, N, AR, R
     
-    def assemble_neumann(self, args=None, bfuns=None,
-            symmetric=False, format='csr', layout='blocked', **kwargs):
-        """
-        The sequence b_data['N'] should contain triples of the form `(patch,
-        bdspec, neu_func)` representing the boundary condition 
-        grad(u)*n = neu_func.
+#     def assemble_neumann(self, args=None, bfuns=None,
+#             symmetric=False, format='csr', layout='blocked', **kwargs):
+#         """
+#         The sequence b_data['N'] should contain triples of the form `(patch,
+#         bdspec, neu_func)` representing the boundary condition 
+#         grad(u)*n = neu_func.
 
-        Returns:
-            A vector `N` of size `numdofs` with each element representing 
-            \int_{gamma_N} neu_func * phi * ds
-        """
-        if args is None:
-            args = dict()
-        n = self.numdofs
-        N = np.zeros(n)
-        p2g = dict()        # cache the patch-to-global matrices 
-        for (p, bdspec, g_N) in self.b_data['N']:
-            kvs, geo = self.patches[p]
-            bdofs = boundary_dofs(kvs, bdspec, ravel=True)
-            args.update(g_N = g_N)
-            args.update(geo = geo)
-            if p not in p2g:
-                p2g[p] = self.patch_to_global_idx(p)
-            N_e = assemble('g_N * v * ds', kvs, args=args, bfuns=bfuns,
-                    symmetric=symmetric, format=format, layout=layout,
-                    **kwargs, boundary=bdspec).ravel()
-            N[p2g[p][bdofs]] +=  N_e
-        return N
+#         Returns:
+#             A vector `N` of size `numdofs` with each element representing 
+#             \int_{gamma_N} neu_func * phi * ds
+#         """
+#         if args is None:
+#             args = dict()
+#         n = self.numdofs
+#         N = np.zeros(n)
+#         p2g = dict()        # cache the patch-to-global matrices 
+#         for (p, bdspec, g_N) in self.b_data['N']:
+#             kvs, geo = self.patches[p]
+#             bdofs = boundary_dofs(kvs, bdspec, ravel=True)
+#             args.update(g_N = g_N)
+#             args.update(geo = geo)
+#             if p not in p2g:
+#                 p2g[p] = self.patch_to_global_idx(p)
+#             N_e = assemble('g_N * v * ds', kvs, args=args, bfuns=bfuns,
+#                     symmetric=symmetric, format=format, layout=layout,
+#                     **kwargs, boundary=bdspec).ravel()
+#             N[p2g[p][bdofs]] +=  N_e
+#         return N
     
-    def assemble_robin(self, args=None, bfuns=None,
-            symmetric=False, format='csr', layout='blocked', **kwargs):
-        """
-        The sequence b_data['R'] should contain triples of the form `(patch,
-        bdspec, (alpha, beta, robin_func))` representing the boundary condition 
-        alpha*u + beta*grad(u)*n = robin_func.
+#     def assemble_robin(self, args=None, bfuns=None,
+#             symmetric=False, format='csr', layout='blocked', **kwargs):
+#         """
+#         The sequence b_data['R'] should contain triples of the form `(patch,
+#         bdspec, (alpha, beta, robin_func))` representing the boundary condition 
+#         alpha*u + beta*grad(u)*n = robin_func.
 
-        Returns:
-            A pair `(AR, R)` consisting of the vector `R` of size `numdofs` representing 
-            1/beta * \int_{\Gamma_R} robin_func * phi *ds and a matrix `AR` of size `numdofs x numdofs`
-            representing alpha/beta * \int_{\Gamma_R} phi_i * phi_j * ds
-        """
-        if args is None:
-            args = dict()
-        n = self.numdofs
-        R = np.zeros(n)
-        p2g = dict()        # cache the patch-to-global matrices 
-        for (p, bdspec, (alpha, beta, g_R)) in self.b_data['R']:
-            kvs, geo = self.patches[p]
-            bdofs = boundary_dofs(kvs, bdspec, ravel=True)
-            args.update(g_R = g_R)
-            args.update(geo = geo)
-            if p not in p2g:
-                p2g[p] = self.patch_to_global_idx(p)
-            R_e = assemble('g_R * v * ds', kvs, args=args, bfuns=bfuns,
-                    symmetric=symmetric, format=format, layout=layout,
-                    **kwargs, boundary=bdspec).ravel()
-            N[p2g[p][bdofs]] +=  R_e
+#         Returns:
+#             A pair `(AR, R)` consisting of the vector `R` of size `numdofs` representing 
+#             1/beta * \int_{\Gamma_R} robin_func * phi *ds and a matrix `AR` of size `numdofs x numdofs`
+#             representing alpha/beta * \int_{\Gamma_R} phi_i * phi_j * ds
+#         """
+#         if args is None:
+#             args = dict()
+#         n = self.numdofs
+#         R = np.zeros(n)
+#         p2g = dict()        # cache the patch-to-global matrices 
+#         for (p, bdspec, (alpha, beta, g_R)) in self.b_data['R']:
+#             kvs, geo = self.patches[p]
+#             bdofs = boundary_dofs(kvs, bdspec, ravel=True)
+#             args.update(g_R = g_R)
+#             args.update(geo = geo)
+#             if p not in p2g:
+#                 p2g[p] = self.patch_to_global_idx(p)
+#             R_e = assemble('g_R * v * ds', kvs, args=args, bfuns=bfuns,
+#                     symmetric=symmetric, format=format, layout=layout,
+#                     **kwargs, boundary=bdspec).ravel()
+#             N[p2g[p][bdofs]] +=  R_e
             
-            AR_e = assemble('u * v * ds', kvs, args=args, bfuns=bfuns,
-                    symmetric=symmetric, format=format, layout=layout,
-                    **kwargs, boundary=bdspec)
-            AR += AR_e
-        return AR, R
+#             AR_e = assemble('u * v * ds', kvs, args=args, bfuns=bfuns,
+#                     symmetric=symmetric, format=format, layout=layout,
+#                     **kwargs, boundary=bdspec)
+#             AR += AR_e
+#         return AR, R
 
     def compute_dirichlet_bcs(self):
         """Performs the same operation as the global function
@@ -1526,3 +1573,9 @@ class Multipatch:
             idx = p2g[p]    # maps local dofs to global dofs
             bcs.append((idx[bc[0]], bc[1]))
         return combine_bcs(bcs)
+    
+    def L2Projection(self, u):
+        M, rhs, _, _, _ = self.assemble_system(vform.mass_vf(2), vform.L2functional_vf(2, physical=True), f=u)
+        u_ = solvers.make_solver(M, spd=True).dot(rhs)
+        return u_
+

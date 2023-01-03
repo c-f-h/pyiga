@@ -1,4 +1,4 @@
-from pyiga import bspline, vis, assemble
+from pyiga import bspline, vis, assemble, topology
 import copy
 
 import numpy as np
@@ -7,10 +7,7 @@ import matplotlib.pyplot as plt
 #import BSegments
 
 def bdspec_to_int(bdspec):
-    return 2 * bdspec[0] + bdspec[1]    # convert to a boundary index (0..5)
-
-def espec_to_int(espec):
-    return 4 * espec[0] + 2 * espec[1] + espec[2]    # convert to an edge index (0...11)
+    return 2 * bdspec[0][0] + bdspec[0][1]    # convert to a boundary index (0..5)
     
 def corners(geo, ravel=False):
     """Return an array containing the locations of the 2^d corners of the given
@@ -22,7 +19,7 @@ def corners(geo, ravel=False):
 
 def edges(corners):
     C=np.array(corners).reshape(2,2,2)
-    return np.vstack((C.transpose((1,2,0)).reshape(-1,2), C.transpose((0,2,1)).reshape(-1,2), C.reshape(-1,2)))
+    return np.vstack((C.transpose((0,1,2)).reshape(-1,2), C.transpose((0,2,1)).reshape(-1,2), C.transpose((1,2,0)).reshape(-1,2)))
 
 # Data structures:
 #
@@ -56,8 +53,8 @@ class PatchMesh3D:
         self.patches = []
         self.interfaces = dict()
         
-        self.Nodes = dict()
-        self.Edges = dict()
+        self.Nodes = {'T0':dict(), 'T1':dict(), 'T2':dict()}
+        self.Edges = {'T0':dict(), 'T1':dict()}
         #self.T_nodes = dict()
 
         if patches:
@@ -83,22 +80,17 @@ class PatchMesh3D:
                     BSegments([(vtx[1], vtx[3]), (vtx[5], vtx[7]), (vtx[1], vtx[5]), (vtx[3], vtx[7])], 2),    #right
                 ))
                     
-                for i, v in enumerate(vtx):
-                    bin = tuple(('{0:03b}').format(i))
-                    bin = tuple(int(z) for z in bin)
+                for c_spec, v in zip(topology.face_indices(3,0), vtx):
                     if v in self.Nodes['T0']:
-                        self.Nodes['T0'][v][p] = bin
+                        self.Nodes['T0'][v][p] = c_spec
                     else:
-                        self.Nodes['T0'][v]={p : bin}
+                        self.Nodes['T0'][v]={p : c_spec}
                         
-                for i, e in enumerate(edg):
-                    ax = i//4
-                    bin = tuple(('{0:02b}').format(i%4))
-                    bin = tuple(int(z) for z in bin)
+                for e_spec, e in zip(topology.face_indices(3,1), edg):
                     if e in self.Edges['T0']:
-                        self.Edges['T0'][e][p] = (ax,) + bin
+                        self.Edges['T0'][e][p] = e_spec
                     else:
-                        self.Edges['T0'][e] = {p : (ax,) + bin}
+                        self.Edges['T0'][e]={p: e_spec}
 
             for (p0, bd0, p1, bd1, conn_info) in interfaces:
                 self.add_interface(p0, bdspec_to_int(bd0), tuple(), p1, bdspec_to_int(bd1), tuple(), conn_info)
@@ -437,29 +429,26 @@ class PatchMesh3D:
         
         for ((kvs, geo),_) in self.patches:
             if knots:
-                vis.plot_geo(geo, gridx=kvs[0].mesh,gridy=kvs[1].mesh, gridz=kvs[2].mesh, color='lightgray')       
-            else:
-                vis.plot_geo(geo, grid=2, color='lightgray')
-            for axis, side in [(axis, side) for axis in range(3) for side in range(2)]:
-                vis.plot_geo(geo.boundary((axis,side)), grid=2)
+                vis.plot_geo(geo, gridx=kvs[0].mesh, gridy=kvs[1].mesh, gridz=kvs[2].mesh, color='lightgray')       
+            vis.plot_geo(geo, grid=2)
            
         if nodes:
-            ax.scatter(*np.transpose([vtx[[0,2,1]] for vtx in self.vertices]), color='red')
+            ax.scatter(*np.transpose([vtx[[0,1,2]] for vtx in self.vertices]), color='red')
 
         if patch_idx:
             for p in range(len(self.patches)):        # annotate patch indices
                 geo = self.patches[p][0][1]
                 center_xi = np.flipud(np.mean(geo.support, axis=1))
                 center = geo(*center_xi)
-                ax.text(*(center[[0,2,1]]), str(p), fontsize=18, color='green')
+                ax.text(*(center[[0,1,2]]), str(p), fontsize=18, color='green')
             
         if vertex_idx:
             for i, vtx in enumerate(self.vertices):   # annotate vertex indices
-                ax.text(*(vtx[[0,2,1]]), str(i), fontsize=18, color='red')
+                ax.text(*(vtx[[0,1,2]]), str(i), fontsize=18, color='red')
                 
         if edge_idx:    ### still need to compute real center of the geometry edge
             for i, (vtx1, vtx2) in enumerate(self.edges):    #annotate edge indices
-                ax.text(*((self.vertices[vtx1] + self.vertices[vtx2])/2)[[0,2,1]], str(i), fontsize=18, color='royalblue')
+                ax.text(*((self.vertices[vtx1] + self.vertices[vtx2])/2)[[0,1,2]], str(i), fontsize=18, color='royalblue')
                 
         #ax.invert_xaxis()
         #ax.invert_yaxis()  
@@ -467,8 +456,8 @@ class PatchMesh3D:
         
         #ax.view_init(azim=-30, elev=-25, roll=-180, vertical_axis='y')
         ax.set_xlabel('x')
-        ax.set_ylabel('z')
-        ax.set_zlabel('y')
+        ax.set_ylabel('y')
+        ax.set_zlabel('z')
         #ax.set_aspect('equal')
         plt.show()
             

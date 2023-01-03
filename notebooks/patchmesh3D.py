@@ -1,4 +1,4 @@
-from pyiga import bspline, vis, assemble, topology
+from pyiga import bspline, vis, assemble
 import copy
 
 import numpy as np
@@ -107,9 +107,9 @@ class PatchMesh3D:
             distances = [np.linalg.norm(vtxpos - pos) for vtxpos in self.vertices]
             i_min = np.argmin(distances)
             if distances[i_min] < 1e-14:
-                return i_min, True
+                return i_min, False
         self.vertices.append(pos)
-        return len(self.vertices) - 1, False
+        return len(self.vertices) - 1, True
     
     def add_edge(self, vtx1, vtx2): 
         """Add a new edge from vtx1 to vtx2 or return its index if one already exists there."""
@@ -120,6 +120,14 @@ class PatchMesh3D:
         else:
             self.edges.append((vtx1, vtx2))
             return len(self.edges) - 1
+    
+    def remove_edge(self,vtx1,vtx2):
+        if (vtx1, vtx2) in self.edges:
+            self.edges.remove((vtx1, vtx2))
+        elif (vtx2, vtx1) in self.edges:
+            self.edges.remove((vtx2, vtx1))
+        else:
+            return
 
     def get_vertex_index(self, pos):
         if self.vertices:
@@ -240,7 +248,7 @@ class PatchMesh3D:
         """
 
         #vtx1, vtx2 = self.boundaries(p)[b][::len(self.boundaries(p)[b])-1]
-            
+        #new_edge = self.edges[new_edge]
         try:
             # is the new edge already contained in the boundary?
             if self.boundaries(p)[b].axis != axis:
@@ -320,23 +328,28 @@ class PatchMesh3D:
         if axis == 0:                           # z-axis
             split_boundaries = [2, 3, 4, 5]     # bottom, top, left and right were split
             splitC = corners(geo1)[1,:,:,:].reshape(-1,3)
-            C = corners(geo)
+            C = [self.add_vertex(c)[0] for c in corners(geo).transpose((0,1,2,3)).reshape(-1,3)]
         elif axis == 1:                         # y-axis
             split_boundaries = [0, 1, 4, 5]     # front, back, left and right were split
-            C = corners(geo1)[:,1,:,:].reshape(-1,3)
+            splitC = corners(geo1)[:,1,:,:].reshape(-1,3)
+            C = [self.add_vertex(c)[0] for c in corners(geo).transpose((1,0,2,3)).reshape(-1,3)]
         elif axis == 2:                         # x-axis
             split_boundaries = [0, 1, 2, 3]     # front, back, bottom and top were split
-            C = corners(geo1)[:,:,1,:].reshape(-1,3)
+            splitC = corners(geo1)[:,:,1,:].reshape(-1,3)
+            C = [self.add_vertex(c)[0] for c in corners(geo).transpose((2,0,1,3)).reshape(-1,3)]
         else:
             assert False, 'This axis does not exist.'
             
-        for i, c in enumerate(C):
-                vtx, is_new = self.add_vertex(c)
-                new_vertices.append(vtx)
-                if is_new:
-                    self.edges.remove(())
+        for i, c in enumerate(splitC):
+            vtx, is_new = self.add_vertex(c)
+            new_vertices.append(vtx)
+            if is_new:
+                self.remove_edge(C[i], C[i+4])
+                self.add_edge(C[i], vtx)
+                self.add_edge(vtx, C[i+4])
 
-        new_edges = [(new_vertices[0], new_vertices[1]), (new_vertices[2], new_vertices[3]), (new_vertices[0], new_vertices[2]), (new_vertices[1], new_vertices[3])]
+        #new_edges = [(new_vertices[0], new_vertices[1]), (new_vertices[2], new_vertices[3]), (new_vertices[0], new_vertices[2]), (new_vertices[1], new_vertices[3])]
+        new_edges = [self.add_edge(new_vertices[i1], new_vertices[i2]) for i1, i2 in zip([0,2,0,1],[1,3,2,3])]
         # move existing interfaces from upper side of old to upper of new patch 
         self._reindex_interfaces(p, upper, boundaries[upper].return_segments(), new_p=new_p)
 
@@ -349,7 +362,8 @@ class PatchMesh3D:
         for sb, new_edge in zip(split_boundaries, new_edges):
             #print(self.boundaries(p)[sb].normal_axis)
             #bd_axis = axis - 1*(axis > self.boundaries(p)[sb].normal_axis)
-            self.split_patch_boundary(p, sb, split_xi, axis, new_edge, new_p)
+            print(self.edges[new_edge])
+            self.split_patch_boundary(p, sb, split_xi, axis, self.edges[new_edge], new_p)
             
             # split the boundaries of the new patches at this edge
             new_bd = self.boundaries(p)[sb]
@@ -434,6 +448,7 @@ class PatchMesh3D:
            
         if nodes:
             ax.scatter(*np.transpose([vtx[[0,1,2]] for vtx in self.vertices]), color='red')
+            #ax.scatter(*np.transpose([vtx[[0,1,2]] for vtx in self.vertices]), color='red')
 
         if patch_idx:
             for p in range(len(self.patches)):        # annotate patch indices

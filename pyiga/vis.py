@@ -48,7 +48,7 @@ def plot_geo(geo,
     if np.isscalar(gridy):
         gridy = np.linspace(supp[1][0], supp[1][1], gridy)
     if np.isscalar(gridz):
-        gridz = np.linspace(supp[1][0], supp[1][1], gridz)
+        gridz = np.linspace(supp[2][0], supp[2][1], gridz)
 
     meshx = np.linspace(supp[0][0], supp[0][1], res)
     meshy = np.linspace(supp[1][0], supp[1][1], res)

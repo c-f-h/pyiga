@@ -353,8 +353,8 @@ class PatchMesh3D:
         # move existing interfaces from upper side of old to upper of new patch 
         self._reindex_interfaces(p, upper, boundaries[upper].return_segments(), new_p=new_p)
 
-        boundaries[upper]     =  BSegments(new_edges, axis)   # upper edge of new lower patch
-        new_boundaries[lower] =  BSegments(new_edges, axis)   # lower edge of new upper patch
+        boundaries[upper]     =  BSegments([self.edges[e] for e in new_edges], axis)   # upper edge of new lower patch
+        new_boundaries[lower] =  BSegments([self.edges[e] for e in new_edges], axis)   # lower edge of new upper patch
 
         # add interface between the two new patches
         self.add_interface(p, upper, tuple(), new_p, lower, tuple(), (False, False))
@@ -362,7 +362,7 @@ class PatchMesh3D:
         for sb, new_edge in zip(split_boundaries, new_edges):
             #print(self.boundaries(p)[sb].normal_axis)
             #bd_axis = axis - 1*(axis > self.boundaries(p)[sb].normal_axis)
-            print(self.edges[new_edge])
+            #print(self.edges[new_edge])
             self.split_patch_boundary(p, sb, split_xi, axis, self.edges[new_edge], new_p)
             
             # split the boundaries of the new patches at this edge

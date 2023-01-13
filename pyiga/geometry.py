@@ -224,15 +224,14 @@ class NurbsFunc(bspline._BaseSplineFunc):
             return bspline._BaseGeoFunc.boundary(self, bdspec, flip=flip)
 
         bdspec = bspline._parse_bdspec(bdspec, self.sdim)
-        axis, sides = tuple(zip(*bdspec))#tuple(ax for ax, _ in bdspec), tuple(-idx for _, idx in bdspec)
-        
+        axis, sides = tuple(ax for ax, _ in bdspec), tuple(-idx for _, idx in bdspec)
         assert all([0 <= ax < self.sdim for ax in axis]), 'Invalid axis'
         slices = self.sdim * [slice(None)]
         for ax, idx in zip(axis, sides):
-            slices[ax] = (idx)
+            slices[ax] = idx
         coeffs = self.coeffs[tuple(slices)]
         kvs = list(self.kvs)
-        for ax in axis:
+        for ax in sorted(axis, reverse=True):
             del kvs[ax]
         return NurbsFunc(kvs, coeffs, weights=None, premultiplied=True)
 
@@ -423,16 +422,14 @@ class _BoundaryFunction(bspline._BaseGeoFunc):
     def __init__(self, f, bdspec, flip = None):
         self.f = f
         bdspec = bspline._parse_bdspec(bdspec, f.sdim)
-        axis, sides = tuple(zip(*bdspec))
-        ax = axis[0]
-        side = sides[0]
-        lohi = f.support[ax]
-        self.fixed_coord = (lohi[0] if sides==0 else lohi[1])
-        self.axis = ax
-        self.side = side
-        self.support = f.support[:ax] + f.support[ax+1:]
+        self.axis, self.sides = tuple(zip(*sorted(bdspec)))
+        self.fixed_coord = {ax: f.support[ax][idx] for ax, idx in bdspec}
+        self.support = list(f.support)
+        for ax in np.flip(self.axis):
+            del self.support[ax]
+        self.support=tuple(self.support)
         self.dim = f.dim
-        self.sdim = f.sdim - 1
+        self.sdim = f.sdim - len(bdspec)
         
         if flip is None:
             flip = self.sdim*(False,)
@@ -443,20 +440,23 @@ class _BoundaryFunction(bspline._BaseGeoFunc):
 
     def eval(self, *x):
         x = list(x)
-        x.insert(len(x) - self.axis, self.fixed_coord)
+        for ax in self.axis:
+            x.insert(len(x) - ax, self.fixed_coord[ax])
         return self.f(*x)
 
     def grid_eval(self, gridaxes):
-        gridaxes = [1 - grid if flp else grid for grid, supp, flp in zip(gridaxes, self.support, self.flip)]
-        gridaxes.insert(self.axis, np.array([self.fixed_coord]))
+        gridaxes = [1 - grid if flp else grid for grid, flp in zip(gridaxes, self.flip)]
+        for ax in self.axis:
+            gridaxes.insert(ax, np.array([self.fixed_coord[ax]]))
         vals = utils.grid_eval(self.f, gridaxes)
-        return vals.squeeze(self.axis)
+        return np.squeeze(vals,self.axis)
 
     def grid_jacobian(self, gridaxes, keep_normal=False):
-        gridaxes = [1 - grid if flp else grid for grid, supp, flp in zip(gridaxes, self.support, self.flip)]
-        gridaxes.insert(self.axis, np.array([self.fixed_coord]))
+        gridaxes = [1 - grid if flp else grid for grid, flp in zip(gridaxes, self.flip)]
+        for ax in self.axis:
+            gridaxes.insert(ax, np.array([self.fixed_coord[ax]]))
         jacs = self.f.grid_jacobian(gridaxes)
-        jacs = jacs.squeeze(self.axis)
+        jacs = np.squeeze(jacs, self.axis)
         if not keep_normal:
             # drop the partial derivatives corresponding to the normal
             # direction
@@ -477,7 +477,7 @@ class _BoundaryFunction(bspline._BaseGeoFunc):
             x[:,[0,1]]=x[:,[1,0]]
             return di*x/np.linalg.norm(x,axis=1)[:,None]
         elif self.dim==3 and self.sdim==2:   # surface integral
-            di=-1 if (self.axis+self.side)%2==0 else 1
+            di=-1 if (self.axis[0]+self.sides[0])%2==0 else 1
             x, y = jacs[:,:,:,0], jacs[:,:,:,1]
             un=np.cross(x, y).reshape(N[0],N[1],3,1)
             return di*un/np.linalg.norm(un,axis=2)[:,:,None]

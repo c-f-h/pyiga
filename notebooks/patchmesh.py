@@ -1,4 +1,4 @@
-from pyiga import bspline, vis, assemble
+from pyiga import bspline, vis, assemble, topology
 import copy
 
 import numpy as np
@@ -16,17 +16,6 @@ def corners(geo, ravel=False):
     if ravel:
         return vtx.reshape((-1,geo.dim))
     return vtx
-
-def face_indices(n,m,z=True):
-    S=[]
-    for comb in it.combinations(range(n),n-m):
-        for i in it.product(*(n-m)*((0,1),)):
-            #print(list(zip(comb,i)))
-            if z:
-                S.append(list(zip(comb,i)))
-            else:
-                S.append([comb, i])
-    return S
 
 # Data structures:
 #
@@ -80,7 +69,7 @@ class PatchMesh:
                     [vtx[1], vtx[3]],    # right
                 ))
                     
-                for cspec, v in zip(face_indices(2,0), vtx):
+                for cspec, v in zip(topology.face_indices(2,0), vtx):
                     if v in self.Nodes['T0']:
                         self.Nodes['T0'][v][p] = cspec
                     else:

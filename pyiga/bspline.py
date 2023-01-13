@@ -797,6 +797,8 @@ def prolongation_tp(kvs1, kvs2):
     P = Prol[0]
     for d in range(1,dim):
         P = scipy.sparse.kron(P, Prol[d])
+    P=scipy.sparse.csr_matrix(P)
+    P.eliminate_zeros()
     return P
     
 def knot_insertion(kv, u):
@@ -1134,15 +1136,15 @@ class BSplineFunc(_BaseSplineFunc):
             return _BaseGeoFunc.boundary(self, bdspec)
         
         bdspec = _parse_bdspec(bdspec, self.sdim)
-        axis, sides = tuple(zip(*bdspec))#tuple(ax for ax, _ in bdspec), tuple(-idx for _, idx in bdspec)
+        axis, sides = tuple(ax for ax, _ in bdspec), tuple(-idx for _, idx in bdspec)
 
         assert all([0 <= ax < self.sdim for ax in axis]), 'Invalid axis'
         slices = self.sdim * [slice(None)]
         for ax, idx in zip(axis, sides):
-            slices[ax] = (idx)
+            slices[ax] = idx
         coeffs = self.coeffs[tuple(slices)]
         kvs = list(self.kvs)
-        for ax in axis:
+        for ax in sorted(axis,reverse=True):
             del kvs[ax]
         return BSplineFunc(kvs, coeffs)
 

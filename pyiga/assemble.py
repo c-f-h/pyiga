@@ -415,35 +415,34 @@ def boundary_dofs(kvs, bdspec, ravel=False, swap=None, flip=None):
     """Indices of the dofs which lie on the given boundary of the tensor
     product basis `kvs`. Output format is as for :func:`slice_indices`.
     """
-    bd = bspline._parse_bdspec(bdspec, len(kvs))
-    axis, sides = tuple(ax for ax, _ in bd), tuple(-idx for _, idx in bd)
+    bdspec = bspline._parse_bdspec(bdspec, len(kvs))
+    axis, sides = tuple(ax for ax, _ in bdspec), tuple(-idx for _, idx in bdspec)
     N = tuple(kv.numdofs for kv in kvs)
     return slice_indices(axis, sides, N, ravel=ravel, swap=swap, flip=flip)
 
-def boundary_kv(kvs, bdspec, flip=None):
+def boundary_kv(kvs, bdspec, swap=None, flip=None):
+    kvs=list(kvs)
     if flip is None:
         flip=(len(kvs)-1)*(False,)
-    (ax,_) = bdspec
-    bkvs = (bspline.KnotVector(1-np.flip(kv.kv),kv.p) if flp else kv for kv, flp in zip(kvs[:ax]+kvs[(ax+1):],flip))
-    return tuple(bkvs)
-    
-    #2D hardcoded for now
-    if cspec == (0,0):
-        bdspecs = [(0,0), (1,0)]  #bottom and left
-    elif cspec == (0,1):
-        bdspecs = [(0,0), (1,1)]  #bottom and right
-    elif cspec == (1,0):
-        bdspecs = [(0,1), (1,0)]  #top and left
-    elif cspec == (1,1):
-        bdspecs = [(0,1), (1,1)]  #top and right
-    else:
-        assert False, 'Wrong input specification.'
+    bdspec = bspline._parse_bdspec(bdspec, len(kvs))
+    axis, sides = tuple(ax for ax, _ in bdspec), tuple(-idx for _, idx in bdspec)
+    not_axis = tuple(np.setdiff1d(range(len(kvs)),axis))
+    #bkvs = (bspline.KnotVector(1-np.flip(kv.kv),kv.p) if flp else kv for kv, flp in zip(not_axis,flip))
+    for ax in sorted(axis,reverse=True):
+        del kvs[ax]
+    if flip is not None:
+        for i, flp in enumerate(flip):
+            if flp:
+                kvs[i] = bspline.KnotVector(1-np.flip(kvs[i].kv),kvs[i].p)
+    if swap is not None:
+        kvs=[kvs[i] for i in swap]
+    return tuple(kvs)
         
-    bdaxes, bdsides = [bdspec[0] for bdspec in bdspecs], [bdspec[1] for bdspec in bdspecs]
-    idx = [np.arange(k_+1) if bdsides[i]==0 else np.arange(-1,-k_-2,-1) for i,k_ in enumerate(k)]
-    dofs=[slice_indices(bdaxes[0], i, N, ravel=ravel) for i in idx[0]]
-    dofs=[dofs_[idx[1]] for dofs_ in dofs]
-    return np.concatenate(dofs)
+#     bdaxes, bdsides = [bdspec[0] for bdspec in bdspecs], [bdspec[1] for bdspec in bdspecs]
+#     idx = [np.arange(k_+1) if bdsides[i]==0 else np.arange(-1,-k_-2,-1) for i,k_ in enumerate(k)]
+#     dofs=[slice_indices(bdaxes[0], i, N, ravel=ravel) for i in idx[0]]
+#     dofs=[dofs_[idx[1]] for dofs_ in dofs]
+#     return np.concatenate(dofs)
 
 def boundary_cells(kvs, bdspec, swap=None, ravel=False):
     """Indices of the cells which lie on the given boundary of the tensor
@@ -499,15 +498,13 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
     """
     bdspec = bspline._parse_bdspec(bdspec, len(kvs))
     axis, sides = tuple(ax for ax, _ in bdspec), tuple(-idx for _, idx in bdspec)
-
     # get basis for the boundary face
     bdbasis = list(kvs)
     assert len(bdbasis) == geo.sdim, 'Invalid dimension of geometry'
-    for ax in axis:
+    for ax in sorted(axis,reverse=True):
         del bdbasis[ax]
 
     # get boundary geometry and interpolate dir_func
-    #print(bdspec)
     bdgeo = geo.boundary(bdspec)
     from .approx import interpolate
     if np.isscalar(dir_func):

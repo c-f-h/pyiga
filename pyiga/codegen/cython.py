@@ -704,6 +704,7 @@ class AsmGenerator(CodegenVisitor):
         self.putf('def update(self, {args}):',
                 args=', '.join('%s=None' % inp.name for inp in self.updatable))
         self.indent()
+        self.put('N = self.fields.base.shape[:-1]')
 
         # declare/initialize array variables
         for var in self.vform.linear_deps:
@@ -711,7 +712,14 @@ class AsmGenerator(CodegenVisitor):
                 assert var.scope == vform.Scope.FIELD and var.is_global, 'only global array vars can be updated'
                 self.putf("if {name}:", name=var.src.name)
                 self.indent()
-                self.putf("{arr} = {src}", arr='self.'+var.name, src=self.parse_src(var))
+
+                var, sz, ofs = self.global_info[var.name]
+                arr = 'self.fields'
+                # NB: Cython (as of 0.29.20) can't assign an ndarray to a slice
+                # of a typed memoryview, so we use the underlying ndarray via .base
+                self.putf('{arr}.base[{dims}, {ofs}:{end}] = {src}.reshape(N + (-1,))',
+                        arr=arr, dims=self.dimrep(':'), ofs=ofs, end=ofs+sz, src=self.parse_src(var))
+
                 self.dedent()
         self.end_function()
 

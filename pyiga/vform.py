@@ -1779,11 +1779,25 @@ def divdiv_vf(dim):
 
 def L2functional_vf(dim, physical=False, updatable=False):
     V = VForm(dim, arity=1)
-    u = V.basisfuns()
+    v = V.basisfuns()
     f = V.input('f', shape=(), physical=physical, updatable=updatable)
-    V.add(f * u * dx)
+    V.add(f * v * dx)
     return V
 
+#surface variational forms
+
+def mass_Bvf(dim):
+    V = VForm(dim)
+    u, v = V.basisfuns()
+    V.add(u * v * ds)
+    return V
+
+def L2functional_Bvf(dim, physical=False, updatable=False):
+    V = VForm(dim, arity=1)
+    v = V.basisfuns()
+    f = V.input('f', shape=(), physical=physical, updatable=updatable)
+    V.add(f * v * ds)
+    return V
 ################################################################################
 # parse strings to VForms
 ################################################################################

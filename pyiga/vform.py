@@ -1787,13 +1787,13 @@ def L2functional_vf(dim, physical=False, updatable=False):
 #surface variational forms
 
 def mass_Bvf(dim):
-    V = VForm(dim)
+    V = VForm(dim, boundary=True)
     u, v = V.basisfuns()
     V.add(u * v * ds)
     return V
 
 def L2functional_Bvf(dim, physical=False, updatable=False):
-    V = VForm(dim, arity=1)
+    V = VForm(dim, arity=1, boundary=True)
     v = V.basisfuns()
     f = V.input('f', shape=(), physical=physical, updatable=updatable)
     V.add(f * v * ds)

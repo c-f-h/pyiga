@@ -4,6 +4,7 @@ import copy
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+from pyiga import topology
 #import BSegments
 
 def bdspec_to_int(bdspec):

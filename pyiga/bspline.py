@@ -773,7 +773,7 @@ def prolongation(kv1, kv2):
     C2 = collocation(kv2, g)
     P = scipy.sparse.linalg.spsolve(C2, C1)
     # prune matrix
-    P[np.abs(P) < 1e-15] = 0.0
+    P[np.abs(P) < 1e-12] = 0.0
     return scipy.sparse.csr_matrix(P)
 
 def prolongation_tp(kvs1, kvs2):

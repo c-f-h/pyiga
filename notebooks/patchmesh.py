@@ -50,7 +50,7 @@ class PatchMesh:
         self.outer_boundaries = {0:set()}
         
         self.Nodes = {'T0':dict(), 'T1':dict()}
-        #self.Nodes['T1'] = dict()
+        self.Nodes['T1'] = dict()
 
         if patches:
             # add interfaces between patches
@@ -323,7 +323,7 @@ class PatchMesh:
 
         # dimension-independent description of bottom/left and top/right edge
         lower, upper = 2 * axis, 2 * axis + 1
-        l, r =(lower+2)%4, (upper+2)%4
+        sides = (lower+2)%4, (upper+2)%4
 
         # copy existing boundaries, they will be corrected below
         boundaries = list(boundaries)
@@ -347,11 +347,10 @@ class PatchMesh:
             if (p, upper) in self.outer_boundaries[s]:
                 self.outer_boundaries[s].remove((p, upper))
                 self.outer_boundaries[s].add((new_p, upper))
-            if (p, l) in self.outer_boundaries[s]:
-                self.outer_boundaries[s].add((new_p, l))
-            if (p, r) in self.outer_boundaries[s]:
-                self.outer_boundaries[s].add((new_p, r))
-
+            for bd in sides:
+                if (p, bd) in self.outer_boundaries[s]:
+                    self.outer_boundaries[s].add((new_p, bd))
+                    
         boundaries[upper]     = list(new_vertices)      # upper edge of new lower patch
         new_boundaries[lower] = list(new_vertices)      # lower edge of new upper patch
 
@@ -370,7 +369,7 @@ class PatchMesh:
             # change patch index for all interfaces from the split part of the boundary
             self._reindex_interfaces(p, sb, range(i_new, len(new_bd) - 1), -i_new, new_p=new_p)
             
-        # change patch index for all corner nodes and T nodes on the upper edge of old patch   
+        #change patch index for all corner nodes and T nodes on the upper edge of old patch   
         for vtx in new_boundaries[upper]:
                 if vtx in self.Nodes['T0']:
                     c = self.Nodes['T0'][vtx][p]

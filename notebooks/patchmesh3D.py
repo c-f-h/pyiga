@@ -53,6 +53,7 @@ class PatchMesh3D:
         self.edges=[]
         self.patches = []
         self.interfaces = dict()
+        self.outer_boundaries = {0:set()}
         
         self.Nodes = {'T0':dict(), 'T1':dict(), 'T2':dict()}
         self.Edges = {'T0':dict(), 'T1':dict()}
@@ -95,6 +96,11 @@ class PatchMesh3D:
 
             for (p0, bd0, p1, bd1, conn_info) in interfaces:
                 self.add_interface(p0, bdspec_to_int(bd0), tuple(), p1, bdspec_to_int(bd1), tuple(), conn_info)
+                
+            for p in range(len(patches)):
+                for b in range(6):
+                    if (p,b,tuple()) not in self.interfaces:
+                        self.outer_boundaries[0].add((p,b))
 
             #self.sanity_check()
 
@@ -171,14 +177,24 @@ class PatchMesh3D:
             (kvs,geo), b = self.patches[p]
             new_kvs = tuple([kv.refine(mult=mult) for kv in kvs])
             self.patches[p]=((new_kvs, geo), b)
+            
+    def set_boundary_id(self, boundary_id):
+        marked = set().union(*boundary_id.values())
+        for key in self.outer_boundaries.keys():
+            self.outer_boundaries[key]=self.outer_boundaries[key]-marked
+        self.outer_boundaries.update(boundary_id)
+        
+    def rename_boundary(self, idx,new_idx):
+        assert new_idx not in self.outer_boundaries
+        self.outer_boundaries[new_idx] = self.outer_boundaries.pop(idx)
 
     def _reindex_interfaces(self, p, b, old_s, ofs = tuple(), r = 0, new_p=None):
-        old_s = list(old_s)
+        #old_s = list(old_s)
         if r > 0:
-            new_s = [ofs + s[:-r] for s in old_s]
+            new_s = [ofs + s[r:] for s in old_s]
         else:
             new_s = [ofs + s for s in old_s]
-        if new_p is None:
+        if not new_p:
             new_p = p
         S_old = [(p, b, s) for s in old_s]
         S_new = [(new_p, b, s) for s in new_s]
@@ -275,6 +291,7 @@ class PatchMesh3D:
 
     def split_patch(self, p, axis = None, mult=1):
         if axis == None:
+            
             (p1, p2), new_kvs0 = self.split_patch(p,  axis=2, mult=mult)
             (p1, p3), new_kvs1 = self.split_patch(p1, axis=1, mult=mult)
             (p2, p4), _        = self.split_patch(p2, axis=1, mult=mult)
@@ -318,6 +335,7 @@ class PatchMesh3D:
 
         # dimension-independent description of front/bottom/left and back/top/right edge
         lower, upper = 2 * axis, 2 * axis + 1
+        sides = (lower+2)%6, (upper+2)%6, (lower+4)%6, (upper+4)%6 
 
         # copy existing boundaries, they will be corrected below
         boundaries = list(boundaries)
@@ -353,7 +371,15 @@ class PatchMesh3D:
         new_edges = [self.add_edge(new_vertices[i1], new_vertices[i2]) for i1, i2 in zip([0,2,0,1],[1,3,2,3])]
         # move existing interfaces from upper side of old to upper of new patch 
         self._reindex_interfaces(p, upper, boundaries[upper].return_segments(), new_p=new_p)
-
+        
+        for s in self.outer_boundaries.keys():
+            if (p, upper) in self.outer_boundaries[s]:
+                self.outer_boundaries[s].remove((p, upper))
+                self.outer_boundaries[s].add((new_p, upper))
+            for bd in sides:
+                if (p, bd) in self.outer_boundaries[s]:
+                    self.outer_boundaries[s].add((new_p, bd))
+                    
         boundaries[upper]     =  BSegments([self.edges[e] for e in new_edges], axis)   # upper edge of new lower patch
         new_boundaries[lower] =  BSegments([self.edges[e] for e in new_edges], axis)   # lower edge of new upper patch
 
@@ -373,7 +399,7 @@ class PatchMesh3D:
 
             # change patch index for all interfaces from the split part of the boundary
             self._reindex_interfaces(p, sb, [(1,) + s for s in new_boundaries[sb].return_segments()], ofs=tuple(), r = 1, new_p=new_p)
-            self._reindex_interfaces(p, sb, [(0,) + s for s in new_boundaries[sb].return_segments()], ofs=tuple(), r = 1)
+            self._reindex_interfaces(p, sb, [(0,) + s for s in boundaries[sb].return_segments()], ofs=tuple(), r = 1)
             
         # change patch index for all corner nodes and T nodes on the upper edge of old patch   
         
@@ -384,6 +410,47 @@ class PatchMesh3D:
         
         return (p, new_p), new_kvs     # return the two indices of the split patches and the joined knot mesh over the 2 patches
     
+    def split_boundary_idx(self, p, n, axis=None):
+        if axis==None:
+            axis=(0,1,2)
+        axis=np.unique(axis)
+        if len(axis)==1: axis=axis[0]
+        for s in self.outer_boundaries.keys():
+            
+            b_idx_p = [(patch , bd) for (patch, bd) in self.outer_boundaries[s] if patch == p]
+            
+            if b_idx_p:
+                if not np.isscalar(axis):
+                    for k,ax in enumerate(axis[::-1]):
+                        self.split_boundary_idx(p, n+2**k-1, axis=ax)
+                        for i in range(2**k-1):
+                            self.split_boundary_idx(n+i, n+2**k+i, axis=ax)
+                else:
+                    for (patch, bd) in b_idx_p:
+                        if axis == 0:
+                            if bd == 'back':
+                                self.outer_boundaries[s].remove((patch, bd))
+                                self.outer_boundaries[s].append((n, bd))
+                            if bd == 'left' or bd == 'right' or bd == 'bottom' or bd=='top':
+                                 self.outer_boundaries[s].append((n, bd))
+                        if axis == 1:
+                            if bd == 'top':
+                                self.outer_boundaries[s].remove((patch, bd))
+                                self.outer_boundaries[s].append((n, bd))
+                            if bd == 'left' or bd == 'right':
+                                self.outer_boundaries[s].append((n, bd))
+                            if self.dim == 3:
+                                if bd == 'front' or bd == 'back':
+                                    self.outer_boundaries[s].append((n, bd)) 
+                        if axis == 2:
+                            if bd == 'right':
+                                self.outer_boundaries[s].remove((patch, bd))
+                                self.outer_boundaries[s].append((n, bd))   
+                            if bd == 'bottom' or bd == 'top':
+                                self.outer_boundaries[s].append((n, bd))
+                            if self.dim == 3:
+                                if bd == 'front' or bd == 'back':
+                                    self.outer_boundaries[s].append((n, bd)) 
             
     def split_patches(self, patches=None, mult=1, dir_data = None):
         

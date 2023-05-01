@@ -12,26 +12,51 @@ from .tensor import apply_tprod
 
 def _parse_bdspec(bdspec, dim):
     if bdspec == 'left':
-        bd = (dim - 1, 0)
+        bd = ((dim - 1, 0),)
     elif bdspec == 'right':
-        bd = (dim - 1, 1)
+        bd = ((dim - 1, 1),)
     elif bdspec == 'bottom':
-        bd = (dim - 2, 0)
+        bd = ((dim - 2, 0),)
     elif bdspec == 'top':
-        bd = (dim - 2, 1)
+        bd = ((dim - 2, 1),)
     elif bdspec == 'front':
-        bd = (dim - 3, 0)
+        bd = ((dim - 3, 0),)
     elif bdspec == 'back':
-        bd = (dim - 3, 1)
+        bd = ((dim - 3, 1),)
     else:
-        bd = bdspec
-    if not (len(bd) == 2 and bd[1] in (0,1)):
-        raise ValueError('invalid bdspec ' + str(bd))
-    if bd[0] < 0 or bd[0] >= dim:
-        raise ValueError('invalid bdspec %s for space of dimension %d'
+        bd=bdspec
+        if not all((side in (0,1) for _, side in bd)):
+            raise ValueError('invalid bdspec ' + str(bd))
+        if any(( ax < 0 or ax >= dim for ax, _ in bd)):
+            raise ValueError('invalid bdspec %s for space of dimension %d'
                 % (bdspec, dim))
     return bd
 
+def is_sub_space(kv1,kv2):
+    """Checks if the spline space induced by the knot vector kv1 is a subspace of the corresponding spline space induced by kv2 in some subinterval of kv1.
+    
+    Currently only covers cases with the same spline degree `p`.
+    
+    """
+    assert kv1.p == kv2.p
+    
+    a1, b1 = kv1.support()
+    a2, b2 = kv2.support()
+    
+    if a2 < a1 or b2 > b1:
+        return False
+
+    return all([any(np.isclose(k,kv2.mesh)) for k in kv1.mesh if a2 <= k <= b2])
+
+
+def multi_indices(N, k=0):
+    assert N>0 and k>=0, "N must be positive and k non-negative."
+    if N==1:
+        yield (k,)
+    else:
+        for i in range(k,-1,-1):
+            for j in multi_indices(N-1,k-i):
+                yield (i,) + j
 
 class KnotVector:
     """Represents an open B-spline knot vector together with a spline degree.
@@ -173,12 +198,14 @@ class KnotVector:
             # support interval; clamp them manually to avoid problems later on
             return np.clip(g, self.kv[0], self.kv[-1])
 
-    def refine(self, new_knots=None):
+    def refine(self, new_knots=None, mult=1):
         """Return the refinement of this knot vector by inserting `new_knots`,
         or performing uniform refinement if none are given."""
         if new_knots is None:
             mesh = self.mesh
             new_knots = (mesh[1:] + mesh[:-1]) / 2
+            if mult>1:
+                new_knots = np.hstack(mult*[new_knots,])
         kvnew = np.sort(np.concatenate((self.kv, new_knots)))
         return KnotVector(kvnew, self.p)
 
@@ -611,6 +638,21 @@ def collocation(kv, nodes):
 
     return scipy.sparse.coo_matrix((values.ravel(), (I,J)), shape=(m,n)).tocsr()
 
+def collocation_tp(kvs, gridaxes):
+    """Compute collocation matrix for Tensor product B-spline basis at the given interpolation grid"""
+    dim=len(kvs)
+    assert len(gridaxes)==dim,"Input has wrong dimension."
+    if not all(np.ndim(ax) == 1 for ax in gridaxes):
+            gridaxes = tuple(np.squeeze(ax) for ax in gridaxes)
+            assert all(ax.ndim == 1 for ax in gridaxes), \
+                "Grid axes should be one-dimensional"
+    
+    Colloc = [collocation(kvs[d],gridaxes[d]) for d in range(dim)]
+    C = Colloc[0]
+    for d in range(1,dim):
+        C = scipy.sparse.kron(C,Colloc[d])
+    return C
+
 def collocation_info(kv, nodes):
     """Return two arrays: one containing the index of the first active B-spline
     per evaluation node, and one containing, per node, the coefficient vector
@@ -645,6 +687,29 @@ def collocation_derivs(kv, nodes, derivs=1):
 
     return [scipy.sparse.coo_matrix((values[d].ravel(), (I,J)), shape=(m,n)).tocsr()
             for d in range(derivs + 1)]
+
+def collocation_derivs_tp(kvs, gridaxes, derivs=1):
+    """Compute collocation matrix and derivative collocation matrices for Tensor product B-spline
+    basis at the given grid.
+
+    Returns a list of derivs+1 lists containing collocation matrices for derivatives of order derivs as sparse CSR matrices with shape (m,n) where me is the number of gridpoints
+    and n the  overall number of basis functions related to kvs."""
+    dim=len(kvs)
+    assert len(gridaxes)==dim,"Input has wrong dimension."
+    if not all(np.ndim(ax) == 1 for ax in gridaxes):
+            gridaxes = tuple(np.squeeze(ax) for ax in gridaxes)
+            assert all(ax.ndim == 1 for ax in gridaxes), \
+                "Grid axes should be one-dimensional"
+    
+    Colloc = [collocation_derivs(kvs[d],gridaxes[d],derivs=derivs) for d in range(dim)]
+    D = [[] for k in range(derivs+1)]
+    for k in range(derivs+1):
+        for ind in multi_indices(dim,k):
+            C=Colloc[0][ind[0]]
+            for d in range(1,dim):
+                C = scipy.sparse.kron(C,Colloc[d][ind[d]])
+            D[k].append(C)
+    return D
 
 def collocation_derivs_info(kv, nodes, derivs=1):
     """Similar to :func:`collocation_info`, but the second array also contains
@@ -708,9 +773,34 @@ def prolongation(kv1, kv2):
     C2 = collocation(kv2, g)
     P = scipy.sparse.linalg.spsolve(C2, C1)
     # prune matrix
-    P[np.abs(P) < 1e-15] = 0.0
+    P[np.abs(P) < 1e-12] = 0.0
     return scipy.sparse.csr_matrix(P)
 
+def prolongation_tp(kvs1, kvs2):
+    """Compute prolongation matrix between Tensor product B-spline bases.
+
+    Given two Tensor product B-spline bases, where the first spans a subspace of the second
+    one, compute the matrix which maps spline coefficients from the first
+    basis to the coefficients of the same function in the second basis.
+
+    Args:
+        kvs1 (tuple(:class:`KnotVector`)): tuple of source B-spline basis knot vectors
+        kvs2 (tuple(:class:`KnotVector`)): tuple of target B-spline basis knot vectors
+
+    Returns:
+        csr_matrix: sparse matrix which prolongs coefficients from `kvs1` to `kvs2`
+    """
+    assert len(kvs1)==len(kvs2), "Number of dimensions does not match!"
+    dim = len(kvs1)
+    
+    Prol = [prolongation(kvs1[d],kvs2[d]) for d in range(dim)]
+    P = Prol[0]
+    for d in range(1,dim):
+        P = scipy.sparse.kron(P, Prol[d])
+    P=scipy.sparse.csr_matrix(P)
+    P.eliminate_zeros()
+    return P
+    
 def knot_insertion(kv, u):
     """Return a sparse matrix of size `(n+1) x n`, with `n = kv.numdofs´, which
     maps coefficients from `kv` to a new knot vector obtained by inserting the
@@ -784,7 +874,7 @@ class _BaseGeoFunc:
         else:
             raise ValueError('Could not find coordinates for desired point %s' % (x,))
 
-    def boundary(self, bdspec):
+    def boundary(self, bdspec, flip = None):
         """Return one side of the boundary as a :class:`.UserFunction`.
 
         Args:
@@ -795,7 +885,7 @@ class _BaseGeoFunc:
             has `sdim` reduced by 1 and the same `dim` as this function
         """
         from .geometry import _BoundaryFunction
-        return _BoundaryFunction(self, bdspec)
+        return _BoundaryFunction(self, bdspec, flip=flip)
 
 class _BaseSplineFunc(_BaseGeoFunc):
     def eval(self, *x):
@@ -919,6 +1009,25 @@ class BSplineFunc(_BaseSplineFunc):
             ops = [colloc[j][1 if j==i else 0] for j in range(self.sdim)] # deriv. in i-th direction
             grad_components.append(apply_tprod(ops, self.coeffs))   # shape: shape(grid) x self.dim
         return np.stack(grad_components, axis=-1)   # shape: shape(grid) x self.dim x self.sdim
+    
+    def grid_outer_normal(self, gridaxes):
+        gridaxes = list(gridaxes)
+        N = [len(grid) for grid in gridaxes]
+        #gridaxes.insert(self.axis, np.array([self.fixed_coord]))
+        jacs = self.grid_jacobian(gridaxes)
+        if self.dim==2 and self.sdim==1:     # line integral
+            x = jacs
+            #di=-1 if self.axis != self.side else 1
+            x[:,0]=-x[:,0]
+            x[:,[0,1]]=x[:,[1,0]]
+            return x/np.linalg.norm(x,axis=1)[:,None]
+        elif self.dim==3 and self.sdim==2:   # surface integral
+            #di=-1 if (self.axis+self.side)%2==0 else 1
+            x, y = jacs[:,:,:,0], jacs[:,:,:,1]
+            un=np.cross(x, y).reshape(N[0],N[1],3,1)
+            return un/np.linalg.norm(un,axis=2)[:,:,None]
+        else:
+            assert False, 'do not know how to compute normal vector for Jacobian shape {}'.format(jacs.shape)
 
     def grid_hessian(self, gridaxes):
         """Evaluate the Hessian matrix of a scalar or vector function on a tensor product grid.
@@ -1025,14 +1134,18 @@ class BSplineFunc(_BaseSplineFunc):
             # if we have reduced support, the boundary may not be
             # interpolatory; return a custom function
             return _BaseGeoFunc.boundary(self, bdspec)
+        
+        bdspec = _parse_bdspec(bdspec, self.sdim)
+        axis, sides = tuple(ax for ax, _ in bdspec), tuple(-idx for _, idx in bdspec)
 
-        axis, side = _parse_bdspec(bdspec, self.sdim)
-        assert 0 <= axis < self.sdim, 'Invalid axis'
+        assert all([0 <= ax < self.sdim for ax in axis]), 'Invalid axis'
         slices = self.sdim * [slice(None)]
-        slices[axis] = (0 if side==0 else -1)
+        for ax, idx in zip(axis, sides):
+            slices[ax] = idx
         coeffs = self.coeffs[tuple(slices)]
         kvs = list(self.kvs)
-        del kvs[axis]
+        for ax in sorted(axis,reverse=True):
+            del kvs[ax]
         return BSplineFunc(kvs, coeffs)
 
     @property
@@ -1085,6 +1198,18 @@ class BSplineFunc(_BaseSplineFunc):
         R = np.array([
             [c, -s],
             [s, c]
+        ])
+        return self.apply_matrix(R)
+    
+    def rotate_3d(self, angle, n):
+        """Rotate a geometry with :attr:`dim` = 3 by the given angle around a given line generated by n and return the result."""
+        assert self.dim == 3, 'Must be 3D vector function'
+        (n1,n2,n3) = n = n/np.linalg.norm(n)
+        s, c = np.sin(angle), np.cos(angle)
+        R = np.array([
+            [n1**2*(1-c) + c   , n1*n2*(1-c) - n3*s, n1*n3*(1-c) + n2*s],
+            [n1*n2*(1-c) + n3*s, n2**2*(1-c) + c   , n2*n3*(1-c) - n1*s],
+            [n1*n3*(1-c) - n2*s, n2*n3*(1-c) + n1*s, n3**2*(1-c) + c   ]
         ])
         return self.apply_matrix(R)
 

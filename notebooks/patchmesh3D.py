@@ -107,6 +107,12 @@ class PatchMesh3D:
     @property
     def numpatches(self):
         return len(self.patches)
+    
+    def geos(self):
+        return [geo for ((_, geo),_) in self.patches]
+    
+    def kvs(self):
+        return [kvs for ((kvs, _),_) in self.patches]
             
     def add_vertex(self, pos):
         """Add a new vertex at `pos` at return new index and `False` or return its index and `True` if one already exists there."""

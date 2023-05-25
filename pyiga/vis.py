@@ -102,7 +102,7 @@ def plot_surface(geo,
     meshx = np.linspace(supp[0][0], supp[0][1], res)
     meshy = np.linspace(supp[1][0], supp[1][1], res)
 
-    def plotline(pts, capstyle='butt', color=color):
+    def plotline(pts, capstyle='butt', color=color, linewidth=None):
         if geo.dim == 3:
             plt.plot(pts[:,0], pts[:,1], pts[:,2], color=color, linewidth=linewidth,
                                        solid_joinstyle='round', solid_capstyle=capstyle)
@@ -111,16 +111,16 @@ def plot_surface(geo,
                 solid_joinstyle='round', solid_capstyle=capstyle)
 
     pts = utils.grid_eval(geo, (gridx, meshy))
-    plotline(pts[0,:,:], capstyle='round')
+    plotline(pts[0,:,:], capstyle='round', linewidth=linewidth)
     for i in range(1, pts.shape[0]-1):
-        plotline(pts[i,:,:])
-    plotline(pts[-1,:,:], capstyle='round')
+        plotline(pts[i,:,:], linewidth=linewidth)
+    plotline(pts[-1,:,:], capstyle='round', linewidth=linewidth)
 
     pts = utils.grid_eval(geo, (meshx, gridy))
-    plotline(pts[:,0,:], capstyle='round')
+    plotline(pts[:,0,:], capstyle='round', linewidth=linewidth)
     for j in range(1, pts.shape[1]-1):
-        plotline(pts[:,j,:])
-    plotline(pts[:,-1,:], capstyle='round')
+        plotline(pts[:,j,:], linewidth=linewidth)
+    plotline(pts[:,-1,:], capstyle='round', linewidth=linewidth)
 
 
 def plot_curve(geo, res=50, linewidth=None, color='black'):

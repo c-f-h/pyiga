@@ -101,7 +101,12 @@ def plot_surface(geo,
 
     meshx = np.linspace(supp[0][0], supp[0][1], res)
     meshy = np.linspace(supp[1][0], supp[1][1], res)
-
+    # bpts0 = utils.grid_eval(geo, (np.linspace(supp[0][0], supp[0][1], 2), meshy))
+    # bpts1 = utils.grid_eval(geo, (meshx,np.linspace(supp[0][0], supp[0][1], 2)))
+    # x=np.concatenate([bpts0[0,:,0],bpts1[:,1,0],np.flip(bpts0[1,:,0]),np.flip(bpts1[:,0,0])])
+    # y=np.concatenate([bpts0[0,:,1],bpts1[:,1,1],np.flip(bpts0[1,:,1]),np.flip(bpts1[:,0,1])])
+    # plt.fill(x,y,color='lightgray')
+    
     def plotline(pts, capstyle='butt', color=color, linewidth=None):
         if geo.dim == 3:
             plt.plot(pts[:,0], pts[:,1], pts[:,2], color=color, linewidth=linewidth,
@@ -121,6 +126,8 @@ def plot_surface(geo,
     for j in range(1, pts.shape[1]-1):
         plotline(pts[:,j,:], linewidth=linewidth)
     plotline(pts[:,-1,:], capstyle='round', linewidth=linewidth)
+    
+    
 
 
 def plot_curve(geo, res=50, linewidth=None, color='black'):

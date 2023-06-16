@@ -101,6 +101,7 @@ Integration
 
 """
 import numpy as np
+import matplotlib.pyplot as plt
 import scipy
 import scipy.sparse
 import itertools
@@ -116,6 +117,7 @@ from . import utils
 from . import geometry
 from . import algebra
 from . import topology
+from . import vis
 
 from .quadrature import make_iterated_quadrature, make_tensor_quadrature
 from .mlmatrix import MLStructure
@@ -1695,8 +1697,8 @@ class Multipatch:
 
         for (u_func, ((kvs, geo),_)) in zip(u_funcs, self.mesh.patches):
             vis.plot_field(u_func, geo, vmin=u_min, vmax=u_max)
-        axis('scaled')
-        colorbar();
+        plt.axis('scaled');
+        plt.colorbar();
         plt.show()
     
     def sanity_check(self):

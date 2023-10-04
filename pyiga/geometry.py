@@ -13,7 +13,6 @@ from .tensor import apply_tprod
 
 import functools
 
-
 def _nurbs_jacobian(val, jac):
     """Compute the NURBS Jacobians given an array of B-spline values and
     B-spline Jacobians.
@@ -48,7 +47,7 @@ class NurbsFunc(bspline._BaseSplineFunc):
     The evaluation functions have the same prototypes and behavior as those in
     :class:`.BSplineFunc`.
     """
-    def __init__(self, kvs, coeffs, weights, premultiplied=False):
+    def __init__(self, kvs, coeffs, weights, premultiplied=False, support=None):
         if isinstance(kvs, bspline.KnotVector):
             kvs = (kvs,)
         self.kvs = tuple(kvs)
@@ -89,7 +88,10 @@ class NurbsFunc(bspline._BaseSplineFunc):
         if not premultiplied:
             self.coeffs[..., :-1] *= self.coeffs[..., -1:]
 
-        self._support_override = None
+        if support:
+            self._support_override = tuple(support)
+        else:
+            self._support_override = None
 
     def output_shape(self):
         if self._isscalar:
@@ -246,7 +248,7 @@ class NurbsFunc(bspline._BaseSplineFunc):
 
     @support.setter
     def support(self, new_support):
-        self._support_override = new_support
+        self._support_override = tuple(new_support)
 
     def copy(self):
         """Return a copy of this geometry."""
@@ -488,15 +490,15 @@ class _BoundaryFunction(bspline._BaseGeoFunc):
 # Examples of 2D geometries
 ################################################################################
 
-def unit_square(num_intervals=1):
+def unit_square(num_intervals=1, support = None):
     """Unit square with given number of intervals per direction.
 
     Returns:
         :class:`.BSplineFunc` 2D geometry
     """
-    return unit_cube(dim=2, num_intervals=num_intervals)
+    return unit_cube(dim=2, num_intervals=num_intervals, support=support)
 
-def perturbed_square(num_intervals=5, noise=0.02):
+def perturbed_square(num_intervals=5, noise=0.02, support = None):
     """Randomly perturbed unit square.
 
     Unit square with given number of intervals per direction;
@@ -506,9 +508,9 @@ def perturbed_square(num_intervals=5, noise=0.02):
     Returns:
         :class:`.BSplineFunc` 2D geometry
     """
-    return unit_square(num_intervals).perturb(noise)
+    return unit_square(num_intervals, support).perturb(noise)
 
-def bspline_annulus(r1=1.0, r2=2.0, phi=np.pi/2):
+def bspline_annulus(r1=1.0, r2=2.0, phi=np.pi/2, support = None):
     """A B-spline approximation of a quarter annulus in the first quadrant.
 
     Args:
@@ -530,9 +532,9 @@ def bspline_annulus(r1=1.0, r2=2.0, phi=np.pi/2):
             [[np.cos(phi)*r1,  np.sin(phi)*r1],
              [np.cos(phi)*r2,  np.sin(phi)*r2]],
     ])
-    return BSplineFunc((kvy,kvx), coeffs)
+    return BSplineFunc((kvy,kvx), coeffs, support)
 
-def bspline_quarter_annulus(r1=1.0, r2=2.0):
+def bspline_quarter_annulus(r1=1.0, r2=2.0, support = None):
     """A B-spline approximation of a quarter annulus in the first quadrant.
 
     Args:
@@ -553,9 +555,9 @@ def bspline_quarter_annulus(r1=1.0, r2=2.0):
             [[0.0,  r1],
              [0.0,  r2]],
     ])
-    return BSplineFunc((kvy,kvx), coeffs)
+    return BSplineFunc((kvy,kvx), coeffs, support)
 
-def annulus(r1=1.0, r2=2.0, phi=np.pi/2):
+def annulus(r1=1.0, r2=2.0, phi=np.pi/2, support = None):
     """A NURBS representation of a quarter annulus in the first quadrant.
     The 'bottom' and 'top' boundaries (with respect to the reference domain)
     lie on the x and y axis, respectively.
@@ -579,9 +581,9 @@ def annulus(r1=1.0, r2=2.0, phi=np.pi/2):
             [[np.cos(phi)*r1,  np.sin(phi)*r1, 1.0],
              [np.cos(phi)*r2,  np.sin(phi)*r2, 1.0]],
     ])
-    return NurbsFunc((kvy,kvx), coeffs, weights=None)
+    return NurbsFunc((kvy,kvx), coeffs, weights=None, support = support)
 
-def quarter_annulus(r1=1.0, r2=2.0):
+def quarter_annulus(r1=1.0, r2=2.0, support = None):
     """A NURBS representation of a quarter annulus in the first quadrant.
     The 'bottom' and 'top' boundaries (with respect to the reference domain)
     lie on the x and y axis, respectively.
@@ -604,7 +606,7 @@ def quarter_annulus(r1=1.0, r2=2.0):
             [[0.0,  r1, 1.0],
              [0.0,  r2, 1.0]],
     ])
-    return NurbsFunc((kvy,kvx), coeffs, weights=None)
+    return NurbsFunc((kvy,kvx), coeffs, weights=None, support = support)
 
 def _combine_boundary_curves(bottom, top, left, right):
     kvs = (left.kvs[0], bottom.kvs[0])
@@ -615,7 +617,7 @@ def _combine_boundary_curves(bottom, top, left, right):
     coeffs[-1, :] = top.coeffs
     return kvs, coeffs
 
-def disk(r=1.0):
+def disk(r=1.0, support = None):
     """A NURBS representation of a circular disk.
 
     The parametrization has four boundary singularities where the determinant
@@ -640,20 +642,24 @@ def disk(r=1.0):
     coeffs[1, 1] = (0.0, 0.0, 0.5)  # weight 1/2 makes weight matrix rank 1
     if r != 1.0:
         coeffs[:, :, :2] *= r
-    return NurbsFunc(kvs, coeffs, None, premultiplied=True)
+    return NurbsFunc(kvs, coeffs, None, premultiplied=True, support = support)
 
 ################################################################################
 # Examples of 3D geometries
 ################################################################################
 
-def unit_cube(dim=3, num_intervals=1):
+def unit_cube(dim=3, num_intervals=1, support = None):
     """The `dim`-dimensional unit cube with `num_intervals` intervals
     per coordinate direction.
 
     Returns:
         :class:`.BSplineFunc` geometry
     """
-    return functools.reduce(tensor_product, dim * (line_segment(0.0, 1.0, intervals=num_intervals),))
+    if support:
+        assert len(support)==dim, "Wrong dimension of support!"
+        return functools.reduce(tensor_product, tuple(line_segment(0.0, 1.0, intervals=num_intervals, support = S) for S in support))
+    else:
+        return functools.reduce(tensor_product, dim * (line_segment(0.0, 1.0, intervals=num_intervals),))
 
 def identity(extents):
     """Identity mapping (using linear splines) over a d-dimensional box
@@ -708,7 +714,7 @@ def twisted_box():
 # Functions for creating curves
 ################################################################################
 
-def line_segment(x0, x1, support=(0.0, 1.0), intervals=1):
+def line_segment(x0, x1, intervals=1,support=None):
     """Return a :class:`.BSplineFunc` which describes the line between the
     vectors `x0` and `x1`.
 
@@ -728,7 +734,7 @@ def line_segment(x0, x1, support=(0.0, 1.0), intervals=1):
     # interpolate linearly
     S = np.linspace(0.0, 1.0, intervals+1).reshape((intervals+1, 1))
     coeffs = (1-S) * x0 + S * x1
-    return BSplineFunc(bspline.make_knots(1, support[0], support[1], intervals), coeffs)
+    return BSplineFunc(bspline.make_knots(1, 0.0, 1.0, intervals,), coeffs, support = support)
 
 def circular_arc(alpha, r=1.0):
     """Construct a circular arc with angle `alpha` and radius `r`.
@@ -895,6 +901,7 @@ def tensor_product(G1, G2, *Gs):
 
     Gs = (G1, G2)
     nurbs = any(isinstance(G, NurbsFunc) for G in Gs)
+    override = any(G._support_override for G in Gs)
 
     if nurbs:
         Gs = tuple(G.as_nurbs() for G in Gs)
@@ -907,6 +914,15 @@ def tensor_product(G1, G2, *Gs):
     else:
         assert isinstance(G1, BSplineFunc) and isinstance(G2, BSplineFunc)
         Cs = tuple(G.coeffs for G in Gs)
+        
+    if override:
+        if G1.sdim ==1: supp1 = (G1.support,) 
+        else: supp1 =G1.support
+        if G2.sdim ==1: supp2 = (G2.support,) 
+        else: supp2 = G2.support
+        support = supp1 + supp2
+    else:
+        support = None
 
     SD1, SD2 = (np.atleast_1d(C.shape[:G.sdim]) for (C,G) in zip(Cs,Gs))
     VD1, VD2 = (np.atleast_1d(C.shape[G.sdim:]) for (C,G) in zip(Cs,Gs))
@@ -920,6 +936,6 @@ def tensor_product(G1, G2, *Gs):
     C = np.concatenate((C2,C1), axis=-1)
 
     if nurbs:
-        return NurbsFunc(G1.kvs + G2.kvs, C, W)
+        return NurbsFunc(G1.kvs + G2.kvs, C, W, support = support)
     else:
-        return BSplineFunc(G1.kvs + G2.kvs, C)
+        return BSplineFunc(G1.kvs + G2.kvs, C, support = support)

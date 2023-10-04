@@ -66,7 +66,7 @@ def edges(corners):
 #
 
 class PatchMesh:
-    def __init__(self, patches = None):
+    def __init__(self, patches = None, interfaces = None):
         self.vertices = []
         self.patches = []
         self.interfaces = dict()
@@ -76,31 +76,28 @@ class PatchMesh:
         self.Nodes['T1'] = dict()
 
         if patches:
-            # add interfaces between patches
-            conn, interfaces = assemble.detect_interfaces(patches)
-            assert conn, 'patch graph is not connected!'
-            
             for p, patch in enumerate(patches):
                 kvs, geo = patch
                 # add/get vertices (checks for duplicates)
                 vtx = [self.add_vertex(c) for c in corners(geo, ravel = True)]
-                # add boundaries in fixed order
-                self.add_patch(patch, (
-                    [vtx[0], vtx[1]],    # bottom
-                    [vtx[2], vtx[3]],    # top
-                    [vtx[0], vtx[2]],    # left
-                    [vtx[1], vtx[3]],    # right
-                ))
-                    
-                for cspec, v in zip(face_indices(2,0), vtx):
-                    if v in self.Nodes['T0']:
-                        self.Nodes['T0'][v][p] = cspec
-                    else:
-                        self.Nodes['T0'][v]={p : cspec}
+                self.add_patch(patch)
 
-            for (p0, bd0, p1, bd1, (perm, flip)) in interfaces:
-                self.add_interface(p0, bdspec_to_int(bd0), 0, p1, bdspec_to_int(bd1), 0, flip)
-            
+                # for cspec, v in zip(face_indices(2,0), vtx):
+                #     if v in self.Nodes['T0']:
+                #         self.Nodes['T0'][v][p] = cspec
+                #     else:
+                #         self.Nodes['T0'][v]={p : cspec}
+                
+            # add interfaces between patches
+            if not interfaces:
+                conn, interfaces = assemble.detect_interfaces(patches)
+                assert conn, 'patch graph is not connected!'
+                for (p0, bd0, p1, bd1, (perm, flip)) in interfaces:
+                    self.add_interface(p0, bdspec_to_int(bd0), 0, p1, bdspec_to_int(bd1), 0, flip)
+            else:
+                for I in interfaces:
+                    self.add_interface(*I[0],*I[1],(I[2],))
+
             for p in range(len(patches)):
                 for b in range(4):
                     if (p,b,0) not in self.interfaces:
@@ -136,7 +133,13 @@ class PatchMesh:
                 return i_min
         raise ValueError('no vertex found at %s' % (pos,))
 
-    def add_patch(self, patch, boundaries):
+    def add_patch(self, patch):
+        kvs, geo = patch
+        vtx = [self.add_vertex(c) for c in corners(geo, ravel = True)]
+        boundaries = ([vtx[0], vtx[1]],    # bottom
+                      [vtx[2], vtx[3]],    # top
+                      [vtx[0], vtx[2]],    # left
+                      [vtx[1], vtx[3]])    # right
         self.patches.append((patch, boundaries))
 
     def add_interface(self, p0, b0, s0, p1, b1, s1, flip):
@@ -258,15 +261,15 @@ class PatchMesh:
         
         vtx1, vtx2 = self.boundaries(p)[b][::len(self.boundaries(p)[b])-1]
 
-        if vtx1 in self.Nodes['T0']:
-            corner1 = self.Nodes['T0'][vtx1][p]
-        else:
-            [corner1] = [c for patch, c in self.Nodes['T1'][vtx1][1:] if patch==p]
+#         if vtx1 in self.Nodes['T0']:
+#             corner1 = self.Nodes['T0'][vtx1][p]
+#         else:
+#             [corner1] = [c for patch, c in self.Nodes['T1'][vtx1][1:] if patch==p]
         
-        if vtx2 in self.Nodes['T0']:
-            corner2 = self.Nodes['T0'][vtx2][p]
-        else:
-            [corner2] = [c for patch, c in self.Nodes['T1'][vtx2][1:] if patch==p]
+#         if vtx2 in self.Nodes['T0']:
+#             corner2 = self.Nodes['T0'][vtx2][p]
+#         else:
+#             [corner2] = [c for patch, c in self.Nodes['T1'][vtx2][1:] if patch==p]
             
         try:
             # is the vertex already contained in the boundary?
@@ -277,21 +280,21 @@ class PatchMesh:
             #print(seg)
             self.split_boundary_segment(p, b, seg, new_vtx, new_p)
             
-            if (p,b,0) in self.interfaces:
-                self.Nodes['T1'][new_vtx] = ((self.interfaces[(p,b,0)][0][:-1],self.interfaces[(p,b,0)][1]), (p, corner2), (new_p, corner1))
-            else:
-                self.Nodes['T0'][new_vtx] = dict()
-                self.Nodes['T0'][new_vtx][p] = corner2
-                self.Nodes['T0'][new_vtx][new_p] = corner1
+            # if (p,b,0) in self.interfaces:
+            #     self.Nodes['T1'][new_vtx] = ((self.interfaces[(p,b,0)][0][:-1],self.interfaces[(p,b,0)][1]), (p, corner2), (new_p, corner1))
+            # else:
+            #     self.Nodes['T0'][new_vtx] = dict()
+            #     self.Nodes['T0'][new_vtx][p] = corner2
+            #     self.Nodes['T0'][new_vtx][new_p] = corner1
             return seg + 1  # we want the segment just after the newly inserted vertex
         else:
-            if new_vtx not in self.Nodes['T0']:
-                self.Nodes['T0'][new_vtx] = dict()
-            for patch, c in self.Nodes['T1'][new_vtx][1:]:
-                self.Nodes['T0'][new_vtx][patch] = c
-            self.Nodes['T0'][new_vtx][p] = corner2
-            self.Nodes['T0'][new_vtx][new_p] = corner1
-            del self.Nodes['T1'][new_vtx]
+            # if new_vtx not in self.Nodes['T0']:
+            #     self.Nodes['T0'][new_vtx] = dict()
+            # for patch, c in self.Nodes['T1'][new_vtx][1:]:
+            #     self.Nodes['T0'][new_vtx][patch] = c
+            # self.Nodes['T0'][new_vtx][p] = corner2
+            # self.Nodes['T0'][new_vtx][new_p] = corner1
+            # del self.Nodes['T1'][new_vtx]
             return vtx_idx
 
     def _find_boundary_split_index(self, p, bdidx, xi_split, vtx_idx):
@@ -393,24 +396,24 @@ class PatchMesh:
             self._reindex_interfaces(p, sb, range(i_new, len(new_bd) - 1), -i_new, new_p=new_p)
             
         #change patch index for all corner nodes and T nodes on the upper edge of old patch   
-        for vtx in new_boundaries[upper]:
-                if vtx in self.Nodes['T0']:
-                    c = self.Nodes['T0'][vtx][p]
-                    del self.Nodes['T0'][vtx][p]
-                    self.Nodes['T0'][vtx][new_p] = c
-                else:
-                    ((p0, b0), flip), (p1, c1), (p2, c2) = self.Nodes['T1'][vtx]
-                    if p0 == p: p0 = new_p
-                    if p1 == p: p1 = new_p
-                    if p2 == p: p2 = new_p
-                    self.Nodes['T1'][vtx] = (((p0, b0), flip), (p1, c1), (p2, c2))
+#         for vtx in new_boundaries[upper]:
+#                 if vtx in self.Nodes['T0']:
+#                     c = self.Nodes['T0'][vtx][p]
+#                     del self.Nodes['T0'][vtx][p]
+#                     self.Nodes['T0'][vtx][new_p] = c
+#                 else:
+#                     ((p0, b0), flip), (p1, c1), (p2, c2) = self.Nodes['T1'][vtx]
+#                     if p0 == p: p0 = new_p
+#                     if p1 == p: p1 = new_p
+#                     if p2 == p: p2 = new_p
+#                     self.Nodes['T1'][vtx] = (((p0, b0), flip), (p1, c1), (p2, c2))
         
-        #also change patch index of possible Nodes['T1'] at the new boundaries in the different axis direction (left and right)
-        for sb in split_boundaries:
-            for vtx in new_boundaries[sb][1:-1]:
-                if vtx in self.Nodes['T1']:
-                    ((p0, b0), flip), (p1, c1), (p2, c2) = self.Nodes['T1'][vtx]
-                    self.Nodes['T1'][vtx] = (((new_p, b0), flip), (p1, c1), (p2, c2))
+#         #also change patch index of possible Nodes['T1'] at the new boundaries in the different axis direction (left and right)
+#         for sb in split_boundaries:
+#             for vtx in new_boundaries[sb][1:-1]:
+#                 if vtx in self.Nodes['T1']:
+#                     ((p0, b0), flip), (p1, c1), (p2, c2) = self.Nodes['T1'][vtx]
+#                     self.Nodes['T1'][vtx] = (((new_p, b0), flip), (p1, c1), (p2, c2))
             
         self.patches[p] = ((kvs1, geo1), tuple(boundaries))
         self.patches.append(((kvs2, geo2), tuple(new_boundaries)))
@@ -501,7 +504,7 @@ class PatchMesh:
         fig=plt.figure(figsize=figsize)
         for ((kvs, geo),_) in self.patches:
             if knots:
-                vis.plot_geo(geo, gridx=kvs[0].mesh,gridy=kvs[1].mesh, color='gray')
+                vis.plot_geo(geo, gridx=kvs[0].mesh,gridy=kvs[1].mesh, color='lightgray')
             vis.plot_geo(geo, grid=2, linewidth=bwidth)
            
         if nodes:

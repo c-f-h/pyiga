@@ -25,7 +25,6 @@ def plot_field(field, geo=None, res=80, physical=False, **kwargs):
         C = utils.grid_eval(field, grd)
         return plt.pcolormesh(grd[1], grd[0], C, **kwargs)
 
-
 def plot_geo(geo,
              grid=10, gridx=None, gridy=None, gridz=None,
              res=50,
@@ -40,7 +39,10 @@ def plot_geo(geo,
         if gridx is None: gridx = grid
         if gridy is None: gridy = grid
         if gridz is None: gridz = grid
-    supp = geo.support
+    if geo._support_override:
+        supp = geo._support_override
+    else:
+        supp = geo.support
 
     # if gridx/gridy is not an array, build an array with given number of ticks
     if np.isscalar(gridx):
@@ -57,7 +59,6 @@ def plot_geo(geo,
     def plotline(pts, capstyle='butt', color=color):
         plt.plot(pts[:,0], pts[:,1], pts[:,2], color=color, linewidth=linewidth,
             solid_joinstyle='round', solid_capstyle=capstyle)
-
         
     pts = utils.grid_eval(geo, (gridx, gridy, meshz))
     for i in range(0, pts.shape[0]):
@@ -91,7 +92,10 @@ def plot_surface(geo,
     assert geo.sdim == 2 and (geo.dim == 2 or geo.dim == 3), "Can only plot surfaces."
     if gridx is None: gridx = grid
     if gridy is None: gridy = grid
-    supp = geo.support
+    if geo._support_override:
+        supp = geo._support_override
+    else:
+        supp = geo.support
 
     # if gridx/gridy is not an array, build an array with given number of ticks
     if np.isscalar(gridx):
@@ -115,25 +119,28 @@ def plot_surface(geo,
             plt.plot(pts[:,0], pts[:,1], color=color, linewidth=linewidth,
                 solid_joinstyle='round', solid_capstyle=capstyle)
 
+    #print(meshy)
     pts = utils.grid_eval(geo, (gridx, meshy))
+    #print(pts)
     plotline(pts[0,:,:], capstyle='round', linewidth=linewidth)
     for i in range(1, pts.shape[0]-1):
         plotline(pts[i,:,:], linewidth=linewidth)
     plotline(pts[-1,:,:], capstyle='round', linewidth=linewidth)
 
     pts = utils.grid_eval(geo, (meshx, gridy))
+    #print(pts)
     plotline(pts[:,0,:], capstyle='round', linewidth=linewidth)
     for j in range(1, pts.shape[1]-1):
         plotline(pts[:,j,:], linewidth=linewidth)
     plotline(pts[:,-1,:], capstyle='round', linewidth=linewidth)
-    
-    
-
 
 def plot_curve(geo, res=50, linewidth=None, color='black'):
     """Plot a 2D curve."""
     assert (geo.dim == 2 or geo.dim == 3) and geo.sdim == 1, 'Can only plot 2D curves'
-    supp = geo.support
+    if geo._support_override:
+        supp = geo._support_override
+    else:
+        supp = geo.support
     mesh = np.linspace(supp[0][0], supp[0][1], res)
     pts = utils.grid_eval(geo, (mesh,))
     if geo.dim == 3:

@@ -934,7 +934,7 @@ class BSplineFunc(_BaseSplineFunc):
         sdim (int): dimension of the parameter domain
         dim (int): dimension of the output of the function
     """
-    def __init__(self, kvs, coeffs):
+    def __init__(self, kvs, coeffs, support = None):
         if isinstance(kvs, KnotVector):
             kvs = (kvs,)
         self.kvs = tuple(kvs)
@@ -956,7 +956,10 @@ class BSplineFunc(_BaseSplineFunc):
             dim = dim[0]
         self.dim = dim
 
-        self._support_override = None
+        if support:
+            self._support_override = support
+        else:
+            self._support_override = None
 
     def output_shape(self):
         return self.coeffs.shape[self.sdim:]

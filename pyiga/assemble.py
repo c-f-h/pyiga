@@ -1685,15 +1685,17 @@ class Multipatch:
                 bcs.append((idx.astype(int), bc[1][feasible]))
         return combine_bcs(bcs)
     
-    def plot(self, u, figsize=(5,5)):
+    def plot(self, u, figsize=(5,5), u_min = None, u_max = None):
         assert self.dim==2, 'visualization only possible for 2D.'
         assert len(u)==self.numdofs, 'wrong size of coefficient vector.'
         
         fig=plt.figure(figsize=figsize)
         u_loc = self.Basis@u
         u_funcs = [geometry.BSplineFunc(kvs, u_loc[self.N_ofs[p]:self.N_ofs[p+1]]) for p, kvs in enumerate(self.mesh.kvs())]
-        u_max=max(u)
-        u_min=min(u)
+        if not u_max:
+            u_max=max(u)
+        if not u_min:
+            u_min=min(u)
 
         for (u_func, ((kvs, geo),_)) in zip(u_funcs, self.mesh.patches):
             vis.plot_field(u_func, geo, vmin=u_min, vmax=u_max)

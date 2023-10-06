@@ -214,7 +214,10 @@ class KnotVector:
         nspans = self.numspans
         support = abs(self.kv[-1] - self.kv[0])
         return support / nspans
-
+    
+def mapto(kv, f):
+        """Transform mesh of the knots by the mapping f"""
+        return KnotVector(f(kv.kv), kv.p)
 
 def make_knots(p, a, b, n, mult=1):
     """Create an open knot vector of degree `p` over an interval `(a,b)` with `n` knot spans.
@@ -247,7 +250,6 @@ def numdofs(kvs):
         return kvs.numdofs
     else:
         return np.prod([kv.numdofs for kv in kvs])
-
 ################################################################################
 
 def ev(knotvec, coeffs, u):

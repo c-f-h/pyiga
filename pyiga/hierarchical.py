@@ -848,7 +848,7 @@ class HSpace:
             marked[l-self.disparity] = marked.get(l-self.disparity, set()) | neighbors
             self._mark_recursive(l-self.disparity, marked, truncate=truncate)
 
-    def refine(self, marked, truncate=False):
+    def refine(self, marked, truncate=False, refine_functions=False):
         """Refine the given cells; `marked` is a dictionary which has the
         levels as indices and the list of marked cells on that level as values.
 
@@ -861,13 +861,29 @@ class HSpace:
             input cells
         """
         max_lv = max(lv for (lv,cells) in marked.items() if cells)
-        self._ensure_levels(max_lv + 2)
+
+        if refine_functions:
+            # produce enlarged marked, such that all functions in the support of the input marked are refined
+            candidate_cells = [set() for k in range(self.numlevels)]
+            for (l, cells) in marked.items():
+                if not cells:
+                    continue
+                for k in range(max(0, l-self.disparity), l+1):
+                    candidate_cells[k] |= set(self.cell_support_extension(l, cells, k))
+            for l in range(self.numlevels):
+                if l > max_lv:
+                    candidate_cells[l] = set()
+                else:
+                    candidate_cells[l] &= self.hmesh.active[l]
+            marked = {lv: cells for (lv, cells) in enumerate(candidate_cells)}
 
         if self.disparity < np.inf:
-            marked = marked.copy()
+            if not refine_functions: 
+                marked = marked.copy()
             for l in range(self.numlevels):
                 self._mark_recursive(l, marked, truncate=truncate)
 
+        self._ensure_levels(max_lv + 2)
         new_cells = self.hmesh.refine(marked)
         mf = self._functions_to_deactivate(marked)
 

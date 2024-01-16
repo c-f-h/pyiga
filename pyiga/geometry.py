@@ -256,7 +256,8 @@ class NurbsFunc(bspline._BaseSplineFunc):
                 tuple(kv.copy() for kv in self.kvs),
                 self.coeffs.copy(),
                 None,
-                premultiplied=True)
+                premultiplied=True,
+                support = self._support_override)
 
     def coeffs_weights(self):
         """Return the non-premultiplied coefficients and weights as a pair of arrays."""
@@ -266,14 +267,14 @@ class NurbsFunc(bspline._BaseSplineFunc):
     def translate(self, offset):
         """Return a version of this geometry translated by the specified offset."""
         C, W = self.coeffs_weights()
-        return NurbsFunc(self.kvs, C + offset, W)
+        return NurbsFunc(self.kvs, C + offset, W, support = self._support_override)
 
     def scale(self, factor):
         """Scale all control points either by a scalar factor or componentwise by
         a vector, leave the weights unchanged, and return the resulting new function.
         """
         C, W = self.coeffs_weights()
-        return NurbsFunc(self.kvs, C * factor, W)
+        return NurbsFunc(self.kvs, C * factor, W, support=self._support_override)
 
     def apply_matrix(self, A):
         """Apply a matrix to each control point of this function, leave the weights
@@ -286,7 +287,7 @@ class NurbsFunc(bspline._BaseSplineFunc):
         C, W = self.coeffs_weights()
         C = np.matmul(A, C[..., None])
         assert C.shape[-1] == 1  # this should have created a new singleton axis
-        return NurbsFunc(self.kvs, np.squeeze(C, axis=-1), W)
+        return NurbsFunc(self.kvs, np.squeeze(C, axis=-1), W, support=self._support_override)
 
     def rotate_2d(self, angle):
         """Rotate a geometry with :attr:`dim` = 2 by the given angle and return the result."""
@@ -319,11 +320,11 @@ class NurbsFunc(bspline._BaseSplineFunc):
         else:
             assert self.is_scalar()
             C = self.coeffs[..., :-1]   # keep singleton dimension, don't squeeze it
-            return NurbsFunc(self.kvs, C, self.coeffs[..., -1], premultiplied=True)
+            return NurbsFunc(self.kvs, C, self.coeffs[..., -1], premultiplied=True, support=self.support)
 
     def __getitem__(self, I):
         C = self.coeffs[..., :-1]
-        return NurbsFunc(self.kvs, C[..., I], self.coeffs[..., -1], premultiplied=True)
+        return NurbsFunc(self.kvs, C[..., I], self.coeffs[..., -1], premultiplied=True, support = self._support_override)
 
 
 class UserFunction(bspline._BaseGeoFunc):
@@ -436,6 +437,9 @@ class _BoundaryFunction(bspline._BaseGeoFunc):
         if flip is None:
             flip = self.sdim*(False,)
         self.flip = tuple(flip)
+        
+        if f._support_override:
+            self._support_override = self.support
 
     def output_shape(self):
         return self.f.output_shape()

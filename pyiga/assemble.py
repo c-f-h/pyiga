@@ -118,6 +118,7 @@ from . import geometry
 from . import algebra
 from . import topology
 from . import vis
+from . import vform
 
 from .quadrature import make_iterated_quadrature, make_tensor_quadrature
 from .mlmatrix import MLStructure
@@ -1079,11 +1080,16 @@ class Assembler:
 # Convenience functions
 ################################################################################
 
-def int_to_bdspec(i):
-    return (i//2,i%2)
+def bdspec_to_int(bdspec):
+    if isinstance(bdspec, int):
+        return bdspec
+    return 2 * bdspec[0][0] + bdspec[0][1]    # convert to a boundary index (0..3)
 
-def bdspec_to_int(i):
-    return 2*i[0]+i[1]
+def int_to_bdspec(bdspec):
+    if isinstance(bdspec,tuple) and len(bdspec)==2:
+        return bdspec
+    else:
+        return (bdspec//2,bdspec%2)
 
 def _detect_dim(kvs):
     if isinstance(kvs, bspline.KnotVector):
@@ -1315,12 +1321,9 @@ class Multipatch:
                     self.intfs.add(((p1,bd1,s1),(p2,bd2,s2),flip))
                 
             #print(self.intfs)
-            C=[]
-            for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs:
-                bdspec1 = (int_to_bdspec(bd1),)
-                bdspec2 = (int_to_bdspec(bd2),)
-                C.append(self.join_boundaries(p1, bdspec1, s1 , p2, bdspec2, s2, flip))
-            self.Constr = scipy.sparse.vstack(C)
+            C=[self.join_boundaries(p1, (int_to_bdspec(bd1),), s1 , p2, (int_to_bdspec(bd2),), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs]
+            if len(C)!=0:
+                self.Constr = scipy.sparse.vstack(C)
             self.finalize()
 
     @property
@@ -1341,7 +1344,7 @@ class Multipatch:
         return self.N_ofs[-1]
     
     def reset(self):
-        self.__init__(pm=self.mesh, dim=self.dim)
+        self.__init__(pm=self.mesh, automatch=True)
 
     def join_boundaries(self, p1, bdspec1, s1, p2, bdspec2, s2, flip=None):
         """Join the dofs lying along boundary `bdspec1` of patch `p1` with
@@ -1404,9 +1407,44 @@ class Multipatch:
         # local-to-global offset per patch
         self.M_ofs = np.concatenate(([0], np.cumsum(self.M)))
         self.Basis = algebra.compute_basis(self.Constr, maxiter=10)
-        #self.sanity_check()   
+        #self.sanity_check()
         
-    def assemble_system(self, problem, rhs, args=None, bfuns=None,
+    def assemble_volume(self, problem, arity=1, domain_id=0, args=None, bfuns=None,
+            symmetric=False, format='csr', layout='blocked', **kwargs):
+        n = self.numdofs
+        X=self.Basis
+        if isinstance(problem, vform.VForm):
+            arity = problem.arity
+        
+        if args is None:
+            args = dict()
+        if arity==2:
+            A = []
+            dofs=[] 
+            for p in self.mesh.domains[domain_id]:
+                kvs, geo = self.mesh.patches[p][0]
+                args.update(geo=geo)
+                # TODO: vector-valued problems
+                A.append(assemble(problem, kvs, args=args, bfuns=bfuns,
+                        symmetric=symmetric, format=format, layout=layout,
+                        **kwargs))
+                dofs.append(np.arange(self.N_ofs[p],self.N_ofs[p+1]))
+                X = self.Basis[np.concatenate(dofs),:]
+            return X.T@scipy.sparse.block_diag(A)@X
+        else:
+            F=np.zeros(self.numloc_dofs)
+            for p in self.mesh.domains[domain_id]:
+                kvs, geo = self.mesh.patches[p][0]
+                args.update(geo=geo)
+                # TODO: vector-valued problems
+                vals=assemble(problem, kvs, args=args, bfuns=bfuns,
+                        symmetric=symmetric, format=format, layout=layout,
+                        **kwargs).ravel()
+                dofs=np.arange(self.N_ofs[p],self.N_ofs[p+1])
+                F[dofs]+=vals
+            return X.T@F
+        
+    def assemble_system(self, problem, rhs, arity=1, domain_id=0, args=None, bfuns=None,
             symmetric=False, format='csr', layout='blocked', **kwargs):
         """Assemble both the system matrix and the right-hand side vector
         for a variational problem over the multipatch geometry.
@@ -1419,7 +1457,7 @@ class Multipatch:
             right-hand side vector.
         """
         n = self.numdofs
-        X=self.Basis
+        X = self.Basis
         
         A = []
         b = []
@@ -1444,27 +1482,23 @@ class Multipatch:
     
     def assemble_surface(self, problem, arity=1, boundary_idx=0, args=None, bfuns=None,
             symmetric=False, format='csr', layout='blocked', **kwargs):
-        X = MP.Basis
+        X = self.Basis
         if args is None:
             args = dict()
         if arity==2:
-            I, J, data = [], [], []
+            R=[]
+            bdofs=[]
             for (p,b) in self.mesh.outer_boundaries[boundary_idx]:
                 kvs, geo = self.mesh.patches[p][0]
-                bdspec=[(b//2,b%2)]
-                bdofs = boundary_dofs(kvs, bdspec, ravel=True) + self.N_ofs[p]
+                bdofs.append(boundary_dofs(kvs, bdspec, ravel=True) + self.N_ofs[p])
                 args.update(geo = geo)
                 
-                R = assemble(problem, kvs, args=args, bfuns=bfuns,
+                R.append(assemble(problem, kvs, args=args, bfuns=bfuns,
                         symmetric=symmetric, format='coo', layout=layout,
-                        **kwargs, boundary=bdspec)
-                
-                I_p ,J_p = R.row, R.col
-                I.append(bdofs[I_p]), J.append(bdofs[J_p]), data.append(R.data)
-                
-            I, J, data = np.concatenate(I), np.concatenate(J), np.concatenate(data)
-            R = scipy.sparse.coo_matrix((data, (I, J)), 2*(self.numloc_dofs,))
-            return X @ scipy.sparse.csr_matrix(R) @ X.T
+                        **kwargs, boundary=[(b//2,b%2)]))
+            X=self.Basis[np.concatenate(bdofs),:]
+
+            return X @ scipy.sparse.block_diag(R) @ X.T
         else:
             N=np.zeros(self.numloc_dofs)
             for (p,b) in self.mesh.outer_boundaries[boundary_idx]:
@@ -1685,7 +1719,7 @@ class Multipatch:
                 bcs.append((idx.astype(int), bc[1][feasible]))
         return combine_bcs(bcs)
     
-    def plot(self, u, figsize=(5,5), u_min = None, u_max = None):
+    def plot(self, u, figsize=(5,5), u_min = None, u_max = None, cmap = plt.cm.jet):
         assert self.dim==2, 'visualization only possible for 2D.'
         assert len(u)==self.numdofs, 'wrong size of coefficient vector.'
         
@@ -1698,13 +1732,17 @@ class Multipatch:
             u_min=min(u)
 
         for (u_func, ((kvs, geo),_)) in zip(u_funcs, self.mesh.patches):
-            vis.plot_field(u_func, geo, vmin=u_min, vmax=u_max)
+            vis.plot_field(u_func, geo, vmin=u_min, vmax=u_max, cmap = cmap)
         plt.axis('scaled');
         plt.colorbar();
         plt.show()
+        
+    def function(self, u):
+        u_loc=self.Basis@u
+        return [geometry.BSplineFunc(kvs,u_loc[self.N_ofs[p]:self.N_ofs[p+1]]) for p, kvs in enumerate(self.mesh.kvs())]
     
     def sanity_check(self):
-        assert self.Basis, 'Basis for function space not yet computed.'
+        assert self.Basis != None, 'Basis for function space not yet computed.'
         assert all(np.isclose(self.Basis@np.ones(self.numdofs),1)), 'No partition of unity.'
         assert abs(self.Constr@self.Basis).max()<1e-12, 'Not an H^1-conforming function space.'
 

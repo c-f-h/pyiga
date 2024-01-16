@@ -215,6 +215,12 @@ class KnotVector:
         support = abs(self.kv[-1] - self.kv[0])
         return support / nspans
     
+    def meshsize_max(self):
+        """Compute average length of the knot spans of this knot vector"""
+        nspans = self.numspans
+        support = abs(self.kv[-1] - self.kv[0])
+        return np.max(self.kv[1:]-self.kv[:-1])
+    
 def mapto(kv, f):
         """Transform mesh of the knots by the mapping f"""
         return KnotVector(f(kv.kv), kv.p)
@@ -462,6 +468,9 @@ def single_ev(knotvec, i, u):
             result[j] = _bspline_single_ev_single(knotvec, i, u[j])
         return result
 
+def tp_findspan(kvs,U):
+    return tuple(kv.findspan(u) for kv,u in zip(kvs,U))
+    
 def tp_bsp_eval_pointwise(kvs, coeffs, points):
     """Evaluate a tensor-product B-spline function at an unstructured list of points.
 
@@ -1177,13 +1186,13 @@ class BSplineFunc(_BaseSplineFunc):
 
     def translate(self, offset):
         """Return a version of this geometry translated by the specified offset."""
-        return BSplineFunc(self.kvs, self.coeffs + offset)
+        return BSplineFunc(self.kvs, self.coeffs + offset, support = self._support_override)
 
     def scale(self, factor):
         """Scale all control points either by a scalar factor or componentwise by
         a vector and return the resulting new function.
         """
-        return BSplineFunc(self.kvs, self.coeffs * factor)
+        return BSplineFunc(self.kvs, self.coeffs * factor, support = self._support_override)
 
     def apply_matrix(self, A):
         """Apply a matrix to each control point of this function and return the result.
@@ -1194,7 +1203,7 @@ class BSplineFunc(_BaseSplineFunc):
         assert self.is_vector(), 'Can only apply matrices to vector-valued functions'
         C = np.matmul(A, self.coeffs[..., None])
         assert C.shape[-1] == 1  # this should have created a new singleton axis
-        return BSplineFunc(self.kvs, np.squeeze(C, axis=-1))
+        return BSplineFunc(self.kvs, np.squeeze(C, axis=-1), support = self._support_override)
 
     def rotate_2d(self, angle):
         """Rotate a geometry with :attr:`dim` = 2 by the given angle and return the result."""
@@ -1238,7 +1247,7 @@ class BSplineFunc(_BaseSplineFunc):
     def as_nurbs(self):
         """Return a NURBS version of this function with constant weights equal to 1."""
         from .geometry import NurbsFunc
-        return NurbsFunc(self.kvs, self.coeffs.copy(), np.ones(self.coeffs.shape[:self.sdim]))
+        return NurbsFunc(self.kvs, self.coeffs.copy(), np.ones(self.coeffs.shape[:self.sdim]), support = self._support_override)
 
     def as_vector(self):
         """Convert a scalar function to a 1D vector function."""
@@ -1246,7 +1255,7 @@ class BSplineFunc(_BaseSplineFunc):
             return self
         else:
             assert self.is_scalar()
-            return BSplineFunc(self.kvs, self.coeffs[..., np.newaxis])
+            return BSplineFunc(self.kvs, self.coeffs[..., np.newaxis], support = self._support_override)
 
     def __getitem__(self, I):
         return BSplineFunc(self.kvs, self.coeffs[..., I])
@@ -1262,6 +1271,7 @@ class PhysicalGradientFunc(_BaseGeoFunc):
         self.geo = geo
         self.dim = self.sdim = func.sdim
         self.support = func.support
+        self._support_override = func._support_override
 
     def output_shape(self):
         return self.func.output_shape() + (self.sdim,)

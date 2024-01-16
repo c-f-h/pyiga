@@ -11,7 +11,6 @@ import networkx
 import copy
 import numbers
 
-
 def set_union(sets):
     return reduce(operator.or_, sets, set())
 
@@ -1737,17 +1736,17 @@ def tan(x):
 # concrete variational forms
 ################################################################################
 
-def mass_vf(dim):
+def mass_vf(dim, c=1):
     V = VForm(dim)
     u, v = V.basisfuns()
-    V.add(u * v * dx)
+    V.add(c * u * v * dx)
     return V
 
-def stiffness_vf(dim):
+def stiffness_vf(dim, a=1):
     V = VForm(dim)
     u, v = V.basisfuns()
     B = V.let('B', V.W * dot(V.JacInv, V.JacInv.T), symmetric=True)
-    V.add(B.dot(grad(u, parametric=True)).dot(grad(v, parametric=True)))
+    V.add(a*B.dot(grad(u, parametric=True)).dot(grad(v, parametric=True)))
     return V
 
 ### slower:
@@ -1802,7 +1801,7 @@ def L2functional_Bvf(dim, physical=False, updatable=False):
 # parse strings to VForms
 ################################################################################
 
-def _check_input_field(kvs, f):
+def _check_input_field(kvs, geo, f):
     # return (shape, physical) pair for function f
     # NB: by default, _BaseGeoFuncs are considered parametric and explicitly
     #     given functions physical!
@@ -1812,7 +1811,7 @@ def _check_input_field(kvs, f):
     else:   # assume a callable function
         supp = tuple(kv.support() for kv in kvs)
         mid = tuple((a+b)/2 for (a,b) in supp)
-        result = f(*mid)        # evaluate it at the midpoint
+        result = f(*geo(*mid))        # evaluate it at the midpoint
         return np.shape(result), True
 
 def parse_vf(expr, kvs, args=dict(), bfuns=None, boundary=False, updatable=[]):
@@ -1828,6 +1827,7 @@ def parse_vf(expr, kvs, args=dict(), bfuns=None, boundary=False, updatable=[]):
 
     dim = len(kvs)
     loc = dict()
+    geo=args['geo']
 
     # parse all identifiers in the expression string
     import re
@@ -1881,7 +1881,7 @@ def parse_vf(expr, kvs, args=dict(), bfuns=None, boundary=False, updatable=[]):
     for inp in sorted(set(args.keys()) & words):
         upd = (inp in updatable)
         if callable(args[inp]):     # function - treat as input field
-            shp, phys = _check_input_field(kvs, args[inp])
+            shp, phys = _check_input_field(kvs, geo, args[inp])
             loc[inp] = vf.input(inp, shape=shp, physical=phys, updatable=upd)
         else:       # constant value or array - treat as parameter
             shp = np.shape(args[inp])

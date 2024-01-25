@@ -1252,3 +1252,7 @@ class BSegments:
             return str(self.boundaries)
         else:
             return "(" + self.lower.print() + "," + self.upper.print() + ")"
+        
+################################################################################
+# Multipatch geometries
+################################################################################

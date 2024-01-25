@@ -943,3 +943,4 @@ def tensor_product(G1, G2, *Gs):
         return NurbsFunc(G1.kvs + G2.kvs, C, W, support = support)
     else:
         return BSplineFunc(G1.kvs + G2.kvs, C, support = support)
+

@@ -111,6 +111,7 @@ def plot_surface(geo,
         bpts1 = utils.grid_eval(geo, (meshx,np.linspace(supp[0][0], supp[0][1], 2)))
         x=np.concatenate([bpts0[0,:,0],bpts1[:,1,0],np.flip(bpts0[1,:,0]),np.flip(bpts1[:,0,0])])
         y=np.concatenate([bpts0[0,:,1],bpts1[:,1,1],np.flip(bpts0[1,:,1]),np.flip(bpts1[:,0,1])])
+        print(x,y)
         plt.fill(x,y,color=color)
     
     def plotline(pts, capstyle='butt', color=color, linewidth=None):

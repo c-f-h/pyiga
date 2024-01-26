@@ -99,43 +99,42 @@ def plot_surface(geo,
 
     # if gridx/gridy is not an array, build an array with given number of ticks
     if np.isscalar(gridx):
-        gridx = np.linspace(supp[0][0], supp[0][1], gridx)
+        gridx = np.linspace(supp[1][0], supp[1][1], gridx)
     if np.isscalar(gridy):
-        gridy = np.linspace(supp[1][0], supp[1][1], gridy)
+        gridy = np.linspace(supp[0][0], supp[0][1], gridy)
 
-    meshx = np.linspace(supp[0][0], supp[0][1], res)
-    meshy = np.linspace(supp[1][0], supp[1][1], res)
-    
-    if color:
-        bpts0 = utils.grid_eval(geo, (np.linspace(supp[0][0], supp[0][1], 2), meshy))
-        bpts1 = utils.grid_eval(geo, (meshx,np.linspace(supp[0][0], supp[0][1], 2)))
-        x=np.concatenate([bpts0[0,:,0],bpts1[:,1,0],np.flip(bpts0[1,:,0]),np.flip(bpts1[:,0,0])])
-        y=np.concatenate([bpts0[0,:,1],bpts1[:,1,1],np.flip(bpts0[1,:,1]),np.flip(bpts1[:,0,1])])
-        print(x,y)
-        plt.fill(x,y,color=color)
+    meshx = np.linspace(supp[1][0], supp[1][1], res)
+    meshy = np.linspace(supp[0][0], supp[0][1], res)
     
     def plotline(pts, capstyle='butt', color=color, linewidth=None):
         if geo.dim == 3:
-            plt.plot(pts[:,0], pts[:,1], pts[:,2], color=lcolor, linewidth=linewidth,
+            plt.plot(pts[:,0], pts[:,1], pts[:,2], color=color, linewidth=linewidth,
                                        solid_joinstyle='round', solid_capstyle=capstyle)
         if geo.dim == 2:
-            plt.plot(pts[:,0], pts[:,1], color=lcolor, linewidth=linewidth,
+            plt.plot(pts[:,0], pts[:,1], color=color, linewidth=linewidth,
                 solid_joinstyle='round', solid_capstyle=capstyle)
 
     #print(meshy)
-    pts = utils.grid_eval(geo, (gridx, meshy))
+    pts = utils.grid_eval(geo, (gridy, meshx))
     #print(pts)
-    plotline(pts[0,:,:], capstyle='round', linewidth=linewidth)
+    plotline(pts[0,:,:], capstyle='round', linewidth=linewidth, color="black")
     for i in range(1, pts.shape[0]-1):
-        plotline(pts[i,:,:], linewidth=linewidth)
-    plotline(pts[-1,:,:], capstyle='round', linewidth=linewidth)
+        plotline(pts[i,:,:], linewidth=linewidth, color=lcolor)
+    plotline(pts[-1,:,:], capstyle='round', linewidth=linewidth, color="black")
 
-    pts = utils.grid_eval(geo, (meshx, gridy))
+    pts = utils.grid_eval(geo, (meshy, gridx))
     #print(pts)
-    plotline(pts[:,0,:], capstyle='round', linewidth=linewidth)
+    plotline(pts[:,0,:], capstyle='round', linewidth=linewidth, color="black")
     for j in range(1, pts.shape[1]-1):
-        plotline(pts[:,j,:], linewidth=linewidth)
-    plotline(pts[:,-1,:], capstyle='round', linewidth=linewidth)
+        plotline(pts[:,j,:], linewidth=linewidth, color=lcolor)
+    plotline(pts[:,-1,:], capstyle='round', linewidth=linewidth, color="black")
+    
+    if color:
+        bpts0 = utils.grid_eval(geo,(meshy, np.linspace(supp[1][0], supp[1][1], 2)))
+        bpts1 = utils.grid_eval(geo, (np.linspace(supp[0][0], supp[0][1], 2),meshx))
+        x=np.concatenate([bpts1[0,:,0],bpts0[:,1,0],np.flip(bpts1[1,:,0]),np.flip(bpts0[:,0,0])])
+        y=np.concatenate([bpts1[0,:,1],bpts0[:,1,1],np.flip(bpts1[1,:,1]),np.flip(bpts0[:,0,1])])
+        plt.fill(x,y,color=color)
 
 def plot_curve(geo, res=50, linewidth=None, lcolor='black'):
     """Plot a 2D curve."""

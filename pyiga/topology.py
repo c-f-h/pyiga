@@ -235,6 +235,8 @@ class PatchMesh:
                 self.domains[key]=self.domains[key].union(domain_id[key])
             else:
                 self.domains[key]=domain_id[key]
+            for p in domain_id[key]:
+                self.patch_domains[p]=key
         #self.domains.update(domain_id)
         
     def rename_boundary(self, idx, new_idx):
@@ -571,17 +573,19 @@ class PatchMesh:
         else:
             return None     # no matching segment - must be on the boundary
 
-    def draw(self, knots=True, vertex_idx = False, patch_idx = False, nodes=False, figsize=(5,5), bwidth=None, color=None):
+    def draw(self, knots=True, vertex_idx = False, patch_idx = False, nodes=False, figsize=(5,5), bwidth=1, color=None):
         """draws a visualization of the patchmesh in 2D."""
         fig=plt.figure(figsize=figsize)
         
         for p,((kvs, geo),_) in enumerate(self.patches):
-            if knots:
-                vis.plot_geo(geo, gridx=kvs[0].mesh,gridy=kvs[1].mesh, lcolor='lightgray')
-            if color:
-                vis.plot_geo(geo, grid=2, linewidth=bwidth, color=color[self.patch_domains[p]])
+            if color is not None:
+                c=color[self.patch_domains[p]]
             else:
-                vis.plot_geo(geo, grid=2, linewidth=bwidth)
+                c=None
+            if knots:
+                vis.plot_geo(geo, gridy=kvs[0].mesh,gridx=kvs[1].mesh, lcolor='lightgray', color=c, linewidth=bwidth)
+            else:
+                vis.plot_geo(geo, grid=2, linewidth=bwidth, color=c)
            
         if nodes:
             plt.scatter(*np.transpose(self.vertices))

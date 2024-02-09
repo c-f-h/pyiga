@@ -28,13 +28,13 @@ def plot_field(field, geo=None, res=80, physical=False, **kwargs):
 def plot_geo(geo,
              grid=10, gridx=None, gridy=None, gridz=None,
              res=50,
-             linewidth=None, lcolor='black', color=None):
+             linewidth=None, lcolor='black', color=None, boundary=True):
     """Plot a wireframe representation of a 2D geometry."""
     assert (geo.dim == 2 or geo.dim == 3), 'Can only represent geometries in 2D or 3D!' 
     if geo.sdim == 1:
-        return plot_curve(geo, res=res, linewidth=linewidth, color=color)
+        return plot_curve(geo, res=res, linewidth=linewidth, lcolor=color)
     if geo.sdim == 2:
-        return plot_surface(geo, grid=grid, gridx=gridx, gridy=gridy, res=res, linewidth=linewidth, lcolor=lcolor, color=color)
+        return plot_surface(geo, grid=grid, gridx=gridx, gridy=gridy, res=res, linewidth=linewidth, lcolor=lcolor, color=color, boundary=boundary)
     else:
         if gridx is None: gridx = grid
         if gridy is None: gridy = grid
@@ -87,7 +87,7 @@ def plot_geo(geo,
 def plot_surface(geo,
                  grid=10, gridx=None, gridy=None,
                  res=50,
-                 linewidth=None, lcolor='black', color=None):
+                 linewidth=None, lcolor='black', color=None, boundary=True):
     """Plot a 2D or 3D surface."""
     assert geo.sdim == 2 and (geo.dim == 2 or geo.dim == 3), "Can only plot surfaces."
     if gridx is None: gridx = grid
@@ -114,20 +114,22 @@ def plot_surface(geo,
             plt.plot(pts[:,0], pts[:,1], color=color, linewidth=linewidth,
                 solid_joinstyle='round', solid_capstyle=capstyle)
 
+    
     #print(meshy)
-    pts = utils.grid_eval(geo, (gridy, meshx))
-    #print(pts)
-    plotline(pts[0,:,:], capstyle='round', linewidth=linewidth, color="black")
-    for i in range(1, pts.shape[0]-1):
-        plotline(pts[i,:,:], linewidth=linewidth, color=lcolor)
-    plotline(pts[-1,:,:], capstyle='round', linewidth=linewidth, color="black")
+    pts1 = utils.grid_eval(geo, (gridy, meshx))
+    pts2 = utils.grid_eval(geo, (meshy, gridx))
+    
+    for i in range(1, pts1.shape[0]-1):
+        plotline(pts1[i,:,:], linewidth=linewidth, color=lcolor)
 
-    pts = utils.grid_eval(geo, (meshy, gridx))
-    #print(pts)
-    plotline(pts[:,0,:], capstyle='round', linewidth=linewidth, color="black")
-    for j in range(1, pts.shape[1]-1):
-        plotline(pts[:,j,:], linewidth=linewidth, color=lcolor)
-    plotline(pts[:,-1,:], capstyle='round', linewidth=linewidth, color="black")
+    for j in range(1, pts2.shape[1]-1):
+        plotline(pts2[:,j,:], linewidth=linewidth, color=lcolor)
+        
+    if boundary:
+        plotline(pts1[0,:,:], capstyle='round', linewidth=linewidth, color="black")
+        plotline(pts1[-1,:,:], capstyle='round', linewidth=linewidth, color="black")
+        plotline(pts2[:,0,:], capstyle='round', linewidth=linewidth, color="black")
+        plotline(pts2[:,-1,:], capstyle='round', linewidth=linewidth, color="black")
     
     if color:
         bpts0 = utils.grid_eval(geo,(meshy, np.linspace(supp[1][0], supp[1][1], 2)))
@@ -138,6 +140,8 @@ def plot_surface(geo,
 
 def plot_curve(geo, res=50, linewidth=None, lcolor='black'):
     """Plot a 2D curve."""
+    if not lcolor:
+        lcolor='black'
     assert (geo.dim == 2 or geo.dim == 3) and geo.sdim == 1, 'Can only plot 2D curves'
     if geo._support_override:
         supp = geo._support_override

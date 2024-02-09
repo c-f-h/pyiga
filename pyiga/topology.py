@@ -573,7 +573,7 @@ class PatchMesh:
         else:
             return None     # no matching segment - must be on the boundary
 
-    def draw(self, knots=True, vertex_idx = False, patch_idx = False, nodes=False, figsize=(5,5), bwidth=1, color=None):
+    def draw(self, knots=True, vertex_idx = False, patch_idx = False, nodes=False, figsize=(5,5), bwidth=1, color=None, bcolor=None):
         """draws a visualization of the patchmesh in 2D."""
         fig=plt.figure(figsize=figsize)
         
@@ -583,9 +583,26 @@ class PatchMesh:
             else:
                 c=None
             if knots:
-                vis.plot_geo(geo, gridy=kvs[0].mesh,gridx=kvs[1].mesh, lcolor='lightgray', color=c, linewidth=bwidth)
+                vis.plot_geo(geo, gridy=kvs[0].mesh,gridx=kvs[1].mesh, lcolor='lightgray', color=c, boundary=True)
             else:
-                vis.plot_geo(geo, grid=2, linewidth=bwidth, color=c)
+                vis.plot_geo(geo, grid=2, color=c, boundary=True)
+                
+#         long_edges = set((p,b) for (p,b,s) in self.interfaces if s>0)
+#         common_edges=set()
+#         for (p,b,s),((p1,b1,s1),_) in self.interfaces.items():
+#             if s==0 and len(self.boundaries(p1)[b1])==2 and (p1,b1) not in common_edges:
+#                 common_edges.add((p,b))
+#                 print(p,b)
+            
+#         for (p,b) in long_edges.union(common_edges):
+#             vis.plot_geo(self.geos()[p].boundary([assemble.int_to_bdspec(b)]))
+        
+        for key in self.outer_boundaries:
+            bcol=None
+            if bcolor is not None:
+                bcol=bcolor[key]
+            for (p,b) in self.outer_boundaries[key]:
+                vis.plot_geo(self.geos()[p].boundary([assemble.int_to_bdspec(b)]), linewidth=bwidth, color=bcol)
            
         if nodes:
             plt.scatter(*np.transpose(self.vertices))

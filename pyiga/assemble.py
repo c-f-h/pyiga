@@ -106,6 +106,7 @@ import scipy
 import scipy.sparse
 import itertools
 import math
+from sksparse.cholmod import cholesky
 
 from . import bspline
 from . import assemble_tools
@@ -1314,14 +1315,14 @@ class Multipatch:
         self.Constr=scipy.sparse.csr_matrix((0,self.N_ofs[-1]))
 
         if automatch:
-            interfaces = self.mesh.interfaces.copy()
+            interfaces = self.mesh.interfaces
             
             for ((p1,bd1,s1),((p2,bd2,s2),flip)) in interfaces.items():
                 if ((p2,bd2,s2),(p1,bd1,s1),flip) not in self.intfs:
                     self.intfs.add(((p1,bd1,s1),(p2,bd2,s2),flip))
                 
             #print(self.intfs)
-            C=[self.join_boundaries(p1, (int_to_bdspec(bd1),), s1 , p2, (int_to_bdspec(bd2),), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs]
+            C=[self.join_boundaries(p1, (int_to_bdspec(bd1),), s1 , p2, (int_to_bdspec(bd2),), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
             if len(C)!=0:
                 self.Constr = scipy.sparse.vstack(C)
             self.finalize()
@@ -1378,7 +1379,6 @@ class Multipatch:
             bdspec1, bdspec2 = bdspec2, bdspec1
             bkv1, bkv2 = bkv2, bkv1
             dofs1, dofs2 = dofs2, dofs1
-            
         else:
             print(p1, bkv1, p2, bkv2)
             print('interface coupling not possible')
@@ -1407,7 +1407,7 @@ class Multipatch:
         # local-to-global offset per patch
         self.M_ofs = np.concatenate(([0], np.cumsum(self.M)))
         self.Basis = algebra.compute_basis(self.Constr, maxiter=10)
-        #self.sanity_check()
+        self.sanity_check()
         
     def assemble_volume(self, problem, arity=1, domain_id=0, args=None, bfuns=None,
             symmetric=False, format='csr', layout='blocked', **kwargs):
@@ -1736,6 +1736,11 @@ class Multipatch:
         plt.axis('scaled');
         plt.colorbar();
         plt.show()
+        
+    def L2projection(self, u):
+        Mh = self.assemble_volume(vform.mass_vf(2))
+        u_rhs = self.assemble_volume(vform.L2functional_vf(2, physical=True),f=u)
+        return (cholesky(Mh.tocsc()))(u_rhs)
         
     def function(self, u):
         u_loc=self.Basis@u

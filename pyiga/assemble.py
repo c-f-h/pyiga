@@ -1574,45 +1574,45 @@ class Multipatch:
 #         P[np.abs(P) < 1e-15] = 0.0
 #         return scipy.sparse.csr_matrix(P) 
     
-    def refine(self, patches=None, mult=1, return_prol=False):
-        if isinstance(patches, dict):
-            assert max(patches.keys())<self.numpatches and min(patches.keys())>=0, "patch index out of bounds."
-            patches = patches.keys()
-        elif isinstance(patches, (list, set, np.ndarray)):
-            assert max(patches)<self.numpatches and min(patches)>=0, "patch index out of bounds."
-        elif patches==None:
-            patches = np.arange(self.numpatches)
-        elif np.isscalar(patches):
-            patches=(patches,)
-        else:
-            assert 0, "unknown input type"
-        if return_prol:
-            n=self.numdofs
-            old_kvs=[kvs for (kvs,_),_ in self.mesh.patches]
-            old_global_to_patch = [self.global_to_patch(p) for p in range(self.numpatches)]
+#     def refine(self, patches=None, mult=1, return_prol=False):
+#         if isinstance(patches, dict):
+#             assert max(patches.keys())<self.numpatches and min(patches.keys())>=0, "patch index out of bounds."
+#             patches = patches.keys()
+#         elif isinstance(patches, (list, set, np.ndarray)):
+#             assert max(patches)<self.numpatches and min(patches)>=0, "patch index out of bounds."
+#         elif patches==None:
+#             patches = np.arange(self.numpatches)
+#         elif np.isscalar(patches):
+#             patches=(patches,)
+#         else:
+#             assert 0, "unknown input type"
+#         if return_prol:
+#             n=self.numdofs
+#             old_kvs=[kvs for (kvs,_),_ in self.mesh.patches]
+#             old_global_to_patch = [self.global_to_patch(p) for p in range(self.numpatches)]
             
-        self.mesh.refine(patches, mult=mult)
-        self.reset()
-        #MP = Multipatch(self.mesh, automatch=True, k=self.k)
+#         self.mesh.refine(patches, mult=mult)
+#         self.reset()
+#         #MP = Multipatch(self.mesh, automatch=True, k=self.k)
         
-        if return_prol:
-            m = self.numdofs
-            P = scipy.sparse.csr_matrix((m, n))
+#         if return_prol:
+#             m = self.numdofs
+#             P = scipy.sparse.csr_matrix((m, n))
             
-            for p in range(self.numpatches):
-                if p in patches:
-                    kvs=old_kvs[p]
-                    new_kvs=MP.mesh.patches[p][0][0]
-                    C = bspline.prolongation_tp(kvs, new_kvs)
-                else:
-                    C = scipy.sparse.identity(self.N[p])
+#             for p in range(self.numpatches):
+#                 if p in patches:
+#                     kvs=old_kvs[p]
+#                     new_kvs=MP.mesh.patches[p][0][0]
+#                     C = bspline.prolongation_tp(kvs, new_kvs)
+#                 else:
+#                     C = scipy.sparse.identity(self.N[p])
 
-                P += MP.patch_to_global(p) @ C @ old_global_to_patch[p]
-            factors = [1/sum([sum(dof[p][1]) for p in dof]) for dof in MP.shared_dofs]
-            P[MP.M_ofs[-1]:] = scipy.sparse.spdiags(factors, 0, len(factors), len(factors)) @ P[MP.M_ofs[-1]:]
-            return P
+#                 P += MP.patch_to_global(p) @ C @ old_global_to_patch[p]
+#             factors = [1/sum([sum(dof[p][1]) for p in dof]) for dof in MP.shared_dofs]
+#             P[MP.M_ofs[-1]:] = scipy.sparse.spdiags(factors, 0, len(factors), len(factors)) @ P[MP.M_ofs[-1]:]
+#             return P
         
-    def patch_refine(self, patches=None, mult=1, return_prol = False):
+    def patch_refine(self, patches=None, mult=1, return_P = False):
         """Refines the Mesh by splitting patches
         
         The dictionary `patches` specifies which patches (dict keys) are to be split 
@@ -1637,62 +1637,37 @@ class Multipatch:
         else:
             assert 0, "unknown input type"
         
-        #n=self.numdofs
-        N=self.numpatches
-
-        #M = copy.deepcopy(self.mesh)
-        #old_kvs = [kvs for (kvs,_),_ in self.mesh.patches]
-       # old_global_to_patch = [self.global_to_patch(p) for p in range(self.numpatches)]
-        
+        num_p_old = self.numpatches
+        N_old=self.N
+        B_old = self.Basis
+        N_ofs_old = self.N_ofs
         new_patches = dict()
         new_kvs_ = dict()
-        for p in patches.keys():
-            #self.split_boundary_data(p, self.numpatches, axis=patches[p])
-            new_patches[p], new_kvs_[p] = self.mesh.split_patch(p, axis=patches[p], mult=mult)
-        
-        #MP = Multipatch(self.mesh, automatch=True, k=self.k)
+        P_loc=dict()
+        for p in patches:
+            kvs_old = self.mesh.kvs()[p]
+            if patches[p]==-1:
+                new_patches[p] = (p,)
+                self.mesh.refine(patches = p)
+            else:
+                new_patches[p] = self.mesh.split_patch(p, axis=patches[p], mult=mult)
+            if return_P:
+                P_loc[p]={new_p: scipy.sparse.coo_matrix(bspline.prolongation_tp(kvs_old,self.mesh.kvs()[new_p])) for new_p in new_patches[p]}
         self.reset()
-        #m = self.numdofs
-        
-#         if return_prol:
-#             P = scipy.sparse.csr_matrix((m, n))
-#             for p in range(N):
-#                 kvs=old_kvs[p]
-#                 if p in new_patches:
-#                     new_kvs = new_kvs_[p]
-#                     S = scipy.sparse.csr_matrix((m,bspline.numdofs(new_kvs)))
-#                     C =  bspline.prolongation_tp(kvs, new_kvs)
-                    
-#                     for i, new_p in enumerate(new_patches[p]):
-                    
-#                         val = np.ones(self.N[new_p])
-#                         I = np.arange(self.N[new_p])
-                        
-#                         if patches[p]==0:
-#                             bdspec = (0,i)
-#                             k = self.mesh.patches[new_p][0][0][0].numdofs
-#                             J = np.sort(Ass.boundary_dofs(new_kvs,bdspec,ravel=True,k=k-1))
-#                         elif patches[p]==1:
-#                             bdspec = (1,i)
-#                             k = self.mesh.patches[new_p][0][0][1].numdofs
-#                             J = np.sort(Ass.boundary_dofs(new_kvs,bdspec,ravel=True,k=k-1))
-#                         else:
-#                             cspec=(i//2,i%2)
-#                             k0=self.mesh.patches[new_p][0][0][0].numdofs
-#                             k1=self.mesh.patches[new_p][0][0][1].numdofs
-#                             J = np.sort(Ass.boundary_dofs(new_kvs,cspec,k=[k0-1,k1-1], ravel=True))
-               
-#                         R = scipy.sparse.coo_matrix((val,(I,J)),shape=(self.N[new_p],bspline.numdofs(new_kvs)))
-#                         S += self.patch_to_global(new_p) @ R
-#                 else:
-#                     S=self.patch_to_global(p)
-#                     C=scipy.sparse.identity(self.N[p])
-                
-#                 P += S @ C @ old_global_to_patch[p]
-                
-#             factors = [1/sum([sum(dof[p][1]) for p in dof]) for dof in self.shared_dofs]
-#             P[self.M_ofs[-1]:] = scipy.sparse.spdiags(factors, 0, len(factors), len(factors)) @ P[self.M_ofs[-1]:]
-#             return P
+        if return_P:
+            data=np.concatenate([np.concatenate([P_loc[p][new_p].data for new_p in new_patches[p]]) for p in patches])
+            I = np.concatenate([np.concatenate([P_loc[p][new_p].row + self.N_ofs[new_p] for new_p in new_patches[p]]) for p in patches])
+            J = np.concatenate([np.concatenate([P_loc[p][new_p].col + N_ofs_old[p] for new_p in new_patches[p]]) for p in patches])
+            P_loc=scipy.sparse.coo_matrix((data,(I, J)),(sum(self.N),sum(N_old)))
+            if len(patches)!=num_p_old:
+                data_id=np.ones(sum([self.N[p] for p in range(num_p_old) if p not in patches]))
+                I_id = np.concatenate([np.arange(self.N[p])+self.N_ofs[p] for p in range(num_p_old) if p not in patches])
+                J_id = np.concatenate([np.arange(self.N[p])+N_ofs_old[p] for p in range(num_p_old) if p not in patches])
+                #print(len(data_id),len(I_id),len(J_id))
+                P_loc = P_loc +  scipy.sparse.coo_matrix((data_id,(I_id, J_id)),(sum(self.N),sum(N_old)))
+            P = self.Basis.T@P_loc@B_old
+            D=np.sum(P,axis=1).A
+            return scipy.sparse.spdiags(1./D.T,0,len(D),len(D))@P
 
     def compute_dirichlet_bcs(self, b_data):
         """Performs the same operation as the global function

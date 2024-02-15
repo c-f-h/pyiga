@@ -189,23 +189,16 @@ class PatchMesh:
         self.interfaces[S0] = (S1, flip)
         self.interfaces[S1] = (S0, flip)
         
-    def refine(self, patches = None, mult=1):
-        if isinstance(patches, dict):
-            assert max(patches.keys())<self.numpatches and min(patches.keys())>=0, "patch index out of bounds."
-            patches = patches.keys()
-        elif isinstance(patches, (list, set, np.ndarray)):
-            assert max(patches)<self.numpatches and min(patches)>=0, "patch index out of bounds."
-        elif patches==None:
-            patches = np.arange(self.numpatches)
-        elif np.isscalar(patches):
-            patches=(patches,)
-        else:
-            assert 0, "unknown input type"
-            
+    def k_refine(self, patches = None):
+        if isinstance(patches,int):
+            patches = {p:patches for p in range(self.numpatches)}     
+
         for p in patches:
             (kvs,geo), b = self.patches[p]
-            new_kvs = tuple([kv.refine(mult=mult) for kv in kvs])
+            new_kvs = tuple([kv.k_refine(patches[p]) for kv in kvs])
             self.patches[p]=((new_kvs, geo), b)
+            
+        return {p:(p,) for p in patches}
             
     def set_boundary_id(self, boundary_id):
         marked = set().union(*boundary_id.values())
@@ -385,7 +378,7 @@ class PatchMesh:
             return (p1, p2, p3, p4)
         
         (kvs, geo), boundaries = self.patches[p]
-        kv = kvs[axis].refine(mult=mult)
+        kv = kvs[axis].h_refine(mult=mult)
         dim = len(kvs)
         
         #split_xi = sum(kv.support())/2.0
@@ -525,15 +518,16 @@ class PatchMesh:
                                 self.outer_boundaries[s].append((n, bd))
     
             
-    def split_patches(self, patches=None, mult=1, dir_data = None):
-        
+    def h_refine(self, patches=None, mult=1, dir_data = None):
         if isinstance(patches, dict):
-            assert max(patches.keys())<self.numpatches and min(patches.keys())>=0, "patch index out of bounds."
+            if len(patches)>0:
+                assert max(patches.keys())<self.numpatches and min(patches.keys())>=0, "patch index out of bounds."
         elif isinstance(patches,int):
-            assert patches >=0 and patches < 2, "dimension error."
+            assert patches >=-1 and patches < 2, "dimension error."
             patches = {p:patches for p in range(self.numpatches)}
         elif isinstance(patches, (list, set, np.ndarray)):
-            assert max(patches)<self.numpatches and min(patches)>=0, "patch index out of bounds."
+            if len(patches)>0:
+                assert max(patches)<self.numpatches and min(patches)>=0, "patch index out of bounds."
             patches = {p:None for p in patches}
         elif patches==None:
             patches = {p:None for p in range(self.numpatches)}
@@ -544,10 +538,15 @@ class PatchMesh:
         new_kvs = dict()
         for p in patches.keys():
             #self.split_boundary_idx(p, self.numpatches, axis=patches[p])
-            new_p = self.split_patch(p, axis=patches[p], mult=mult)
+            if patches[p]==-1:
+                (kvs,geo), b = self.patches[p]
+                new_kvs = tuple([kv.h_refine(mult=mult) for kv in kvs])
+                self.patches[p]=((new_kvs, geo), b)
+                new_p=(p,)
+            else:    
+                new_p = self.split_patch(p, axis=patches[p], mult=mult)
             new_patches[p] = new_p
-            #new_kvs[p] = new_kvs_
-            
+            #new_kvs[p] = new_kvs_  
         return new_patches
 
     def boundaries(self, p):

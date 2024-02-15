@@ -90,6 +90,7 @@ class KnotVector:
         # sanity check: knots should be monotonically increasing
         assert np.all(self.kv[1:] - self.kv[:-1] >= 0), 'knots should be increasing'
         self.p = p
+        assert isinstance(self.p,int) and self.p >= 0, 'polynomial degree is not a integer'
         self._mesh = None    # knots with duplicates removed (on demand)
         self._knots_to_mesh = None   # knot indices to mesh indices (on demand)
 
@@ -198,7 +199,7 @@ class KnotVector:
             # support interval; clamp them manually to avoid problems later on
             return np.clip(g, self.kv[0], self.kv[-1])
 
-    def refine(self, new_knots=None, mult=1):
+    def h_refine(self, new_knots=None, mult=1):
         """Return the refinement of this knot vector by inserting `new_knots`,
         or performing uniform refinement if none are given."""
         if new_knots is None:
@@ -208,6 +209,9 @@ class KnotVector:
                 new_knots = np.hstack(mult*[new_knots,])
         kvnew = np.sort(np.concatenate((self.kv, new_knots)))
         return KnotVector(kvnew, self.p)
+    
+    def k_refine(self, p_inc):
+        return KnotVector(np.concatenate([p_inc*[self.kv[0]],self.kv,p_inc*[self.kv[-1]]]),self.p + p_inc)
 
     def meshsize_avg(self):
         """Compute average length of the knot spans of this knot vector"""

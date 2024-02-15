@@ -1612,11 +1612,14 @@ class Multipatch:
 #             P[MP.M_ofs[-1]:] = scipy.sparse.spdiags(factors, 0, len(factors), len(factors)) @ P[MP.M_ofs[-1]:]
 #             return P
         
-    def patch_refine(self, patches=None, mult=1, return_P = False):
+    def patch_refine(self, h_ref=None, p_ref = 0, mult=1, return_P = False):
         """Refines the Mesh by splitting patches
         
-        The dictionary `patches` specifies which patches (dict keys) are to be split 
-        and how to split them (dict values: 0 to dim-1 or None)
+        The dictionary `h_ref` specifies which patches (dict keys) are to be split 
+        and how to split them (dict values: 0 to dim-1 or None or -1)
+        
+        The dictionary `p_ref` specifies which patches (dict keys) should have their degree elevated 
+        (dict values: int)
         
         The `return_prol` keyword enables also the generation of a prolongation matrix from one mesh to the split mesh.
         
@@ -1624,18 +1627,21 @@ class Multipatch:
             A new :class:`Multipatch` object `MP`
             A sparse matrix `P` suitable for prolongation.
         """
-        if isinstance(patches, dict):
-            assert max(patches.keys())<self.numpatches and min(patches.keys())>=0, "patch index out of bounds."
-        elif isinstance(patches,int):
+        if isinstance(h_ref, dict):
+            if len(h_ref)>0:
+                assert max(h_ref.keys())<self.numpatches and min(h_ref.keys())>=0, "patch index out of bounds."
+        elif isinstance(h_ref,int):
             #assert patches >=0 and patches < self.dim, "dimension error."
-            patches = {p:patches for p in range(self.numpatches)}
-        elif isinstance(patches, (list, set, np.ndarray)):
-            assert max(patches)<self.numpatches and min(patches)>=0, "patch index out of bounds."
-            patches = {p:None for p in patches}
-        elif patches==None:
-            patches = {p:None for p in range(self.numpatches)}
+            h_ref = {p:h_ref for p in range(self.numpatches)}
+        elif isinstance(h_ref, (list, set, np.ndarray)):
+            assert max(h_ref)<self.numpatches and min(h_ref)>=0, "patch index out of bounds."
+            h_ref = {p:None for p in patches}
+        elif h_ref==None:
+            h_ref = {p:None for p in range(self.numpatches)}
         else:
             assert 0, "unknown input type"
+        if isinstance(p_ref,int):
+            p_ref = {p:p_ref for p in range(self.numpatches)}
         
         num_p_old = self.numpatches
         N_old=self.N
@@ -1644,25 +1650,24 @@ class Multipatch:
         new_patches = dict()
         new_kvs_ = dict()
         P_loc=dict()
-        for p in patches:
-            kvs_old = self.mesh.kvs()[p]
-            if patches[p]==-1:
-                new_patches[p] = (p,)
-                self.mesh.refine(patches = p)
-            else:
-                new_patches[p] = self.mesh.split_patch(p, axis=patches[p], mult=mult)
-            if return_P:
-                P_loc[p]={new_p: scipy.sparse.coo_matrix(bspline.prolongation_tp(kvs_old,self.mesh.kvs()[new_p])) for new_p in new_patches[p]}
+        
+        kvs_old = self.mesh.kvs()
+        new_patches = self.mesh.k_refine(p_ref)
+        new_patches.update(self.mesh.h_refine(h_ref))
         self.reset()
+        
         if return_P:
-            data=np.concatenate([np.concatenate([P_loc[p][new_p].data for new_p in new_patches[p]]) for p in patches])
-            I = np.concatenate([np.concatenate([P_loc[p][new_p].row + self.N_ofs[new_p] for new_p in new_patches[p]]) for p in patches])
-            J = np.concatenate([np.concatenate([P_loc[p][new_p].col + N_ofs_old[p] for new_p in new_patches[p]]) for p in patches])
+            refined_patches = set().union(h_ref,p_ref)
+            for p in refined_patches:
+                P_loc[p]={new_p: scipy.sparse.coo_matrix(bspline.prolongation_tp(kvs_old[p],self.mesh.kvs()[new_p])) for new_p in new_patches[p]}
+            data=np.concatenate([np.concatenate([P_loc[p][new_p].data for new_p in new_patches[p]]) for p in refined_patches])
+            I = np.concatenate([np.concatenate([P_loc[p][new_p].row + self.N_ofs[new_p] for new_p in new_patches[p]]) for p in refined_patches])
+            J = np.concatenate([np.concatenate([P_loc[p][new_p].col + N_ofs_old[p] for new_p in new_patches[p]]) for p in refined_patches])
             P_loc=scipy.sparse.coo_matrix((data,(I, J)),(sum(self.N),sum(N_old)))
-            if len(patches)!=num_p_old:
-                data_id=np.ones(sum([self.N[p] for p in range(num_p_old) if p not in patches]))
-                I_id = np.concatenate([np.arange(self.N[p])+self.N_ofs[p] for p in range(num_p_old) if p not in patches])
-                J_id = np.concatenate([np.arange(self.N[p])+N_ofs_old[p] for p in range(num_p_old) if p not in patches])
+            if len(refined_patches)!=num_p_old:
+                data_id=np.ones(sum([self.N[p] for p in range(num_p_old) if p not in refined_patches]))
+                I_id = np.concatenate([np.arange(self.N[p])+self.N_ofs[p] for p in range(num_p_old) if p not in refined_patches])
+                J_id = np.concatenate([np.arange(self.N[p])+N_ofs_old[p] for p in range(num_p_old) if p not in refined_patches])
                 #print(len(data_id),len(I_id),len(J_id))
                 P_loc = P_loc +  scipy.sparse.coo_matrix((data_id,(I_id, J_id)),(sum(self.N),sum(N_old)))
             P = self.Basis.T@P_loc@B_old

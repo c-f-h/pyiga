@@ -82,8 +82,8 @@ class PatchMesh:
         self.domains = {0:set()}
         self.patch_domains = dict()
         
-        self.Nodes = {'T0':dict(), 'T1':dict()}
-        self.Nodes['T1'] = dict()
+        # self.Nodes = {'T0':dict(), 'T1':dict()}
+        # self.Nodes['T1'] = dict()
 
         if patches:
             if domains:
@@ -143,9 +143,11 @@ class PatchMesh:
     def numpatches(self):
         return len(self.patches)
     
+    @property
     def geos(self):
         return [geo for ((_, geo),_) in self.patches]
     
+    @property
     def kvs(self):
         return [kvs for ((kvs, _),_) in self.patches]
             

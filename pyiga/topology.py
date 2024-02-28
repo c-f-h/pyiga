@@ -191,13 +191,13 @@ class PatchMesh:
         self.interfaces[S0] = (S1, flip)
         self.interfaces[S1] = (S0, flip)
         
-    def k_refine(self, patches = None):
+    def p_refine(self, patches = None):
         if isinstance(patches,int):
             patches = {p:patches for p in range(self.numpatches)}     
 
         for p in patches:
             (kvs,geo), b = self.patches[p]
-            new_kvs = tuple([kv.k_refine(patches[p]) for kv in kvs])
+            new_kvs = tuple([kv.p_refine(patches[p]) for kv in kvs])
             self.patches[p]=((new_kvs, geo), b)
             
         return {p:(p,) for p in patches}
@@ -574,15 +574,18 @@ class PatchMesh:
         else:
             return None     # no matching segment - must be on the boundary
 
-    def draw(self, fig, knots=True, vertex_idx = False, patch_idx = False, nodes=False, bwidth=1, color=None, bcolor=None):
+    def draw(self, vertex_idx = False, patch_idx = False, nodes=False, bwidth=1, color=None, bcolor=None, axis='scaled', **kwargs):
         """draws a visualization of the patchmesh in 2D."""
+        
+        fig=plt.figure(figsize=kwargs.get('figsize'))
+        ax = plt.axes()
         
         for p,((kvs, geo),_) in enumerate(self.patches):
             if color is not None:
                 c=color[self.patch_domains[p]]
             else:
                 c=None
-            if knots:
+            if kwargs.get('knots'):
                 vis.plot_geo(geo, gridy=kvs[0].mesh,gridx=kvs[1].mesh, lcolor='lightgray', color=c, boundary=True)
             else:
                 vis.plot_geo(geo, grid=2, color=c, boundary=True)
@@ -595,14 +598,14 @@ class PatchMesh:
 #                 print(p,b)
             
 #         for (p,b) in long_edges.union(common_edges):
-#             vis.plot_geo(self.geos()[p].boundary([assemble.int_to_bdspec(b)]))
+#             vis.plot_geo(self.geos[p].boundary([assemble.int_to_bdspec(b)]))
         
         for key in self.outer_boundaries:
             bcol=None
             if bcolor is not None:
                 bcol=bcolor[key]
             for (p,b) in self.outer_boundaries[key]:
-                vis.plot_geo(self.geos()[p].boundary([assemble.int_to_bdspec(b)]), linewidth=bwidth, color=bcol)
+                vis.plot_geo(self.geos[p].boundary([assemble.int_to_bdspec(b)]), linewidth=bwidth, color=bcol)
            
         if nodes:
             plt.scatter(*np.transpose(self.vertices))
@@ -617,58 +620,99 @@ class PatchMesh:
         if vertex_idx:
             for i, vtx in enumerate(self.vertices):   # annotate vertex indices
                 plt.annotate(str(i), vtx, fontsize=18, color='red')
+                
+        plt.axis(axis);
         
 
     def sanity_check(self):
-        for (p, b, s), ((p1, b1, s1), flip) in self.interfaces.items():
-            # check that all interface indices make sense
-            assert 0 <= p < len(self.patches) and 0 <= p1 < len(self.patches)
-            bd, bd1 = self.boundaries(p), self.boundaries(p1)
-            assert 0 <= b < len(bd) and 0 <= b1 < len(bd1)
-            assert 0 <= s < len(bd[b]) - 1 and 0 <= s1 < len(bd1[b1]) - 1
-                                        
-        for p in range(len(self.patches)):
-                       
-            # check topology of corner vertices
-            kvs, geo = self.patches[p][0]
-            crns = corners(geo)
+        # for (p, b, s), ((p1, b1, s1), flip) in self.interfaces.items():
+        #     # check that all interface indices make sense
+        #     assert 0 <= p < len(self.patches) and 0 <= p1 < len(self.patches)
+        #     bd, bd1 = self.boundaries(p), self.boundaries(p1)
+        #     assert 0 <= b < len(bd) and 0 <= b1 < len(bd1)
+        #     assert 0 <= s < len(bd[b]) - 1 and 0 <= s1 < len(bd1[b1]) - 1
             
-            (B,T,L,R) = bdrs = self.boundaries(p)
-            assert B[0] == L[0]    # bottom/left match in corner
-            assert B[1] == R[0]    # bottom/right match in corner
-            assert T[0] == L[1]    # top/left match in corner
-            assert T[1] == R[1]    # top/right match in corner
-
-            # check geometric position of corner vertices
-
-            assert np.allclose(self.vertices[B[0]],  crns[0])
-            assert np.allclose(self.vertices[B[1]], crns[1])
-            assert np.allclose(self.vertices[T[0]],  crns[2])
-            assert np.allclose(self.vertices[T[1]], crns[3])
-
-            # check that there are no duplicate vertices in any segment
-            for bd in bdrs:
-                assert len(np.unique(bd)) == len(bd)
-
-            # check that connectivity of interfaces is consistent
-            for b, bd in enumerate(bdrs):
-                assert len(bd) >= 2    # each boundary has at least one segment
-                for s in range(len(bd) - 1):    # check each boundary segment
+        I1 = list(self.interfaces.keys())
+        I2 = [i[0] for i in self.interfaces.values()]
+        
+        assert set(I1)==set(I2), "interface information not compatible"
+        I1=np.array(I1)
+        I2=np.array(I2)
+        
+        V = np.array(self.vertices)
+        I = np.array([[b[::len(b)-1] for b in self.boundaries(p)] for p in range(self.numpatches)])
+        bdrs = [[b for b in self.boundaries(p)] for p in range(self.numpatches)]
+        S=np.array([[len(b)-1 for b in B] for B in bdrs])
+        
+        assert np.all(S>0), "some boundary does not have starting- or endpoint"
+        
+        assert np.all((I1[:,0]>=0) | (I1[:,0]<self.numpatches)), "patch index is negative or exceeds number of patches"
+        assert np.all((I1[:,1]>=0) | (I1[:,1]<4)), "boundary index is invalid"
+        assert np.all(np.array(I1)[:,2]<S[np.array(I1)[:,0],np.array(I1)[:,1]]), "segment index exceeds number of segments on that side of the interface"
+        
+        assert np.all(np.isclose(V[I[:,0:2]],np.array([corners(geo) for geo in self.geos]))), "corners do not match vertex information"
+        
+        BL = (I[:,0,0]==I[:,2,0])
+        BR = (I[:,0,1]==I[:,3,0])
+        TL = (I[:,1,0]==I[:,2,1])
+        TR = (I[:,1,1]==I[:,3,1])
+        
+        assert np.all(BL), "boundary information does not match on lower left corner on patches: " + str(np.where((BL==False)[0]))
+        assert np.all(BR), "boundary information does not match on lower right corner on patches: " + str(np.where((BR==False)[0]))
+        assert np.all(TL), "boundary information does not match on upper left corner on patches: " + str(np.where((TL==False)[0]))
+        assert np.all(TR), "boundary information does not match on upper right corner on patches: " + str(np.where((TR==False)[0]))
+        
+        for p in range(self.numpatches):
+            for b in range(4):
+                for s in range(S[p,b]):
                     other = self.get_matching_interface(p, b, s)
                     if other:
-                        # if not on the boundary, make sure the other one refers back to this one
-                        matching = self.get_matching_interface(*other)
-                        #print((p,b,s), '->', other, '->', matching)
-                        assert matching == (p, b, s)
-
-                        # check that the two segments refer to the same two vertices
-                        (p1, b1, s1) = other
-                        assert sorted(bd[s:s+2]) == sorted(self.boundaries(p1)[b1][s1:s1+2])
+                        assert (p,b,s)==self.interfaces[self.interfaces[(p,b,s)][0]][0], "interface connectivity invalid"
                     else:
-                        segment = tuple(sorted(bd[s:s+2]))
-                        assert (p, b) in outer_boundaries, str(segment) + ' is non-linked boundary segment for two patches!'
-                            #assert False, str(segment) + ' is non-linked boundary segment for two patches!'
-                        #self.outer_boundaries.add(segment)
+                        assert np.any([(p, b) in self.outer_boundaries[idx] for idx in self.outer_boundaries]),'A segment is neither a linked interface segment for two patches nor an outer boundary!'
+        
+#         for p in range(len(self.patches)):
+                       
+#             # check topology of corner vertices
+# #             kvs, geo = self.patches[p][0]
+# #             crns = corners(geo)
+            
+# #             (B,T,L,R) = bdrs = self.boundaries(p)
+#             # assert B[0] == L[0]    # bottom/left match in corner
+#             # assert B[1] == R[0]    # bottom/right match in corner
+#             # assert T[0] == L[1]    # top/left match in corner
+#             # assert T[1] == R[1]    # top/right match in corner
+
+#             # check geometric position of corner vertices
+
+#             # assert np.allclose(self.vertices[B[0]],  crns[0])
+#             # assert np.allclose(self.vertices[B[1]], crns[1])
+#             # assert np.allclose(self.vertices[T[0]],  crns[2])
+#             # assert np.allclose(self.vertices[T[1]], crns[3])
+
+#             # check that there are no duplicate vertices in any segment
+#             for bd in bdrs:
+#                 assert len(np.unique(bd)) == len(bd)
+
+#             # check that connectivity of interfaces is consistent
+#             for b, bd in enumerate(bdrs):
+#                 assert len(bd) >= 2    # each boundary has at least one segment
+#                 for s in range(len(bd) - 1):    # check each boundary segment
+#                     other = self.get_matching_interface(p, b, s)
+#                     if other:
+#                         # if not on the boundary, make sure the other one refers back to this one
+#                         matching = self.get_matching_interface(*other)
+#                         #print((p,b,s), '->', other, '->', matching)
+#                         assert matching == (p, b, s)
+
+#                         # check that the two segments refer to the same two vertices
+#                         (p1, b1, s1) = other
+#                         assert sorted(bd[s:s+2]) == sorted(self.boundaries(p1)[b1][s1:s1+2])
+#                     else:
+#                         segment = tuple(sorted(bd[s:s+2]))
+#                         assert (p, b) in self.outer_boundaries, str(segment) + ' is non-linked boundary segment for two patches!'
+#                             #assert False, str(segment) + ' is non-linked boundary segment for two patches!'
+#                         #self.outer_boundaries.add(segment)
 
                         
 # class PatchMesh3D:

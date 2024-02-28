@@ -210,8 +210,10 @@ class KnotVector:
         kvnew = np.sort(np.concatenate((self.kv, new_knots)))
         return KnotVector(kvnew, self.p)
     
-    def k_refine(self, p_inc):
-        return KnotVector(np.concatenate([p_inc*[self.kv[0]],self.kv,p_inc*[self.kv[-1]]]),self.p + p_inc)
+    def p_refine(self, p_inc):
+        KV = self.h_refine(new_knots=np.repeat(self.mesh,p_inc))
+        KV.p=self.p+p_inc
+        return KV
 
     def meshsize_avg(self):
         """Compute average length of the knot spans of this knot vector"""

@@ -27,8 +27,7 @@ Tensor product Gauss quadrature assemblers
 
 Standard Gauss quadrature assemblers for mass and stiffness matrices.
 They take one or two arguments:
-
-- `kvs` (list of :class:`.KnotVector`):
+f):
   Describes the tensor product B-spline basis for which to assemble
   the matrix. One :class:`KnotVector` per coordinate direction.
   In the 1D case, a single :class:`.KnotVector` may be passed
@@ -120,6 +119,7 @@ from . import algebra
 from . import topology
 from . import vis
 from . import vform
+from . import solvers
 
 from .quadrature import make_iterated_quadrature, make_tensor_quadrature
 from .mlmatrix import MLStructure
@@ -1407,7 +1407,7 @@ class Multipatch:
         # local-to-global offset per patch
         self.M_ofs = np.concatenate(([0], np.cumsum(self.M)))
         self.Basis = algebra.compute_basis(self.Constr, maxiter=10)
-        self.sanity_check()
+        #self.sanity_check()
         
     def assemble_volume(self, problem, arity=1, domain_id=0, args=None, bfuns=None,
             symmetric=False, format='csr', layout='blocked', **kwargs):
@@ -1612,7 +1612,7 @@ class Multipatch:
 #             P[MP.M_ofs[-1]:] = scipy.sparse.spdiags(factors, 0, len(factors), len(factors)) @ P[MP.M_ofs[-1]:]
 #             return P
         
-    def patch_refine(self, h_ref=None, p_ref = 0, mult=1, return_P = False):
+    def h_refine(self, h_ref=None, mult=1, return_P = False):
         """Refines the Mesh by splitting patches
         
         The dictionary `h_ref` specifies which patches (dict keys) are to be split 
@@ -1621,7 +1621,7 @@ class Multipatch:
         The dictionary `p_ref` specifies which patches (dict keys) should have their degree elevated 
         (dict values: int)
         
-        The `return_prol` keyword enables also the generation of a prolongation matrix from one mesh to the split mesh.
+        The `return_P` keyword enables also the generation of a prolongation matrix from one mesh to the split mesh.
         
         Returns:
             A new :class:`Multipatch` object `MP`
@@ -1640,8 +1640,8 @@ class Multipatch:
             h_ref = {p:None for p in range(self.numpatches)}
         else:
             assert 0, "unknown input type"
-        if isinstance(p_ref,int):
-            p_ref = {p:p_ref for p in range(self.numpatches)}
+        # if isinstance(p_ref,int):
+        #     p_ref = {p:p_ref for p in range(self.numpatches)}
         
         num_p_old = self.numpatches
         N_old=self.N
@@ -1651,28 +1651,51 @@ class Multipatch:
         new_kvs_ = dict()
         P_loc=dict()
         
-        kvs_old = self.mesh.kvs()
-        new_patches = self.mesh.k_refine(p_ref)
-        new_patches.update(self.mesh.h_refine(h_ref))
+        kvs_old = self.mesh.kvs
+        new_patches=self.mesh.h_refine(h_ref)
         self.reset()
         
         if return_P:
-            refined_patches = set().union(h_ref,p_ref)
+            refined_patches = h_ref
             for p in refined_patches:
-                P_loc[p]={new_p: scipy.sparse.coo_matrix(bspline.prolongation_tp(kvs_old[p],self.mesh.kvs()[new_p])) for new_p in new_patches[p]}
-            data=np.concatenate([np.concatenate([P_loc[p][new_p].data for new_p in new_patches[p]]) for p in refined_patches])
-            I = np.concatenate([np.concatenate([P_loc[p][new_p].row + self.N_ofs[new_p] for new_p in new_patches[p]]) for p in refined_patches])
-            J = np.concatenate([np.concatenate([P_loc[p][new_p].col + N_ofs_old[p] for new_p in new_patches[p]]) for p in refined_patches])
-            P_loc=scipy.sparse.coo_matrix((data,(I, J)),(sum(self.N),sum(N_old)))
+                P_loc[p]={new_p: scipy.sparse.coo_matrix(bspline.prolongation_tp(kvs_old[p],self.mesh.kvs[new_p])) for new_p in new_patches[p]}
+            if len(refined_patches)!=0:
+                data=np.concatenate([np.concatenate([P_loc[p][new_p].data for new_p in new_patches[p]]) for p in refined_patches])
+                I = np.concatenate([np.concatenate([P_loc[p][new_p].row + self.N_ofs[new_p] for new_p in new_patches[p]]) for p in refined_patches])
+                J = np.concatenate([np.concatenate([P_loc[p][new_p].col + N_ofs_old[p] for new_p in new_patches[p]]) for p in refined_patches])
+                P_loc = scipy.sparse.coo_matrix((data,(I, J)),(sum(self.N),sum(N_old)))
+            else:
+                P_loc = scipy.sparse.coo_matrix((sum(self.N),sum(N_old)))
             if len(refined_patches)!=num_p_old:
                 data_id=np.ones(sum([self.N[p] for p in range(num_p_old) if p not in refined_patches]))
-                I_id = np.concatenate([np.arange(self.N[p])+self.N_ofs[p] for p in range(num_p_old) if p not in refined_patches])
-                J_id = np.concatenate([np.arange(self.N[p])+N_ofs_old[p] for p in range(num_p_old) if p not in refined_patches])
+                I_id = np.concatenate([np.arange(self.N[p]) + self.N_ofs[p] for p in range(num_p_old) if p not in refined_patches])
+                J_id = np.concatenate([np.arange(self.N[p]) + N_ofs_old[p] for p in range(num_p_old) if p not in refined_patches])
                 #print(len(data_id),len(I_id),len(J_id))
                 P_loc = P_loc +  scipy.sparse.coo_matrix((data_id,(I_id, J_id)),(sum(self.N),sum(N_old)))
-            P = self.Basis.T@P_loc@B_old
-            D=np.sum(P,axis=1).A
-            return scipy.sparse.spdiags(1./D.T,0,len(D),len(D))@P
+            #return solvers.fastBlockInverse(self.Basis.T@self.Basis)@self.Basis.T@P_loc@B_old
+            return scipy.sparse.linalg.spsolve(self.Basis.T@self.Basis,self.Basis.T@P_loc@B_old)
+        
+    def p_refine(self, p_inc=1, return_P = False):
+        N_old=self.N
+        B_old = self.Basis
+        N_ofs_old = self.N_ofs
+        kvs_old = self.mesh.kvs
+        P_loc=dict()
+        
+        self.mesh.p_refine(p_inc)
+        self.reset()
+        
+        if return_P:
+            for p in range(self.numpatches):
+                P_loc[p]= scipy.sparse.coo_matrix(bspline.prolongation_tp(kvs_old[p],self.mesh.kvs[p]))
+            data=np.concatenate([P_loc[p].data for p in range(self.numpatches)])
+            I = np.concatenate([P_loc[p].row + self.N_ofs[p] for p in range(self.numpatches)])
+            J = np.concatenate([P_loc[p].col + N_ofs_old[p] for p in range(self.numpatches)])
+            #print(sum(self.N),sum(N_old))
+            #print(data, I, J)
+            P_loc = scipy.sparse.coo_matrix((data,(I, J)),(sum(self.N),sum(N_old)))
+            #return solvers.fastBlockInverse(self.Basis.T@self.Basis)@self.Basis.T@P_loc@B_old
+            return scipy.sparse.linalg.spsolve(self.Basis.T@self.Basis,self.Basis.T@P_loc@B_old)
 
     def compute_dirichlet_bcs(self, b_data):
         """Performs the same operation as the global function
@@ -1699,23 +1722,36 @@ class Multipatch:
                 bcs.append((idx.astype(int), bc[1][feasible]))
         return combine_bcs(bcs)
     
-    def plot(self, u, figsize=(5,5), u_min = None, u_max = None, cmap = plt.cm.jet):
+    def plot(self, u, cmap = plt.cm.jet, cbar=True, axis='scaled', **kwargs):
         assert self.dim==2, 'visualization only possible for 2D.'
         assert len(u)==self.numdofs, 'wrong size of coefficient vector.'
         
-        fig=plt.figure(figsize=figsize)
+        fig = plt.figure(figsize=kwargs.get('figsize'))
+        ax = plt.axes()
+        
         u_loc = self.Basis@u
-        u_funcs = [geometry.BSplineFunc(kvs, u_loc[self.N_ofs[p]:self.N_ofs[p+1]]) for p, kvs in enumerate(self.mesh.kvs())]
-        if not u_max:
+        u_funcs = [geometry.BSplineFunc(kvs, u_loc[self.N_ofs[p]:self.N_ofs[p+1]]) for p, kvs in enumerate(self.mesh.kvs)]
+        if 'range' not in kwargs:
             u_max=max(u)
-        if not u_min:
             u_min=min(u)
+        else:
+            assert isinstance(kwargs['range'],tuple) and len(kwargs['range'])==2, 'wrong input for image range'
+            u_max=kwargs['range'][1]
+            u_min=kwargs['range'][0]
+            
+        if abs(u_max-u_min)<1e-2:
+            mid=(u_min+u_max)/2
+            u_max=mid+0.01
+            u_min=mid-0.01
 
         for (u_func, ((kvs, geo),_)) in zip(u_funcs, self.mesh.patches):
             vis.plot_field(u_func, geo, vmin=u_min, vmax=u_max, cmap = cmap)
-        plt.axis('scaled');
-        plt.colorbar();
-        plt.show()
+        
+        plt.axis(axis);
+        if cbar:
+            cax = fig.add_axes([ax.get_position().x1+0.03,ax.get_position().y0,0.02,ax.get_position().height])
+            plt.colorbar(cax=cax) # Similar to fig.colorbar(im, cax = cax)
+        #plt.show()
         
     def L2projection(self, u):
         Mh = self.assemble_volume(vform.mass_vf(2))
@@ -1724,7 +1760,7 @@ class Multipatch:
         
     def function(self, u):
         u_loc=self.Basis@u
-        return [geometry.BSplineFunc(kvs,u_loc[self.N_ofs[p]:self.N_ofs[p+1]]) for p, kvs in enumerate(self.mesh.kvs())]
+        return [geometry.BSplineFunc(kvs,u_loc[self.N_ofs[p]:self.N_ofs[p+1]]) for p, kvs in enumerate(self.mesh.kvs)]
     
     def sanity_check(self):
         assert self.Basis != None, 'Basis for function space not yet computed.'

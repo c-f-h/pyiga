@@ -289,3 +289,25 @@ def plot_active_cells(hspace, values, cmap=None, edgecolor=None):
     """Plot the mesh of active cells with colors chosen according to the given
     `values`."""
     return HSpaceVis(hspace).plot_active_cells(values, cmap=cmap)
+
+def spy(A, marker=None, markersize=10, cbar=False, cmap = plt.cm.jet, **kwargs):
+    fig = plt.figure(figsize=kwargs.get('figsize'))
+    ax = plt.axes()
+    
+    A = A.tocoo()
+    data, I, J = A.data, A.row, A.col
+    if cbar:
+        plt.scatter(J, I, c=data, marker="s", s=markersize, cmap = cmap)
+    else:
+        plt.scatter(J, I, s=markersize, marker="s")
+    ax.axis('scaled');
+    ax.set_xlim(-0.5,A.shape[1]-0.5)
+    ax.set_ylim(-0.5,A.shape[0]-0.5)
+    ax.invert_yaxis()
+    ax.xaxis.tick_top()
+    
+    if cbar:
+        cax = fig.add_axes([ax.get_position().x1+0.03,ax.get_position().y0,0.02,ax.get_position().height])
+        plt.colorbar(cax=cax) # Similar to fig.colorbar(im, cax = cax)
+    
+    

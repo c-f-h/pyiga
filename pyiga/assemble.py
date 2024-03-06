@@ -20,8 +20,7 @@ See the section :doc:`/guide/vforms` for further details.
 
 .. autoclass:: Assembler
     :members:
-
-
+final
 Tensor product Gauss quadrature assemblers
 ------------------------------------------
 
@@ -106,6 +105,7 @@ import scipy.sparse
 import itertools
 import math
 from sksparse.cholmod import cholesky
+import time
 
 from . import bspline
 from . import assemble_tools
@@ -406,7 +406,7 @@ def slice_indices(axis, sides, shape, ravel=False, swap=None, flip=None):
             if i in axis:
                 axdofs[i] = axdofs[i]
             else:
-                axdofs[i]=axdofs_[swap[k]]
+                axdofs[i]=axdofs_[swap[k]] 
                 k += 1
     #return axdofs
     
@@ -417,15 +417,20 @@ def slice_indices(axis, sides, shape, ravel=False, swap=None, flip=None):
         multi_indices = np.ravel_multi_index(multi_indices.T, shape)
     return multi_indices
 
-def boundary_dofs(kvs, bdspec, ravel=False, swap=None, flip=None):
+def boundary_dofs(kvs, bdspec=None, ravel=False, swap=None, flip=None):
     """Indices of the dofs which lie on the given boundary of the tensor
     product basis `kvs`. Output format is as for :func:`slice_indices`.
     """
-    bdspec = bspline._parse_bdspec(bdspec, len(kvs))
-    axis, sides = tuple(ax for ax, _ in bdspec), tuple(-idx for _, idx in bdspec)
-    N = tuple(kv.numdofs for kv in kvs)
-    return slice_indices(axis, sides, N, ravel=ravel, swap=swap, flip=flip)
-
+    if bdspec:
+        bdspec = bspline._parse_bdspec(bdspec, len(kvs))
+        axis, sides = tuple(ax for ax, _ in bdspec), tuple(-idx for _, idx in bdspec)
+        N = tuple(kv.numdofs for kv in kvs)
+        return slice_indices(axis, sides, N, ravel=ravel, swap=swap, flip=flip)
+    else:
+        if ravel==True:
+            return np.unique(np.concatenate([boundary_dofs(kvs, [(a,b)], ravel=True) for a,b in itertools.product(*2*(range(2),))]))
+        else:
+            return [boundary_dofs(kvs, [(a,b)], ravel=True) for a,b in itertools.product(*2*(range(2),))]
 def boundary_kv(kvs, bdspec, swap=None, flip=None):
     kvs=list(kvs)
     if flip is None:
@@ -1406,42 +1411,57 @@ class Multipatch:
         self.M = [n - s for (n, s) in zip(self.N, num_shared)]
         # local-to-global offset per patch
         self.M_ofs = np.concatenate(([0], np.cumsum(self.M)))
-        self.Basis = algebra.compute_basis(self.Constr, maxiter=10)
+        t=time.time()
+        self.Basis = algebra.compute_basis(self.Constr, maxiter=20)
+        data, indices, indptr = self.Basis.data, self.Basis.indices, self.Basis.indptr
+        m, n = self.Basis.shape
+        #self.P2G = scipy.sparse.csc_matrix((data[indptr[:-1]],indices[indptr[:-1]],np.arange(n+1)),shape=(m,n)).T
+        X = scipy.sparse.coo_matrix(self.Basis)
+        idx = np.where(np.isclose(X.data,1))
+        X.data, X.row, X.col = X.data[idx], X.row[idx], X.col[idx]
+        D = (X.T@self.Basis).sum(axis=1).A.ravel()
+        self.P2G = scipy.sparse.csr_matrix(scipy.sparse.spdiags(1/D,[0],len(D),len(D))@X.T)
+        self.Basis = scipy.sparse.csr_matrix(self.Basis)
+        print("Basis setup took "+str(time.time()-t)+" seconds")
         #self.sanity_check()
         
-    def assemble_volume(self, problem, arity=1, domain_id=0, args=None, bfuns=None,
+    def assemble_volume(self, problem, arity=1, domain_id=None, args=None, bfuns=None,
             symmetric=False, format='csr', layout='blocked', **kwargs):
         n = self.numdofs
         X=self.Basis
         if isinstance(problem, vform.VForm):
             arity = problem.arity
-        
         if args is None:
             args = dict()
+        if domain_id:
+            domain_id=(domain_id,)
+        else:
+            domain_id=self.mesh.domains
+            
         if arity==2:
             A = []
             dofs=[] 
-            for p in self.mesh.domains[domain_id]:
-                kvs, geo = self.mesh.patches[p][0]
-                args.update(geo=geo)
-                # TODO: vector-valued problems
-                A.append(assemble(problem, kvs, args=args, bfuns=bfuns,
-                        symmetric=symmetric, format=format, layout=layout,
-                        **kwargs))
-                dofs.append(np.arange(self.N_ofs[p],self.N_ofs[p+1]))
-                X = self.Basis[np.concatenate(dofs),:]
+            for d_idx in domain_id:
+                for p in self.mesh.domains[d_idx]:
+                    kvs, geo = self.mesh.patches[p][0]
+                    args.update(geo=geo)
+                    A.append(assemble(problem, kvs, args=args, bfuns=bfuns,
+                            symmetric=symmetric, format=format, layout=layout,
+                            **kwargs))
+                    dofs.append(np.arange(self.N_ofs[p],self.N_ofs[p+1]))
+            X = self.Basis[np.concatenate(dofs),:]
             return X.T@scipy.sparse.block_diag(A)@X
         else:
             F=np.zeros(self.numloc_dofs)
-            for p in self.mesh.domains[domain_id]:
-                kvs, geo = self.mesh.patches[p][0]
-                args.update(geo=geo)
-                # TODO: vector-valued problems
-                vals=assemble(problem, kvs, args=args, bfuns=bfuns,
+            for d_idx in domain_id:
+                for p in self.mesh.domains[d_idx]:
+                    kvs, geo = self.mesh.patches[p][0]
+                    args.update(geo=geo)
+                    vals=assemble(problem, kvs, args=args, bfuns=bfuns,
                         symmetric=symmetric, format=format, layout=layout,
                         **kwargs).ravel()
-                dofs=np.arange(self.N_ofs[p],self.N_ofs[p+1])
-                F[dofs]+=vals
+                    dofs=np.arange(self.N_ofs[p],self.N_ofs[p+1])
+                    F[dofs]+=vals
             return X.T@F
         
     def assemble_system(self, problem, rhs, arity=1, domain_id=0, args=None, bfuns=None,
@@ -1652,10 +1672,13 @@ class Multipatch:
         P_loc=dict()
         
         kvs_old = self.mesh.kvs
+        t=time.time()
         new_patches=self.mesh.h_refine(h_ref)
+        print("Refinement took " + str(time.time()-t) + " seconds")
         self.reset()
         
         if return_P:
+            t = time.time()
             refined_patches = h_ref
             for p in refined_patches:
                 P_loc[p]={new_p: scipy.sparse.coo_matrix(bspline.prolongation_tp(kvs_old[p],self.mesh.kvs[new_p])) for new_p in new_patches[p]}
@@ -1672,8 +1695,10 @@ class Multipatch:
                 J_id = np.concatenate([np.arange(self.N[p]) + N_ofs_old[p] for p in range(num_p_old) if p not in refined_patches])
                 #print(len(data_id),len(I_id),len(J_id))
                 P_loc = P_loc +  scipy.sparse.coo_matrix((data_id,(I_id, J_id)),(sum(self.N),sum(N_old)))
-            #return solvers.fastBlockInverse(self.Basis.T@self.Basis)@self.Basis.T@P_loc@B_old
-            return scipy.sparse.linalg.spsolve(self.Basis.T@self.Basis,self.Basis.T@P_loc@B_old)
+            #P = scipy.sparse.linalg.spsolve(self.Basis.T@self.Basis,self.Basis.T@P_loc@B_old)
+            P = self.P2G@P_loc@B_old
+            print("Prolongation took "+str(time.time()-t)+" seconds")
+            return P
         
     def p_refine(self, p_inc=1, return_P = False):
         N_old=self.N
@@ -1686,6 +1711,7 @@ class Multipatch:
         self.reset()
         
         if return_P:
+            t = time.time()
             for p in range(self.numpatches):
                 P_loc[p]= scipy.sparse.coo_matrix(bspline.prolongation_tp(kvs_old[p],self.mesh.kvs[p]))
             data=np.concatenate([P_loc[p].data for p in range(self.numpatches)])
@@ -1694,8 +1720,10 @@ class Multipatch:
             #print(sum(self.N),sum(N_old))
             #print(data, I, J)
             P_loc = scipy.sparse.coo_matrix((data,(I, J)),(sum(self.N),sum(N_old)))
-            #return solvers.fastBlockInverse(self.Basis.T@self.Basis)@self.Basis.T@P_loc@B_old
-            return scipy.sparse.linalg.spsolve(self.Basis.T@self.Basis,self.Basis.T@P_loc@B_old)
+            #P = scipy.sparse.linalg.spsolve(self.Basis.T@self.Basis,self.Basis.T@P_loc@B_old)
+            P = self.P2G@P_loc@B_old
+            print("Prolongation took "+str(time.time()-t)+" seconds")
+            return P
 
     def compute_dirichlet_bcs(self, b_data):
         """Performs the same operation as the global function
@@ -1766,4 +1794,5 @@ class Multipatch:
         assert self.Basis != None, 'Basis for function space not yet computed.'
         assert all(np.isclose(self.Basis@np.ones(self.numdofs),1)), 'No partition of unity.'
         assert abs(self.Constr@self.Basis).max()<1e-12, 'Not an H^1-conforming function space.'
+        assert scipy.sparse.linalg.norm(self.P2G@self.Basis-scipy.sparse.identity(self.numdofs)) <1e-12
 

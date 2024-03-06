@@ -1084,7 +1084,7 @@ def createIndicesInversion(dataN,indicesN,indptrN,block_ends) -> (float64[:],int
     
     blis = 0; blis2 = 0
     
-    for i in nb.prange(block_lengths.size):
+    for i in range(block_lengths.size):
         
         blis = blicum[i]
         blis2 = bli2cum[i]

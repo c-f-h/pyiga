@@ -163,12 +163,12 @@ def compute_basis(Constr, maxiter):
         #eliminate used constraints from constraint matrix
         Constr = Constr @ Basis    
         activeConstraints = compute_active_constr(Constr)
-            
         i+=1
         
     #print(np.array(list(allderivedDofs.keys())))
     #nonderivedDofs=np.setdiff1d(allLocalDofs, np.array(list(allderivedDofs.keys())))
     #print(nonderivedDofs)
+    Basis = scipy.sparse.csc_matrix(Basis)
     return Basis[:,nonderivedDofs]  #,Constr,activeConstraints
 
 def rref(A, tol=1e-8):

@@ -241,6 +241,10 @@ class PatchMesh:
     def rename_domain(self, idx, new_idx):
         assert new_idx not in self.domains
         self.domains[new_idx] = self.domains.pop(idx)
+        
+    def remove_boundary(self, bds):
+        for key in self.outer_boundaries:
+            self.outer_boundaries[key] = self.outer_boundaries[key]-bds
             
     #def split_mesh(self, patches):
         #patches=np.unique(patches)

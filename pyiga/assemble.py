@@ -1433,7 +1433,7 @@ class Multipatch:
             arity = problem.arity
         if args is None:
             args = dict()
-        if domain_id:
+        if domain_id is not None:
             domain_id=(domain_id,)
         else:
             domain_id=self.mesh.domains
@@ -1442,7 +1442,9 @@ class Multipatch:
             A = []
             dofs=[] 
             for d_idx in domain_id:
+                #print(str(d_idx) + " : \n")
                 for p in self.mesh.domains[d_idx]:
+                    #print(p)
                     kvs, geo = self.mesh.patches[p][0]
                     args.update(geo=geo)
                     A.append(assemble(problem, kvs, args=args, bfuns=bfuns,
@@ -1454,7 +1456,9 @@ class Multipatch:
         else:
             F=np.zeros(self.numloc_dofs)
             for d_idx in domain_id:
+                #print(str(d_idx) + " : \n")
                 for p in self.mesh.domains[d_idx]:
+                    #print(p)
                     kvs, geo = self.mesh.patches[p][0]
                     args.update(geo=geo)
                     vals=assemble(problem, kvs, args=args, bfuns=bfuns,

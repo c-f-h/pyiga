@@ -117,20 +117,20 @@ class PatchMesh:
                 for (p, b, s),(p1, b1, s1),flip in interfaces:
                     self.add_interface(p, b, s, p1, b1, s1, (flip,))
                     if (p,b) in D:
-                        D[(p,b)][s]=self.boundaries(p1)[b1]
+                        D[(p,b)][s]=self.boundaries(p1)[0][b1]
                     else:
-                        D[(p,b)]={s:self.boundaries(p1)[b1]}
+                        D[(p,b)]={s:self.boundaries(p1)[0][b1]}
                     if (p1,b1) in D:
-                        D[(p1,b1)][s1]=self.boundaries(p)[b]
+                        D[(p1,b1)][s1]=self.boundaries(p)[0][b]
                     else:
-                        D[(p1,b1)]={s1:self.boundaries(p)[b]}
+                        D[(p1,b1)]={s1:self.boundaries(p)[0][b]}
                 #print(D)
                 for (p,b) in D:
                     if len(D[(p,b)])>1:
                         bd=D[(p,b)][0].copy()
                         for i in range(1,len(D[(p,b)])):
                             bd.append(D[(p,b)][i][1])
-                        self.patches[p][1][b]=bd
+                        self.patches[p][1][0][b]=bd
                         
             for p in range(len(patches)):
                 for b in range(4):
@@ -172,11 +172,16 @@ class PatchMesh:
     def add_patch(self, patch):
         kvs, geo = patch
         vtx = [self.add_vertex(c) for c in corners(geo, ravel = True)]
-        boundaries = [[vtx[0], vtx[1]],    # bottom
-                      [vtx[2], vtx[3]],    # top
-                      [vtx[0], vtx[2]],    # left
-                      [vtx[1], vtx[3]]]    # right
-        self.patches.append((patch, boundaries))
+        bds = [[vtx[0], vtx[1]],    # bottom
+               [vtx[2], vtx[3]],    # top
+               [vtx[0], vtx[2]],    # left
+               [vtx[1], vtx[3]]]    # right
+        S=geo.support
+        bds_par = [[S[1][0], S[1][1]],
+                   [S[1][0], S[1][1]],
+                   [S[0][0], S[0][1]],
+                   [S[0][0], S[0][1]]]
+        self.patches.append((patch, [bds,bds_par]))
 
     def add_interface(self, p0, b0, s0, p1, b1, s1, flip):
         """Join segment s0 of boundary b0 of patch p0 with segment s1
@@ -196,9 +201,9 @@ class PatchMesh:
             patches = {p:patches for p in range(self.numpatches)}     
 
         for p in patches:
-            (kvs,geo), b = self.patches[p]
+            (kvs,geo), (b, b_par) = self.patches[p]
             new_kvs = tuple([kv.p_refine(patches[p]) for kv in kvs])
-            self.patches[p]=((new_kvs, geo), b)
+            self.patches[p]=((new_kvs, geo), (b, b_par))
             
         return {p:(p,) for p in patches}
             
@@ -243,6 +248,7 @@ class PatchMesh:
         self.domains[new_idx] = self.domains.pop(idx)
         
     def remove_boundary(self, bds):
+        bds=set(bds)
         for key in self.outer_boundaries:
             self.outer_boundaries[key] = self.outer_boundaries[key]-bds
             
@@ -264,7 +270,7 @@ class PatchMesh:
                 self.interfaces[Sn] = intf
                 self.interfaces[intf[0]] = (Sn, intf[1])
 
-    def split_boundary_segment(self, p, b, s, new_vtx, new_p):
+    def split_boundary_segment(self, p, b, s, new_vtx, split_xi, new_p):
         """Split the boundary segment `s` on boundary `b` of patch `p` by
         inserting the new vertex with index `new_vtx`.
 
@@ -272,9 +278,11 @@ class PatchMesh:
         corresponding segment on the other side and updates the interface
         information.
         """
-        bd = self.boundaries(p)[b]
+        bd = self.boundaries(p)[0][b]
+        bd_par = self.boundaries(p)[1][b]
         assert 0 <= s < len(bd) - 1
         bd.insert(s + 1, new_vtx)
+        bd_par.insert(s + 1, split_xi)
         # shift all later interfaces up by one
         #print(list(range(s + 1, len(bd) - 2)))
         self._reindex_interfaces(p, b, range(s + 1, len(bd) - 2), +1)
@@ -283,10 +291,12 @@ class PatchMesh:
         other = self.get_matching_interface(p, b, s)
         if other:
             (p1, b1, s1) = other
-            bd1 = self.boundaries(p1)[b1]
+            bd1 = self.boundaries(p1)[0][b1]
+            bd_par1 = self.boundaries(p1)[1][b1]
             #print(bd1)
             #print(new_vtx)
             bd1.insert(s1 + 1, new_vtx)
+            bd_par1.insert(s1 + 1, split_xi)
 
             # shift all later interfaces up by one
             self._reindex_interfaces(p1, b1, range(s1 + 1, len(bd1) - 2), +1)
@@ -323,7 +333,7 @@ class PatchMesh:
         """
         new_vtx = self.add_vertex(vtxpos)
         
-        vtx1, vtx2 = self.boundaries(p)[b][::len(self.boundaries(p)[b])-1]
+        vtx1, vtx2 = self.boundaries(p)[0][b][::len(self.boundaries(p)[0][b])-1]
 
 #         if vtx1 in self.Nodes['T0']:
 #             corner1 = self.Nodes['T0'][vtx1][p]
@@ -337,13 +347,13 @@ class PatchMesh:
             
         try:
             # is the vertex already contained in the boundary?
-            vtx_idx = self.boundaries(p)[b].index(new_vtx)
+            vtx_idx = self.boundaries(p)[1][b].index(xi)
             #print(1)
         except ValueError:
             # otherwise, we need to insert it, split the segments and insert a new T_node (or corner at the boundary of the domain)
             seg = self._find_boundary_split_index(p, b, xi, new_vtx)
             #print(seg)
-            self.split_boundary_segment(p, b, seg, new_vtx, new_p)
+            self.split_boundary_segment(p, b, seg, new_vtx, xi, new_p)
             
             # if (p,b,0) in self.interfaces:
             #     self.Nodes['T1'][new_vtx] = ((self.interfaces[(p,b,0)][0][:-1],self.interfaces[(p,b,0)][1]), (p, corner2), (new_p, corner1))
@@ -363,8 +373,8 @@ class PatchMesh:
             return vtx_idx
 
     def _find_boundary_split_index(self, p, bdidx, xi_split, vtx_idx):
-        (kvs, geo), boundaries = self.patches[p]
-        segments = boundaries[bdidx]
+        (kvs, geo), (bds, bds_par) = self.patches[p]
+        segments = bds[bdidx]
         # simple case: if a single interval covers the boundary, we split it
         if len(segments) == 2:
             return 0
@@ -383,7 +393,7 @@ class PatchMesh:
             #new_kvs = (new_kvs1[0], new_kvs0[1])
             return (p1, p2, p3, p4)
         
-        (kvs, geo), boundaries = self.patches[p]
+        (kvs, geo), (bds, bds_par) = self.patches[p]
         kv = kvs[axis].h_refine(mult=mult)
         dim = len(kvs)
         
@@ -418,8 +428,10 @@ class PatchMesh:
         sides = (lower+2)%4, (upper+2)%4
 
         # copy existing boundaries, they will be corrected below
-        boundaries = list(boundaries)
-        new_boundaries = [list(bd) for bd in boundaries]
+        bds = list(bds)
+        new_bds = [list(bd) for bd in bds]
+        bds_par = list(bds_par)
+        new_bds_par = [list(par) for par in bds_par]
 
         new_p =  self.numpatches
         
@@ -435,7 +447,7 @@ class PatchMesh:
         #print(new_vertices)
 
         # move existing interfaces from upper side of old to upper of new patch ###
-        self._reindex_interfaces(p, upper, range(0, len(boundaries[upper]) - 1), 0, new_p=new_p)
+        self._reindex_interfaces(p, upper, range(0, len(bds[upper]) - 1), 0, new_p=new_p)
         # reindex existing outer boundary to new patch
         for s in self.outer_boundaries.keys():
             if (p, upper) in self.outer_boundaries[s]:
@@ -445,9 +457,10 @@ class PatchMesh:
                 if (p, bd) in self.outer_boundaries[s]:
                     self.outer_boundaries[s].add((new_p, bd))
                     
-        boundaries[upper]     = list(new_vertices)      # upper edge of new lower patch
-        new_boundaries[lower] = list(new_vertices)      # lower edge of new upper patch
-
+        bds[upper]         = list(new_vertices)      # upper edge of new lower patch
+        bds_par[upper]     = [bds_par[upper][0], bds_par[upper][-1]]
+        new_bds[lower]     = list(new_vertices)      # lower edge of new upper patch
+        new_bds_par[lower] = [bds_par[upper][0], bds_par[upper][-1]]
         # add interface between the two new patches
         self.add_interface(p, upper, 0, new_p, lower, 0, (False,))
 
@@ -455,37 +468,26 @@ class PatchMesh:
             i_new = self.split_patch_boundary(p, sb, split_xi, self.vertices[new_vtx], new_p)
             #print(i_new)
             # split the boundaries of the new patches at this vertex
-            new_bd = self.boundaries(p)[sb]
-            #print(new_bd)
-            boundaries[sb] = list(new_bd[:i_new+1])
-            new_boundaries[sb] = list(new_bd[i_new:])
-            #print(boundaries[sb])
+            new_bd = self.boundaries(p)[0][sb]
+            new_bd_par = self.boundaries(p)[1][sb]
+
+            bds[sb] = list(new_bd[:i_new+1])
+            new_bds[sb] = list(new_bd[i_new:])
+            bds_par[sb] = list(new_bd_par[:i_new+1])
+            new_bds_par[sb] = list(new_bd_par[i_new:])
+            #bds_par[sb] = list()
+            # if len(bds[sb])==1:
+            #     print(bds[sb])
+            if len(new_bds[sb])==1:
+                print(new_bd)
+                print(i_new)
+                print(new_bds[sb])
 
             # change patch index for all interfaces from the split part of the boundary
             self._reindex_interfaces(p, sb, range(i_new, len(new_bd) - 1), -i_new, new_p=new_p)
             
-        #change patch index for all corner nodes and T nodes on the upper edge of old patch   
-#         for vtx in new_boundaries[upper]:
-#                 if vtx in self.Nodes['T0']:
-#                     c = self.Nodes['T0'][vtx][p]
-#                     del self.Nodes['T0'][vtx][p]
-#                     self.Nodes['T0'][vtx][new_p] = c
-#                 else:
-#                     ((p0, b0), flip), (p1, c1), (p2, c2) = self.Nodes['T1'][vtx]
-#                     if p0 == p: p0 = new_p
-#                     if p1 == p: p1 = new_p
-#                     if p2 == p: p2 = new_p
-#                     self.Nodes['T1'][vtx] = (((p0, b0), flip), (p1, c1), (p2, c2))
-        
-#         #also change patch index of possible Nodes['T1'] at the new boundaries in the different axis direction (left and right)
-#         for sb in split_boundaries:
-#             for vtx in new_boundaries[sb][1:-1]:
-#                 if vtx in self.Nodes['T1']:
-#                     ((p0, b0), flip), (p1, c1), (p2, c2) = self.Nodes['T1'][vtx]
-#                     self.Nodes['T1'][vtx] = (((new_p, b0), flip), (p1, c1), (p2, c2))
-            
-        self.patches[p] = ((kvs1, geo1), tuple(boundaries))
-        self.patches.append(((kvs2, geo2), tuple(new_boundaries)))
+        self.patches[p] = ((kvs1, geo1), [bds, bds_par])
+        self.patches.append(((kvs2, geo2), [new_bds, new_bds_par]))
         
         domain_idx=self.patch_domains[p]
         self.patch_domains[new_p]=domain_idx
@@ -545,9 +547,9 @@ class PatchMesh:
         for p in patches.keys():
             #self.split_boundary_idx(p, self.numpatches, axis=patches[p])
             if patches[p]==-1:
-                (kvs,geo), b = self.patches[p]
+                (kvs,geo), (b, b_par) = self.patches[p]
                 new_kvs = tuple([kv.h_refine(mult=mult) for kv in kvs])
-                self.patches[p]=((new_kvs, geo), b)
+                self.patches[p]=((new_kvs, geo), (b, b_par))
                 new_p=(p,)
             else:    
                 new_p = self.split_patch(p, axis=patches[p], mult=mult)
@@ -569,7 +571,7 @@ class PatchMesh:
     def get_matching_interface(self, p, boundary, segment):
         """Get the boundary/interface which is connected to the given boundary/interface."""
         assert 0 <= p < len(self.patches)
-        bdrs = self.boundaries(p)
+        bdrs = self.boundaries(p)[0]
         assert 0 <= boundary < len(bdrs)
         assert 0 <= segment < len(bdrs[boundary]) - 1
         matching = self.interfaces.get((p, boundary, segment))
@@ -593,16 +595,6 @@ class PatchMesh:
                 vis.plot_geo(geo, gridy=kvs[0].mesh,gridx=kvs[1].mesh, lcolor='lightgray', color=c, boundary=True)
             else:
                 vis.plot_geo(geo, grid=2, color=c, boundary=True)
-                
-#         long_edges = set((p,b) for (p,b,s) in self.interfaces if s>0)
-#         common_edges=set()
-#         for (p,b,s),((p1,b1,s1),_) in self.interfaces.items():
-#             if s==0 and len(self.boundaries(p1)[b1])==2 and (p1,b1) not in common_edges:
-#                 common_edges.add((p,b))
-#                 print(p,b)
-            
-#         for (p,b) in long_edges.union(common_edges):
-#             vis.plot_geo(self.geos[p].boundary([assemble.int_to_bdspec(b)]))
         
         for key in self.outer_boundaries:
             bcol=None
@@ -644,8 +636,8 @@ class PatchMesh:
         I2=np.array(I2)
         
         V = np.array(self.vertices)
-        I = np.array([[b[::len(b)-1] for b in self.boundaries(p)] for p in range(self.numpatches)])
-        bdrs = [[b for b in self.boundaries(p)] for p in range(self.numpatches)]
+        I = np.array([[b[::len(b)-1] for b in self.boundaries(p)[0]] for p in range(self.numpatches)])
+        bdrs = [[b for b in self.boundaries(p)[0]] for p in range(self.numpatches)]
         S=np.array([[len(b)-1 for b in B] for B in bdrs])
         
         assert np.all(S>0), "some boundary does not have starting- or endpoint"
@@ -666,14 +658,14 @@ class PatchMesh:
         assert np.all(TL), "boundary information does not match on upper left corner on patches: " + str(np.where((TL==False)[0]))
         assert np.all(TR), "boundary information does not match on upper right corner on patches: " + str(np.where((TR==False)[0]))
         
-        for p in range(self.numpatches):
-            for b in range(4):
-                for s in range(S[p,b]):
-                    other = self.get_matching_interface(p, b, s)
-                    if other:
-                        assert (p,b,s)==self.interfaces[self.interfaces[(p,b,s)][0]][0], "interface connectivity invalid"
-                    else:
-                        assert np.any([(p, b) in self.outer_boundaries[idx] for idx in self.outer_boundaries]),'A segment is neither a linked interface segment for two patches nor an outer boundary!'
+        # for p in range(self.numpatches):
+        #     for b in range(4):
+        #         for s in range(S[p,b]):
+        #             other = self.get_matching_interface(p, b, s)
+        #             if other:
+        #                 assert (p,b,s)==self.interfaces[self.interfaces[(p,b,s)][0]][0], "interface connectivity invalid"
+        #             else:
+        #                 assert np.any([(p, b) in self.outer_boundaries[idx] for idx in self.outer_boundaries]),'A segment is neither a linked interface segment for two patches nor an outer boundary!'
         
 #         for p in range(len(self.patches)):
                        

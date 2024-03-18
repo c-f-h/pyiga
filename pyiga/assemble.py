@@ -1423,6 +1423,7 @@ class Multipatch:
         self.P2G = scipy.sparse.csr_matrix(scipy.sparse.spdiags(1/D,[0],len(D),len(D))@X.T)
         self.Basis = scipy.sparse.csr_matrix(self.Basis)
         print("Basis setup took "+str(time.time()-t)+" seconds")
+        #self.mesh.sanity_check()
         #self.sanity_check()
         
     def assemble_volume(self, problem, arity=1, domain_id=None, args=None, bfuns=None,

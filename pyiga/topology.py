@@ -444,7 +444,8 @@ class PatchMesh:
         else:
             assert False, 'unimplemented'
         
-        #print(new_vertices)
+        # print(new_vertices)
+        # print(split_boundaries)
 
         # move existing interfaces from upper side of old to upper of new patch ###
         self._reindex_interfaces(p, upper, range(0, len(bds[upper]) - 1), 0, new_p=new_p)
@@ -470,6 +471,8 @@ class PatchMesh:
             # split the boundaries of the new patches at this vertex
             new_bd = self.boundaries(p)[0][sb]
             new_bd_par = self.boundaries(p)[1][sb]
+            
+            # print(new_bd)
 
             bds[sb] = list(new_bd[:i_new+1])
             new_bds[sb] = list(new_bd[i_new:])

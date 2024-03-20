@@ -23,16 +23,18 @@ def PoissonEstimator(MP, uh, f=0., a=1., MaT=(0.,0.), divMaT =0., neu_data={}, *
     indicator = np.zeros(n)
     uh_loc = MP.Basis@uh
     uh_per_patch = dict()
+    
     #residual contribution, TODO vectorize
     t=time.time()
     for p, ((kvs, geo), _) in enumerate(MP.mesh.patches):
-        h = np.linalg.norm([kv.meshsize_max() for kv in kvs])
+        h = np.linalg.norm([kv.meshsize_max()*(b-a) for kv,(a,b) in zip(kvs,geo.bounding_box(full=True))])
         #h=np.linalg.norm([(b-a) for (a,b) in geo.bounding_box()])
         uh_per_patch[p] = uh_loc[np.arange(MP.N[p]) + MP.N_ofs[p]]   #cache Spline Function on patch p
         kvs0 = tuple([bspline.KnotVector(kv.mesh, 0) for kv in kvs])
         u_func = geometry.BSplineFunc(kvs, uh_per_patch[p])
-        indicator[p] = h**2 * np.sum(assemble.assemble('(f + div(a*grad(uh)))**2 * v * dx', kvs=kvs0, geo=geo, a=a[MP.mesh.patch_domains[p]], f=f[MP.mesh.patch_domains[p]],uh=u_func,**kwargs))
+        indicator[p] = h**2 * np.sum(assemble.assemble('((f + div(a*grad(uh)))**2 * v) * dx', kvs=kvs0, geo=geo, a=a[MP.mesh.patch_domains[p]], f=f[MP.mesh.patch_domains[p]],uh=u_func,**kwargs))
     print('Residual contributions took ' + str(time.time()-t) + ' seconds.')
+    
     #flux contribution
     t=time.time()
     for i,((p1,b1,_), (p2,b2,_), flip) in enumerate(MP.intfs):
@@ -41,13 +43,15 @@ def PoissonEstimator(MP, uh, f=0., a=1., MaT=(0.,0.), divMaT =0., neu_data={}, *
         bkv1, bkv2 = assemble.boundary_kv(kvs1, bdspec1), assemble.boundary_kv(kvs2, bdspec2)
         geo = geo2.boundary(bdspec2)
         kv0 = tuple([bspline.KnotVector(kv.mesh, 0) for kv in bkv2])
-        h = bkv2[0].meshsize_max()
+        h = bkv2[0].meshsize_max()*np.linalg.norm([b-a for a,b in geo.bounding_box(full=True)])
         #h = np.linalg.norm([(b-a) for (a,b) in geo.bounding_box()])
         uh1_grad = geometry.BSplineFunc(kvs1, uh_per_patch[p1]).transformed_jacobian(geo1).boundary(bdspec1, flip=flip) #physical gradient of uh on patch 1 (flipped if needed)
         uh2_grad = geometry.BSplineFunc(kvs2, uh_per_patch[p2]).transformed_jacobian(geo2).boundary(bdspec2)            #physical gradient of uh on patch 2
-        J = np.sum(assemble.assemble('(inner((a1 * uh1_grad + Ma1) - (a2 * uh2_grad + Ma2), n) )**2 * v * ds', kv0 ,geo=geo,a1=a[MP.mesh.patch_domains[p1]],a2=a[MP.mesh.patch_domains[p2]],uh1_grad=uh1_grad,uh2_grad=uh2_grad,Ma1=MaT[MP.mesh.patch_domains[p1]],Ma2=MaT[MP.mesh.patch_domains[p2]],**kwargs))
+        J = np.sum(assemble.assemble('((inner((a1 * uh1_grad + Ma1) - (a2 * uh2_grad + Ma2), n) )**2 * v ) * ds', kv0 ,geo=geo,a1=a[MP.mesh.patch_domains[p1]],a2=a[MP.mesh.patch_domains[p2]],uh1_grad=uh1_grad,uh2_grad=uh2_grad,Ma1=MaT[MP.mesh.patch_domains[p1]],Ma2=MaT[MP.mesh.patch_domains[p2]],**kwargs))
         indicator[p1] += 0.5 * h * J
         indicator[p2] += 0.5 * h * J
+        
+    #Neumann flux
     for bd in neu_data:
         g = neu_data[bd]
         for (p,b) in MP.mesh.outer_boundaries[bd]:
@@ -58,6 +62,7 @@ def PoissonEstimator(MP, uh, f=0., a=1., MaT=(0.,0.), divMaT =0., neu_data={}, *
             uh_grad = geometry.BSplineFunc(kvs, uh_per_patch[p]).transformed_jacobian(geo).boundary(bdspec)
             J = np.sum(assemble.assemble('(inner(a * uh_grad, n) - g)**2 * v * ds', kv0 ,geo=geo_b, a=a[MP.mesh.patch_domains[p]], uh_grad=uh_grad, **kwargs))
             indicator[p] += h * J
+            
     print('Jump contributions took ' + str(time.time()-t) + ' seconds.')
     return np.sqrt(indicator)
 

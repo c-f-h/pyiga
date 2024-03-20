@@ -856,7 +856,7 @@ class _BaseGeoFunc:
         """Returns True if the function is vector-valued."""
         return len(self.output_shape()) == 1
 
-    def bounding_box(self, grid=1):
+    def bounding_box(self, grid=1, full=False):
         """Compute a bounding box for the image of this geometry.
 
         By default, only the corners are taken into account. By choosing
@@ -865,7 +865,10 @@ class _BaseGeoFunc:
         Returns:
             a tuple of `(lower,upper)` limits per dimension (in XY order)
         """
-        supp = self.support
+        if full:
+            supp=((0.0,1.0),)*self.sdim
+        else:
+            supp = self.support
         grid = [np.linspace(s[0], s[1], grid+1) for s in supp]
         X = self.grid_eval(grid)
         X.shape = (-1, self.dim)

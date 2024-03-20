@@ -1500,8 +1500,8 @@ class Multipatch:
                     symmetric=symmetric, format=format, layout=layout,
                     **kwargs).ravel())
     
-        A = X.T@scipy.sparse.block_diag(A)@X
-        b = X.T@np.concatenate(b)
+        A = X.T @ scipy.sparse.block_diag(A) @ X
+        b = X.T @ np.concatenate(b)
             
         return A, b
     
@@ -1515,7 +1515,7 @@ class Multipatch:
             bdofs=[]
             for (p,b) in self.mesh.outer_boundaries[boundary_idx]:
                 kvs, geo = self.mesh.patches[p][0]
-                bdofs.append(boundary_dofs(kvs, bdspec, ravel=True) + self.N_ofs[p])
+                bdofs.append(boundary_dofs(kvs, [(b//2,b%2)], ravel=True) + self.N_ofs[p])
                 args.update(geo = geo)
                 
                 R.append(assemble(problem, kvs, args=args, bfuns=bfuns,
@@ -1523,13 +1523,14 @@ class Multipatch:
                         **kwargs, boundary=[(b//2,b%2)]))
             X=self.Basis[np.concatenate(bdofs),:]
 
-            return X @ scipy.sparse.block_diag(R) @ X.T
+            
+            return X.T @ scipy.sparse.block_diag(R) @ X
         else:
             N=np.zeros(self.numloc_dofs)
             for (p,b) in self.mesh.outer_boundaries[boundary_idx]:
                 kvs, geo = self.mesh.patches[p][0]
                 bdspec=[(b//2,b%2)]
-                bdofs = boundary_dofs(kvs, bdspec, ravel=True) + self.N_ofs[p]
+                bdofs = boundary_dofs(kvs, [(b//2,b%2)], ravel=True) + self.N_ofs[p]
                 args.update(geo = geo)
     
                 vals=assemble(problem, kvs, args=args, bfuns=bfuns,

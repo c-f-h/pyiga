@@ -346,6 +346,7 @@ class UserFunction(bspline._BaseGeoFunc):
     def __init__(self, f, support, dim=None, jac=None):
         self.f = f
         self.support = tuple(support)
+        self._support_override=tuple(support)
         self.jac = jac
         if dim is None:
             x0 = tuple(lo for (lo,hi) in reversed(support))

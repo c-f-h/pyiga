@@ -246,6 +246,9 @@ class PatchMesh:
     def rename_domain(self, idx, new_idx):
         assert new_idx not in self.domains
         self.domains[new_idx] = self.domains.pop(idx)
+        for p in self.patch_domains:
+            if self.patch_domains[p]==idx:
+                self.patch_domains[p]=new_idx
         
     def remove_boundary(self, bds):
         bds=set(bds)
@@ -586,8 +589,11 @@ class PatchMesh:
     def draw(self, vertex_idx = False, patch_idx = False, nodes=False, bwidth=1, color=None, bcolor=None, axis='scaled', **kwargs):
         """draws a visualization of the patchmesh in 2D."""
         
-        fig=plt.figure(figsize=kwargs.get('figsize'))
-        ax = plt.axes()
+        if kwargs.get('fig'):
+            fig=kwargs.get('fig')
+        else:
+            fig=plt.figure(figsize=kwargs.get('figsize'))
+            ax = plt.axes()
         
         for p,((kvs, geo),_) in enumerate(self.patches):
             if color is not None:
@@ -595,7 +601,7 @@ class PatchMesh:
             else:
                 c=None
             if kwargs.get('knots'):
-                vis.plot_geo(geo, gridy=kvs[0].mesh,gridx=kvs[1].mesh, lcolor='lightgray', color=c, boundary=True)
+                vis.plot_geo(geo, gridy=kvs[0].mesh, gridx=kvs[1].mesh, lcolor='lightgray', color=c, boundary=True)
             else:
                 vis.plot_geo(geo, grid=2, color=c, boundary=True)
         

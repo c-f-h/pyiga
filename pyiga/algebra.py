@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.sparse
+import time
 
 def find_ddofs(Constr, activeConstraints):
     derivedDofs={}
@@ -122,7 +123,7 @@ def compute_active_constr(Constr):
                 a += 1
             if Constr.data[ind] < -1e-12:
                 b += 1
-        if a+b>0:
+        if (a==1 and b>0) or (b==1 and a>0):
             activeConstraints.append(r)
             #print("{}: {}, {}".format(r,a,b))
             #if not (a==1 or b==1): 
@@ -141,6 +142,9 @@ def compute_basis(Constr, maxiter):
     allderivedDofs={}
     activeConstraints=np.arange(Constr.shape[0])
     Basis=scipy.sparse.csr_matrix(scipy.sparse.identity(n))
+    time_find_active = 0
+    time_find_ddofs = 0
+    time_update = 0
     i=1
     while len(activeConstraints)!=0:
         #print(Constr[activeConstraints])
@@ -148,7 +152,9 @@ def compute_basis(Constr, maxiter):
             print("maxiter reached.")
             break
             
+        t = time.time()
         derivedDofs = find_ddofs(Constr, activeConstraints)  
+        time_find_ddofs += time.time()-t
         #assert derivedDofs, 'Unable to derive any further dofs.'
         assert derivedDofs, 'Unable to derive further dofs.'
         #if not derivedDofs: 
@@ -158,16 +164,21 @@ def compute_basis(Constr, maxiter):
         #update which dofs were already derived
         allderivedDofs.update(derivedDofs)
         nonderivedDofs=np.setdiff1d(allLocalDofs, np.array(list(allderivedDofs.keys())))
+        t=time.time()
         Basis = update_basis(Constr, derivedDofs, Basis)
-        
+        time_update += time.time()-t
         #eliminate used constraints from constraint matrix
         Constr = Constr @ Basis    
+        
+        t=time.time()
         activeConstraints = compute_active_constr(Constr)
+        time_find_active += time.time()-t
         i+=1
         
     #print(np.array(list(allderivedDofs.keys())))
     #nonderivedDofs=np.setdiff1d(allLocalDofs, np.array(list(allderivedDofs.keys())))
     #print(nonderivedDofs)
+    #print('finding active constraints took')
     Basis = scipy.sparse.csc_matrix(Basis)
     return Basis[:,nonderivedDofs]  #,Constr,activeConstraints
 

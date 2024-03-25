@@ -1756,15 +1756,21 @@ class Multipatch:
                 bcs.append((idx.astype(int), bc[1][feasible]))
         return combine_bcs(bcs)
     
-    def plot(self, u, cmap = plt.cm.jet, cbar=True, axis='scaled', **kwargs):
+    def integrate(self, problem, u_=None, **kwargs):
+        u_loc=np.zeros(self.N_ofs[-1])
+        if u_ is not None:
+            u_loc=self.Basis@u_
+        return np.array([assemble(problem, kvs=tuple(bspline.KnotVector(kv.mesh,0) for kv in kvs), geo=geo, uh=geometry.BSplineFunc(kvs,u_loc[self.N_ofs[p]:self.N_ofs[p+1]]), **kwargs).ravel() for p,((kvs,geo),_) in enumerate(self.mesh.patches)]).sum()
+    
+    def plot(self, u, cmap = plt.cm.jet, cbar=True, mesh=False, axis='scaled', contour=False, **kwargs):
         assert self.dim==2, 'visualization only possible for 2D.'
         assert len(u)==self.numdofs, 'wrong size of coefficient vector.'
         
         fig = plt.figure(figsize=kwargs.get('figsize'))
         ax = plt.axes()
         
-        u_loc = self.Basis@u
-        u_funcs = [geometry.BSplineFunc(kvs, u_loc[self.N_ofs[p]:self.N_ofs[p+1]]) for p, kvs in enumerate(self.mesh.kvs)]
+        u_funcs = self.function(u)
+        
         if 'range' not in kwargs:
             u_max=max(u)
             u_min=min(u)
@@ -1773,19 +1779,28 @@ class Multipatch:
             u_max=kwargs['range'][1]
             u_min=kwargs['range'][0]
             
-        if abs(u_max-u_min)<1e-2:
+        if abs(u_max-u_min)<1e-10:
             mid=(u_min+u_max)/2
             u_max=mid+0.01
             u_min=mid-0.01
 
+        if mesh:
+            self.mesh.draw(fig=fig)
+            
         for (u_func, ((kvs, geo),_)) in zip(u_funcs, self.mesh.patches):
-            vis.plot_field(u_func, geo, vmin=u_min, vmax=u_max, cmap = cmap)
+            vis.plot_field(u_func, geo, vmin=u_min, vmax=u_max, cmap = cmap, contour=contour)
         
         plt.axis(axis);
         if cbar:
             cax = fig.add_axes([ax.get_position().x1+0.03,ax.get_position().y0,0.02,ax.get_position().height])
             plt.colorbar(cax=cax) # Similar to fig.colorbar(im, cax = cax)
-        #plt.show()
+        plt.show()
+        
+    def plot_quiver(self, u, mesh=False, axis='scaled', **kwargs):
+        
+        for (u_func, ((kvs, geo),_)) in zip(u_funcs, self.mesh.patches):
+            vis.plot_field(u_func, geo, vmin=u_min, vmax=u_max, cmap = cmap, contour=contour)
+        
         
     def L2projection(self, u):
         Mh = self.assemble_volume(vform.mass_vf(2))

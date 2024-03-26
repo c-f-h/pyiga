@@ -8,7 +8,7 @@ from sksparse.cholmod import cholesky
 from pyiga import utils
 
 ### Error estimators
-def PoissonEstimator(MP, uh, f=0., a=1., MaT=(0.,0.), divMaT =0., neu_data={}, **kwargs):
+def PoissonEstimator(MP, uh, f=0., a=1., M=(0.,0.), divMaT =0., neu_data={}, **kwargs):
     if isinstance(a,(np.ndarray,list,set)):
         assert len(a)==len(MP.mesh.domains)
         a={d:a_ for d,a_ in zip(MP.mesh.domains,a)}
@@ -24,7 +24,7 @@ def PoissonEstimator(MP, uh, f=0., a=1., MaT=(0.,0.), divMaT =0., neu_data={}, *
     uh_loc = MP.Basis@uh
     uh_per_patch = dict()
     
-    #residual contribution, TODO vectorize
+    #residual contribution
     t=time.time()
     for p, ((kvs, geo), _) in enumerate(MP.mesh.patches):
         h = np.linalg.norm([kv.meshsize_max()*(b-a) for kv,(a,b) in zip(kvs,geo.bounding_box(full=True))])
@@ -47,7 +47,7 @@ def PoissonEstimator(MP, uh, f=0., a=1., MaT=(0.,0.), divMaT =0., neu_data={}, *
         #h = np.linalg.norm([(b-a) for (a,b) in geo.bounding_box()])
         uh1_grad = geometry.BSplineFunc(kvs1, uh_per_patch[p1]).transformed_jacobian(geo1).boundary(bdspec1, flip=flip) #physical gradient of uh on patch 1 (flipped if needed)
         uh2_grad = geometry.BSplineFunc(kvs2, uh_per_patch[p2]).transformed_jacobian(geo2).boundary(bdspec2)            #physical gradient of uh on patch 2
-        J = np.sum(assemble.assemble('((inner((a1 * uh1_grad + Ma1) - (a2 * uh2_grad + Ma2), n) )**2 * v ) * ds', kv0 ,geo=geo,a1=a[MP.mesh.patch_domains[p1]],a2=a[MP.mesh.patch_domains[p2]],uh1_grad=uh1_grad,uh2_grad=uh2_grad,Ma1=MaT[MP.mesh.patch_domains[p1]],Ma2=MaT[MP.mesh.patch_domains[p2]],**kwargs))
+        J = np.sum(assemble.assemble('((inner((a1 * uh1_grad + Ma1) - (a2 * uh2_grad + Ma2), n) )**2 * v ) * ds', kv0 ,geo=geo,a1=a[MP.mesh.patch_domains[p1]],a2=a[MP.mesh.patch_domains[p2]],uh1_grad=uh1_grad,uh2_grad=uh2_grad,Ma1=M[MP.mesh.patch_domains[p1]],Ma2=M[MP.mesh.patch_domains[p2]],**kwargs))
         indicator[p1] += 0.5 * h * J
         indicator[p2] += 0.5 * h * J
         

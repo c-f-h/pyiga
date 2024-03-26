@@ -1435,9 +1435,9 @@ class Multipatch:
         if args is None:
             args = dict()
         if domain_id is not None:
-            domain_id=(domain_id,)
+            domain_id={domain_id}
         else:
-            domain_id=self.mesh.domains
+            domain_id=set(self.mesh.domains)
             
         if arity==2:
             A = []
@@ -1469,7 +1469,7 @@ class Multipatch:
                     F[dofs]+=vals
             return X.T@F
         
-    def assemble_system(self, problem, rhs, arity=1, domain_id=0, args=None, bfuns=None,
+    def assemble_system(self, problem, rhs, arity=1, domain_id=None, args=None, bfuns=None,
             symmetric=False, format='csr', layout='blocked', **kwargs):
         """Assemble both the system matrix and the right-hand side vector
         for a variational problem over the multipatch geometry.
@@ -1488,6 +1488,11 @@ class Multipatch:
         b = []
         if args is None:
             args = dict()
+        if domain_id is not None:
+            domain_id={domain_id}
+        else:
+            domain_id=set(self.mesh.domains)
+            
         for p in range(self.numpatches):
             kvs, geo = self.mesh.patches[p][0]
             args.update(geo=geo)
@@ -1756,11 +1761,22 @@ class Multipatch:
                 bcs.append((idx.astype(int), bc[1][feasible]))
         return combine_bcs(bcs)
     
-    def integrate(self, problem, u_=None, **kwargs):
+    def integrate(self, problem, u_=None, nu=None, domain_id=None, **kwargs):
         u_loc=np.zeros(self.N_ofs[-1])
         if u_ is not None:
             u_loc=self.Basis@u_
-        return np.array([assemble(problem, kvs=tuple(bspline.KnotVector(kv.mesh,0) for kv in kvs), geo=geo, uh=geometry.BSplineFunc(kvs,u_loc[self.N_ofs[p]:self.N_ofs[p+1]]), **kwargs).ravel() for p,((kvs,geo),_) in enumerate(self.mesh.patches)]).sum()
+        if domain_id is not None:
+            if isscalar(domain_id):
+                domain_id={domain_id}
+        else:
+            domain_id=set(self.mesh.domains)
+        if nu is None:
+            nu={d_id:0. for d_id in domain_id}
+            
+        I = 0
+        for d_id in domain_id:
+            I += np.array([assemble(problem, kvs=tuple(bspline.KnotVector(kv.mesh,0) for kv in kvs), geo=geo, nu=nu[d_id], uh=geometry.BSplineFunc(kvs,u_loc[self.N_ofs[p]:self.N_ofs[p+1]]), **kwargs).ravel() for p,((kvs,geo),_) in enumerate(self.mesh.patches) if p in self.mesh.domains[d_id]]).sum()
+        return I
     
     def plot(self, u, cmap = plt.cm.jet, cbar=True, mesh=False, axis='scaled', contour=False, **kwargs):
         assert self.dim==2, 'visualization only possible for 2D.'

@@ -1435,7 +1435,7 @@ class Multipatch:
         if args is None:
             args = dict()
         if domain_id is not None:
-            domain_id={domain_id}
+            domain_id=(domain_id,)
         else:
             domain_id=set(self.mesh.domains)
             
@@ -1461,12 +1461,11 @@ class Multipatch:
                 for p in self.mesh.domains[d_idx]:
                     #print(p)
                     kvs, geo = self.mesh.patches[p][0]
-                    args.update(geo=geo)
-                    vals=assemble(problem, kvs, args=args, bfuns=bfuns,
+                    #args.update(geo=geo)
+                    vals=assemble(problem, kvs, geo=geo, args=args, bfuns=bfuns,
                         symmetric=symmetric, format=format, layout=layout,
                         **kwargs).ravel()
-                    dofs=np.arange(self.N_ofs[p],self.N_ofs[p+1])
-                    F[dofs]+=vals
+                    F[self.N_ofs[p]:self.N_ofs[p+1]]+=vals
             return X.T@F
         
     def assemble_system(self, problem, rhs, arity=1, domain_id=None, args=None, bfuns=None,

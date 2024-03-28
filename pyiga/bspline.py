@@ -210,6 +210,10 @@ class KnotVector:
         kvnew = np.sort(np.concatenate((self.kv, new_knots)))
         return KnotVector(kvnew, self.p)
     
+    def b_refine(self, q)
+        mesh=self.mesh
+        return self.h_refine(new_knots=[mesh[0]*q + mesh[1]*(1-q),mesh[-1]*q + mesh[-2]*(1-q)])
+    
     def p_refine(self, p_inc):
         KV = self.h_refine(new_knots=np.repeat(self.mesh,p_inc))
         KV.p=self.p+p_inc

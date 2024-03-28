@@ -590,10 +590,13 @@ class PatchMesh:
         """draws a visualization of the patchmesh in 2D."""
         
         if kwargs.get('fig'):
-            fig=kwargs.get('fig')
+            fig, ax = kwargs['fig']
         else:
             fig=plt.figure(figsize=kwargs.get('figsize'))
             ax = plt.axes()
+            
+        if nodes:
+            plt.scatter(*np.transpose(self.vertices),zorder=100)
         
         for p,((kvs, geo),_) in enumerate(self.patches):
             if color is not None:
@@ -611,9 +614,6 @@ class PatchMesh:
                 bcol=bcolor[key]
             for (p,b) in self.outer_boundaries[key]:
                 vis.plot_geo(self.geos[p].boundary([assemble.int_to_bdspec(b)]), linewidth=bwidth, color=bcol)
-           
-        if nodes:
-            plt.scatter(*np.transpose(self.vertices))
 
         if patch_idx:
             for p in range(len(self.patches)):        # annotate patch indices

@@ -37,7 +37,7 @@ def plot_geo(geo,
              grid=10, gridx=None, gridy=None, gridz=None,
              res=50,
              linewidth=None, lcolor='black', color=None, boundary=True):
-    """Plot a wireframe representation of a 2D geometry."""
+    """Plot a wireframe representation of a geometry."""
     assert (geo.dim == 2 or geo.dim == 3), 'Can only represent geometries in 2D or 3D!' 
     if geo.sdim == 1:
         return plot_curve(geo, res=res, linewidth=linewidth, lcolor=color)
@@ -47,7 +47,7 @@ def plot_geo(geo,
         if gridx is None: gridx = grid
         if gridy is None: gridy = grid
         if gridz is None: gridz = grid
-    if geo._support_override:
+    if geo._support_override is not None:
         supp = geo._support_override
     else:
         supp = geo.support
@@ -100,7 +100,7 @@ def plot_surface(geo,
     assert geo.sdim == 2 and (geo.dim == 2 or geo.dim == 3), "Can only plot surfaces."
     if gridx is None: gridx = grid
     if gridy is None: gridy = grid
-    if geo._support_override:
+    if geo._support_override is not None:
         supp = geo._support_override
     else:
         supp = geo.support

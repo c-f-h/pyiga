@@ -32,7 +32,6 @@ def find_ddofs(Constr, activeConstraints):
 
 def update_basis(Constr, derivedDofs, Basis):
     n=Constr.shape[1]
-    testVec = np.zeros(n)
     #print(Basis)
     
     #variant 1
@@ -52,24 +51,27 @@ def update_basis(Constr, derivedDofs, Basis):
     ddofs=np.array(list(derivedDofs.keys()))   #derived dofs
     n2 = len(ddofs)
     r = np.array(list(derivedDofs.values()))  #which constraints do the dofs derive from
-    nddofs=np.setdiff1d(np.arange(n),ddofs)   #still free dofs
+    nddofs=np.setdiff1d(np.arange(n),ddofs)   #still free dofs (TODO: make this faster)
     n1=len(nddofs)
 
     lBasis=scipy.sparse.csr_matrix((n,n))
     c = 1/(Constr[r,ddofs].A.ravel())
-    B1 = scipy.sparse.csr_matrix(scipy.sparse.coo_matrix((np.ones(n1),(np.arange(n1),nddofs)),(n1,n)))
+    B1 = scipy.sparse.coo_matrix((np.ones(n1),(np.arange(n1),nddofs)),(n1,n)).tocsr()
+    t=time.time()
     B2 = - Constr[r].multiply(Constr[r]<0)  
     B2 = scipy.sparse.spdiags(c,0,n2,n2)@B2  #row scaling
     
-    Q1 = scipy.sparse.coo_matrix((np.ones(n1),(nddofs,np.arange(n1))),(n,n1))
-    Q2 = scipy.sparse.coo_matrix((np.ones(n2),(ddofs,np.arange(n2))),(n,n2))
+    Q1 = scipy.sparse.coo_matrix((np.ones(n1),(nddofs,np.arange(n1))),(n,n1)).tocsr()
+    Q2 = scipy.sparse.coo_matrix((np.ones(n2),(ddofs,np.arange(n2))),(n,n2)).tocsr()
     lBasis = Q1@B1 + Q2@B2
     
     lBasis = lBasis @ Basis
     
-    lastFound = n+1
+    #lastFound = n+1
     #print(len(ddofs))
-    testVec[ddofs]=1 
+    #testVec[ddofs]=1 
+    
+    testVec = scipy.sparse.coo_array((np.ones(n2),(ddofs,np.zeros(n2))),shape=(n,1))
         
     while True:
         found = 0
@@ -78,7 +80,7 @@ def update_basis(Constr, derivedDofs, Basis):
         #     if abs(tmp[i])>1e-12:
         #         #print('{}'.format(i))
         #         found += 1
-        found = sum(abs(tmp)>1e-12)
+        found = sum(abs(tmp.data)>1e-12)
         
         # NEW
         # for i in ddofs:
@@ -90,7 +92,7 @@ def update_basis(Constr, derivedDofs, Basis):
         if found > 0:
             #print(found, lastFound)
             #assert(found < lastFound)
-            lastFound = found
+            #lastFound = found
             lBasis = lBasis @ lBasis
             #print("multiply & repeat")
         else:
@@ -178,7 +180,9 @@ def compute_basis(Constr, maxiter):
     #print(np.array(list(allderivedDofs.keys())))
     #nonderivedDofs=np.setdiff1d(allLocalDofs, np.array(list(allderivedDofs.keys())))
     #print(nonderivedDofs)
-    #print('finding active constraints took')
+    # print('finding active constraints took '+str(time_find_active)+' seconds.')
+    # print('finding derived dofs took '+str(time_find_ddofs)+' seconds.')
+    # print('updating basis and constraints took '+str(time_update)+' seconds.')
     Basis = scipy.sparse.csc_matrix(Basis)
     return Basis[:,nonderivedDofs]  #,Constr,activeConstraints
 

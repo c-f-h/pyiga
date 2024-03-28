@@ -515,6 +515,16 @@ def perturbed_square(num_intervals=5, noise=0.02, support = None):
     """
     return unit_square(num_intervals, support).perturb(noise)
 
+def Quad(P,support=None):
+    
+    bottom = line_segment(P[:,0],P[:,1])
+    top = line_segment(P[:,2],P[:,3])
+    left = line_segment(P[:,0],P[:,2])
+    right = line_segment(P[:,1],P[:,3])
+    
+    kvs, coeffs = _combine_boundary_curves(bottom,top,left,right)
+    return bspline.BSplineFunc(kvs, coeffs, support=support)
+
 def bspline_annulus(r1=1.0, r2=2.0, phi=np.pi/2, support = None):
     """A B-spline approximation of a quarter annulus in the first quadrant.
 

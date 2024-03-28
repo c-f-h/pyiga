@@ -1684,7 +1684,7 @@ class Multipatch:
         kvs_old = self.mesh.kvs
         t=time.time()
         new_patches=self.mesh.h_refine(h_ref)
-        print("Refinement took " + str(time.time()-t) + " seconds")
+        print("Refinement took " + str(time.time()-t) + " seconds for "+str(len(h_ref))+' patches.')
         self.reset()
         
         if return_P:

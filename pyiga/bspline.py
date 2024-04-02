@@ -210,7 +210,7 @@ class KnotVector:
         kvnew = np.sort(np.concatenate((self.kv, new_knots)))
         return KnotVector(kvnew, self.p)
     
-    def b_refine(self, q)
+    def b_refine(self, q):
         mesh=self.mesh
         return self.h_refine(new_knots=[mesh[0]*q + mesh[1]*(1-q),mesh[-1]*q + mesh[-2]*(1-q)])
     
@@ -230,6 +230,15 @@ class KnotVector:
         nspans = self.numspans
         support = abs(self.kv[-1] - self.kv[0])
         return np.max(self.kv[1:]-self.kv[:-1])
+    
+    def deriv(self, deriv=1, coeffs=None):
+        assert isinstance(deriv,int) and deriv>0, "ambiguous"
+        new_coeffs = self.p/(self.kv[self.p+2:]-self.kv[:-self.p-2])*(coeffs[1:]-coeffs[:-1])
+        new_kv=KnotVector(self.kv[1:-1],self.p-1)
+        if deriv==1:
+            return new_kv, new_coeffs
+        else:
+            return new_kv.deriv(deriv=deriv-1, coeffs=new_coeffs)
     
 def mapto(kv, f):
         """Transform mesh of the knots by the mapping f"""

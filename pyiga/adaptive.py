@@ -58,9 +58,10 @@ def PoissonEstimator(MP, uh, f=0., a=1., M=(0.,0.), divMaT =0., neu_data={}, **k
             ((kvs, geo), _) = MP.mesh.patches[p]
             bdspec = [assemble.int_to_bdspec(b)]
             bkv = assemble.boundary_kv(kvs, bdspec)
+            kv0 = tuple([bspline.KnotVector(kv.mesh, 0) for kv in bkv])
             geo_b = geo.boundary(bdspec)
             uh_grad = geometry.BSplineFunc(kvs, uh_per_patch[p]).transformed_jacobian(geo).boundary(bdspec)
-            J = np.sum(assemble.assemble('((inner(a * uh_grad + Ma, n) - g)**2 * v ) * ds', kv0 ,geo=geo_b,Ma=MaT[MP.mesh.patch_domains[p]], a=a[MP.mesh.patch_domains[p]], uh_grad=uh_grad, **kwargs))
+            J = np.sum(assemble.assemble('((inner(a * uh_grad + Ma, n) - g)**2 * v ) * ds', kv0 ,geo=geo_b,Ma=M[MP.mesh.patch_domains[p]], a=a[MP.mesh.patch_domains[p]],g=g, uh_grad=uh_grad, **kwargs))
             indicator[p] += h * J
             
     print('Jump contributions took ' + str(time.time()-t) + ' seconds.')

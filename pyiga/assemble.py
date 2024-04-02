@@ -1666,8 +1666,8 @@ class Multipatch:
         elif isinstance(h_ref, (list, set, np.ndarray)):
             assert max(h_ref)<self.numpatches and min(h_ref)>=0, "patch index out of bounds."
             h_ref = {p:None for p in patches}
-        elif h_ref==None:
-            h_ref = {p:None for p in range(self.numpatches)}
+        elif h_ref==None or h_ref=='q':
+            h_ref = {p:h_ref for p in range(self.numpatches)}
         else:
             assert 0, "unknown input type"
         # if isinstance(p_ref,int):

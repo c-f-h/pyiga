@@ -1,6 +1,7 @@
 import itertools as it
 from pyiga import bspline, vis, assemble
 import copy
+import time
 
 import numpy as np
 import matplotlib
@@ -550,15 +551,22 @@ class PatchMesh:
 
         new_patches = dict()
         new_kvs = dict()
+        
         for p in patches.keys():
             #self.split_boundary_idx(p, self.numpatches, axis=patches[p])
+            (kvs,geo), (b, b_par) = self.patches[p]
             if patches[p]==-1:
-                (kvs,geo), (b, b_par) = self.patches[p]
                 new_kvs = tuple([kv.h_refine(mult=mult) for kv in kvs])
                 self.patches[p]=((new_kvs, geo), (b, b_par))
                 new_p=(p,)
+            elif patches[p]=='q':
+                new_kvs = tuple([kv.b_refine(q=0.5) for kv in kvs])
+                self.patches[p]=((new_kvs, geo), (b, b_par))
+                new_p=(p,)
             else:    
+                t=time.time()
                 new_p = self.split_patch(p, axis=patches[p], mult=mult)
+                #print(time.time()-t)
             new_patches[p] = new_p
             #new_kvs[p] = new_kvs_  
         return new_patches

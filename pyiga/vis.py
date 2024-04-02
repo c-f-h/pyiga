@@ -30,8 +30,6 @@ def plot_field(field, geo=None, res=80, physical=False, contour=False, **kwargs)
             plt.contourf(grd[1],grd[0], C, **kwargs)
         else:
             return plt.pcolormesh(grd[1], grd[0], C, **kwargs)
-    
-#def plot_quiver()
 
 def plot_geo(geo,
              grid=10, gridx=None, gridy=None, gridz=None,

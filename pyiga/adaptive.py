@@ -26,6 +26,15 @@ def PoissonEstimator(MP, uh, f=0., a=1., M=(0.,0.), divMaT =0., neu_data={}, **k
     
     #residual contribution
     t=time.time()
+    
+    #slightly faster
+    # kvs, geos = MP.mesh.kvs, MP.mesh.geos
+    # h_V = np.array([[kv.meshsize_max()*(b-a) for kv,(a,b) in zip(kvs_,geo.bounding_box(full=True))] for kvs_,geo in zip(kvs,geos)])
+    # h_V = np.linalg.norm(h_V,axis=1)
+    # kvs0 = [tuple([bspline.KnotVector(kv.mesh, 0) for kv in kvs_]) for kvs_ in kvs]
+    # R = np.array([assemble.assemble('(f + div(a*grad(uh))) * v * dx', kvs=kv0 , geo=geo , a=a[MP.mesh.patch_domains[p]], f=f[MP.mesh.patch_domains[p]] ,uh=geometry.BSplineFunc(kv, uh_loc[MP.N_ofs[p]:MP.N_ofs[p+1]])).ravel() for p, (kv0, kv, geo) in enumerate(zip(kvs0,kvs,geos))])
+    # indicator = h_V**2 * R.sum(axis=1)
+    
     for p, ((kvs, geo), _) in enumerate(MP.mesh.patches):
         h = np.linalg.norm([kv.meshsize_max()*(b-a) for kv,(a,b) in zip(kvs,geo.bounding_box(full=True))])
         #h=np.linalg.norm([(b-a) for (a,b) in geo.bounding_box()])
@@ -45,8 +54,8 @@ def PoissonEstimator(MP, uh, f=0., a=1., M=(0.,0.), divMaT =0., neu_data={}, **k
         kv0 = tuple([bspline.KnotVector(kv.mesh, 0) for kv in bkv2])
         h = bkv2[0].meshsize_max()*np.linalg.norm([b-a for a,b in geo.bounding_box(full=True)])
         #h = np.linalg.norm([(b-a) for (a,b) in geo.bounding_box()])
-        uh1_grad = geometry.BSplineFunc(kvs1, uh_per_patch[p1]).transformed_jacobian(geo1).boundary(bdspec1, flip=flip) #physical gradient of uh on patch 1 (flipped if needed)
-        uh2_grad = geometry.BSplineFunc(kvs2, uh_per_patch[p2]).transformed_jacobian(geo2).boundary(bdspec2)            #physical gradient of uh on patch 2
+        uh1_grad = geometry.BSplineFunc(kvs1, uh_loc[MP.N_ofs[p1]:MP.N_ofs[p1+1]]).transformed_jacobian(geo1).boundary(bdspec1, flip=flip) #physical gradient of uh on patch 1 (flipped if needed)
+        uh2_grad = geometry.BSplineFunc(kvs2, uh_loc[MP.N_ofs[p2]:MP.N_ofs[p2+1]]).transformed_jacobian(geo2).boundary(bdspec2)            #physical gradient of uh on patch 2
         J = np.sum(assemble.assemble('((inner((a1 * uh1_grad + Ma1) - (a2 * uh2_grad + Ma2), n) )**2 * v ) * ds', kv0 ,geo=geo,a1=a[MP.mesh.patch_domains[p1]],a2=a[MP.mesh.patch_domains[p2]],uh1_grad=uh1_grad,uh2_grad=uh2_grad,Ma1=M[MP.mesh.patch_domains[p1]],Ma2=M[MP.mesh.patch_domains[p2]],**kwargs))
         indicator[p1] += 0.5 * h * J
         indicator[p2] += 0.5 * h * J

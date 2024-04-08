@@ -549,6 +549,30 @@ def bspline_annulus(r1=1.0, r2=2.0, phi=np.pi/2, support = None):
     ])
     return BSplineFunc((kvy,kvx), coeffs, support)
 
+def bspline_annuseg(r1=1.0, r2=2.0, phi=np.pi/2, support = None):
+    """A B-spline approximation of a quarter annulus in the first quadrant.
+
+    Args:
+        r1 (float): inner radius
+        r2 (float): outer radius
+
+    Returns:
+        :class:`.BSplineFunc` 2D geometry
+    """
+    assert -np.pi/2<=phi<=np.pi/2, 'angle needs to be sharp!'
+    kvx = bspline.make_knots(1, 0.0, 1.0, 1)
+    kvy = bspline.make_knots(2, 0.0, 1.0, 1)
+
+    coeffs = np.array([
+            [[ r1, 0.0],
+             [ r2, 0.0]],
+            [[ r1/2*(1+np.cos(phi)),  np.sin(phi)*r1/2],
+             [ r2,  np.tan(phi/2)*r2]],
+            [[np.cos(phi)*r1,  np.sin(phi)*r1],
+             [np.cos(phi)*r2,  np.sin(phi)*r2]],
+    ])
+    return BSplineFunc((kvy,kvx), coeffs, support)
+
 def bspline_quarter_annulus(r1=1.0, r2=2.0, support = None):
     """A B-spline approximation of a quarter annulus in the first quadrant.
 
@@ -566,6 +590,30 @@ def bspline_quarter_annulus(r1=1.0, r2=2.0, support = None):
             [[ r1, 0.0],
              [ r2, 0.0]],
             [[ r1,  r1],
+             [ r2,  r2]],
+            [[0.0,  r1],
+             [0.0,  r2]],
+    ])
+    return BSplineFunc((kvy,kvx), coeffs, support)
+
+def bspline_quarter_annuseg(r1=1.0, r2=2.0, phi=np.pi/2, support = None):
+    """A B-spline approximation of a quarter annulus in the first quadrant.
+
+    Args:
+        r1 (float): inner radius
+        r2 (float): outer radius
+
+    Returns:
+        :class:`.BSplineFunc` 2D geometry
+    """
+    assert -np.pi/2<=phi<=np.pi/2, 'angle needs to be sharp!'
+    kvx = bspline.make_knots(1, 0.0, 1.0, 1)
+    kvy = bspline.make_knots(2, 0.0, 1.0, 1)
+
+    coeffs = np.array([
+            [[ r1, 0.0],
+             [ r2, 0.0]],
+            [[ r1/2,  r1/2],
              [ r2,  r2]],
             [[0.0,  r1],
              [0.0,  r2]],
@@ -598,6 +646,32 @@ def annulus(r1=1.0, r2=2.0, phi=np.pi/2, support = None):
     ])
     return NurbsFunc((kvy,kvx), coeffs, weights=None, support = support)
 
+def annuseg(r1=1.0, r2=2.0, phi=np.pi/2, support = None):
+    """A NURBS representation of a quarter annulus in the first quadrant.
+    The 'bottom' and 'top' boundaries (with respect to the reference domain)
+    lie on the x and y axis, respectively.
+
+    Args:
+        r1 (float): inner radius
+        r2 (float): outer radius
+
+    Returns:
+        :class:`NurbsFunc` 2D geometry
+    """
+    assert -np.pi/2<=phi<=np.pi/2, 'angle needs to be sharp!'
+    kvx = bspline.make_knots(1, 0.0, 1.0, 1)
+    kvy = bspline.make_knots(2, 0.0, 1.0, 1)
+
+    coeffs = np.array([
+            [[ r1, 0.0, 1.0],
+             [ r2, 0.0, 1.0]],
+            [[ r1/2*(1+np.cos(phi)),  np.sin(phi)*r1/2, 1.0],
+             [ r2,  np.tan(phi/2)*r2, 1.0 / np.sqrt(2.0)]],
+            [[np.cos(phi)*r1,  np.sin(phi)*r1, 1.0],
+             [np.cos(phi)*r2,  np.sin(phi)*r2, 1.0]],
+    ])
+    return NurbsFunc((kvy,kvx), coeffs, weights=None, support = support)
+
 def quarter_annulus(r1=1.0, r2=2.0, support = None):
     """A NURBS representation of a quarter annulus in the first quadrant.
     The 'bottom' and 'top' boundaries (with respect to the reference domain)
@@ -617,6 +691,31 @@ def quarter_annulus(r1=1.0, r2=2.0, support = None):
             [[ r1, 0.0, 1.0],
              [ r2, 0.0, 1.0]],
             [[ r1,  r1, 1.0 / np.sqrt(2.0)],
+             [ r2,  r2, 1.0 / np.sqrt(2.0)]],
+            [[0.0,  r1, 1.0],
+             [0.0,  r2, 1.0]],
+    ])
+    return NurbsFunc((kvy,kvx), coeffs, weights=None, support = support)
+
+def quarter_annuseg(r1=1.0, r2=2.0, support = None):
+    """A NURBS representation of a quarter annulus in the first quadrant.
+    The 'bottom' and 'top' boundaries (with respect to the reference domain)
+    lie on the x and y axis, respectively.
+
+    Args:
+        r1 (float): inner radius
+        r2 (float): outer radius
+
+    Returns:
+        :class:`NurbsFunc` 2D geometry
+    """
+    kvx = bspline.make_knots(1, 0.0, 1.0, 1)
+    kvy = bspline.make_knots(2, 0.0, 1.0, 1)
+
+    coeffs = np.array([
+            [[ r1, 0.0, 1.0],
+             [ r2, 0.0, 1.0]],
+            [[ r1/2,  r1/2, 1.0],
              [ r2,  r2, 1.0 / np.sqrt(2.0)]],
             [[0.0,  r1, 1.0],
              [0.0,  r2, 1.0]],
@@ -801,6 +900,17 @@ def semicircle(r=1.0):
 def circle(r=1.0):
     """Construct a circle with radius `r` using NURBS."""
     return circular_arc_7pt(2 * np.pi, r)
+
+################################################################################
+# Multi-patch geometries
+################################################################################
+
+def mp_disk(r=1.0):
+    return [unit_square().scale(1/np.sqrt(2)).rotate_2d(np.pi/4).translate((0,-0.5)),
+            quarter_annuseg(r1=0.5,r2=1),
+            quarter_annuseg(r1=0.5,r2=1).rotate_2d(angle=np.pi/2),
+            quarter_annuseg(r1=0.5,r2=1).rotate_2d(angle=np.pi),
+            quarter_annuseg(r1=0.5,r2=1).rotate_2d(angle=3*np.pi/2)]
 
 ################################################################################
 # Operations on geometries

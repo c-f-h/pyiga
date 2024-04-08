@@ -120,7 +120,7 @@ def PoissonEstimator2(MP, uh, f=0., a=1., M=(0.,0.), neu_data={}, **kwargs):
         h = np.sum(assemble.assemble('v * ds', kv0, geo=geo))*kv0[0].meshsize_max()/(kv0[0].support()[1]-kv0[0].support()[0])
         uh1_grad = geometry.BSplineFunc(kvs1, uh_per_patch[p1]).transformed_jacobian(geo1).boundary(bdspec1, flip=flip) #physical gradient of uh on patch 1 (flipped if needed)
         uh2_grad = geometry.BSplineFunc(kvs2, uh_per_patch[p2]).transformed_jacobian(geo2).boundary(bdspec2)            #physical gradient of uh on patch 2
-        J = assemble.assemble('(inner((a1 * uh1_grad - a2 * uh2_grad + (M2 - M1)), n))**2 * v * ds', kv0 ,geo=geo,a1=a[MP.mesh.patch_domains[p1]],a2=a[MP.mesh.patch_domains[p2]],uh1_grad=uh1_grad,uh2_grad=uh2_grad,M1=M[MP.mesh.patch_domains[p1]],M2=M[MP.mesh.patch_domains[p2]],**kwargs)
+        J = assemble.assemble('((inner((a1 * uh1_grad + Ma1) - (a2 * uh2_grad + Ma2), n) )**2 * v ) * ds', kv0 ,geo=geo,a1=a[MP.mesh.patch_domains[p1]],a2=a[MP.mesh.patch_domains[p2]],uh1_grad=uh1_grad,uh2_grad=uh2_grad,M1=M[MP.mesh.patch_domains[p1]],M2=M[MP.mesh.patch_domains[p2]],**kwargs)
         supp1, supp2 = geo1.boundary(bdspec1).support(), geo2.boundary(bdspec2).support()
         if b1==0: s10,s11=0,1
         if b1==1: s10,s11=2,3
@@ -148,16 +148,16 @@ def PoissonEstimator2(MP, uh, f=0., a=1., M=(0.,0.), neu_data={}, **kwargs):
     print('jump contributions took ' + str(time.time()-t) + ' seconds.')
     return np.sqrt(indicator)
 
-def doerfler_marking(errors, theta=0.8):
+def doerfler_marking(errors, theta=0.9):
     """Given a list of errors, return a minimal list of indices such that the indexed
     errors have norm of at least theta * norm(errors)."""
     ix = np.argsort(errors)
     total = np.linalg.norm(errors)
     running = []
     marked = []
-    for i in reversed(ix):
-        running.append(errors[i])
-        marked.append(i)
-        if np.linalg.norm(running) >= theta * total:
+    for i in reversed(range(len(ix))):
+        running.append(errors[ix[i]])
+        marked.append(ix[i])
+        if (np.linalg.norm(running) >= theta * total):# and ((errors[ix[i]]-errors[ix[max(i+1,len(ix)-1)]])/errors[ix[i]]>1e-4):
             break
     return marked

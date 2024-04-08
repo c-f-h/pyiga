@@ -683,51 +683,7 @@ class PatchMesh:
         #                 assert (p,b,s)==self.interfaces[self.interfaces[(p,b,s)][0]][0], "interface connectivity invalid"
         #             else:
         #                 assert np.any([(p, b) in self.outer_boundaries[idx] for idx in self.outer_boundaries]),'A segment is neither a linked interface segment for two patches nor an outer boundary!'
-        
-#         for p in range(len(self.patches)):
-                       
-#             # check topology of corner vertices
-# #             kvs, geo = self.patches[p][0]
-# #             crns = corners(geo)
-            
-# #             (B,T,L,R) = bdrs = self.boundaries(p)
-#             # assert B[0] == L[0]    # bottom/left match in corner
-#             # assert B[1] == R[0]    # bottom/right match in corner
-#             # assert T[0] == L[1]    # top/left match in corner
-#             # assert T[1] == R[1]    # top/right match in corner
-
-#             # check geometric position of corner vertices
-
-#             # assert np.allclose(self.vertices[B[0]],  crns[0])
-#             # assert np.allclose(self.vertices[B[1]], crns[1])
-#             # assert np.allclose(self.vertices[T[0]],  crns[2])
-#             # assert np.allclose(self.vertices[T[1]], crns[3])
-
-#             # check that there are no duplicate vertices in any segment
-#             for bd in bdrs:
-#                 assert len(np.unique(bd)) == len(bd)
-
-#             # check that connectivity of interfaces is consistent
-#             for b, bd in enumerate(bdrs):
-#                 assert len(bd) >= 2    # each boundary has at least one segment
-#                 for s in range(len(bd) - 1):    # check each boundary segment
-#                     other = self.get_matching_interface(p, b, s)
-#                     if other:
-#                         # if not on the boundary, make sure the other one refers back to this one
-#                         matching = self.get_matching_interface(*other)
-#                         #print((p,b,s), '->', other, '->', matching)
-#                         assert matching == (p, b, s)
-
-#                         # check that the two segments refer to the same two vertices
-#                         (p1, b1, s1) = other
-#                         assert sorted(bd[s:s+2]) == sorted(self.boundaries(p1)[b1][s1:s1+2])
-#                     else:
-#                         segment = tuple(sorted(bd[s:s+2]))
-#                         assert (p, b) in self.outer_boundaries, str(segment) + ' is non-linked boundary segment for two patches!'
-#                             #assert False, str(segment) + ' is non-linked boundary segment for two patches!'
-#                         #self.outer_boundaries.add(segment)
-
-                        
+                 
 # class PatchMesh3D:
 #     def __init__(self, patches = None):
 #         self.vertices = []

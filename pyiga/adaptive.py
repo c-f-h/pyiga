@@ -7,8 +7,11 @@ from pyiga import assemble, adaptive, bspline, vform, geometry, vis, solvers, ut
 from sksparse.cholmod import cholesky
 from pyiga import utils
 
-### Error estimators
-def PoissonEstimator(MP, uh, f=0., a=1., M=(0.,0.), divMaT =0., neu_data={}, **kwargs):
+################################################################################
+# Error Estimators
+################################################################################
+
+def resPois(MP, uh, f=0., a=1., M=(0.,0.), divMaT =0., neu_data={}, **kwargs):
     if isinstance(a,(np.ndarray,list,set)):
         assert len(a)==len(MP.mesh.domains)
         a={d:a_ for d,a_ in zip(MP.mesh.domains,a)}
@@ -148,16 +151,27 @@ def PoissonEstimator2(MP, uh, f=0., a=1., M=(0.,0.), neu_data={}, **kwargs):
     print('jump contributions took ' + str(time.time()-t) + ' seconds.')
     return np.sqrt(indicator)
 
-def doerfler_marking(errors, theta=0.9):
-    """Given a list of errors, return a minimal list of indices such that the indexed
-    errors have norm of at least theta * norm(errors)."""
-    ix = np.argsort(errors)
-    total = np.linalg.norm(errors)
-    running = []
-    marked = []
-    for i in reversed(range(len(ix))):
-        running.append(errors[ix[i]])
-        marked.append(ix[i])
-        if (np.linalg.norm(running) >= theta * total):# and ((errors[ix[i]]-errors[ix[max(i+1,len(ix)-1)]])/errors[ix[i]]>1e-4):
+################################################################################
+# Marking strategies
+################################################################################
+
+def doerfler_mark(x, theta=0.9, TOL=0.01):
+    """Given an array of x, return a minimal array of indices such that the indexed
+    values of x have norm of at least theta * norm(errors). Requires sorting the array x.
+    Indices of entries that are 100*TOL percentage off from the breakpoint entry are also added to the output"""
+    ix = np.argsort(x)
+    n=len(ix)
+    total = x@x
+    
+    S = 0
+    for i in reversed(range(n)):
+        S += x[ix[i]]**2
+        if (S > theta * total):
+            k=i-1
+            while (abs(x[ix[i]]-x[ix[k]])/x[ix[i]] < TOL) and k>0:
+                k-=1
             break
-    return marked
+    return ix[(k+1):]
+
+def quick_mark(x, theta=0.9):
+    return x

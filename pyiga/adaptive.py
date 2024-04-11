@@ -8,19 +8,13 @@ from sksparse.cholmod import cholesky
 from pyiga import utils
 
 ################################################################################
-# Error Estimators
+# Error Estimation
 ################################################################################
 
-def resPois(MP, uh, f=0., a=1., M=(0.,0.), divMaT =0., neu_data={}, **kwargs):
-    if isinstance(a,(np.ndarray,list,set)):
-        assert len(a)==len(MP.mesh.domains)
-        a={d:a_ for d,a_ in zip(MP.mesh.domains,a)}
-    elif isinstance(a,(int,float)):
+def mp_resPois(MP, uh, f=0., a=1., M=(0.,0.), divMaT =0., neu_data={}, **kwargs):
+    if isinstance(a,(int,float)):
         a={d:a for d in MP.mesh.domains}
-    if isinstance(f,(np.ndarray,list,set)):
-        assert len(f)==len(MP.mesh.domains)
-        f={d:f_ for d,f_ in zip(MP.mesh.domains,f)}
-    elif isinstance(f,(int,float)):
+    if isinstance(f,(int,float)):
         f={d:f for d in MP.mesh.domains}
     n = MP.mesh.numpatches
     indicator = np.zeros(n)
@@ -86,19 +80,14 @@ def ratio(kv,u,s=0):
     else:
         return np.clip((kv.mesh[1:]-u)/(kv.mesh[1:]-kv.mesh[:-1]),a_min=0.,a_max=1.)
     
-def PoissonEstimator2(MP, uh, f=0., a=1., M=(0.,0.), neu_data={}, **kwargs):
-    if isinstance(a,(np.ndarray,list,set)):
-        assert len(a)==len(MP.mesh.domains)
-        a={d:a_ for d,a_ in zip(MP.mesh.domains,a)}
-    elif isinstance(a,(int,float)):
+def mp_resPois2(MP, uh, f=0., a=1., M=(0.,0.), neu_data={}, **kwargs):
+    if isinstance(a,(int,float)):
         a={d:a for d in MP.mesh.domains}
-    if isinstance(f,(np.ndarray,list,set)):
-        assert len(f)==len(MP.mesh.domains)
-        f={d:f_ for d,f_ in zip(MP.mesh.domains,f)}
-    elif isinstance(f,(int,float)):
+    if isinstance(f,(int,float)):
         f={d:f for d in MP.mesh.domains}
+        
     n = MP.mesh.numpatches
-    indicator = np.zeros((n,4))
+    indicator = np.zeros(n)
     uh_loc = MP.Basis@uh
     uh_per_patch = dict()
     #residual contribution, TODO vectorize
@@ -152,26 +141,41 @@ def PoissonEstimator2(MP, uh, f=0., a=1., M=(0.,0.), neu_data={}, **kwargs):
     return np.sqrt(indicator)
 
 ################################################################################
-# Marking strategies
+# Marking
 ################################################################################
 
-def doerfler_mark(x, theta=0.9, TOL=0.01):
+def doerfler_mark(x, theta=0.8, TOL=0.01):
     """Given an array of x, return a minimal array of indices such that the indexed
     values of x have norm of at least theta * norm(errors). Requires sorting the array x.
     Indices of entries that are 100*TOL percentage off from the breakpoint entry are also added to the output"""
-    ix = np.argsort(x)
-    n=len(ix)
+    idx = np.argsort(x)
+    n=len(idx)
     total = x@x
-    
-    S = 0
+    S=0
     for i in reversed(range(n)):
-        S += x[ix[i]]**2
+        S+= x[idx[i]]**2
         if (S > theta * total):
-            k=i-1
-            while (abs(x[ix[i]]-x[ix[k]])/x[ix[i]] < TOL) and k>0:
+            k=i
+            while (abs(x[idx[i]]-x[idx[k]])/x[idx[i]] < TOL) and k>0:   #we go on adding entries that are just 100*TOL% off from the breakpoint entry.
                 k-=1
             break
-    return ix[(k+1):]
+    return idx[k:]
 
-def quick_mark(x, theta=0.9):
-    return x
+def quick_mark(x, idx = None, l=None, u=None , v=None, theta=0.8):
+    """Given an array of x, return a minimal array of indices such that the indexed
+    values of x have norm of at least theta * norm(errors)**2. Does not require sorting the array x.
+    TODO: add checks for when values are equal in the array, see Praetorius 2019 paper."""
+    if idx is None: idx=np.arange(len(x))
+    if l is None: l=0
+    if u is None: u=len(x)-1
+    if v is None: v=theta*x@x
+        
+    p = l+(u-l)//2                                                           #pivot for partition is chosen as the median
+    idx[l:(u+1)] = idx[l:(u+1)][np.argpartition(-x[idx[l:(u+1)]],p-l)]       #partition of subarray from l to u
+    sigma = x[idx[l:p]]@x[idx[l:p]]
+    if sigma > v:                                                            #if the norm of the larger entries exceeds the total norm we didn't find the minimal set of entries yet.
+        return quick_mark(x, idx, l, p-1, v, theta=theta)
+    elif sigma + x[idx[p]]**2 > v:                                           #if adding the p-th value (the next biggest entry we can add) suddenly satisfies the condition we are done.
+        return idx[:(p+1)]# idx[:(p + ceil((v-sigma)/x[idx[p]]))             
+    else:                                                                    #we haven't reached the desired norm so we have to look further.
+        return quick_mark(x, idx, p + 1,u,v-sigma-x[idx[p]]**2,theta=theta)

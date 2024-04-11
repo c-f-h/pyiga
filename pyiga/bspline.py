@@ -275,6 +275,15 @@ def numdofs(kvs):
         return kvs.numdofs
     else:
         return np.prod([kv.numdofs for kv in kvs])
+    
+def numspans(kvs):
+    """Convenience function which returns the number of dofs in a single knot vector
+    or in a tensor product space represented by a tuple of knot vectors.
+    """
+    if isinstance(kvs, KnotVector):
+        return kvs.numspans
+    else:
+        return np.prod([kv.numspans for kv in kvs])
 ################################################################################
 
 def ev(knotvec, coeffs, u):

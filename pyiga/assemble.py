@@ -1311,6 +1311,8 @@ class Multipatch:
         # number of tensor product dofs per patch
         self.n = [tuple([kv.numdofs for kv in kvs]) for ((kvs,_),_) in self.mesh.patches]
         self.N = [np.prod(n) for n in self.n]
+        self.Z = [bspline.numspans(kvs) for ((kvs,_),_) in self.mesh.patches]
+        self.Z_ofs = np.concatenate(([0], np.cumsum(self.Z)))
         # offset to the dofs of the i-th patch
         self.N_ofs = np.concatenate(([0], np.cumsum(self.N)))
         # per patch, a dict of shared indices
@@ -1348,6 +1350,11 @@ class Multipatch:
     @property
     def numloc_dofs(self):
         return self.N_ofs[-1]
+    
+    @property
+    def numcells(self):
+        """Number of cells throughout the Multipatch structure."""
+        return 
     
     def reset(self):
         self.__init__(pm=self.mesh, automatch=True)

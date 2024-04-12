@@ -79,66 +79,6 @@ def ratio(kv,u,s=0):
         return np.clip(1-(kv.mesh[1:]-u)/(kv.mesh[1:]-kv.mesh[:-1]),a_min=0.,a_max=1.)
     else:
         return np.clip((kv.mesh[1:]-u)/(kv.mesh[1:]-kv.mesh[:-1]),a_min=0.,a_max=1.)
-    
-def mp_resPois2(MP, uh, f=0., a=1., M=(0.,0.), neu_data={}, **kwargs):
-    if isinstance(a,(int,float)):
-        a={d:a for d in MP.mesh.domains}
-    if isinstance(f,(int,float)):
-        f={d:f for d in MP.mesh.domains}
-        
-    n = MP.mesh.numpatches
-    indicator = np.zeros(n)
-    uh_loc = MP.Basis@uh
-    uh_per_patch = dict()
-    #residual contribution, TODO vectorize
-    t=time.time()
-    for p, ((kvs, geo), _) in enumerate(MP.mesh.patches):
-        h = np.linalg.norm([(b-a)*kv.meshsize_max()/(kv.support()[1]-kv.support()[0]) for (a,b),kv in zip(geo.bounding_box(),kvs)])
-        uh_per_patch[p] = uh_loc[np.arange(MP.N[p]) + MP.N_ofs[p]]   #cache Spline Function on patch p
-        kvs0 = tuple([bspline.KnotVector(kv.mesh, 0) for kv in kvs])
-        u_func = geometry.BSplineFunc(kvs, uh_per_patch[p])
-        R=h**2*assemble.assemble('(f + div(a*grad(uh)))**2 * v * dx', kvs0, geo=geo, a=a[MP.mesh.patch_domains[p]],f=f[MP.mesh.patch_domains[p]],uh=u_func, M=M[MP.mesh.patch_domains[p]],**kwargs)
-        for i,j in itertools.product(*2*(range(2),)):
-            indicator[p,2*i+j] = np.sum(np.outer(ratio(kvs0[0],0.5,s=i),ratio(kvs0[1],0.5,s=j))*R)
-    print('residual contributions took ' + str(time.time()-t) + ' seconds.')
-    #flux contribution
-    t=time.time()
-    for i,((p1,b1,_), (p2,b2,_), flip) in enumerate(MP.intfs):
-        ((kvs1, geo1), _), ((kvs2, geo2), _) = MP.mesh.patches[p1], MP.mesh.patches[p2]
-        bdspec1, bdspec2 = [assemble.int_to_bdspec(b1)], [assemble.int_to_bdspec(b2)]
-        bkv1, bkv2 = assemble.boundary_kv(kvs1, bdspec1), assemble.boundary_kv(kvs2, bdspec2)
-        geo = geo2.boundary(bdspec2)
-        kv0 = tuple([bspline.KnotVector(kv.mesh, 0) for kv in bkv2])
-        h = np.sum(assemble.assemble('v * ds', kv0, geo=geo))*kv0[0].meshsize_max()/(kv0[0].support()[1]-kv0[0].support()[0])
-        uh1_grad = geometry.BSplineFunc(kvs1, uh_per_patch[p1]).transformed_jacobian(geo1).boundary(bdspec1, flip=flip) #physical gradient of uh on patch 1 (flipped if needed)
-        uh2_grad = geometry.BSplineFunc(kvs2, uh_per_patch[p2]).transformed_jacobian(geo2).boundary(bdspec2)            #physical gradient of uh on patch 2
-        J = assemble.assemble('((inner((a1 * uh1_grad + Ma1) - (a2 * uh2_grad + Ma2), n) )**2 * v ) * ds', kv0 ,geo=geo,a1=a[MP.mesh.patch_domains[p1]],a2=a[MP.mesh.patch_domains[p2]],uh1_grad=uh1_grad,uh2_grad=uh2_grad,M1=M[MP.mesh.patch_domains[p1]],M2=M[MP.mesh.patch_domains[p2]],**kwargs)
-        supp1, supp2 = geo1.boundary(bdspec1).support(), geo2.boundary(bdspec2).support()
-        if b1==0: s10,s11=0,1
-        if b1==1: s10,s11=2,3
-        if b1==2: s10,s11=0,2
-        if b1==3: s10,s11=1,3
-        if min(supp2)>0.5*sum(supp1): s1=s11
-        else: s1=s12
-        indicator[p1,s1 ] += 0.5 * h * np.sum(J)
-        if b2==0: s20,s21=0,1
-        if b2==1: s20,s21=2,3
-        if b2==2: s20,s21=0,2
-        if b2==3: s20,s21=1,3
-        indicator[p2,s20] += 0.5 * h * np.sum(ratio(kv0,0.5,s=0)*J)
-        indicator[p2,s21] += 0.5 * h * np.sum(ratio(kv0,0.5,s=1)*J)
-    for bd in neu_data:
-        g = neu_data[bd]
-        for (p,b) in MP.mesh.outer_boundaries[bd]:
-            ((kvs, geo), _) = MP.mesh.patches[p]
-            bdspec = [assemble.int_to_bdspec(b)]
-            bkv = assemble.boundary_kv(kvs, bdspec)
-            geo_b = geo.boundary(bdspec)
-            uh_grad = geometry.BSplineFunc(kvs, uh_per_patch[p]).transformed_jacobian(geo).boundary(bdspec)
-            J = np.sum(assemble.assemble('(inner(a * uh_grad, n) - g)**2 * v * ds', kv0 ,geo=geo_b, a=a[MP.mesh.patch_domains[p]], uh_grad=uh_grad, **kwargs))
-            indicator[p] += h * J
-    print('jump contributions took ' + str(time.time()-t) + ' seconds.')
-    return np.sqrt(indicator)
 
 ################################################################################
 # Marking
@@ -156,7 +96,7 @@ def doerfler_mark(x, theta=0.8, TOL=0.01):
         S+= x[idx[i]]**2
         if (S > theta * total):
             k=i
-            while (abs(x[idx[i]]-x[idx[k]])/x[idx[i]] < TOL) and k>0:   #we go on adding entries that are just 100*TOL% off from the breakpoint entry.
+            while (abs(x[idx[i]]-x[idx[k]])/x[idx[i]] < TOL) and k>0:       #we go on adding entries that are just 100*TOL% off from the breakpoint entry.
                 k-=1
             break
     return idx[k:]

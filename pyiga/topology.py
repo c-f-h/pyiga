@@ -597,6 +597,13 @@ class PatchMesh:
     def draw(self, vertex_idx = False, patch_idx = False, nodes=False, bwidth=1, color=None, bcolor=None, axis='scaled', **kwargs):
         """draws a visualization of the patchmesh in 2D."""
         
+        if color is not None:
+            if isinstance(color,dict):
+                for d in (set(self.domains) - set(color)):
+                    color[d] = 'white'
+            elif isinstance(color, str):
+                color = {d: color for d in self.domains}
+        
         if kwargs.get('fig'):
             fig, ax = kwargs['fig']
         else:
@@ -1286,7 +1293,3 @@ class PatchMesh:
 #             return str(self.boundaries)
 #         else:
 #             return "(" + self.lower.print() + "," + self.upper.print() + ")"
-        
-# ################################################################################
-# # Multipatch geometries
-# ################################################################################

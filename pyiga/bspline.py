@@ -8,7 +8,7 @@ import scipy.sparse
 import scipy.sparse.linalg
 import scipy.interpolate
 
-from .tensor import apply_tprod
+from .tensor import apply_tprod, _multi_kron
 
 def _parse_bdspec(bdspec, dim):
     if bdspec == 'left':
@@ -686,11 +686,11 @@ def collocation_tp(kvs, gridaxes):
             assert all(ax.ndim == 1 for ax in gridaxes), \
                 "Grid axes should be one-dimensional"
     
-    Colloc = [collocation(kvs[d],gridaxes[d]) for d in range(dim)]
-    C = Colloc[0]
-    for d in range(1,dim):
-        C = scipy.sparse.kron(C,Colloc[d])
-    return C
+    C = [collocation(kvs[d],gridaxes[d]) for d in range(dim)]
+    # C = Colloc[0]
+    # for d in range(1,dim):
+    #     C = scipy.sparse.kron(C,Colloc[d])
+    return _multi_kron(C)
 
 def collocation_info(kv, nodes):
     """Return two arrays: one containing the index of the first active B-spline
@@ -1306,6 +1306,8 @@ class PhysicalGradientFunc(_BaseGeoFunc):
 
     def output_shape(self):
         return self.func.output_shape() + (self.sdim,)
+    
+    #def eval(self, *x):
 
     def grid_eval(self, gridaxes):
         geojac = self.geo.grid_jacobian(gridaxes)

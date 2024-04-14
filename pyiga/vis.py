@@ -9,6 +9,7 @@ from . import utils
 def plot_field(field, geo=None, res=80, physical=False, contour=False, **kwargs):
     """Plot a scalar field, optionally over a geometry."""
     kwargs.setdefault('shading', 'gouraud')
+    #assert field.dim==1
     if np.isscalar(res):
         res = (res, res)
     if geo is not None:
@@ -30,7 +31,27 @@ def plot_field(field, geo=None, res=80, physical=False, contour=False, **kwargs)
             plt.contourf(grd[1],grd[0], C, **kwargs)
         else:
             return plt.pcolormesh(grd[1], grd[0], C, **kwargs)
-
+        
+def plot_quiver(field, geo=None, res=10, physical=False, **kwargs):
+    """plot a vector field, optionally over a geometry."""
+    #assert field.dim==2
+    if np.isscalar(res):
+        res = (res, res)
+    if geo is not None:
+        grd = tuple(np.linspace(s[0], s[1], r) for (s,r) in zip(geo.support, res))
+        XY = utils.grid_eval(geo, grd)
+        if physical:
+            C = utils.grid_eval_transformed(field, grd, geo)
+        else:
+            C = utils.grid_eval(field, grd)
+            return plt.quiver(XY[...,0], XY[...,1],C[:,:,0], C[:,:,1],**kwargs)
+            #return plt.pcolormesh(XY[...,0], XY[...,1], C, **kwargs)
+    else:
+        # assumes that `field` is a BSplineFunc or equivalent
+        grd = tuple(np.linspace(s[0], s[1], r) for (s,r) in zip(field.support, res))
+        C = utils.grid_eval(field, grd)
+        return plt.quiver(grd[1], grd[0], C[:,:,0], C[:,:,1], **kwargs)
+        
 def plot_geo(geo,
              grid=10, gridx=None, gridy=None, gridz=None,
              res=50,

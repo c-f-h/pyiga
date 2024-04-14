@@ -1329,7 +1329,9 @@ class Multipatch:
                     self.intfs.add(((p1,bd1,s1),(p2,bd2,s2),flip))
                 
             #print(self.intfs)
+            t=time.time()
             C=[self.join_boundaries(p1, (int_to_bdspec(bd1),), s1 , p2, (int_to_bdspec(bd2),), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
+            print('setting up constraints took '+str(time.time()-t)+' seconds.')
             if len(C)!=0:
                 self.Constr = scipy.sparse.vstack(C)
             self.finalize()

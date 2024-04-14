@@ -67,36 +67,16 @@ def update_basis(Constr, derivedDofs, Basis):
     
     lBasis = lBasis @ Basis
     
-    #lastFound = n+1
-    #print(len(ddofs))
-    #testVec[ddofs]=1 
-    
     testVec = scipy.sparse.coo_array((np.ones(n2),(ddofs,np.zeros(n2))),shape=(n,1))
         
     while True:
         found = 0
         tmp = lBasis @ testVec
-        # for i in range(n):
-        #     if abs(tmp[i])>1e-12:
-        #         #print('{}'.format(i))
-        #         found += 1
         found = sum(abs(tmp.data)>1e-12)
         
-        # NEW
-        # for i in ddofs:
-        #     for j in ddofs:
-        #         if abs(lBasis[i,j]) > 1e-12:
-        #             found = 1
-        # ENDNEW
-        
         if found > 0:
-            #print(found, lastFound)
-            #assert(found < lastFound)
-            #lastFound = found
             lBasis = lBasis @ lBasis
-            #print("multiply & repeat")
         else:
-            #print("done")
             break
     return lBasis
 
@@ -180,9 +160,9 @@ def compute_basis(Constr, maxiter):
     #print(np.array(list(allderivedDofs.keys())))
     #nonderivedDofs=np.setdiff1d(allLocalDofs, np.array(list(allderivedDofs.keys())))
     #print(nonderivedDofs)
-    # print('finding active constraints took '+str(time_find_active)+' seconds.')
-    # print('finding derived dofs took '+str(time_find_ddofs)+' seconds.')
-    # print('updating basis and constraints took '+str(time_update)+' seconds.')
+    print('finding active constraints took '+str(time_find_active)+' seconds.')
+    print('finding derived dofs took '+str(time_find_ddofs)+' seconds.')
+    print('updating basis and constraints took '+str(time_update)+' seconds.')
     Basis = scipy.sparse.csc_matrix(Basis)
     return Basis[:,nonderivedDofs]  #,Constr,activeConstraints
 

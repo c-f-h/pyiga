@@ -160,9 +160,9 @@ def compute_basis(Constr, maxiter):
     #print(np.array(list(allderivedDofs.keys())))
     #nonderivedDofs=np.setdiff1d(allLocalDofs, np.array(list(allderivedDofs.keys())))
     #print(nonderivedDofs)
-    print('finding active constraints took '+str(time_find_active)+' seconds.')
-    print('finding derived dofs took '+str(time_find_ddofs)+' seconds.')
-    print('updating basis and constraints took '+str(time_update)+' seconds.')
+    # print('finding active constraints took '+str(time_find_active)+' seconds.')
+    # print('finding derived dofs took '+str(time_find_ddofs)+' seconds.')
+    # print('updating basis and constraints took '+str(time_update)+' seconds.')
     Basis = scipy.sparse.csc_matrix(Basis)
     return Basis[:,nonderivedDofs]  #,Constr,activeConstraints
 

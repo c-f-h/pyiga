@@ -1331,7 +1331,7 @@ class Multipatch:
             #print(self.intfs)
             t=time.time()
             C=[self.join_boundaries(p1, (int_to_bdspec(bd1),), s1 , p2, (int_to_bdspec(bd2),), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
-            print('setting up constraints took '+str(time.time()-t)+' seconds.')
+            #print('setting up constraints took '+str(time.time()-t)+' seconds.')
             if len(C)!=0:
                 self.Constr = scipy.sparse.vstack(C)
             self.finalize()
@@ -1431,7 +1431,7 @@ class Multipatch:
         D = (X.T@self.Basis).sum(axis=1).A.ravel()
         self.P2G = scipy.sparse.csr_matrix(scipy.sparse.spdiags(1/D,[0],len(D),len(D))@X.T)
         self.Basis = scipy.sparse.csr_matrix(self.Basis)
-        print("Basis setup took "+str(time.time()-t)+" seconds")
+        #print("Basis setup took "+str(time.time()-t)+" seconds")
         #self.mesh.sanity_check()
         #self.sanity_check()
         
@@ -1693,7 +1693,7 @@ class Multipatch:
         kvs_old = self.mesh.kvs
         t=time.time()
         new_patches=self.mesh.h_refine(h_ref)
-        print("Refinement took " + str(time.time()-t) + " seconds for "+str(len(h_ref))+' patches.')
+        #print("Refinement took " + str(time.time()-t) + " seconds for "+str(len(h_ref))+' patches.')
         self.reset()
         
         if return_P:
@@ -1716,7 +1716,7 @@ class Multipatch:
                 P_loc = P_loc +  scipy.sparse.coo_matrix((data_id,(I_id, J_id)),(sum(self.N),sum(N_old)))
             #P = scipy.sparse.linalg.spsolve(self.Basis.T@self.Basis,self.Basis.T@P_loc@B_old)
             P = self.P2G@P_loc@B_old
-            print("Prolongation took "+str(time.time()-t)+" seconds")
+            #print("Prolongation took "+str(time.time()-t)+" seconds")
             return P
         
     def p_refine(self, p_inc=1, return_P = False):
@@ -1741,7 +1741,7 @@ class Multipatch:
             P_loc = scipy.sparse.coo_matrix((data,(I, J)),(sum(self.N),sum(N_old)))
             #P = scipy.sparse.linalg.spsolve(self.Basis.T@self.Basis,self.Basis.T@P_loc@B_old)
             P = self.P2G@P_loc@B_old
-            print("Prolongation took "+str(time.time()-t)+" seconds")
+            #print("Prolongation took "+str(time.time()-t)+" seconds")
             return P
 
     def compute_dirichlet_bcs(self, b_data):

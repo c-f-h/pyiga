@@ -1601,6 +1601,21 @@ def curl(expr):
         expr[1].dx(0) - expr[0].dx(1),
     ))
 
+def curl2D(expr):
+    """The vector to scalar curl of a 2D vector expression."""
+    expr = as_expr(expr)
+    if not (expr.is_vector() and len(expr) == 2):
+        raise TypeError('can only compute curl2D of 2D vector expression')
+    return expr[1].dx(0) - expr[0].dx(1)
+
+def Curl2D(expr):
+    """The scalar to vector curl of a scalar expression."""
+    expr = as_expr(expr)    
+    return as_vector((
+          expr.dx(1),
+        - expr.dx(0),
+    ))
+
 def as_expr(x):
     """Interpret input as an expression; useful for constants."""
     if isinstance(x, Expr):

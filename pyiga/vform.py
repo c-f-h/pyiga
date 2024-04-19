@@ -1713,8 +1713,12 @@ def cross(x, y):
     """Cross product of two 3D vectors."""
     x = as_expr(x)
     y = as_expr(y)
-    return VectorCrossExpr(x, y)
-
+    
+    if (x.is_vector() and len(x) == 2) and (y.is_vector() and len(y) == 2):
+        return x[0]*y[1]-x[1]*y[0]
+    else:
+        return VectorCrossExpr(x, y)
+    
 def outer(x, y):
     """Outer product of two vectors, resulting in a matrix."""
     x = as_expr(x)

@@ -1295,16 +1295,14 @@ class Multipatch:
             :meth:`join_boundaries` as often as needed, followed by
             :meth:`finalize`.
     """
-    def __init__(self, pm, automatch=False):
+    def __init__(self, M, automatch=False, space='H1', dim=1):
         """Initialize a multipatch structure."""
         # underlying PatchMesh object describing the geometry
-        self.mesh = pm
-        # enforced regularity across patch interfaces
-        #self.k = k
+        self.mesh = M
         if isinstance(pm, topology.PatchMesh):
-            self.dim = 2
+            self.sdim = 2
         elif isinstance(pm, topology.PatchMesh3D):
-            self.dim = 3
+            self.sdim = 3
         else:
             print('unknown mesh object.')
             
@@ -1330,7 +1328,12 @@ class Multipatch:
                 
             #print(self.intfs)
             t=time.time()
-            C=[self.join_boundaries(p1, (int_to_bdspec(bd1),), s1 , p2, (int_to_bdspec(bd2),), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
+            if space == 'Hcurl':
+                C=[self.join_boundaries_tangential(p1, (int_to_bdspec(bd1),), s1 , p2, (int_to_bdspec(bd2),), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
+            elif space == 'Hdiv':
+                C=[self.join_boundaries_normal(p1, (int_to_bdspec(bd1),), s1 , p2, (int_to_bdspec(bd2),), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
+            else:
+                C=[self.join_boundaries(p1, (int_to_bdspec(bd1),), s1 , p2, (int_to_bdspec(bd2),), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
             #print('setting up constraints took '+str(time.time()-t)+' seconds.')
             if len(C)!=0:
                 self.Constr = scipy.sparse.vstack(C)
@@ -1756,7 +1759,7 @@ class Multipatch:
             :class:`RestrictedLinearSystem`.
         """
         bcs = []
-        p2g = dict()        # cache the patch-to-global indices for efficiency
+        #p2g = dict()        # cache the patch-to-global indices for efficiency
         for bidx, g in b_data.items():
             for p, bdspec in self.mesh.outer_boundaries[bidx]:
                 (kvs, geo), _ = self.mesh.patches[p]

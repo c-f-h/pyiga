@@ -52,6 +52,31 @@ def interpolate(kvs, f, geo=None, nodes=None):
                 for i in range(len(kvs))]
     return tensor.apply_tprod(Cinvs, rhs)
 
+def interpolate_tangential(kvs, f, geo=None, nodes=None, dim=2):
+    if isinstance(kvs, bspline.KnotVector):
+        kvs = (kvs,)
+    if nodes is None:
+        nodes = [kv.greville() for kv in kvs]
+        
+    if isinstance(f, np.ndarray):
+        # check that leading dimensions match the number of dofs
+        if np.shape(f)[:len(kvs)] != tuple(kv.numdofs for kv in kvs):
+            raise ValueError('array f has wrong shape')
+        rhs = f
+    else:
+        if geo is not None:
+            rhs = utils.grid_eval_transformed(f, nodes, geo)
+        else:
+            rhs = utils.grid_eval(f, nodes)
+            
+    C = bspline.collocation_tp(kvs, nodes)
+    N = geo.grid_outer_normal(nodes).reshape(-1,dim).T
+    N0=scipy.sparse.spdiags(N[0], 0, len(N[0]), len(N[0]))
+    N1=scipy.sparse.spdiags(N[1], 0, len(N[1]), len(N[1]))
+    
+    if dim==2:
+        return operators.make_solver(N1@C-N0@C).dot(rhs)
+
 def _project_L2_hspace(hs, f, f_physical=False, geo=None):
     from . import vform, geometry
     if geo is None:

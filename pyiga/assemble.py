@@ -1298,13 +1298,14 @@ class Multipatch:
     def __init__(self, M, automatch=False, space='H1', dim=1):
         """Initialize a multipatch structure."""
         # underlying PatchMesh object describing the geometry
-        self.mesh = M
-        if isinstance(pm, topology.PatchMesh):
+        if isinstance(M, topology.PatchMesh):
             self.sdim = 2
-        elif isinstance(pm, topology.PatchMesh3D):
+        elif isinstance(M, topology.PatchMesh3D):
             self.sdim = 3
         else:
             print('unknown mesh object.')
+            
+        self.mesh = M
             
         # number of tensor product dofs per patch
         self.n = [tuple([kv.numdofs for kv in kvs]) for ((kvs,_),_) in self.mesh.patches]

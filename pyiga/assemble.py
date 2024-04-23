@@ -1363,7 +1363,7 @@ class Multipatch:
         return 
     
     def reset(self):
-        self.__init__(pm=self.mesh, automatch=True)
+        self.__init__(M=self.mesh, automatch=True)
 
     def join_boundaries(self, p1, bdspec1, s1, p2, bdspec2, s2, flip=None):
         """Join the dofs lying along boundary `bdspec1` of patch `p1` with
@@ -1437,7 +1437,7 @@ class Multipatch:
         self.Basis = scipy.sparse.csr_matrix(self.Basis)
         #print("Basis setup took "+str(time.time()-t)+" seconds")
         #self.mesh.sanity_check()
-        #self.sanity_check()
+        self.sanity_check()
         
     def assemble_volume(self, problem, arity=1, domain_id=None, args=None, bfuns=None,
             symmetric=False, format='csr', layout='blocked', **kwargs):

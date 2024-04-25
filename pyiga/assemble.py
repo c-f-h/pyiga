@@ -98,6 +98,8 @@ Integration
 .. autofunction:: integrate
 
 """
+import warnings
+
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy
@@ -417,20 +419,27 @@ def slice_indices(axis, sides, shape, ravel=False, swap=None, flip=None):
         multi_indices = np.ravel_multi_index(multi_indices.T, shape)
     return multi_indices
 
-def boundary_dofs(kvs, bdspec=None, ravel=False, swap=None, flip=None):
+def boundary_dofs(kvs, bdspec=None, m=None, ravel=False, swap=None, flip=None):
     """Indices of the dofs which lie on the given boundary of the tensor
     product basis `kvs`. Output format is as for :func:`slice_indices`.
     """
+    kvs = tuple(kvs)
+    n = len(kvs)
+    if m is None:
+        m = n-1
     if bdspec:
         bdspec = bspline._parse_bdspec(bdspec, len(kvs))
         axis, sides = tuple(ax for ax, _ in bdspec), tuple(-idx for _, idx in bdspec)
         N = tuple(kv.numdofs for kv in kvs)
         return slice_indices(axis, sides, N, ravel=ravel, swap=swap, flip=flip)
     else:
+        manifolds = topology.face_indices(n,m)
+        #print(manifolds)
         if ravel==True:
-            return np.unique(np.concatenate([boundary_dofs(kvs, [(a,b)], ravel=True) for a,b in itertools.product(*2*(range(2),))]))
+            return np.unique(np.concatenate([boundary_dofs(kvs, M, ravel=True) for M in manifolds]))
         else:
-            return [boundary_dofs(kvs, [(a,b)], ravel=True) for a,b in itertools.product(*2*(range(2),))]
+            return [boundary_dofs(kvs, M, ravel=True) for M in manifolds]
+        
 def boundary_kv(kvs, bdspec, swap=None, flip=None):
     kvs=list(kvs)
     if flip is None:
@@ -1378,7 +1387,7 @@ class Multipatch:
         """
         kvs1, kvs2 = self.mesh.patches[p1][0][0], self.mesh.patches[p2][0][0]
         if flip is None:
-            flip=(self.dim-1)*(False,)
+            flip=(self.sdim-1)*(False,)
         
         bkv1 = boundary_kv(kvs1, bdspec1)
         bkv2 = boundary_kv(kvs2, bdspec2, flip=flip) 
@@ -1674,7 +1683,7 @@ class Multipatch:
             if len(h_ref)>0:
                 assert max(h_ref.keys())<self.numpatches and min(h_ref.keys())>=0, "patch index out of bounds."
         elif isinstance(h_ref,int):
-            #assert patches >=0 and patches < self.dim, "dimension error."
+            #assert patches >=0 and patches < self.sdim, "dimension error."
             h_ref = {p:h_ref for p in range(self.numpatches)}
         elif isinstance(h_ref, (list, set, np.ndarray)):
             assert max(h_ref)<self.numpatches and min(h_ref)>=0, "patch index out of bounds."
@@ -1747,31 +1756,116 @@ class Multipatch:
             P = self.P2G@P_loc@B_old
             #print("Prolongation took "+str(time.time()-t)+" seconds")
             return P
+        
+    def get_crosspoints(self):
+        """Get crosspoints in the multipatch object. A crosspoint is a corner where more than two patches meet and is not a Dirichlet dof."""
+        cp = dict()
+
+        corners = list(zip(np.arange(0,self.sdim), np.zeros((self.sdim,))))
+
+        totalboundary = np.array([])
+        for bidx in self.mesh.outer_boundaries.keys():
+            totalboundary = np.union1d(totalboundary, self.get_boundary_dofs(bidx))
+
+        for p in range(len(self.mesh.patches)):
+            (kvs, _), _ = self.mesh.patches[p]
+            for side in range(2**self.sdim):
+                sideAsbin = bin(side)[2:]
+                sideAsbin = (self.sdim - len(sideAsbin)) * '0' + sideAsbin
+                bndside = np.array(tuple(sideAsbin), dtype=int)
+                vertex = list(map(lambda tp, n: (tp[0],int(tp[1]+n)), corners, bndside))
+                loc_idx = boundary_dofs(kvs, vertex, ravel=True) # local vertex
+
+                glob_idx, _ = self._get_idx(loc_idx, p)
+                glob_idx = int(glob_idx[0])
+
+                if glob_idx not in totalboundary:
+                    if p not in cp.keys():
+                        cp[p] = []
+
+                    cp[p].append(tuple((loc_idx[0], glob_idx))) # One could also be computed from the other?
+                    #cp = np.union1d(cp, glob_idx)
+
+        return cp
+
+#    def get_crosspoints2(self):
+#        """Alternative implementation to the method above. More pythonic but seems to be slightly slower. """
+#        cp = np.array([])
+#
+#        axes = np.arange(0, self.sdim)
+#        sides = np.arange(0,2)
+#
+#        test = list(itertools.product(axes, sides))
+#        split = [test[i:i+2] for i in range(0,len(test),2)]
+#
+#        candidates = list(itertools.product(*split))
+#
+#        totalboundary = np.array([])
+#        for bidx in self.mesh.outer_boundaries.keys():
+#            totalboundary = np.union1d(totalboundary, self.get_boundary_dofs(bidx))
+#
+#        for p in range(len(self.mesh.patches)):
+#            (kvs, _), _ = self.mesh.patches[p]
+#            for vertex in candidates:
+#                loc_idx = boundary_dofs(kvs, vertex, ravel=True) # local vertex
+#                glob_idx, _ = self._get_idx(loc_idx, p)
+#
+#                if glob_idx not in totalboundary:
+#                    cp = np.union1d(cp, glob_idx)
+#
+#        return cp
+
+    def get_boundary_dofs(self, bidx):
+        """Computes the global dof indices of the boundary specified by 'bidx'
+
+        The integer `bidx` indicates the index of the boundary.
+
+        Returns:
+            A numpy array `bnd_idx` that contains the global dof indices of the boundary 'bidx'.
+        """
+        bnd_idx = np.array([])
+        for p, bdspec in self.mesh.outer_boundaries[bidx]:
+            (kvs, _), _ = self.mesh.patches[p]
+            bdofs = boundary_dofs(kvs, ((bdspec // 2, bdspec % 2),), ravel=True)
+
+            idx, _ = self._get_idx(bdofs, p)
+            bnd_idx = np.union1d(bnd_idx, idx)
+
+        return bnd_idx
 
     def compute_dirichlet_bcs(self, b_data):
         """Performs the same operation as the global function
         :func:`compute_dirichlet_bcs`, but for a multipatch problem.
-
         The dictionary `b_data` should contain tuples of the form `(bd_idx, dir_func)`, 
         where `bd_idx` relates to a part of the boundary of the mesh. 
-
         Returns:
             A pair `(indices, values)` suitable for passing to
             :class:`RestrictedLinearSystem`.
         """
         bcs = []
-        #p2g = dict()        # cache the patch-to-global indices for efficiency
+        p2g = dict()        # cache the patch-to-global indices for efficiency
         for bidx, g in b_data.items():
             for p, bdspec in self.mesh.outer_boundaries[bidx]:
                 (kvs, geo), _ = self.mesh.patches[p]
                 bc = compute_dirichlet_bc(kvs, geo, ((bdspec//2,bdspec%2),), g)# + self.N_ofs[p]
                 B = self.Basis[bc[0] + self.N_ofs[p]]       
                 feasible = (B.indptr[1:]-B.indptr[:-1])==1
-                #print(B[np.arange(len(bc[0]))[feasible]].shape)
-                #print(self.numdofs)
+                idx, feasible = self._get_idx(bc[0], p)
                 idx = B[np.arange(len(bc[0]))[feasible]]@np.arange(self.numdofs)
                 bcs.append((idx.astype(int), bc[1][feasible]))
         return combine_bcs(bcs)
+    
+    def _get_idx(self, ids, p):
+        """Helper to get global dof indices from the local indices 'ids' and patch 'p'.
+
+        Returns:
+            A pair '(idx, feasible)' with global indices  'idx' and an array to indicate whether the entries in idx can be considered feasible.
+        """
+        B = self.Basis[ids + self.N_ofs[p]]
+        feasible = (B.indptr[1:] - B.indptr[:-1]) == 1
+        idx = B[np.arange(len(ids))[feasible]] @ np.arange(self.numdofs)
+
+        return idx, feasible
     
     def integrate(self, problem, u_=None, nu=None, domain_id=None, **kwargs):
         u_loc=np.zeros(self.N_ofs[-1])
@@ -1791,7 +1885,7 @@ class Multipatch:
         return I
     
     def plot(self, u, cmap = plt.cm.jet, cbar=True, mesh=False, axis='scaled', contour=False, **kwargs):
-        assert self.dim==2, 'visualization only possible for 2D.'
+        assert self.sdim==2, 'visualization only possible for 2D.'
         assert len(u)==self.numdofs, 'wrong size of coefficient vector.'
         
         fig = plt.figure(figsize=kwargs.get('figsize'))

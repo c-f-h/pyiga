@@ -336,13 +336,13 @@ def newton(F, J, x0, atol=1e-6, rtol=1e-6, maxiter=100, freeze_jac=1):
     """Solve the nonlinear problem F(x) == 0 using Newton iteration.
 
     Args:
-        F (function): function computing the residual of the nonlinear equation
-        J (function): function computing the Jacobian matrix of `F`
-        x0 (ndarray): the initial guess as a vector
-        atol (float): absolute tolerance for the norm of the residual
-        rtol (float): relative tolerance with respect to the initial residual
-        maxiter (int): the maximum number of iterations
-        freeze_jac (int): if >1, the Jacobian is only updated every `freeze_jac` steps
+        F (function):      function computing the residual of the nonlinear equation
+        J (function):      function computing the Jacobian matrix of `F`
+        x0 (ndarray):      the initial guess as a vector
+        atol (float):      absolute tolerance for the norm of the residual
+        rtol (float):      relative tolerance with respect to the initial residual
+        maxiter (int):     the maximum number of iterations
+        freeze_jac (int):  if >1, the Jacobian is only updated every `freeze_jac` steps
 
     Returns:
         ndarray: a vector `x` which approximately satisfies F(x) == 0
@@ -359,6 +359,68 @@ def newton(F, J, x0, atol=1e-6, rtol=1e-6, maxiter=100, freeze_jac=1):
         x -= jac_inv.dot(res)
         res = F(x)
     raise NoConvergenceError('newton', maxiter, x)
+    
+def pcg(A, f, x0 = None, P = 1, tol = 1e-5, maxiter = 100, output = False):    
+    """Solve the the linear system Ax = f by conjugated gradient method.
+    
+    Args:
+        A (function or ndarray):  the matrix of the linear system
+        f (ndarray):              the right-hand side vector of the system
+        x0 (ndarray):             initial guess for the solution, by default the zero vector
+        P (function or ndarray):  preconditioner to use for the system. by default the identity map.
+        tol (float) :             iteration stops if relative error of residual and initial residual has reached tol
+        maxiter (int) :           maximum number of iterations if the stopping criterion is not met
+        output (boolean) :        information to be printed after iteration stops
+    """
+    maxiter = int(maxiter)
+    
+    if not callable(A):
+        Afun = lambda x : A@x
+    else:
+        Afun = A
+        
+    if not isinstance(f,np.ndarray):
+        d = f.A.ravel()
+    else:
+        d = f.ravel() 
+        
+    if x0 is not None:
+        if not isinstance(x0, np.ndarray):
+            u = x0.A.ravel()
+        else:
+            u = x0.ravel() 
+    else:
+        u = np.zeros(len(d))
+        
+    if not callable(P):
+        if isinstance(P, np.ndarray):
+            assert P.shape==2*(len(f),), 'dimension mismatch'
+            Pfun = lambda x: P@x
+        else:
+            Pfun = lambda x : x
+        # splu_pfun = sp.linalg.splu(pfuns,permc_spec='COLAMD')
+        # pfun = lambda x : splu_pfun.solve(x)
+    # print('Cond about',condest(pfuns@Afuns))
+    w = Pfun(d)
+    rho = w@d
+    err0 = np.sqrt(rho)
+    s = w
+    for it in range(maxiter):
+        As = Afun(s)
+        alpha = rho/(As@s)
+        u = u + alpha*s
+        d = d - alpha*As
+        w = Pfun(d)
+        rho1 = rho
+        rho = w@d
+        err = np.sqrt(rho)
+        if err < tol*err0:
+            break
+        beta = rho/rho1
+        s = w + beta*s
+    if output:
+        print('pcg stopped after ' + str(it) + ' iterations with relres ' + str(err/err0))
+    return u, it, d
 
 
 ## Time stepping

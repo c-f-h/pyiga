@@ -2,6 +2,11 @@ import numpy as np
 import scipy.sparse
 import time
 
+def condest(A):
+    luA = splu(A)
+    iA = LinearOperator(luA.shape, matvec = lambda x : luA.solve(x), rmatvec = lambda x : luA.solve(x))
+    return onenormest(iA)*onenormest(A)
+
 def find_ddofs(Constr, activeConstraints):
     derivedDofs={}
     for r in activeConstraints:
@@ -80,7 +85,7 @@ def update_basis(Constr, derivedDofs, Basis):
             break
     return lBasis
 
-def compute_active_constr(Constr):
+def compute_active_constr(Constr, Idx):
     #fast variant
     
     # a=(Constr>1e-12).sum(axis=1).A.ravel(); b=(Constr<-1e-12).sum(axis=1).A.ravel()
@@ -105,7 +110,7 @@ def compute_active_constr(Constr):
                 a += 1
             if Constr.data[ind] < -1e-12:
                 b += 1
-        if (a==1 and b>0) or (b==1 and a>0):
+        if ((a==1 and b>0) or (b==1 and a>0)) and r in Idx:
             activeConstraints.append(r)
             #print("{}: {}, {}".format(r,a,b))
             #if not (a==1 or b==1): 
@@ -118,11 +123,12 @@ def compute_active_constr(Constr):
                 
     return np.array(activeConstraints)
 
-def compute_basis(Constr, maxiter):
+def compute_basis(Constr, maxiter, Idx=None):
+    if Idx is None: Idx = np.arange(Constr.shape[0])
     n=Constr.shape[1]
     nonderivedDofs = allLocalDofs=np.arange(n)
     allderivedDofs={}
-    activeConstraints=np.arange(Constr.shape[0])
+    activeConstraints=Idx
     Basis=scipy.sparse.csr_matrix(scipy.sparse.identity(n))
     time_find_active = 0
     time_find_ddofs = 0
@@ -153,7 +159,7 @@ def compute_basis(Constr, maxiter):
         Constr = Constr @ Basis    
         
         t=time.time()
-        activeConstraints = compute_active_constr(Constr)
+        activeConstraints = compute_active_constr(Constr, Idx)
         time_find_active += time.time()-t
         i+=1
         
@@ -164,7 +170,7 @@ def compute_basis(Constr, maxiter):
     # print('finding derived dofs took '+str(time_find_ddofs)+' seconds.')
     # print('updating basis and constraints took '+str(time_update)+' seconds.')
     Basis = scipy.sparse.csc_matrix(Basis)
-    return Basis[:,nonderivedDofs]  #,Constr,activeConstraints
+    return Basis[:,nonderivedDofs], Constr  #,Constr,activeConstraints
 
 def rref(A, tol=1e-8):
     B=A.astype(float).copy()

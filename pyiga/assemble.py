@@ -1434,7 +1434,7 @@ class Multipatch:
         # local-to-global offset per patch
         self.M_ofs = np.concatenate(([0], np.cumsum(self.M)))
         t=time.time()
-        self.Basis = algebra.compute_basis(self.Constr, maxiter=20)
+        self.Basis, _ = algebra.compute_basis(self.Constr, maxiter=20)
         data, indices, indptr = self.Basis.data, self.Basis.indices, self.Basis.indptr
         m, n = self.Basis.shape
         #self.P2G = scipy.sparse.csc_matrix((data[indptr[:-1]],indices[indptr[:-1]],np.arange(n+1)),shape=(m,n)).T

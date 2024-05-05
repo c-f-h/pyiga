@@ -1419,9 +1419,18 @@ class Multipatch:
         data = np.concatenate([P.data, np.ones(len(dofs2))])
         I = np.concatenate([P.row, np.arange(len(dofs2))])
         J = np.concatenate([dofs1[P.col] + self.N_ofs[p1],dofs2 + self.N_ofs[p2]])
+        A = scipy.sparse.coo_matrix((data,(I,J)),(len(dofs2), self.numloc_dofs)).tocsr()
+        
+        idx_old = A.indices[A.indptr[np.where(A.getnnz(axis=1)==2)[0]]]
+        idx_new = A.indices[A.indptr[np.where(A.getnnz(axis=1)==2)[0]]+1]
+        i = np.arange(A.shape[1])
+        i[idx_old]=idx_new
+        i[idx_new]=idx_old
+
+        M = scipy.sparse.coo_matrix((np.ones(A.shape[1]),(i,np.arange(A.shape[1]))),2*(A.shape[1],))
         
         #self.Constr = scipy.sparse.vstack([self.Constr,scipy.sparse.coo_matrix((data,(I,J)),(len(dofs2), self.numloc_dofs)).tocsr()])
-        return scipy.sparse.coo_matrix((data,(I,J)),(len(dofs2), self.numloc_dofs)).tocsr()
+        return (A@M).tocsr()
         
     def finalize(self):
         """After all shared dofs have been declared using

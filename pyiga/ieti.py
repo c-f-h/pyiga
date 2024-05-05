@@ -27,14 +27,36 @@ class IetiDP:
             self.dir_idx[p], lookup = np.unique(self.dir_idx[p], return_index = True)
             self.dir_vals[p] = np.concatenate(self.dir_vals[p])[lookup]
             
-        self.global_dir_idx = np.concatenate([self.dir_idx[p] + self.space.N_ofs[p] for p in self.dir_idx])
-        self.free_dofs = np.setdiff1d(np.arange(self.space.N_ofs[-1]),self.global_dir_idx)
+        Idx = np.where(self.space.Constr.getnnz(axis=1)>2)[0]
+        Bas, self.B = algebra.compute_basis(self.space.Constr, maxiter=5, Idx = Idx)
+        self.Basisk = []
+        self.P2G =[]
+        for p in range(self.space.numpatches):
+            b = Bas[self.space.N_ofs[p]:self.space.N_ofs[p+1],:]
+            b = b[:,np.where(b.getnnz(axis=0)>0)[0]]
+            self.Basisk.append(b)
             
-        self.B = self.space.Constr[:,self.free_dofs]
+            X = scipy.sparse.coo_matrix(self.Basisk[p])
+            idx = np.where(np.isclose(X.data,1))
+            X.data, X.row, X.col = X.data[idx], X.row[idx], X.col[idx]
+            D = (X.T@self.Basisk[p]).sum(axis=1).A.ravel()
+            self.P2G.append(scipy.sparse.spdiags(1/D,[0],len(D),len(D))@X.T)
+            I = np.zeros(self.Basisk[p].shape[0])
+            I[self.dir_idx[p]] = 1
+            self.dir_idx[p] = np.where(np.isclose(self.P2G[p]@I,1))[0]
         
-        nnz_per_col = MP.Constr.getnnz(axis=0)
+        self.N = [Ba.shape[1] for Ba in self.Basisk]
+        self.N_ofs = np.cumsum([0]+self.N)
+        self.global_dir_idx = np.concatenate([self.dir_idx[p] + self.N_ofs[p] for p in self.dir_idx])
+        self.free_dofs = np.setdiff1d(np.arange(self.N_ofs[-1]),self.global_dir_idx)
+        
+        self.B = self.B @ scipy.sparse.block_diag(self.Basisk)
+        
+        nnz_per_col = self.B.getnnz(axis=0)
         self.intf_dofs = np.where(nnz_per_col > 0)[0]
         self.intfs = np.setdiff1d(self.intf_dofs, self.global_dir_idx)
+        
+        #self.B = self.B[:,self.free_dofs]
 
         #self.dir_ofs = np.cumsum(np.array([len(np.unique(idx[p])) for p in range(MP.numpatches)]))
         
@@ -42,27 +64,37 @@ class IetiDP:
         #self.dir_vals = np.concatenate(vals)[lookup]
         
     def assemble(self, f):
-        Ak = [assemble.assemble('inner(grad(u),grad(v)) * dx', kvs, bfuns=[('u',1), ('v',1)], geo=geo) for (kvs, geo),_ in self.space.mesh.patches]
+        Ak = [Ba.T @ assemble.assemble('inner(grad(u),grad(v)) * dx', kvs, bfuns=[('u',1), ('v',1)], geo=geo)@Ba for Ba, ((kvs, geo),_) in zip(self.Basisk, self.space.mesh.patches)]
         A = scipy.sparse.block_diag(Ak, format='csr')
-        rhsk = [assemble.assemble('f * v * dx', kvs, bfuns=[('v',1)], geo=geo, f=f).ravel() for (kvs, geo),_ in self.space.mesh.patches]
+        rhsk = [Ba.T @ assemble.assemble('f * v * dx', kvs, bfuns=[('v',1)], geo=geo, f=f).ravel() for Ba, ((kvs, geo),_) in zip(self.Basisk,self.space.mesh.patches)]
         
         Id = scipy.sparse.eye(A.shape[1], format='csr')
         mask = np.zeros(A.shape[1], dtype=bool)
         mask[list(self.intfs)] = True
         self.Rbb = Id[mask]
+        
         mask = np.ones(A.shape[1], dtype=bool)
         
-        kvs = self.space.mesh.kvs
-
+        kvs=self.space.mesh.kvs
+        
         for p in range(self.space.numpatches):
             bnd_dofs = np.concatenate([indices for indices in assemble.boundary_dofs(kvs[p])])
-            mask[bnd_dofs+self.space.N_ofs[p]] = False
+            I = np.zeros(self.Basisk[p].shape[0])
+            I[bnd_dofs] = 1
+            bnd_dofs = np.where(np.isclose(self.P2G[p]@I,1))[0]
+            mask[bnd_dofs+self.N_ofs[p]] = False
 
         Rii = Id[mask]
 
+        # for p in range(self.space.numpatches):
+        #     bnd_dofs = np.concatenate([indices for indices in assemble.boundary_dofs(kvs[p])])
+        #     mask[bnd_dofs+self.space.N_ofs[p]] = False
+
+        self.Rii = Id[mask]
+
         self.Abb = self.Rbb.dot(A).dot(self.Rbb.T)
-        self.Aii = Rii.dot(A).dot(Rii.T)
-        self.Abi = self.Rbb.dot(A).dot(Rii.T)
+        self.Aii = self.Rii.dot(A).dot(self.Rii.T)
+        self.Abi = self.Rbb.dot(A).dot(self.Rii.T)
         self.Aib = self.Abi.T
         
         BCRestr = {p:assemble.RestrictedLinearSystem(Ak[p], rhsk[p], (self.dir_idx[p],self.dir_vals[p])) for p in self.dir_idx}
@@ -85,10 +117,16 @@ class IetiDP:
             else:
                 to_eliminate = np.array([])
                 
-            free = np.setdiff1d(np.arange(self.space.N[p]),to_eliminate)
+            free = np.setdiff1d(np.arange(self.N[p]),to_eliminate)
             primal = assemble.boundary_dofs(kvs[p], m=0, ravel=1)
+            
+            I = np.zeros(self.Basisk[p].shape[0])
+            I[primal] = 1
+            primal = np.where(np.isclose(self.P2G[p]@I,1))[0]
+            
             primal_free = np.setdiff1d(primal, to_eliminate)
-            B = self.space.Constr[:,primal_free+self.space.N_ofs[p]].tocoo()
+            #print(primal_free)
+            B = self.B[:,primal_free+self.N_ofs[p]].tocoo()
             result = B.row[np.isclose(abs(B.data),1)]
             
             # nnz_per_row = np.isclose(self.space.Constr[:,primal_free+self.space.N_ofs[p]].getnnz(axis=1)
@@ -139,7 +177,7 @@ class IetiDP:
             #loc_dirichlet.append(to_eliminate)
             
         #self.eliminate_constraints = eliminate_constraints
-        self.B = self.space.Constr[:,self.free_dofs]
+        #self.B = self.space.Constr[:,self.free_dofs]
         self.B = self.B[np.setdiff1d(np.arange(self.B.shape[0]),self.eliminate_constraints),:]
         
         self.C = scipy.sparse.block_diag(self.Ck)
@@ -165,14 +203,14 @@ class IetiDP:
         
     def compute_F(self):
         PTAP = self.Psi@self.A@self.Psi.T
-        PTBT = self.Psi@self.B.T
-        BP   = self.B@self.Psi.T
+        PTBT = self.Psi@self.B[:,self.free_dofs].T
+        BP   = self.B[:,self.free_dofs]@self.Psi.T
 
-        BL = scipy.sparse.bmat([[self.B,    np.zeros((self.B.shape[0],self.C.shape[0])), BP]], format='csr')
-        BR = scipy.sparse.bmat([[self.B.T],    
-                                [np.zeros((self.C.shape[0],self.B.shape[0]))], 
+        self.BL = scipy.sparse.bmat([[self.B[:,self.free_dofs],    np.zeros((self.B[:,self.free_dofs].shape[0],self.C.shape[0])), BP]], format='csr')
+        self.BR = scipy.sparse.bmat([[self.B[:,self.free_dofs].T],    
+                                [np.zeros((self.C.shape[0],self.B[:,self.free_dofs].shape[0]))], 
                                 [PTBT]], format='csr')
-        A0 = scipy.sparse.bmat(
+        self.A0 = scipy.sparse.bmat(
             [[self.A,    self.C.T,  None],
              [self.C,    None,      None],
              [None,      None,      PTAP]], format='csr')
@@ -180,22 +218,23 @@ class IetiDP:
             # print("Rank ", np.linalg.matrix_rank(PTAP.A), " vs. shape ", PTAP.shape)
         
         rhs = np.concatenate(self.rhsk)
-        b = np.hstack((rhs, np.zeros(self.C.shape[0],), self.Psi.dot(rhs), np.zeros(self.B.shape[0],)))
+        print(rhs)
+        #b = np.hstack((rhs, np.zeros(self.C.shape[0],), self.Psi.dot(rhs), np.zeros(self.B[:,self.free_dofs].shape[0],)))
 
-        BR = scipy.sparse.linalg.aslinearoperator(BR)
-        BL = scipy.sparse.linalg.aslinearoperator(BL)
-        A0inv = solvers.make_solver(A0.A, spd=False)
+        BR = scipy.sparse.linalg.aslinearoperator(self.BR)
+        BL = scipy.sparse.linalg.aslinearoperator(self.BL)
+        A0inv = solvers.make_solver(self.A0.A, spd=False)
 
         F = BL@A0inv.dot(BR)
 
-        TR = np.hstack((rhs, np.zeros((self.C.shape[0],)), self.Psi.dot(rhs)))
-        b = BL@(A0inv.dot(TR))
+        self.TR = np.hstack((rhs, np.zeros((self.C.shape[0],)), self.Psi.dot(rhs)))
+        b = BL@(A0inv.dot(self.TR))
         
         return F, b
     
     def MsD(self):
-        B_gamma = self.space.Constr
-        B_gamma = B_gamma[np.setdiff1d(np.arange(B_gamma.shape[0]),self.eliminate_constraints),:]
+        B_gamma = self.B
+        #B_gamma = B_gamma[np.setdiff1d(np.arange(B_gamma.shape[0]),self.eliminate_constraints),:]
         self.B_gamma = B_gamma@self.Rbb.T
 
         #print(np.linalg.matrix_rank(Rbb.A, 1e-8))
@@ -203,15 +242,12 @@ class IetiDP:
 
         #Aib = scipy.sparse.linalg.aslinearoperator(Aib)
         AiiinvB = scipy.sparse.linalg.spsolve(self.Aii, self.Aib.A)
-        print(AiiinvB)
         self.S = self.Abb - self.Abi@AiiinvB
         D = np.abs(self.B_gamma).sum(axis=0)
         D = [1/(1+D[0,v]) for v in range(D.shape[1])]
-        D = scipy.sparse.diags(D, format='csr')
+        self.D = scipy.sparse.diags(D, format='csr')
 
-        BgD = self.B_gamma@D
-        MsD = BgD@self.S@BgD.T  
-        
-        return MsD
+        self.BgD = self.B_gamma@self.D
+        return self.BgD@self.S@self.BgD.T  
             
     

@@ -233,7 +233,7 @@ class KnotVector:
     
     def deriv(self, deriv=1, coeffs=None):
         assert isinstance(deriv,int) and deriv>0, "ambiguous"
-        new_coeffs = self.p/(self.kv[self.p+2:]-self.kv[:-self.p-2])*(coeffs[1:]-coeffs[:-1])
+        new_coeffs = np.multiply((self.p/(self.kv[self.p+2:]-self.kv[:-self.p-2]))[None].T,coeffs[1:,...]-coeffs[:-1,...])
         new_kv=KnotVector(self.kv[1:-1],self.p-1)
         if deriv==1:
             return new_kv, new_coeffs

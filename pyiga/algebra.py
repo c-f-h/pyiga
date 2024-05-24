@@ -1,8 +1,12 @@
 import numpy as np
 import scipy.sparse
+from scipy.sparse import coo_matrix, csr_matrix, csc_matrix
+import scipy.linalg
+from scipy.sparse.linalg import LinearOperator, onenormest, splu
+from . import solvers
 import time
 
-def condest(A):
+def condest(A, spd=False):
     luA = splu(A)
     iA = LinearOperator(luA.shape, matvec = lambda x : luA.solve(x), rmatvec = lambda x : luA.solve(x))
     return onenormest(iA)*onenormest(A)

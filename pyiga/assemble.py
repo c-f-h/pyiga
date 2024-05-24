@@ -434,7 +434,6 @@ def boundary_dofs(kvs, bdspec=None, m=None, ravel=False, swap=None, flip=None):
         return slice_indices(axis, sides, N, ravel=ravel, swap=swap, flip=flip)
     else:
         manifolds = topology.face_indices(n,m)
-        #print(manifolds)
         if ravel==True:
             return np.unique(np.concatenate([boundary_dofs(kvs, M, ravel=True) for M in manifolds]))
         else:
@@ -1335,8 +1334,7 @@ class Multipatch:
             for ((p1,bd1,s1),((p2,bd2,s2),flip)) in interfaces.items():
                 if ((p2,bd2,s2),(p1,bd1,s1),flip) not in self.intfs:
                     self.intfs.add(((p1,bd1,s1),(p2,bd2,s2),flip))
-                
-            #print(self.intfs)
+        
             t=time.time()
             if space == 'Hcurl':
                 C=[self.join_boundaries_tangential(p1, (int_to_bdspec(bd1),), s1 , p2, (int_to_bdspec(bd2),), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
@@ -1344,7 +1342,7 @@ class Multipatch:
                 C=[self.join_boundaries_normal(p1, (int_to_bdspec(bd1),), s1 , p2, (int_to_bdspec(bd2),), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
             else:
                 C=[self.join_boundaries(p1, (int_to_bdspec(bd1),), s1 , p2, (int_to_bdspec(bd2),), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
-            #print('setting up constraints took '+str(time.time()-t)+' seconds.')
+            print('setting up constraints took '+str(time.time()-t)+' seconds.')
             if len(C)!=0:
                 self.Constr = scipy.sparse.vstack(C)
             self.finalize()
@@ -1453,9 +1451,9 @@ class Multipatch:
         D = (X.T@self.Basis).sum(axis=1).A.ravel()
         self.P2G = scipy.sparse.csr_matrix(scipy.sparse.spdiags(1/D,[0],len(D),len(D))@X.T)
         self.Basis = scipy.sparse.csr_matrix(self.Basis)
-        #print("Basis setup took "+str(time.time()-t)+" seconds")
+        print("Basis setup took "+str(time.time()-t)+" seconds")
         #self.mesh.sanity_check()
-        self.sanity_check()
+        #self.sanity_check()
         
     def assemble_volume(self, problem, arity=1, domain_id=None, args=None, bfuns=None,
             symmetric=False, format='csr', layout='blocked', **kwargs):
@@ -1474,9 +1472,7 @@ class Multipatch:
             A = []
             dofs=[] 
             for d_idx in domain_id:
-                #print(str(d_idx) + " : \n")
                 for p in self.mesh.domains[d_idx]:
-                    #print(p)
                     kvs, geo = self.mesh.patches[p][0]
                     args.update(geo=geo)
                     A.append(assemble(problem, kvs, args=args, bfuns=bfuns,
@@ -1488,11 +1484,8 @@ class Multipatch:
         else:
             F=np.zeros(self.numloc_dofs)
             for d_idx in domain_id:
-                #print(str(d_idx) + " : \n")
                 for p in self.mesh.domains[d_idx]:
-                    #print(p)
                     kvs, geo = self.mesh.patches[p][0]
-                    #args.update(geo=geo)
                     vals=assemble(problem, kvs, geo=geo, args=args, bfuns=bfuns,
                         symmetric=symmetric, format=format, layout=layout,
                         **kwargs).ravel()
@@ -1715,7 +1708,8 @@ class Multipatch:
         kvs_old = self.mesh.kvs
         t=time.time()
         new_patches=self.mesh.h_refine(h_ref)
-        #print("Refinement took " + str(time.time()-t) + " seconds for "+str(len(h_ref))+' patches.')
+        
+        print("Refinement took " + str(time.time()-t) + " seconds for "+str(len(h_ref))+' patches.')
         self.reset()
         
         if return_P:
@@ -1734,11 +1728,9 @@ class Multipatch:
                 data_id=np.ones(sum([self.N[p] for p in range(num_p_old) if p not in refined_patches]))
                 I_id = np.concatenate([np.arange(self.N[p]) + self.N_ofs[p] for p in range(num_p_old) if p not in refined_patches])
                 J_id = np.concatenate([np.arange(self.N[p]) + N_ofs_old[p] for p in range(num_p_old) if p not in refined_patches])
-                #print(len(data_id),len(I_id),len(J_id))
                 P_loc = P_loc +  scipy.sparse.coo_matrix((data_id,(I_id, J_id)),(sum(self.N),sum(N_old)))
-            #P = scipy.sparse.linalg.spsolve(self.Basis.T@self.Basis,self.Basis.T@P_loc@B_old)
             P = self.P2G@P_loc@B_old
-            #print("Prolongation took "+str(time.time()-t)+" seconds")
+            print("Prolongation took "+str(time.time()-t)+" seconds")
             return P
         
     def p_refine(self, p_inc=1, return_P = False):
@@ -1758,71 +1750,20 @@ class Multipatch:
             data=np.concatenate([P_loc[p].data for p in range(self.numpatches)])
             I = np.concatenate([P_loc[p].row + self.N_ofs[p] for p in range(self.numpatches)])
             J = np.concatenate([P_loc[p].col + N_ofs_old[p] for p in range(self.numpatches)])
-            #print(sum(self.N),sum(N_old))
-            #print(data, I, J)
             P_loc = scipy.sparse.coo_matrix((data,(I, J)),(sum(self.N),sum(N_old)))
-            #P = scipy.sparse.linalg.spsolve(self.Basis.T@self.Basis,self.Basis.T@P_loc@B_old)
             P = self.P2G@P_loc@B_old
-            #print("Prolongation took "+str(time.time()-t)+" seconds")
             return P
         
-    def get_crosspoints(self):
-        """Get crosspoints in the multipatch object. A crosspoint is a corner where more than two patches meet and is not a Dirichlet dof."""
-        cp = dict()
+    def get_nodes(self):
+        """Get node DoFs in the multipatch object. A node is a corner where more than two patches meet and is not a Dirichlet dof."""
+            
+        loc_c = np.concatenate([boundary_dofs(kvs,m=0,ravel=True)+self.N_ofs[p] for p, kvs in enumerate(self.mesh.kvs)])
+        i_loc_c = np.setdiff1d(loc_c, self.global_dir_idx)
 
-        corners = list(zip(np.arange(0,self.sdim), np.zeros((self.sdim,))))
-
-        totalboundary = np.array([])
-        for bidx in self.mesh.outer_boundaries.keys():
-            totalboundary = np.union1d(totalboundary, self.get_boundary_dofs(bidx))
-
-        for p in range(len(self.mesh.patches)):
-            (kvs, _), _ = self.mesh.patches[p]
-            for side in range(2**self.sdim):
-                sideAsbin = bin(side)[2:]
-                sideAsbin = (self.sdim - len(sideAsbin)) * '0' + sideAsbin
-                bndside = np.array(tuple(sideAsbin), dtype=int)
-                vertex = list(map(lambda tp, n: (tp[0],int(tp[1]+n)), corners, bndside))
-                loc_idx = boundary_dofs(kvs, vertex, ravel=True) # local vertex
-
-                glob_idx, _ = self._get_idx(loc_idx, p)
-                glob_idx = int(glob_idx[0])
-
-                if glob_idx not in totalboundary:
-                    if p not in cp.keys():
-                        cp[p] = []
-
-                    cp[p].append(tuple((loc_idx[0], glob_idx))) # One could also be computed from the other?
-                    #cp = np.union1d(cp, glob_idx)
-
-        return cp
-
-#    def get_crosspoints2(self):
-#        """Alternative implementation to the method above. More pythonic but seems to be slightly slower. """
-#        cp = np.array([])
-#
-#        axes = np.arange(0, self.sdim)
-#        sides = np.arange(0,2)
-#
-#        test = list(itertools.product(axes, sides))
-#        split = [test[i:i+2] for i in range(0,len(test),2)]
-#
-#        candidates = list(itertools.product(*split))
-#
-#        totalboundary = np.array([])
-#        for bidx in self.mesh.outer_boundaries.keys():
-#            totalboundary = np.union1d(totalboundary, self.get_boundary_dofs(bidx))
-#
-#        for p in range(len(self.mesh.patches)):
-#            (kvs, _), _ = self.mesh.patches[p]
-#            for vertex in candidates:
-#                loc_idx = boundary_dofs(kvs, vertex, ravel=True) # local vertex
-#                glob_idx, _ = self._get_idx(loc_idx, p)
-#
-#                if glob_idx not in totalboundary:
-#                    cp = np.union1d(cp, glob_idx)
-#
-#        return cp
+        B = self.Basis[i_loc_c,:]
+        C_dofs = np.unique(B[B.getnnz(axis=1)==1].indices)
+        Nodes = {c:self.Basis[:,c].tocsc().indices for c in C_dofs}
+        return Nodes
 
     def get_boundary_dofs(self, bidx):
         """Computes the global dof indices of the boundary specified by 'bidx'
@@ -1841,6 +1782,27 @@ class Multipatch:
             bnd_idx = np.union1d(bnd_idx, idx)
 
         return bnd_idx
+    
+    def set_dirichlet_boundary(self, dir_data):
+        self.dir_idx=dict()
+        self.dir_vals=dict()
+        kvs = self.mesh.kvs
+        geos = self.mesh.geos
+        for key in dir_data:
+            for p,b in self.mesh.outer_boundaries[key]:
+                idx_, vals_ = compute_dirichlet_bc(kvs[p], geos[p], [(b//2,b%2)], dir_data[key])
+                if p in self.dir_idx:
+                    self.dir_idx[p].append(idx_)
+                    self.dir_vals[p].append(vals_)
+                else:
+                    self.dir_idx[p]=[idx_]
+                    self.dir_vals[p]=[vals_]
+                
+        for p in self.dir_idx:
+            self.dir_idx[p], lookup = np.unique(self.dir_idx[p], return_index = True)
+            self.dir_vals[p] = np.concatenate(self.dir_vals[p])[lookup]
+            
+        self.global_dir_idx = np.concatenate([self.dir_idx[p] + self.N_ofs[p] for p in self.dir_idx])
 
     def compute_dirichlet_bcs(self, b_data):
         """Performs the same operation as the global function

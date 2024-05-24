@@ -1004,7 +1004,7 @@ class PatchMesh3D:
             #self.split_patch(p1_, 1, mult=mult)
         
         (kvs, geo), boundaries = self.patches[p]
-        kv = kvs[axis].refine(mult=mult)
+        kv = kvs[axis].h_refine(mult=mult)
         
         #split_xi = sum(kv.support())/2.0
         #split_idx = kv.findspan(split_xi)+1

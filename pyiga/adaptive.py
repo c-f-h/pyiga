@@ -39,7 +39,7 @@ def mp_resPois(MP, uh, f=0., a=1., M=(0.,0.), divMaT =0., neu_data={}, **kwargs)
         kvs0 = tuple([bspline.KnotVector(kv.mesh, 0) for kv in kvs])
         u_func = geometry.BSplineFunc(kvs, uh_per_patch[p])
         indicator[p] = h**2 * np.sum(assemble.assemble('((f + div(a*grad(uh)))**2 * v) * dx', kvs=kvs0, geo=geo, a=a[MP.mesh.patch_domains[p]], f=f[MP.mesh.patch_domains[p]],uh=u_func,**kwargs))
-    #print('Residual contributions took ' + str(time.time()-t) + ' seconds.')
+    print('Residual contributions took ' + str(time.time()-t) + ' seconds.')
     
     #flux contribution
     t=time.time()
@@ -70,7 +70,7 @@ def mp_resPois(MP, uh, f=0., a=1., M=(0.,0.), divMaT =0., neu_data={}, **kwargs)
             J = np.sum(assemble.assemble('((inner(a * uh_grad + Ma, n) - g)**2 * v ) * ds', kv0 ,geo=geo_b,Ma=M[MP.mesh.patch_domains[p]], a=a[MP.mesh.patch_domains[p]],g=g, uh_grad=uh_grad, **kwargs))
             indicator[p] += h * J
             
-    #print('Jump contributions took ' + str(time.time()-t) + ' seconds.')
+    print('Jump contributions took ' + str(time.time()-t) + ' seconds.')
     return np.sqrt(indicator)
 
 def mp_resPois2(MP, uh, f=0., a=1., M=(0.,0.), divM = 0., neu_data={}, **kwargs):
@@ -150,7 +150,7 @@ def ratio(kv,u,s=0):
 def doerfler_mark(x, theta=0.8, TOL=0.01):
     """Given an array of x, return a minimal array of indices such that the indexed
     values of x have norm of at least theta * norm(errors). Requires sorting the array x.
-    Indices of entries that are 100*TOL percentage off from the breakpoint entry are also added to the output"""
+    Indices of entries that have relative error of TOL to the breakpoint entry are also added to the output"""
     idx = np.argsort(x)
     n=len(idx)
     total = x@x
@@ -159,7 +159,7 @@ def doerfler_mark(x, theta=0.8, TOL=0.01):
         S+= x[idx[i]]**2
         k=i
         if (S > theta * total):
-            while k>0 and (abs(x[idx[k]]-x[idx[k-1]])/total < TOL):       #we go on adding entries that are just 100*TOL% off from the breakpoint entry.
+            while k>0 and (abs(x[idx[i]]-x[idx[k-1]])/x[idx[i]] < TOL):       #we go on adding entries that are just 100*TOL% off from the breakpoint entry.
                 k-=1
             break
     return idx[k:]
@@ -176,7 +176,7 @@ def quick_mark(x, theta=0.8, idx = None, l=None, u=None , v=None):
     p = l+(u-l)//2                                                           #pivot for partition is chosen as the median
     idx[l:(u+1)] = idx[l:(u+1)][np.argpartition(-x[idx[l:(u+1)]],p-l)]       #partition of subarray from l to u
     sigma = x[idx[l:p]]@x[idx[l:p]]
-    if sigma > v:                                                            #if the norm of the larger entries exceeds the total norm we didn't find the minimal set of entries yet.
+    if sigma > v:                                                            #if the norm of the larger entries exceeds the total norm we didn't find the MINIMAL set of entries yet.
         return quick_mark(x, theta, idx, l, p-1, v)
     elif sigma + x[idx[p]]**2 > v:                                           #if adding the p-th value (the next biggest entry we can add) suddenly satisfies the condition we are done.
         return idx[:(p+1)]# idx[:(p + ceil((v-sigma)/x[idx[p]]))             

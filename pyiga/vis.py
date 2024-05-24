@@ -31,6 +31,14 @@ def plot_field(field, geo=None, res=80, physical=False, contour=False, **kwargs)
             plt.contourf(grd[1],grd[0], C, **kwargs)
         else:
             return plt.pcolormesh(grd[1], grd[0], C, **kwargs)
+    
+#TODO
+# def plot_mp_field(fields, MP, res=80, physical=False, contour=False, **kargs):
+#     """Plot a scalar field, optionally over a Multi-patch geometry."""
+#     kwargs.setdefault('shading', 'gouraud')
+#     #assert field.dim==1
+#     if np.isscalar(res):
+#         res = (res, res)
         
 def plot_quiver(field, geo=None, res=10, physical=False, **kwargs):
     """plot a vector field, optionally over a geometry."""
@@ -51,6 +59,9 @@ def plot_quiver(field, geo=None, res=10, physical=False, **kwargs):
         grd = tuple(np.linspace(s[0], s[1], r) for (s,r) in zip(field.support, res))
         C = utils.grid_eval(field, grd)
         return plt.quiver(grd[1], grd[0], C[:,:,0], C[:,:,1], **kwargs)
+    
+def plot_mp_quiver():
+    print(1)
         
 def plot_geo(geo,
              grid=10, gridx=None, gridy=None, gridz=None,

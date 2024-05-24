@@ -398,6 +398,8 @@ def pcg(A, f, x0 = None, P = 1, tol = 1e-5, maxiter = 100, output = False):
             Pfun = lambda x: P@x
         else:
             Pfun = lambda x : x
+    else:
+        Pfun = P
         # splu_pfun = sp.linalg.splu(pfuns,permc_spec='COLAMD')
         # pfun = lambda x : splu_pfun.solve(x)
     # print('Cond about',condest(pfuns@Afuns))

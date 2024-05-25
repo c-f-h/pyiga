@@ -1448,6 +1448,7 @@ class Multipatch:
         X = scipy.sparse.coo_matrix(self.Basis)
         idx = np.where(np.isclose(X.data,1))
         X.data, X.row, X.col = X.data[idx], X.row[idx], X.col[idx]
+        self.G2P_idx = X.row
         D = (X.T@self.Basis).sum(axis=1).A.ravel()
         self.P2G = scipy.sparse.csr_matrix(scipy.sparse.spdiags(1/D,[0],len(D),len(D))@X.T)
         self.Basis = scipy.sparse.csr_matrix(self.Basis)
@@ -1756,13 +1757,28 @@ class Multipatch:
         
     def get_nodes(self):
         """Get node DoFs in the multipatch object. A node is a corner where more than two patches meet and is not a Dirichlet dof."""
-            
         loc_c = np.concatenate([boundary_dofs(kvs,m=0,ravel=True)+self.N_ofs[p] for p, kvs in enumerate(self.mesh.kvs)])
         i_loc_c = np.setdiff1d(loc_c, self.global_dir_idx)
 
         B = self.Basis[i_loc_c,:]
         C_dofs = np.unique(B[B.getnnz(axis=1)==1].indices)
-        Nodes = {c:self.Basis[:,c].tocsc().indices for c in C_dofs}
+        X = scipy.sparse.coo_matrix(self.Basis)
+        idx = np.where(np.isclose(X.data,1))
+        X.data, X.row, X.col = X.data[idx], X.row[idx], X.col[idx]
+        Nodes = {c:X.tocsc()[:,c].indices for c in C_dofs}
+        
+        t_idx = i_loc_c[np.where(B.getnnz(axis=1)>1)[0]]
+        T_dofs = {}
+        for i in t_idx:
+            t = tuple(self.Basis[i,:].indices)
+            if len(t)==1: t = t[0]
+            if t not in T_dofs:
+                T_dofs[t] = {i}
+            else:
+                T_dofs[t].add(i)
+
+        T_dofs = {t:np.sort(list(T_dofs[t])) for t in T_dofs}
+        Nodes.update(T_dofs)
         return Nodes
 
     def get_boundary_dofs(self, bidx):

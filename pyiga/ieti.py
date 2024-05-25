@@ -163,8 +163,8 @@ class IetiDP:
                 primal_free = np.where(np.isclose(self.P2G[p]@I,1))[0]
             
             #print(primal_free)
-            B = self.B[:,primal_free+self.N_ofs[p]].tocoo()
-            result = B.row[np.isclose(abs(B.data),1)]
+            # B = self.B[:,primal_free+self.N_ofs[p]].tocoo()
+            # result = B.row[np.isclose(abs(B.data),1)]
             
             # nnz_per_row = np.isclose(self.space.Constr[:,primal_free+self.space.N_ofs[p]].getnnz(axis=1)
             # result = np.where(nnz_per_row > 0)[0]

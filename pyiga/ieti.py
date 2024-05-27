@@ -166,8 +166,8 @@ class IetiDP:
             # B = self.B[:,primal_free+self.N_ofs[p]].tocoo()
             # result = B.row[np.isclose(abs(B.data),1)]
             
-            # nnz_per_row = np.isclose(self.space.Constr[:,primal_free+self.space.N_ofs[p]].getnnz(axis=1)
-            # result = np.where(nnz_per_row > 0)[0]
+            nnz_per_row = np.isclose(self.space.Constr[:,primal_free+self.space.N_ofs[p]].getnnz(axis=1)
+            result = np.where(nnz_per_row > 0)[0]
             
             self.eliminate_constraints = np.union1d(result, self.eliminate_constraints)
 

@@ -1419,16 +1419,16 @@ class Multipatch:
         J = np.concatenate([dofs1[P.col] + self.N_ofs[p1],dofs2 + self.N_ofs[p2]])
         A = scipy.sparse.coo_matrix((data,(I,J)),(len(dofs2), self.numloc_dofs)).tocsr()
         
-        idx_old = A.indices[A.indptr[np.where(A.getnnz(axis=1)==2)[0]]]
-        idx_new = A.indices[A.indptr[np.where(A.getnnz(axis=1)==2)[0]]+1]
-        i = np.arange(A.shape[1])
-        i[idx_old]=idx_new
-        i[idx_new]=idx_old
+        # idx_old = A.indices[A.indptr[np.where(A.getnnz(axis=1)==2)[0]]]
+        # idx_new = A.indices[A.indptr[np.where(A.getnnz(axis=1)==2)[0]]+1]
+        # i = np.arange(A.shape[1])
+        # i[idx_old]=idx_new
+        # i[idx_new]=idx_old
 
-        M = scipy.sparse.coo_matrix((np.ones(A.shape[1]),(i,np.arange(A.shape[1]))),2*(A.shape[1],))
+        #M = scipy.sparse.coo_matrix((np.ones(A.shape[1]),(i,np.arange(A.shape[1]))),2*(A.shape[1],))
         
         #self.Constr = scipy.sparse.vstack([self.Constr,scipy.sparse.coo_matrix((data,(I,J)),(len(dofs2), self.numloc_dofs)).tocsr()])
-        return (A@M).tocsr()
+        return A.tocsr()
         
     def finalize(self):
         """After all shared dofs have been declared using
@@ -1765,18 +1765,16 @@ class Multipatch:
         X = scipy.sparse.coo_matrix(self.Basis)
         idx = np.where(np.isclose(X.data,1))
         X.data, X.row, X.col = X.data[idx], X.row[idx], X.col[idx]
-        Nodes = {c:X.tocsc()[:,c].indices for c in C_dofs}
-        
+        X = X.tocsc()
+        Nodes = {c : X[:,c].indices for c in C_dofs}
         t_idx = i_loc_c[np.where(B.getnnz(axis=1)>1)[0]]
         T_dofs = {}
         for i in t_idx:
             t = tuple(self.Basis[i,:].indices)
-            if len(t)==1: t = t[0]
             if t not in T_dofs:
-                T_dofs[t] = {i}
+                T_dofs[t] = set(self.Constr[self.Constr.tocsc()[:,i].indices,:].indices)
             else:
-                T_dofs[t].add(i)
-
+                 T_dofs[t] = T_dofs[t] & set(self.Constr[self.Constr.tocsc()[:,i].indices,:].indices)
         T_dofs = {t:np.sort(list(T_dofs[t])) for t in T_dofs}
         Nodes.update(T_dofs)
         return Nodes

@@ -1766,16 +1766,18 @@ class Multipatch:
         idx = np.where(np.isclose(X.data,1))
         X.data, X.row, X.col = X.data[idx], X.row[idx], X.col[idx]
         X = X.tocsc()
-        Nodes = {c : X[:,c].indices for c in C_dofs}
+        Nodes = {c:[X[:,c].indices] for c in C_dofs}
         t_idx = i_loc_c[np.where(B.getnnz(axis=1)>1)[0]]
         T_dofs = {}
         for i in t_idx:
             t = tuple(self.Basis[i,:].indices)
+            coeff = tuple()
             if t not in T_dofs:
-                T_dofs[t] = set(self.Constr[self.Constr.tocsc()[:,i].indices,:].indices)
+                T_dofs[t] = [(i,),set(self.Constr[self.Constr.tocsc()[:,i].indices,:].indices)-{i}]
             else:
-                 T_dofs[t] = T_dofs[t] & set(self.Constr[self.Constr.tocsc()[:,i].indices,:].indices)
-        T_dofs = {t:np.sort(list(T_dofs[t])) for t in T_dofs}
+                T_dofs[t][0] = T_dofs[t][0]+(i,)
+                T_dofs[t][1] = T_dofs[t][1] & (set(self.Constr[self.Constr.tocsc()[:,i].indices,:].indices)-{i})
+        T_dofs = {t:[np.sort(T_dofs[t][0]),np.sort(list(T_dofs[t][1]))] for t in T_dofs}
         Nodes.update(T_dofs)
         return Nodes
 

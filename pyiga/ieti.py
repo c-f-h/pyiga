@@ -144,8 +144,9 @@ class IetiDP:
         geos = self.space.mesh.geos
         self.eliminate_constraints = np.array([], dtype=int)
         Nodes = self.space.get_nodes()
-        loc_prim = np.concatenate(list(Nodes.values()))
-        cpp = {p : loc_prim[(loc_prim >= self.space.N_ofs[p]) & (loc_prim < self.space.N_ofs[p+1])] for p in range(self.space.numpatches)}
+        loc_c_prim = np.concatenate([Nodes[key][0] for key in Nodes])
+        cpp = {p : loc_c_prim[(loc_c_prim >= self.space.N_ofs[p]) & (loc_c_prim < self.space.N_ofs[p+1])] for p in range(self.space.numpatches)}
+        tpp = {p : {key:val for key,val in Nodes.items() if isinstance(key,tuple) and all((val[1] >= self.space.N_ofs[p]) & (val[1] < self.space.N_ofs[p+1]))} for p in range(self.space.numpatches)}
         
         for p in range(len(self.space.mesh.patches)):
             #bndindices = (bcs[0] < MP.N_ofs[p+1]) & (bcs[0] >= MP.N_ofs[p])
@@ -166,7 +167,7 @@ class IetiDP:
             # B = self.B[:,primal_free+self.N_ofs[p]].tocoo()
             # result = B.row[np.isclose(abs(B.data),1)]
             
-            nnz_per_row = np.isclose(self.space.Constr[:,primal_free+self.space.N_ofs[p]].getnnz(axis=1)
+            nnz_per_row = self.space.Constr[:,primal_free+self.space.N_ofs[p]].getnnz(axis=1)
             result = np.where(nnz_per_row > 0)[0]
             
             self.eliminate_constraints = np.union1d(result, self.eliminate_constraints)
@@ -177,8 +178,15 @@ class IetiDP:
             rows = np.arange(len(primal_free))
             cols = primal_free
             ck = coo_matrix((data, (rows, cols)),(len(primal_free),self.space.N[p])).tocsc()
+            
+            V = []
+            for t in tpp[p]:
+                constr = (self.space.Constr.tocsc()[:,tpp[p][t][0][0]]==1).indices
+                V.append(self.space.Constr[constr,:][:,self.space.N_ofs[p]:self.space.N_ofs[p+1]])
+            ck = scipy.sparse.vstack([ck]+V).tocsc()
+
             ck = ck[:,free]
-            self.Ck.append(ck)
+            self.Ck.append(ck.tocsr())
             #print(ck.A)
             
         self.B = self.B[np.setdiff1d(np.arange(self.B.shape[0]),self.eliminate_constraints),:]

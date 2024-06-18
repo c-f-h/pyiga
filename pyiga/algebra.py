@@ -1,10 +1,17 @@
+# -*- coding: utf-8 -*-
+"""Functions and classes for algebraic operations.
+
+"""
+
 import numpy as np
 import scipy.sparse
 from scipy.sparse import coo_matrix, csr_matrix, csc_matrix
 import scipy.linalg
 from scipy.sparse.linalg import LinearOperator, onenormest, splu
 from . import solvers
+from . import algebra_cy
 import time
+import numba as nb
 
 def condest(A, spd=False):
     luA = splu(A)
@@ -200,3 +207,53 @@ def rref(A, tol=1e-8):
             i+=1
             j+=1
     return B, np.array(piv), rows
+
+class LanczosMatrix():
+    def __init__(self, delta, gamma):
+        assert len(delta)==len(gamma)+1, "size mismatch."
+        self.gamma = gamma
+        self.delta = delta
+        self.n = len(delta)
+    
+    @property
+    def mat(self):
+        return scipy.sparse.spdiags(np.c_[np.r_[self.gamma,0],self.delta,np.r_[0,self.gamma]].T,[-1,0,1])
+        
+    @property
+    def A(self):
+        return self.mat.A
+        
+    def maxEigenvalue(self):
+        if self.n==1: return self.delta[0]
+    
+        x0 = max(self.mat.sum(axis=1).T.A[0])
+        return self.newton(x0)
+        
+    def minEigenvalue(self): 
+        if self.n==1: return self.delta[0]
+        return self.newton(x0 = 0.)
+        
+    def eval_charPolynomial(self,lambda_):
+        # v = np.zeros(self.n+1)
+        # d = np.zeros(self.n+1)
+        # v[0] = 1.
+        # v[1] = self.delta[0]-lambda_
+        # d[1] = -1.
+        # for i in range(2,self.n+1):
+        #     v[i] = (self.delta[i-1]-lambda_) * v[i-1] - self.gamma[i-2]**2*v[i-2]
+        #     d[i] = (self.delta[i-1]-lambda_) * d[i-1] - v[i-1] - self.gamma[i-2]*self.gamma[i-2]*d[i-2]
+        # return v[-1],d[-1]
+        return algebra_cy.pyx_eval_charPolynomial(self.delta, self.gamma, lambda_)
+        
+    def newton(self, x0, maxiter=50, tol=1e-6):
+        i = 0
+        res = 1
+        x_old = x0
+        x_new = x0
+        while(i < maxiter and res > tol):
+            v, d = self.eval_charPolynomial(x_old)
+            x_new = x_old - v/d
+            res = np.abs(x_old - x_new)
+            x_old = x_new
+            i+=1
+        return x_new

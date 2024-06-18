@@ -2,7 +2,7 @@
 import numpy as np
 import scipy.linalg
 from .operators import make_solver, KroneckerOperator, DiagonalOperator
-from . import utils
+from . import utils, algebra
 
 from functools import reduce
 
@@ -407,9 +407,14 @@ def pcg(A, f, x0 = None, P = 1, tol = 1e-5, maxiter = 100, output = False):
     rho = w@d
     err0 = np.sqrt(rho)
     s = w
+    
+    delta = np.zeros(maxiter)
+    gamma = np.zeros(maxiter)
+    
     for it in range(maxiter):
         As = Afun(s)
         alpha = rho/(As@s)
+        delta[it]+=1/alpha
         u = u + alpha*s
         d = d - alpha*As
         w = Pfun(d)
@@ -420,9 +425,14 @@ def pcg(A, f, x0 = None, P = 1, tol = 1e-5, maxiter = 100, output = False):
             break
         beta = rho/rho1
         s = w + beta*s
+        gamma[it] = -np.sqrt(beta)/alpha
+        delta[it+1] = beta/alpha
+    L = algebra.LanczosMatrix(delta[:(it+1)], gamma[:it])
+    cond = abs(L.maxEigenvalue()/L.minEigenvalue())
+    
     if output:
-        print('pcg stopped after ' + str(it) + ' iterations with relres ' + str(err/err0))
-    return u, it, d
+        print('pcg with preconditioned condition number ' + str(cond) + ' stopped after ' + str(it) + ' iterations with relres ' + str(err/err0))
+    return u, it, cond, d
 
 
 ## Time stepping

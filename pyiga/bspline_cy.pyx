@@ -120,7 +120,6 @@ cdef double[:,:] bspline_active_deriv_single(object knotvec, double u, int numde
 
     return result
 
-
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def active_deriv(object knotvec, u, int numderiv):

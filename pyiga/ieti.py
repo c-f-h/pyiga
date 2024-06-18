@@ -27,12 +27,8 @@ class IetiDP:
         for p in self.dir_idx:
             self.dir_idx[p], lookup = np.unique(self.dir_idx[p], return_index = True)
             self.dir_vals[p] = np.concatenate(self.dir_vals[p])[lookup]
-            
-        # Idx = np.where(self.space.Constr.getnnz(axis=1)>2)[0]
-        # Bas, self.B = algebra.compute_basis(self.space.Constr, maxiter=5, Idx = Idx)
-        # self.Basisk = []
         
-        if elim:
+        if self.elim:
             dofs=dict()
             Basis=MP.Basis.tocsc()
             constr=[]
@@ -62,7 +58,8 @@ class IetiDP:
             self.Basisk = [scipy.sparse.identity(MP.N[p]) for p in range(MP.numpatches)]
             self.B = MP.Constr
             
-        self.P2G =[]
+        self.Basis=scipy.sparse.block_diag(self.Basisk)
+        self.P2Gk =[]
         
         for p in range(self.space.numpatches):
             X = self.Basisk[p].tocoo()
@@ -71,11 +68,13 @@ class IetiDP:
             D = (X.T@self.Basisk[p]).sum(axis=1).A.ravel()
             #assert all(abs(D)>1e-12), 'D has zeros.'
             #S = scipy.sparse.spdiags(1/D,[0],len(D),len(D))
-            self.P2G.append(X.T)
+            self.P2Gk.append(X.T)
             I = np.zeros(self.Basisk[p].shape[0])
             if p in self.dir_idx:
                 I[self.dir_idx[p]] = 1
-                self.dir_idx[p] = np.where(np.isclose(self.P2G[p]@I,1))[0]
+                self.dir_idx[p] = np.where(np.isclose(self.P2Gk[p]@I,1))[0]
+        
+        self.P2G = scipy.sparse.block_diag(self.P2Gk)
         
         self.N = [Ba.shape[1] for Ba in self.Basisk]
         self.N_ofs = np.cumsum([0]+self.N)
@@ -91,9 +90,6 @@ class IetiDP:
         #self.B = self.B[:,self.free_dofs]
 
         #self.dir_ofs = np.cumsum(np.array([len(np.unique(idx[p])) for p in range(MP.numpatches)]))
-        
-        #self.dir_idx, lookup = np.unique(idx, return_index=True)
-        #self.dir_vals = np.concatenate(vals)[lookup]
         
     def assemble(self, f):
         Ak = [Ba.T @ assemble.assemble('(inner(grad(u),grad(v)))* dx', kvs, bfuns=[('u',1), ('v',1)], geo=geo)@Ba for Ba, ((kvs, geo),_) in zip(self.Basisk, self.space.mesh.patches)]
@@ -114,11 +110,11 @@ class IetiDP:
             bnd_dofs = np.concatenate([indices for indices in assemble.boundary_dofs(kvs[p])])
             I = np.zeros(self.Basisk[p].shape[0])
             I[bnd_dofs] = 1
-            bnd_dofs = np.where(np.isclose(self.P2G[p]@I,1))[0]
+            bnd_dofs = np.where(np.isclose(self.P2Gk[p]@I,1))[0]
             mask[bnd_dofs+self.N_ofs[p]] = False
             #mask[]
 
-        Rii = Id[mask]
+        #Rii = Id[mask]
 
         # for p in range(self.space.numpatches):
         #     bnd_dofs = np.concatenate([indices for indices in assemble.boundary_dofs(kvs[p])])
@@ -140,71 +136,104 @@ class IetiDP:
         
     def construct_primal_constraints(self):
         self.Ck = []
+        self.Rk = []
         kvs = self.space.mesh.kvs
         geos = self.space.mesh.geos
         self.eliminate_constraints = np.array([], dtype=int)
-        Nodes = self.space.get_nodes()
-        loc_c_prim = np.concatenate([Nodes[key][0] for key in Nodes])
-        cpp = {p : loc_c_prim[(loc_c_prim >= self.space.N_ofs[p]) & (loc_c_prim < self.space.N_ofs[p+1])] for p in range(self.space.numpatches)}
-        tpp = {p : {key:val for key,val in Nodes.items() if isinstance(key,tuple) and all((val[1] >= self.space.N_ofs[p]) & (val[1] < self.space.N_ofs[p+1]))} for p in range(self.space.numpatches)}
+        Nodes=self.space.get_nodes()
+        self.Prim = {}
+        
+        if self.elim:
+            total_dofs=set()
+            i=0
+            for key in Nodes:
+                if isinstance(key,tuple):
+                    dofs = self.Basis.tocsr()[Nodes[key][1],:].indices
+                    #print(dofs)
+                    for dof in dofs:
+                        if dof not in total_dofs:
+                            total_dofs.add(dof)
+                            self.Prim[i] = np.unique(self.B.tocsr()[self.B.tocsc()[:,dof].indices,:].indices)
+                            i+=1
+                else:
+                    self.Prim[i] = self.Basis.tocsr()[Nodes[key][0],:].indices
+                    i+=1
+            loc_c_prim = np.concatenate([self.Prim[key] for key in self.Prim])
+            #print(loc_c_prim)
+            loc_c_prim_idx = np.repeat(np.arange(len(self.Prim)),[len(self.Prim[i]) for i in self.Prim])
+            self.Prim_pp = {p : (loc_c_prim[(loc_c_prim >= self.N_ofs[p]) & (loc_c_prim < self.N_ofs[p+1])],loc_c_prim_idx[(loc_c_prim >= self.N_ofs[p]) & (loc_c_prim < self.N_ofs[p+1])]) for p in range(self.space.numpatches)}
+        else:
+            self.Prim = {i: val for i,val in enumerate(self.space.get_nodes().values())}
+            loc_c_prim = np.concatenate([Nodes[key][0] for key in Nodes])
+            loc_c_prim_idx = np.repeat(np.arange(len(self.Prim)),[len(self.Prim[i][0]) for i in self.Prim])
+            self.cpp = {p : (loc_c_prim[(loc_c_prim >= self.space.N_ofs[p]) & (loc_c_prim < self.space.N_ofs[p+1])],loc_c_prim_idx[(loc_c_prim >= self.space.N_ofs[p]) & (loc_c_prim < self.space.N_ofs[p+1])]) for p in range(self.space.numpatches)}
+            self.tpp = {p : {key:val for key,val in self.Prim.items() if len(val)>1 and all((val[1] >= self.space.N_ofs[p]) & (val[1] < self.space.N_ofs[p+1]))} for p in range(self.space.numpatches)}
         
         for p in range(len(self.space.mesh.patches)):
-            #bndindices = (bcs[0] < MP.N_ofs[p+1]) & (bcs[0] >= MP.N_ofs[p])
             if p in self.dir_idx:
                 to_eliminate = self.dir_idx[p]
             else:
                 to_eliminate = np.array([])
-                
             free = np.setdiff1d(np.arange(self.N[p]),to_eliminate)
-            primal_free = cpp[p] - self.space.N_ofs[p]
-            
+            #c_primal_free = self.cpp[p][0] - self.space.N_ofs[p]
+                
             if self.elim:
-                I = np.zeros(self.Basisk[p].shape[0])
-                I[primal_free] = 1
-                primal_free = np.where(np.isclose(self.P2G[p]@I,1))[0]
-            
-            #print(primal_free)
-            # B = self.B[:,primal_free+self.N_ofs[p]].tocoo()
-            # result = B.row[np.isclose(abs(B.data),1)]
-            
-            nnz_per_row = self.space.Constr[:,primal_free+self.space.N_ofs[p]].getnnz(axis=1)
-            result = np.where(nnz_per_row > 0)[0]
-            
-            self.eliminate_constraints = np.union1d(result, self.eliminate_constraints)
+                c_primal_free = self.Prim_pp[p][0] - self.N_ofs[p]
+                #print(c_primal_free)
+                data = np.ones(len(c_primal_free))
+                rows = np.arange(len(c_primal_free))
+                cols = c_primal_free
+                ck = coo_matrix((data, (rows, cols)),(len(c_primal_free),self.N[p])).tocsc()
+                ck = ck[:,free]
+                self.Ck.append(ck.tocsr())
+                m, n = ck.shape[0], len(self.Prim)
+                jj = self.Prim_pp[p][1]
+                self.Rk.append(scipy.sparse.coo_matrix((np.ones(m),(np.arange(m),jj)),(m,n)))
+                
+                nnz_per_row = self.B[:,self.Prim_pp[p][0]].getnnz(axis=1)
+                result = np.where(nnz_per_row > 0)[0]
 
-            #loc, _ = cpp[p][0]
+                self.eliminate_constraints = np.union1d(result, self.eliminate_constraints)
+            else:
+                c_primal_free = self.cpp[p][0] - self.space.N_ofs[p]
 
-            data = np.ones(len(primal_free))
-            rows = np.arange(len(primal_free))
-            cols = primal_free
-            ck = coo_matrix((data, (rows, cols)),(len(primal_free),self.space.N[p])).tocsc()
-            
-            V = []
-            for t in tpp[p]:
-                constr = (self.space.Constr.tocsc()[:,tpp[p][t][0][0]]==1).indices
-                V.append(self.space.Constr[constr,:][:,self.space.N_ofs[p]:self.space.N_ofs[p+1]])
-            ck = scipy.sparse.vstack([ck]+V).tocsc()
+                # if self.elim:
+                #     I = np.zeros(self.Basisk[p].shape[0])
+                #     I[c_primal_free] = 1
+                #     c_primal_free = np.where(np.isclose(self.P2Gk[p]@I,1))[0]
 
-            ck = ck[:,free]
-            self.Ck.append(ck.tocsr())
-            #print(ck.A)
+                nnz_per_row = self.space.Constr[:,self.cpp[p][0]].getnnz(axis=1)
+                result = np.where(nnz_per_row > 0)[0]
+
+                self.eliminate_constraints = np.union1d(result, self.eliminate_constraints)
+
+                data = np.ones(len(c_primal_free))
+                rows = np.arange(len(c_primal_free))
+                cols = c_primal_free
+                ck = coo_matrix((data, (rows, cols)),(len(c_primal_free),self.space.N[p])).tocsc()
+
+                V = []
+                for t in self.tpp[p]:
+                    constr = (self.space.Constr.tocsc()[:,self.tpp[p][t][0][0]]==1).indices
+                    self.eliminate_constraints = np.union1d(constr, self.eliminate_constraints)
+                    X = self.space.Constr[constr,:][:,self.space.N_ofs[p]:self.space.N_ofs[p+1]].tocsr()
+                    V.append(X[X.getnnz(axis=1)>0,:])
+                ck = (scipy.sparse.vstack([ck]+V)@self.Basisk[p]).tocsc()
+
+                ck = ck[:,free]
+                self.Ck.append(ck.tocsr())
+                m, n = ck.shape[0], len(Nodes)
+                jj = np.concatenate([self.cpp[p][1],np.array(list(self.tpp[p].keys()), dtype=int)])
+                #print(m, jj)
+                self.Rk.append(scipy.sparse.coo_matrix((np.ones(m),(np.arange(m),jj)),(m,n)))
+                #print(ck.A)
             
+        #self.eliminate_constraints = np.unique(self.B.tocsc()[:,loc_c_prim].indices)
         self.B = self.B[np.setdiff1d(np.arange(self.B.shape[0]),self.eliminate_constraints),:]
-        
         self.C = scipy.sparse.block_diag(self.Ck)
         
     def construct_primal_basis(self):
         PsiK=[]
-        Nodes = self.space.get_nodes()
-        #prim = np.array(list(Nodes.keys()))
-        loc_prim = np.concatenate(list(Nodes.values()))
-        cpp = {p : loc_prim[(loc_prim >= self.space.N_ofs[p]) & (loc_prim < self.space.N_ofs[p+1])] for p in range(self.space.numpatches)}
-
-        data = np.ones(len(loc_prim))
-        ii = loc_prim
-        V =[len(Nodes[key]) for key in Nodes] 
-        jj= np.arange(len(Nodes)).repeat(V)
-        R = scipy.sparse.coo_matrix((data,(ii,jj)),(self.N_ofs[-1],len(Nodes))).tocsr()
         
         for p in range(len(self.space.mesh.patches)):
             a = self.Ak[p]
@@ -219,7 +248,7 @@ class IetiDP:
 
 #             jj=[len() for g in Nodes]
 #             r = scipy.sparse.coo_matrix((np.ones(psi.shape[1]),(cpp[p]-self.space.N_ofs[p],)),(psi.shape[1],len(Nodes)))
-            PsiK.append(psi@(R[cpp[p],:]))
+            PsiK.append(psi@self.Rk[p])
 
         self.Psi=np.vstack(PsiK)
             
@@ -262,7 +291,7 @@ class IetiDP:
         
         return F, b
     
-    def MsD(self):
+    def MsD(self, pseudo=False):
         B = self.B[:,self.free_dofs]
         B = B[np.where(B.getnnz(axis=1)>0)[0]]
         #B_gamma = B_gamma[np.setdiff1d(np.arange(B_gamma.shape[0]),self.eliminate_constraints),:]
@@ -275,10 +304,22 @@ class IetiDP:
         AiiinvB = solvers.make_solver(self.Aii, spd=True)
         #AiiinvB = scipy.sparse.linalg.spsolve(self.Aii, self.Aib.A)
         self.S = scipy.sparse.linalg.aslinearoperator(self.Abb) - scipy.sparse.linalg.aslinearoperator(self.Abi)@AiiinvB.dot(scipy.sparse.linalg.aslinearoperator(self.Aib))
-        D = np.abs(self.B_gamma).sum(axis=0)
-        D = [1/(1+D[0,v]) for v in range(D.shape[1])]
-        self.D = scipy.sparse.diags(D, format='csr')
-
+        
+        if self.elim:
+            D = self.B_gamma.getnnz(axis=0)
+            D = 1/(1+D)
+            self.D = scipy.sparse.diags(D, format='csr')
+        else:
+            if pseudo:
+                t = time.time()
+                D = np.linalg.pinv(self.B_gamma.A)
+                D[abs(D)<1e-16]=0.0
+                print("computing the pseudoinverse and pruning took " + str(time.time()-t) + " seconds.")
+                D=scipy.sparse.csr_matrix(D)
+                self.D=D@D.T
+            else:
+                D = np.abs(self.B_gamma).sum(axis=0)
+                self.D = scipy.sparse.spdiags([1/(D.A[0]+1)],[0],2*(self.B_gamma.shape[1],)).tocsr()
         self.BgD = scipy.sparse.linalg.aslinearoperator(self.B_gamma@self.D)
         return self.BgD@self.S.dot(self.BgD.T)  
             

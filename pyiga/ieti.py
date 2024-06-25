@@ -87,6 +87,8 @@ class IetiDP:
         self.intf_dofs = np.where(nnz_per_col > 0)[0]
         self.intfs = np.setdiff1d(self.intf_dofs, self.global_dir_idx)
         
+        self.Bk = [self.B[:,self.N_ofs[p]:self.N_ofs[p+1]] for p in range(self.space.numpatches)]
+        
         #self.B = self.B[:,self.free_dofs]
 
         #self.dir_ofs = np.cumsum(np.array([len(np.unique(idx[p])) for p in range(MP.numpatches)]))
@@ -229,7 +231,9 @@ class IetiDP:
                 #print(ck.A)
             
         #self.eliminate_constraints = np.unique(self.B.tocsc()[:,loc_c_prim].indices)
-        self.B = self.B[np.setdiff1d(np.arange(self.B.shape[0]),self.eliminate_constraints),:]
+        keep_constr = np.setdiff1d(np.arange(self.B.shape[0]),self.eliminate_constraints)
+        self.B = self.B[keep_constr,:]
+        self.Bk = [B[keep_constr,:] for B in self.Bk]
         self.C = scipy.sparse.block_diag(self.Ck)
         
     def construct_primal_basis(self):
@@ -260,19 +264,22 @@ class IetiDP:
         
     def compute_F(self):
         B = self.B[:,self.free_dofs]
+        idx_p = [(self.free_dofs < self.N_ofs[p+1]) & (self.free_dofs >= self.N_ofs[p]) for p in range(self.space.numpatches)]
+        Bk = [self.B[:,idx_p[p]] for p in range(self.space.numpatches)]
+        Bk_ = [scipy.sparse.bmat([[b,    np.zeros((b.shape[0],self.Ck[p].shape[0]))]], format='csr') for p,b in enumerate(Bk)]
         B = B[np.where(B.getnnz(axis=1)>0)[0]]
         PTAP = self.Psi.T@self.A@self.Psi
         PTBT = self.Psi.T@B.T
         BP   = B@self.Psi
 
-        self.BL = scipy.sparse.bmat([[B,    np.zeros((B.shape[0],self.C.shape[0])), BP]], format='csr')
-        self.BR = scipy.sparse.bmat([[B.T],    
-                                [np.zeros((self.C.shape[0],B.shape[0]))], 
-                                [PTBT]], format='csr')
-        self.A0 = scipy.sparse.bmat(
-            [[self.A,    self.C.T,  None],
-             [self.C,    None,      None],
-             [None,      None,      PTAP]], format='csr')
+        # self.BL = scipy.sparse.bmat([[B,    np.zeros((B.shape[0],self.C.shape[0])), BP]], format='csr')
+        # self.BR = scipy.sparse.bmat([[B.T],    
+        #                         [np.zeros((self.C.shape[0],B.shape[0]))], 
+        #                         [PTBT]], format='csr')
+        # self.A0 = scipy.sparse.bmat(
+        #     [[self.A,    self.C.T,  None],
+        #      [self.C,    None,      None],
+        #      [None,      None,      PTAP]], format='csr')
 
             # print("Rank ", np.linalg.matrix_rank(PTAP.A), " vs. shape ", PTAP.shape)
         
@@ -280,14 +287,18 @@ class IetiDP:
         #print(rhs)
         #b = np.hstack((rhs, np.zeros(self.C.shape[0],), self.Psi.dot(rhs), np.zeros(self.B[:,self.free_dofs].shape[0],)))
 
-        BR = scipy.sparse.linalg.aslinearoperator(self.BR)
-        BL = scipy.sparse.linalg.aslinearoperator(self.BL)
-        A0inv = solvers.make_solver(self.A0, spd=False, symmetric=True)
+        # BR = scipy.sparse.linalg.aslinearoperator(self.BR)
+        # BL = scipy.sparse.linalg.aslinearoperator(self.BL)
+        # A0inv = solvers.make_solver(self.A0, spd=False, symmetric=True)
 
-        F = BL@A0inv.dot(BR)
+        F0 = BP@solvers.make_solver(PTAP, spd=True, symmetric=True)@BP.T + sum([b@solvers.make_solver(scipy.sparse.bmat(
+            [[a,    c.T],
+             [c,    None]], format='csr'), spd=False, symmetric=True)@b.T for a,b,c in zip(self.Ak, Bk_, self.Ck)])
 
         self.TR = np.hstack((rhs, np.zeros((self.C.shape[0],)), self.Psi.T.dot(rhs)))
-        b = BL@(A0inv.dot(self.TR))
+        b = BP@solvers.make_solver(PTAP, spd=True, symmetric=True)@self.Psi.T.dot(rhs) + sum([b@solvers.make_solver(scipy.sparse.bmat(
+            [[a,    c.T],
+             [c,    None]], format='csr'), spd=False, symmetric=True)@f for a,b,c,f in zip(self.Ak, Bk_, self.Ck, self.rhsk)])
         
         return F, b
     

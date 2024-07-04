@@ -13,7 +13,6 @@ def _asdense(X):
     except:
         return X
 
-
 def fastdiag_solver(KM):
     """The fast diagonalization solver as described in [Sangalli, Tani 2016].
 

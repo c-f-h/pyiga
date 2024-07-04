@@ -118,6 +118,7 @@ from . import operators
 from . import utils
 from . import geometry
 from . import algebra
+from . import algebra_cy
 from . import topology
 from . import vis
 from . import vform
@@ -1336,12 +1337,7 @@ class Multipatch:
                     self.intfs.add(((p1,bd1,s1),(p2,bd2,s2),flip))
         
             t=time.time()
-            if space == 'Hcurl':
-                C=[self.join_boundaries_tangential(p1, (int_to_bdspec(bd1),), s1 , p2, (int_to_bdspec(bd2),), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
-            elif space == 'Hdiv':
-                C=[self.join_boundaries_normal(p1, (int_to_bdspec(bd1),), s1 , p2, (int_to_bdspec(bd2),), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
-            else:
-                C=[self.join_boundaries(p1, (int_to_bdspec(bd1),), s1 , p2, (int_to_bdspec(bd2),), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
+            C=[self.join_boundaries(p1, (int_to_bdspec(bd1),), s1 , p2, (int_to_bdspec(bd2),), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
             print('setting up constraints took '+str(time.time()-t)+' seconds.')
             if len(C)!=0:
                 self.Constr = scipy.sparse.vstack(C)
@@ -1441,7 +1437,8 @@ class Multipatch:
         # local-to-global offset per patch
         self.M_ofs = np.concatenate(([0], np.cumsum(self.M)))
         t=time.time()
-        self.Basis, _ = algebra.compute_basis(self.Constr, maxiter=20)
+        self.Basis, _ = algebra_cy.pyx_compute_basis(self.Constr, maxiter=5)
+        print("Basis setup took "+str(time.time()-t)+" seconds")
         data, indices, indptr = self.Basis.data, self.Basis.indices, self.Basis.indptr
         m, n = self.Basis.shape
         #self.P2G = scipy.sparse.csc_matrix((data[indptr[:-1]],indices[indptr[:-1]],np.arange(n+1)),shape=(m,n)).T
@@ -1452,7 +1449,7 @@ class Multipatch:
         D = (X.T@self.Basis).sum(axis=1).A.ravel()
         self.P2G = scipy.sparse.csr_matrix(scipy.sparse.spdiags(1/D,[0],len(D),len(D))@X.T)
         self.Basis = scipy.sparse.csr_matrix(self.Basis)
-        print("Basis setup took "+str(time.time()-t)+" seconds")
+        #print("Basis setup took "+str(time.time()-t)+" seconds")
         #self.mesh.sanity_check()
         #self.sanity_check()
         

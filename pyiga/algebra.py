@@ -96,23 +96,25 @@ def update_basis(Constr, derivedDofs, Basis):
             break
     return lBasis
 
-def compute_active_constr(Constr, Idx):
+def compute_active_constr(Constr):
     #fast variant
+#     A = (Constr>1e-12)
+#     B = (Constr<-1e-12)
+#     a=A.indptr[1:]-A.indptr[:-1]
+#     b=B.indptr[1:]-B.indptr[:-1]
+#     active=np.where(((a==1) & (b>0)) | ((b==1) & (a>0)))[0]
+#     sign = np.ones(len(a), dtype=int)
+#     sign[np.where((b==1) & (a>0))[0]]=-1
     
-    # a=(Constr>1e-12).sum(axis=1).A.ravel(); b=(Constr<-1e-12).sum(axis=1).A.ravel()
-    # activeConstraints=np.where(a+b>0)[0]
-    # sign = np.where(b==1 & a>0)
-    
-#     signs=1.*((a<=1) | (a+b==0))-1.*((a>1)&(a+b>0))
 #     #print(signs)
-#     S=scipy.sparse.spdiags(signs,0,len(a),len(a))
+#     S=scipy.sparse.spdiags(sign,0,len(a),len(a))
     
-#     Constr = S@Constr
+#     Constr = S@Constr ### not by reference
     
     # assert np.all(((a[activeConstraints]==1) | (b[activeConstraints]==1))), 'error in constraint matrix.'
 
     #variant 1
-    activeConstraints=[]
+    active=[]
     for r in range(Constr.shape[0]):
         a = 0
         b = 0
@@ -121,8 +123,8 @@ def compute_active_constr(Constr, Idx):
                 a += 1
             if Constr.data[ind] < -1e-12:
                 b += 1
-        if ((a==1 and b>0) or (b==1 and a>0)) and r in Idx:
-            activeConstraints.append(r)
+        if ((a==1 and b>0) or (b==1 and a>0)):
+            active.append(r)
             #print("{}: {}, {}".format(r,a,b))
             #if not (a==1 or b==1): 
                 #print(a,b)
@@ -130,17 +132,16 @@ def compute_active_constr(Constr, Idx):
             #assert (a==1 or b==1), 'error in constraint matrix.'
             if b==1 and a>0:
                 #print( "Re-sign" )
-                Constr[r,:] *= -1
+                Constr[r,:] *= -1  ###bottleneck
                 
-    return np.array(activeConstraints)
+    return active
 
-def compute_basis(Constr, maxiter, Idx=None):
-    if Idx is None: Idx = np.arange(Constr.shape[0])
+def compute_basis(Constr, maxiter):
     n=Constr.shape[1]
     nonderivedDofs = allLocalDofs=np.arange(n)
     allderivedDofs={}
-    activeConstraints=Idx
-    Basis=scipy.sparse.csr_matrix(scipy.sparse.identity(n))
+    activeConstraints=np.arange(Constr.shape[0])
+    Basis=scipy.sparse.csc_matrix(scipy.sparse.identity(n))
     time_find_active = 0
     time_find_ddofs = 0
     time_update = 0
@@ -156,31 +157,29 @@ def compute_basis(Constr, maxiter, Idx=None):
         time_find_ddofs += time.time()-t
         #assert derivedDofs, 'Unable to derive any further dofs.'
         assert derivedDofs, 'Unable to derive further dofs.'
-        #if not derivedDofs: 
-        #    print(derivedDofs)
-        #    break
         
         #update which dofs were already derived
         allderivedDofs.update(derivedDofs)
-        nonderivedDofs=np.setdiff1d(allLocalDofs, np.array(list(allderivedDofs.keys())))
         t=time.time()
         Basis = update_basis(Constr, derivedDofs, Basis)
+        #assert isinstance(Basis, csc_matrix)
         time_update += time.time()-t
         #eliminate used constraints from constraint matrix
         Constr = Constr @ Basis    
         
         t=time.time()
-        activeConstraints = compute_active_constr(Constr, Idx)
+        activeConstraints = compute_active_constr(Constr)
         time_find_active += time.time()-t
         i+=1
         
     #print(np.array(list(allderivedDofs.keys())))
     #nonderivedDofs=np.setdiff1d(allLocalDofs, np.array(list(allderivedDofs.keys())))
     #print(nonderivedDofs)
-    # print('finding active constraints took '+str(time_find_active)+' seconds.')
-    # print('finding derived dofs took '+str(time_find_ddofs)+' seconds.')
-    # print('updating basis and constraints took '+str(time_update)+' seconds.')
-    Basis = scipy.sparse.csc_matrix(Basis)
+    #print('finding active constraints took '+str(time_find_active)+' seconds.')
+    #print('finding derived dofs took '+str(time_find_ddofs)+' seconds.')
+    #print('updating basis and constraints took '+str(time_update)+' seconds.')
+    #Basis = scipy.sparse.csc_matrix(Basis)
+    nonderivedDofs=np.setdiff1d(allLocalDofs, np.array(list(allderivedDofs.keys())))
     return Basis[:,nonderivedDofs], Constr  #,Constr,activeConstraints
 
 def rref(A, tol=1e-8):
@@ -234,15 +233,6 @@ class LanczosMatrix():
         return self.newton(x0 = 0.)
         
     def eval_charPolynomial(self,lambda_):
-        # v = np.zeros(self.n+1)
-        # d = np.zeros(self.n+1)
-        # v[0] = 1.
-        # v[1] = self.delta[0]-lambda_
-        # d[1] = -1.
-        # for i in range(2,self.n+1):
-        #     v[i] = (self.delta[i-1]-lambda_) * v[i-1] - self.gamma[i-2]**2*v[i-2]
-        #     d[i] = (self.delta[i-1]-lambda_) * d[i-1] - v[i-1] - self.gamma[i-2]*self.gamma[i-2]*d[i-2]
-        # return v[-1],d[-1]
         return algebra_cy.pyx_eval_charPolynomial(self.delta, self.gamma, lambda_)
         
     def newton(self, x0, maxiter=50, tol=1e-6):
@@ -257,3 +247,19 @@ class LanczosMatrix():
             x_old = x_new
             i+=1
         return x_new
+        #return algebra_cy.pyx_newton
+        
+def HilbertMatrix(n, return_inv = False):
+    if return_inv:
+        assert n < 11, "dimension of matrix too large to compute inverse exactly."
+        return algebra_cy.pyx_HilbertMatrix(n), algebra_cy.pyx_HilbertMatrixInv(n)
+    else:
+        return algebra_cy.pyx_HilbertMatrix(n)
+
+def CauchyMatrix(n, return_inv = False):
+    assert n < 170, "dimension of matrix too large."
+    if return_inv:
+        assert n < 8, "dimension of matrix too large to compute inverse exactly."
+        return algebra_cy.pyx_CauchyMatrix(n), algebra_cy.pyx_CauchyMatrixInv(n)
+    else:
+        return algebra_cy.pyx_CauchyMatrix(n)

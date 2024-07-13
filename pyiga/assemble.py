@@ -1328,6 +1328,7 @@ class Multipatch:
         # a list of interfaces (patch1, boundary dofs1, patch2, boundary dofs2)
         self.intfs = set()
         self.Constr=scipy.sparse.csr_matrix((0,self.N_ofs[-1]))
+        self.global_dir_idx = np.array([])
 
         if automatch:
             interfaces = self.mesh.interfaces
@@ -1437,7 +1438,7 @@ class Multipatch:
         # local-to-global offset per patch
         self.M_ofs = np.concatenate(([0], np.cumsum(self.M)))
         t=time.time()
-        self.Basis, _ = algebra_cy.pyx_compute_basis(self.Constr, maxiter=5)
+        self.Basis, _ = algebra.compute_basis(self.Constr, maxiter=5)
         print("Basis setup took "+str(time.time()-t)+" seconds")
         data, indices, indptr = self.Basis.data, self.Basis.indices, self.Basis.indptr
         m, n = self.Basis.shape
@@ -1670,9 +1671,6 @@ class Multipatch:
         The dictionary `h_ref` specifies which patches (dict keys) are to be split 
         and how to split them (dict values: 0 to dim-1 or None or -1)
         
-        The dictionary `p_ref` specifies which patches (dict keys) should have their degree elevated 
-        (dict values: int)
-        
         The `return_P` keyword enables also the generation of a prolongation matrix from one mesh to the split mesh.
         
         Returns:
@@ -1755,6 +1753,7 @@ class Multipatch:
     def get_nodes(self):
         """Get node DoFs in the multipatch object. A node is a corner where more than two patches meet and is not a Dirichlet dof."""
         loc_c = np.concatenate([boundary_dofs(kvs,m=0,ravel=True)+self.N_ofs[p] for p, kvs in enumerate(self.mesh.kvs)])
+        
         i_loc_c = np.setdiff1d(loc_c, self.global_dir_idx)
 
         B = self.Basis[i_loc_c,:]

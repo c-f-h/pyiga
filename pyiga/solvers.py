@@ -407,8 +407,8 @@ def pcg(A, f, x0 = None, P = 1, tol = 1e-5, maxiter = 100, output = False):
     err0 = np.sqrt(rho)
     s = w
     
-    delta = np.zeros(maxiter)
-    gamma = np.zeros(maxiter)
+    delta = np.zeros(maxiter+1)
+    gamma = np.zeros(maxiter+1)
     
     for it in range(maxiter):
         As = Afun(s)

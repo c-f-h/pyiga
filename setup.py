@@ -16,6 +16,11 @@ else:
     c_args_openmp = l_args_openmp = []
 
 extensions = [
+    Extension("pyiga.ieti_cy",
+             ["pyiga/ieti_cy.pyx"],
+        include_dirs = [numpy.get_include()],
+        extra_compile_args=c_args,
+    ),
     Extension("pyiga.algebra_cy",
              ["pyiga/algebra_cy.pyx"],
         include_dirs = [numpy.get_include()],

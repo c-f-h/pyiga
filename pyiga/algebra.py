@@ -145,6 +145,9 @@ def compute_basis(Constr, maxiter):
     time_find_active = 0
     time_find_ddofs = 0
     time_update = 0
+    time_main1 = 0
+    time_main2 = 0
+    time_main3 = 0
     i=1
     while len(activeConstraints)!=0:
         #print(Constr[activeConstraints])
@@ -159,13 +162,17 @@ def compute_basis(Constr, maxiter):
         assert derivedDofs, 'Unable to derive further dofs.'
         
         #update which dofs were already derived
+        t = time.time()
         allderivedDofs.update(derivedDofs)
+        time_main1 += time.time()-t
         t=time.time()
         Basis = update_basis(Constr, derivedDofs, Basis)
         #assert isinstance(Basis, csc_matrix)
         time_update += time.time()-t
         #eliminate used constraints from constraint matrix
+        t = time.time()
         Constr = Constr @ Basis    
+        time_main2 += time.time()-t
         
         t=time.time()
         activeConstraints = compute_active_constr(Constr)
@@ -175,12 +182,22 @@ def compute_basis(Constr, maxiter):
     #print(np.array(list(allderivedDofs.keys())))
     #nonderivedDofs=np.setdiff1d(allLocalDofs, np.array(list(allderivedDofs.keys())))
     #print(nonderivedDofs)
-    #print('finding active constraints took '+str(time_find_active)+' seconds.')
-    #print('finding derived dofs took '+str(time_find_ddofs)+' seconds.')
-    #print('updating basis and constraints took '+str(time_update)+' seconds.')
     #Basis = scipy.sparse.csc_matrix(Basis)
+    
+    t=time.time()
     nonderivedDofs=np.setdiff1d(allLocalDofs, np.array(list(allderivedDofs.keys())))
-    return Basis[:,nonderivedDofs], Constr  #,Constr,activeConstraints
+    Basis = Basis[:,nonderivedDofs].tocsr()
+    time_main3+= time.time()-t
+
+    
+    # print('finding active constraints took '+str(time_find_active)+' seconds.')
+    # print('finding derived dofs took '+str(time_find_ddofs)+' seconds.')
+    # print('updating basis and constraints took '+str(time_update)+' seconds.')
+    # print('main1 took '+str(time_main1)+' seconds.')
+    # print('main2 took '+str(time_main2)+' seconds.')
+    # print('main3 took '+str(time_main3)+' seconds.')
+    
+    return Basis, Constr  #,Constr,activeConstraints
 
 def rref(A, tol=1e-8):
     B=A.astype(float).copy()

@@ -4,8 +4,10 @@ import numpy as np
 import time 
 import scipy
 from scipy.sparse import coo_matrix, csr_matrix, csc_matrix
-import math
+#import math
+
 cimport numpy as np
+cimport libc.math as math
 
 @cython.cdivision(False)
 @cython.boundscheck(False)
@@ -31,21 +33,20 @@ cpdef tuple pyx_compute_basis(object Constr, int maxiter):  #in general this fun
         it+=1
     
     nonderivedDofs = np.setdiff1d(np.arange(n),np.array(list(alldDofs.keys()))) #not yet completely optimal
-    return Basis[:,nonderivedDofs], Constr
+    return Basis[:,nonderivedDofs].tocsr(), Constr
 
 @cython.cdivision(False)
 @cython.boundscheck(False)
 @cython.wraparound(False)
 cpdef object pyx_find_ddofs(object Constr, long[:] active):
     cdef long n = len(active)
-    ddofs={}
+    cpdef object ddofs={}
     
     cdef int[:] Cindptr = Constr.indptr
     cdef int[:] Cindices = Constr.indices
     cdef double[:] Cdata = Constr.data
     
-    cdef int r
-    cdef int elim_dof
+    cdef int r, elim_dof
     cdef bint feasible
     
     for i in range(n):
@@ -80,9 +81,7 @@ cpdef object pyx_compute_active_constr(object Constr):
     cdef int n = Constr.shape[0]
     cdef long[:] active= np.empty(n, dtype=int)
     cdef int k = 0
-    cdef int r
-    cdef int a
-    cdef int b
+    cdef int r, a, b
     
     cdef int[:] indptr = Constr.indptr
     cdef double[:] data = Constr.data
@@ -123,12 +122,8 @@ cpdef object pyx_update_basis(object Constr, object Ddofs, object Basis):
     cdef int[:] Cindices = Constr.indices
     cdef double[:] Cdata = Constr.data
     
-    cdef int i
-    cdef int r
-    cdef int c
-    cdef int ind
-    cdef double v
-    cdef double v0
+    cdef int i, r, c, ind
+    cdef double v, v0
     
     cdef long[:] ii = np.empty(num_elem, dtype=int)       ###
     cdef long[:] jj = np.empty(num_elem, dtype=int)       ### Is it an advantage to use memoryview here???
@@ -216,8 +211,8 @@ cpdef object pyx_HilbertMatrixInv(int n):
     for i in range(1,n+1):
         for j in range(1,n+1):
             if i == 1:
-                m = math.factorial(j-1)
-                temp[j]=math.factorial(n+j-1)/m/m/math.factorial(n-j)
+                m = factorial(j-1)
+                temp[j]=factorial(n+j-1)/m/m/factorial(n-j)
             out[i-1,j-1]=(-1)**(i+j)*(i+j-1)/(i+j-1)**2*temp[i]*temp[j]
     return out.base
 
@@ -232,7 +227,7 @@ cpdef object pyx_CauchyMatrix(int n):
     for i in range(1,n+1):
         for j in range(1,n+1):
             if i==1:
-                temp[j]=math.factorial(n-j)
+                temp[j]=factorial(n-j)
             out[i-1,j-1]=1/temp[i]/temp[j]/(2*n+1-i-j)
     return out.base
 
@@ -256,6 +251,16 @@ cpdef object pyx_CauchyMatrixInv(int n):
                     prod1 *= 2*n-j-r+1
                     if r!=j:
                         prod2 *= r-j
-                temp[j]=math.factorial(n-j)*prod1/prod2
+                temp[j]=factorial(n-j)*prod1/prod2
             out[i-1,j-1]=temp[i]*temp[j]/(2*n+1-i-j)
     return out.base
+
+@cython.cdivision(False)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef int factorial(int n):
+    cdef int i
+    cdef int r = 1
+    for i in range(1,n):
+        r *= i
+    return r

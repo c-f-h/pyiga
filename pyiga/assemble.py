@@ -106,7 +106,7 @@ import scipy
 import scipy.sparse
 import itertools
 import math
-from sksparse.cholmod import cholesky
+#from sksparse.cholmod import cholesky
 import time
 
 from . import bspline
@@ -1910,7 +1910,7 @@ class Multipatch:
     def L2projection(self, u):
         Mh = self.assemble_volume(vform.mass_vf(2))
         u_rhs = self.assemble_volume(vform.L2functional_vf(2, physical=True),f=u)
-        return (cholesky(Mh.tocsc()))(u_rhs)
+        return solvers.make_solver(Mh, spd=True).dot(u_rhs)
         
     def function(self, u):
         u_loc=self.Basis@u

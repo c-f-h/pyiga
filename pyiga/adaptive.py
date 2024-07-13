@@ -4,7 +4,7 @@ import scipy
 import numpy as np
 import matplotlib as plt
 from pyiga import assemble, adaptive, bspline, vform, geometry, vis, solvers, utils, topology
-from sksparse.cholmod import cholesky
+#from sksparse.cholmod import cholesky
 from pyiga import utils
 
 ################################################################################

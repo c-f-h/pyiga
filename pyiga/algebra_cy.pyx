@@ -40,7 +40,7 @@ cpdef tuple pyx_compute_basis(object Constr, int maxiter):  #in general this fun
 @cython.wraparound(False)
 cpdef object pyx_find_ddofs(object Constr, long[:] active):
     cdef long n = len(active)
-    cpdef object ddofs={}
+    cdef object ddofs={}
     
     cdef int[:] Cindptr = Constr.indptr
     cdef int[:] Cindices = Constr.indices
@@ -205,9 +205,7 @@ cpdef object pyx_HilbertMatrix(int n):
 cpdef object pyx_HilbertMatrixInv(int n): 
     cdef double[:,:] out = np.empty((n,n), dtype=float)
     cdef double[::1] temp = np.empty(n, dtype=float)
-    cdef int i
-    cdef int j
-    cpdef object m
+    cdef int i, j, m
     for i in range(1,n+1):
         for j in range(1,n+1):
             if i == 1:

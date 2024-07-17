@@ -431,7 +431,7 @@ def pcg(A, f, x0 = None, P = 1, tol = 1e-5, maxiter = 100, output = False):
     
     if output:
         print('pcg with preconditioned condition number ' + str(cond) + ' stopped after ' + str(it) + ' iterations with relres ' + str(err/err0))
-    return u, it, cond, d
+    return u, it, L.minEigenvalue(), L.maxEigenvalue(), d
 
 
 ## Time stepping

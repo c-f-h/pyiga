@@ -20,6 +20,7 @@ extensions = [
              ["pyiga/ieti_cy.pyx"],
         include_dirs = [numpy.get_include()],
         extra_compile_args=c_args,
+        language="c++",
     ),
     Extension("pyiga.algebra_cy",
              ["pyiga/algebra_cy.pyx"],

@@ -242,7 +242,7 @@ class LanczosMatrix():
     def maxEigenvalue(self):
         if self.n==1: return self.delta[0]
     
-        x0 = max(self.mat.sum(axis=1).T.A[0])
+        x0 = abs(self.mat).sum(axis=1).T.A[0].max()
         return self.newton(x0)
         
     def minEigenvalue(self): 

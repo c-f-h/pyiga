@@ -15,9 +15,10 @@ cimport libc.math as math
 cpdef tuple pyx_compute_basis(object Constr, int maxiter):  #in general this function could probably be optimized a bit more
     cdef int n = Constr.shape[1]
     cdef int m = Constr.shape[0]
-    cdef np.ndarray[np.int64_t] active = np.arange(m, dtype=int)
+    cdef np.ndarray[np.int32_t] active = np.arange(m, dtype=np.int32)
     Basis=scipy.sparse.csc_matrix(scipy.sparse.identity(n))
-    alldDofs = {}
+    cdef dict alldDofs = {}
+    cdef dict dDofs
     cdef int it = 1
     
     while len(active)!=0:
@@ -38,9 +39,9 @@ cpdef tuple pyx_compute_basis(object Constr, int maxiter):  #in general this fun
 @cython.cdivision(False)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef object pyx_find_ddofs(object Constr, long[:] active):
-    cdef long n = len(active)
-    cdef object ddofs={}
+cpdef object pyx_find_ddofs(object Constr, int[:] active):
+    cdef int n = len(active)
+    cdef dict ddofs={}
     
     cdef int[:] Cindptr = Constr.indptr
     cdef int[:] Cindices = Constr.indices
@@ -77,9 +78,9 @@ cpdef object pyx_find_ddofs(object Constr, long[:] active):
 @cython.cdivision(False)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef object pyx_compute_active_constr(object Constr):
+cpdef np.ndarray[np.int32_t] pyx_compute_active_constr(object Constr):
     cdef int n = Constr.shape[0]
-    cdef long[:] active= np.empty(n, dtype=int)
+    cdef int[:] active= np.empty(n, dtype=np.int32)
     cdef int k = 0
     cdef int r, a, b
     
@@ -103,20 +104,20 @@ cpdef object pyx_compute_active_constr(object Constr):
             for ind in range(indptr[r], indptr[r+1]):
                 data[ind]=-data[ind]
 
-    return active.base[:k]
+    return np.asarray(active)[:k]
     
 @cython.cdivision(False)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef object pyx_update_basis(object Constr, object Ddofs, object Basis):   
+cpdef object pyx_update_basis(object Constr, dict Ddofs, object Basis):   
     #assert isinstance(Constr, csr_matrix), "Constraint matrix is not CSR."
     #assert isinstance(Basis, csc_matrix), "Basis matrix is not CSC."
-    cdef long[:] ddofs = np.array(list(Ddofs.keys()))
-    cdef long[:] dconstr = np.array(list(Ddofs.values()))
+    cdef int[:] ddofs = np.array(list(Ddofs.keys()),dtype = np.int32)
+    cdef int[:] dconstr = np.array(list(Ddofs.values()), dtype=np.int32)
     cdef int n_dd = len(Ddofs)
     cdef int n = Constr.shape[1]
 
-    cdef long num_elem = Constr[np.asarray(dconstr),:].nnz - 2*n_dd + n 
+    cdef int num_elem = Constr[np.asarray(dconstr),:].nnz - 2*n_dd + n 
     
     cdef int[:] Cindptr = Constr.indptr
     cdef int[:] Cindices = Constr.indices
@@ -125,8 +126,8 @@ cpdef object pyx_update_basis(object Constr, object Ddofs, object Basis):
     cdef int i, r, c, ind
     cdef double v, v0
     
-    cdef long[:] ii = np.empty(num_elem, dtype=int)       ###
-    cdef long[:] jj = np.empty(num_elem, dtype=int)       ### Is it an advantage to use memoryview here???
+    cdef int[:] ii = np.empty(num_elem, dtype=np.int32)       ###
+    cdef int[:] jj = np.empty(num_elem, dtype=np.int32)       ### Is it an advantage to use memoryview here???
     cdef double[:] data = np.empty(num_elem, dtype=float) ###
 
     cdef int k = 0
@@ -161,7 +162,7 @@ cpdef object pyx_update_basis(object Constr, object Ddofs, object Basis):
 @cython.cdivision(False)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef bint pyx_check_col(object lBasis, long[:] ddofs, int n_dd):
+cpdef bint pyx_check_col(object lBasis, int[:] ddofs, int n_dd):
     cdef int[:] indptr = lBasis.indptr
     cdef bint check = False
     

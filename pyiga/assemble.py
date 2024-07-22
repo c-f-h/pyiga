@@ -1869,7 +1869,7 @@ class Multipatch:
     
     def plot(self, u, cmap = plt.cm.jet, cbar=True, mesh=False, axis='scaled', contour=False, **kwargs):
         assert self.sdim==2, 'visualization only possible for 2D.'
-        assert len(u)==self.numdofs, 'wrong size of coefficient vector.'
+        assert (len(u)==self.numdofs) or (len(u)==self.N_ofs[-1]), 'wrong size of coefficient vector.'
         
         fig = plt.figure(figsize=kwargs.get('figsize'))
         ax = plt.axes()
@@ -1913,7 +1913,10 @@ class Multipatch:
         return solvers.make_solver(Mh, spd=True).dot(u_rhs)
         
     def function(self, u):
-        u_loc=self.Basis@u
+        if len(u)==self.numdofs:
+            u_loc=self.Basis@u
+        else:
+            u_loc = u
         return [geometry.BSplineFunc(kvs,u_loc[self.N_ofs[p]:self.N_ofs[p+1]]) for p, kvs in enumerate(self.mesh.kvs)]
     
     def sanity_check(self):

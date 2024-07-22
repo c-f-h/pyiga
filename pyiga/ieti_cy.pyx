@@ -21,14 +21,10 @@ cpdef tuple pyx_compute_decoupled_coarse_basis(object global_Basis, int[:] N_ofs
     
     cdef int[:] indptr = global_Basis.indptr
     cdef int[:] indices = global_Basis.indices
-    cdef double[:] data = global_Basis.data
+    #cdef double[:] data = global_Basis.data
     #cdef int[:] N_ofs_ = N_ofs
     
     cdef int i, j, ind, p, last_p
-    
-    cdef int[:] jj = np.empty(n, dtype=np.int32)
-    cdef int[:] ii = np.empty(n, dtype=np.int32)
-    cdef int[:] Bdata = np.empty(n, dtype=np.int32)
     
     for j in range(global_Basis.shape[1]):
         last_p=-1
@@ -41,19 +37,35 @@ cpdef tuple pyx_compute_decoupled_coarse_basis(object global_Basis, int[:] N_ofs
                 N[p]+=1
                 last_p=p
     
-    #[N_ofs[p]:N_ofs[p+1],:][:,dofs.base[N_ofs[p]:(N_ofs[p]+N[p])]]
-    #cdef list Basisk = [global_Basis for p in range(K)]
-    cdef int[:] N_ofs_ = np.cumsum([0]+N)
+    cdef list Basisk = [global_Basis[N_ofs[p]:N_ofs[p+1],:][:,dofs.base[N_ofs[p]:(N_ofs[p]+N[p])]] for p in range(K)]
+    cdef int[:] N_ofs_ = np.r_[0,np.cumsum(N.base, dtype=np.int32)]
     
-    cdef int k, p1, p2
+    cdef int k, p1, p2, m, s
     cdef int[:] dofs_intfs, idx1, idx2
+    
+    cdef int l = 0
+    cdef int[:] jj = np.empty(n, dtype=np.int32)            ###TODO: generate list of patch jump matrices immediately, also generate them in csr-format (data, indices, inptr)
+    cdef int[:] ii = np.empty(n, dtype=np.int32)
+    cdef int[:] Bdata = np.empty(n, dtype=np.int32)
+    
     for k in range(p_intfs.shape[1]):
         p1 = p_intfs[0,k]
         p2 = p_intfs[1,k]
         dofs_intfs, idx1, idx2, m = intersect(dofs[N_ofs[p1]:N_ofs[p1]+N[p1]],dofs[N_ofs[p2]:N_ofs[p2]+N[p2]])
+        for s in range(m):
+            jj[l] = idx1[s] + N_ofs_[p1]
+            jj[l+1] = idx2[s] + N_ofs_[p2]
+            ii[l] = l//2
+            ii[l+1] = l//2
+            Bdata[l]= 1
+            Bdata[l+1]= -1
+            l+=2
+        
+    B = scipy.sparse.coo_matrix((Bdata.base[:l],(ii.base[:l],jj.base[:l])),(l//2,N_ofs_[len(N_ofs_)-1])).tocsr()
         #N_ofs_[p1]+idx1
     
-    return dofs, N
+    return Basisk, N_ofs_.base, N.base, B
+    #return (1,2)
 
 @cython.cdivision(False)
 @cython.boundscheck(False)

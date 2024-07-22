@@ -252,7 +252,7 @@ class LanczosMatrix():
     def eval_charPolynomial(self,lambda_):
         return algebra_cy.pyx_eval_charPolynomial(self.delta, self.gamma, lambda_)
         
-    def newton(self, x0, maxiter=50, tol=1e-6):
+    def newton(self, x0, maxiter=5000, tol=1e-6):
         i = 0
         res = 1
         x_old = x0
@@ -263,6 +263,7 @@ class LanczosMatrix():
             res = np.abs(x_old - x_new)
             x_old = x_new
             i+=1
+        if i==maxiter: print("Eigenvalue computation did not converge!")
         return x_new
         #return algebra_cy.pyx_newton
         

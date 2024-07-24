@@ -1884,10 +1884,10 @@ class Multipatch:
             u_max=kwargs['range'][1]
             u_min=kwargs['range'][0]
             
-        if abs(u_max-u_min)<1e-10:
+        if abs(u_max-u_min)<1e-12:
             mid=(u_min+u_max)/2
-            u_max=mid+0.01
-            u_min=mid-0.01
+            u_max=mid+1e-12
+            u_min=mid-1e-12
 
         if mesh:
             self.mesh.draw(fig=fig)

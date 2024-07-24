@@ -363,7 +363,7 @@ def pcg(A, f, x0 = None, P = 1, tol = 1e-5, maxiter = 100, output = False):
     """Solve the the linear system Ax = f by conjugated gradient method.
     
     Args:
-        A (function or ndarray):  the matrix of the linear system
+        A (function or ndarray):  the symmetric and positive definite matrix of the linear system
         f (ndarray):              the right-hand side vector of the system
         x0 (ndarray):             initial guess for the solution, by default the zero vector
         P (function or ndarray):  preconditioner to use for the system. by default the identity map.
@@ -379,9 +379,9 @@ def pcg(A, f, x0 = None, P = 1, tol = 1e-5, maxiter = 100, output = False):
         Afun = A
         
     if not isinstance(f,np.ndarray):
-        d = f.A.ravel()
+        f_ = f.A.ravel()
     else:
-        d = f.ravel() 
+        f_ = f.ravel()
         
     if x0 is not None:
         if not isinstance(x0, np.ndarray):
@@ -389,10 +389,10 @@ def pcg(A, f, x0 = None, P = 1, tol = 1e-5, maxiter = 100, output = False):
         else:
             u = x0.ravel() 
     else:
-        u = np.zeros(len(d))
+        u = np.zeros(len(f_))
         
     if not callable(P):
-        if isinstance(P, np.ndarray):
+        if isinstance(P, np.ndarray) or scipy.sparse.issparse(P):
             assert P.shape==2*(len(f),), 'dimension mismatch'
             Pfun = lambda x: P@x
         else:
@@ -402,28 +402,30 @@ def pcg(A, f, x0 = None, P = 1, tol = 1e-5, maxiter = 100, output = False):
         # splu_pfun = sp.linalg.splu(pfuns,permc_spec='COLAMD')
         # pfun = lambda x : splu_pfun.solve(x)
     # print('Cond about',condest(pfuns@Afuns))
-    w = Pfun(d)
-    rho = w@d
+    # x, it, delta, gamma, d = solvers_cy.pyx_pcg(Afun, f, x0, Pfun, tol, maxiter)
+    r = f_ - Afun(u)
+    h = Pfun(r)
+    rho = h@r
     err0 = np.sqrt(rho)
-    s = w
+    d = h
     
     delta = np.zeros(maxiter+1)
     gamma = np.zeros(maxiter+1)
     
     for it in range(maxiter):
-        As = Afun(s)
-        alpha = rho/(As@s)
+        z = Afun(d)
+        alpha = rho/(z@d)
         delta[it]+=1/alpha
-        u = u + alpha*s
-        d = d - alpha*As
-        w = Pfun(d)
+        u = u + alpha*d
+        r = r - alpha*z
+        h = Pfun(r)
         rho1 = rho
-        rho = w@d
+        rho = h@r
         err = np.sqrt(rho)
         if err < tol*err0:
             break
         beta = rho/rho1
-        s = w + beta*s
+        d = h + beta*d
         gamma[it] = -np.sqrt(beta)/alpha
         delta[it+1] = beta/alpha
     L = algebra.LanczosMatrix(delta[:(it+1)], gamma[:it])

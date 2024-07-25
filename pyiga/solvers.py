@@ -359,17 +359,17 @@ def newton(F, J, x0, atol=1e-6, rtol=1e-6, maxiter=100, freeze_jac=1):
         res = F(x)
     raise NoConvergenceError('newton', maxiter, x)
     
-def pcg(A, f, x0 = None, P = 1, tol = 1e-5, maxiter = 100, output = False):    
+def pcg(A, f, x0 = None, P = 1, rtol = 1e-5, atol = 0.0, maxiter = 100, output = False):    
     """Solve the the linear system Ax = f by conjugated gradient method.
     
     Args:
-        A (function or ndarray):  the symmetric and positive definite matrix of the linear system
-        f (ndarray):              the right-hand side vector of the system
-        x0 (ndarray):             initial guess for the solution, by default the zero vector
-        P (function or ndarray):  preconditioner to use for the system. by default the identity map.
-        tol (float) :             iteration stops if relative error of residual and initial residual has reached tol
-        maxiter (int) :           maximum number of iterations if the stopping criterion is not met
-        output (boolean) :        information to be printed after iteration stops
+        A (LinearOperator or ndarray or sparse matrix):  the symmetric and positive definite matrix of the linear system
+        f (ndarray):                                     the right-hand side vector of the system
+        x0 (ndarray):                                    initial guess for the solution, by default the zero vector
+        P (LinearOperator or ndarray or sparse matrix):  preconditioner to use for the system. by default the identity map.
+        rtol (float), atol (float) :                     iteration stops if relative error of residual and initial residual has reached rtol or if absolute error has reached atol
+        maxiter (int) :                                  maximum number of iterations if the stopping criterion is not met
+        output (boolean) :                               information to be printed after iteration stops
     """
     maxiter = int(maxiter)
     
@@ -385,11 +385,11 @@ def pcg(A, f, x0 = None, P = 1, tol = 1e-5, maxiter = 100, output = False):
         
     if x0 is not None:
         if not isinstance(x0, np.ndarray):
-            u = x0.A.ravel()
+            x = x0.A.ravel()
         else:
-            u = x0.ravel() 
+            x = x0.ravel() 
     else:
-        u = np.zeros(len(f_))
+        x = np.zeros(len(f_))
         
     if not callable(P):
         if isinstance(P, np.ndarray) or scipy.sparse.issparse(P):
@@ -403,37 +403,39 @@ def pcg(A, f, x0 = None, P = 1, tol = 1e-5, maxiter = 100, output = False):
         # pfun = lambda x : splu_pfun.solve(x)
     # print('Cond about',condest(pfuns@Afuns))
     # x, it, delta, gamma, d = solvers_cy.pyx_pcg(Afun, f, x0, Pfun, tol, maxiter)
-    r = f_ - Afun(u)
+    r = f_ - Afun(x)
     h = Pfun(r)
     rho = h@r
-    err0 = np.sqrt(rho)
+    err = np.sqrt(rho)
+    err0 = np.sqrt(Pfun(f_)@f_)
     d = h
     
-    delta = np.zeros(maxiter+1)
-    gamma = np.zeros(maxiter+1)
-    
-    for it in range(maxiter):
+    delta = np.zeros(maxiter+1, dtype=float)
+    gamma = np.zeros(maxiter,   dtype=float)
+    it = 0
+
+    while err > max(rtol * err0, atol) and it < maxiter:
         z = Afun(d)
         alpha = rho/(z@d)
         delta[it]+=1/alpha
-        u = u + alpha*d
-        r = r - alpha*z
+        x += alpha*d
+        r -= alpha*z
         h = Pfun(r)
-        rho1 = rho
+        rho_old = rho
         rho = h@r
         err = np.sqrt(rho)
-        if err < tol*err0:
-            break
-        beta = rho/rho1
+        beta = rho/rho_old
         d = h + beta*d
         gamma[it] = -np.sqrt(beta)/alpha
         delta[it+1] = beta/alpha
-    L = algebra.LanczosMatrix(delta[:(it+1)], gamma[:it])
+        it+=1
+    #print(delta,gamma)
+    L = algebra.LanczosMatrix(delta[:(it)], gamma[:(it-1)])
     cond = abs(L.maxEigenvalue()/L.minEigenvalue())
     
     if output:
         print('pcg with preconditioned condition number ' + str(cond) + ' stopped after ' + str(it) + ' iterations with relres ' + str(err/err0))
-    return u, it, L.minEigenvalue(), L.maxEigenvalue(), d
+    return x, it, L.minEigenvalue(), L.maxEigenvalue(), d
 
 
 ## Time stepping

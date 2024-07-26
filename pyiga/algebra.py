@@ -243,30 +243,52 @@ class LanczosMatrix():
         if self.n==1: return self.delta[0]
     
         x0 = abs(self.mat).sum(axis=1).T.A[0].max()
-        return self.newton(x0)
+        return self.newton(x0 = x0)
         
     def minEigenvalue(self): 
         if self.n==1: return self.delta[0]
-        return self.newton(x0 = 0.)
+        return self.newton(x0 = 1e-15)
         
     def eval_charPolynomial(self,lambda_):
         return algebra_cy.pyx_eval_charPolynomial(self.delta, self.gamma, lambda_)
         
-    def newton(self, x0, maxiter=5000, tol=1e-6):
-        i = 0
-        res = 1
+    def newton(self, x0, maxiter=20, tol=1e-6):
         x_old = x0
         x_new = x0
-        while(i < maxiter and res > tol):
-            v, d = self.eval_charPolynomial(x_old)
+        res=1
+        i = 0
+
+        while (i < maxiter) and (res > tol):
+            v, d, _ = self.eval_charPolynomial(x_old)
             x_new = x_old - v/d
-            res = np.abs(x_old - x_new)
+            res = abs(x_new - x_old)
             x_old = x_new
             i+=1
-        if i==maxiter: print("Eigenvalue computation did not converge!")
+            
+        # for i in range(maxiter):
+        #     x_new = x_old - v/d
+        #     if abs(x_new - x_old)<rtol:
+        #         break
+        #     if i<maxiter-1:
+        #         v, d, _ = self.eval_charPolynomial(x_old)
+        # if i==maxiter-1: 
+        #     print("Eigenvalue computation did not converge!")
         return x_new
-        #return algebra_cy.pyx_newton
-        
+
+    def halley(self, x0, maxiter=20, tol=1e-6):
+        x_old = x0
+        v, d, d2 = self.eval_charPolynomial(x_old)
+
+        for i in range(maxiter):
+            x_new = x_old - (2*v*d)/(2*d**2-v*d2)
+            if abs(x_new - x_old)<tol:
+                break
+            if i<maxiter-1:
+                v, d, d2 = self.eval_charPolynomial(x_old)
+        if i==maxiter-1: 
+            print("Eigenvalue computation did not converge!")
+        return x_new
+
 def HilbertMatrix(n, return_inv = False):
     if return_inv:
         assert n < 11, "dimension of matrix too large to compute inverse exactly."

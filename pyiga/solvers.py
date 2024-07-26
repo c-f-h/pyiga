@@ -6,7 +6,6 @@ from . import utils, algebra
 
 from functools import reduce
 
-
 def _asdense(X):
     try:
         return X.A
@@ -412,9 +411,16 @@ def pcg(A, f, x0 = None, P = 1, rtol = 1e-5, atol = 0.0, maxiter = 100, output =
     
     delta = np.zeros(maxiter+1, dtype=float)
     gamma = np.zeros(maxiter,   dtype=float)
-    it = 0
+    
+    if err < max(rtol * err0, atol):
+        #L = algebra.LanczosMatrix(delta[:1], gamma[:0])
+        delta[0] = (Afun(d)@d)/rho
+        if output:
+            print('pcg with preconditioned condition number '+ str('\N{greek small letter kappa}')+ ' ~ ' + str(1.) + ' stopped after ' + str(0) + ' iterations with relres ' + str(err/err0))
+        return x, 0 , delta[0], delta[0], err
 
-    while err > max(rtol * err0, atol) and it < maxiter:
+    #while err > max(rtol * err0, atol) and it < maxiter:
+    for it in range(maxiter):
         z = Afun(d)
         alpha = rho/(z@d)
         delta[it]+=1/alpha
@@ -424,18 +430,27 @@ def pcg(A, f, x0 = None, P = 1, rtol = 1e-5, atol = 0.0, maxiter = 100, output =
         rho_old = rho
         rho = h@r
         err = np.sqrt(rho)
+        if err < max(rtol * err0, atol):
+            break
         beta = rho/rho_old
         d = h + beta*d
         gamma[it] = -np.sqrt(beta)/alpha
         delta[it+1] = beta/alpha
-        it+=1
+        if it==maxiter-1:
+            delta[it+1] += (Afun(d)@d)/rho
+        
     #print(delta,gamma)
-    L = algebra.LanczosMatrix(delta[:(it)], gamma[:(it-1)])
-    cond = abs(L.maxEigenvalue()/L.minEigenvalue())
+    eigs = scipy.linalg.eigvalsh_tridiagonal(delta[:(it+1)],gamma[:it])
+    m = min(abs(eigs))
+    M = max(abs(eigs))
+    #L = algebra.LanczosMatrix(delta[:(it+1)], gamma[:(it)])
+    # m = L.minEigenvalue()
+    # M = L.maxEigenvalue()
+    cond = abs(M/m)
     
     if output:
-        print('pcg with preconditioned condition number ' + str(cond) + ' stopped after ' + str(it) + ' iterations with relres ' + str(err/err0))
-    return x, it, L.minEigenvalue(), L.maxEigenvalue(), d
+        print('pcg with preconditioned condition number ' + str('\N{greek small letter kappa}')+ ' ~ ' + str(cond) + ' stopped after ' + str(it+1) + ' iterations with relres ' + str(err/err0))
+    return x, it+1 , m, M, err
 
 
 ## Time stepping

@@ -27,13 +27,13 @@ import itertools
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cdef inline void from_seq1(size_t i, size_t[1] ndofs, size_t[1] out) nogil:
+cdef void from_seq1(size_t i, size_t[1] ndofs, size_t[1] out) nogil:
     out[0] = i
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cdef inline void from_seq2(size_t i, size_t[2] ndofs, size_t[2] out) nogil:
+cdef void from_seq2(size_t i, size_t[2] ndofs, size_t[2] out) nogil:
     out[1] = i % ndofs[1]
     i /= ndofs[1]
     out[0] = i
@@ -41,7 +41,7 @@ cdef inline void from_seq2(size_t i, size_t[2] ndofs, size_t[2] out) nogil:
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cdef inline void from_seq3(size_t i, size_t[3] ndofs, size_t[3] out) nogil:
+cdef void from_seq3(size_t i, size_t[3] ndofs, size_t[3] out) nogil:
     out[2] = i % ndofs[2]
     i /= ndofs[2]
     out[1] = i % ndofs[1]

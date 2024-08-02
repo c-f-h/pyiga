@@ -28,7 +28,7 @@ def test_animate_field():
     anim = animate_field(fields, geo=geometry.bspline_quarter_annulus(), res=10)
     anim.to_jshtml()
 
-from .test_hierarchical import create_example_hspace
+from test_hierarchical import create_example_hspace
 
 def test_plot_hierarchical_mesh():
     hs = create_example_hspace(p=3, dim=2, n0=4, disparity=1, num_levels=3)

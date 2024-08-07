@@ -1,4 +1,5 @@
 import numpy as np
+from pyiga import solvers
 
 def gauss_rule(deg, a, b):
     """Return nodes and weights for Gauss-Legendre rule of given degree in (a,b).
@@ -10,6 +11,13 @@ def gauss_rule(deg, a, b):
     nodes   = (np.outer(h,x) + m[:, np.newaxis])
     weights = np.outer(h,w)
     return (nodes.ravel(), weights.ravel())
+
+def greville_rule(kv):
+    """Return nodes and weights for Greville rule of a given Knot Vector kv."""
+    nodes = kv.greville()
+    rhs = (kv.kv[kv.p+1:]-kv.kv[:-kv.p-1])/(kv.p+1)
+    weights = solvers.make_solver(bspline.collocation(kv,nodes)).dot(rhs)
+    return nodes, weights
 
 def make_iterated_quadrature(intervals, nqp):
     return gauss_rule(nqp, intervals[:-1], intervals[1:])

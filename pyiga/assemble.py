@@ -1753,17 +1753,17 @@ class Multipatch:
     def get_nodes(self):
         """Get node DoFs in the multipatch object. A node is a corner where more than two patches meet and is not a Dirichlet dof."""
         loc_c = np.concatenate([boundary_dofs(kvs,m=0,ravel=True)+self.N_ofs[p] for p, kvs in enumerate(self.mesh.kvs)])
-        
-        i_loc_c = np.setdiff1d(loc_c, self.global_dir_idx)
 
-        B = self.Basis[i_loc_c,:]
+        loc_c = np.setdiff1d(loc_c, self.global_dir_idx)
+
+        B = self.Basis[loc_c,:]
         C_dofs = np.unique(B[B.getnnz(axis=1)==1].indices)
         X = scipy.sparse.coo_matrix(self.Basis)
         idx = np.where(np.isclose(X.data,1))
         X.data, X.row, X.col = X.data[idx], X.row[idx], X.col[idx]
         X = X.tocsc()
         Nodes = {c:[X[:,c].indices] for c in C_dofs}
-        t_idx = i_loc_c[np.where(B.getnnz(axis=1)>1)[0]]
+        t_idx = loc_c[np.where(B.getnnz(axis=1)>1)[0]]
         T_dofs = {}
         for i in t_idx:
             t = tuple(self.Basis[i,:].indices)

@@ -89,7 +89,7 @@ setup(
     ],
     packages = ['pyiga', 'pyiga.codegen'],
 
-    ext_modules = cythonize(extensions, compiler_directives={'language_level': 3}),
+    ext_modules = cythonize(extensions, compiler_directives={'language_level': 3, 'legacy_implicit_noexcept': True}),
     package_data = {
         'pyiga': [ '*.pyx' , '*.pxd' , '*.pxi' ,],
     },

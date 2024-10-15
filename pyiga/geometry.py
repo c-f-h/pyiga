@@ -101,6 +101,9 @@ class NurbsFunc(bspline._BaseSplineFunc):
             shp[-1] -= 1
             return tuple(shp)
 
+    def control_points(self):
+        return self.coeffs[..., :-1] / self.coeffs[..., -1:]
+
     def grid_eval(self, gridaxes):
         assert len(gridaxes) == self.sdim, "Input has wrong dimension"
         # make sure axes are one-dimensional

@@ -611,7 +611,7 @@ class PatchMesh:
             ax = plt.axes()
             
         if nodes:
-            plt.scatter(*np.transpose(self.vertices),zorder=100)
+            plt.scatter(*np.transpose(self.vertices),zorder=100000)
         
         for p,((kvs, geo),_) in enumerate(self.patches):
             if color is not None:
@@ -628,7 +628,7 @@ class PatchMesh:
             if bcolor is not None:
                 bcol=bcolor[key]
             for (p,b) in self.outer_boundaries[key]:
-                vis.plot_geo(self.geos[p].boundary([assemble.int_to_bdspec(b)]), linewidth=bwidth, color=bcol)
+                vis.plot_geo(self.geos[p].boundary([assemble.int_to_bdspec(b)]), linewidth=bwidth, color=bcol, zorder=10000)
 
         if patch_idx:
             for p in range(len(self.patches)):        # annotate patch indices

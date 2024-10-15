@@ -1750,11 +1750,13 @@ class Multipatch:
             P = self.P2G@P_loc@B_old
             return P
         
-    def get_nodes(self):
-        """Get node DoFs in the multipatch object. A node is a corner where more than two patches meet and is not a Dirichlet dof."""
+    def get_nodes(self, dir_boundary=False):
+        """Get global vertices of the multipatch object as well as local nodal degrees of freedom corresponding to the vertices. 
+        In case of T-junctions also obtain the $p$ global degrees of freedom and $p$ local degrees of freedom on the coarse patch.
+        Additionally may include nodes on the Dirichlet boundary if desired."""
         loc_c = np.concatenate([boundary_dofs(kvs,m=0,ravel=True)+self.N_ofs[p] for p, kvs in enumerate(self.mesh.kvs)])
 
-        loc_c = np.setdiff1d(loc_c, self.global_dir_idx)
+        #loc_c = np.setdiff1d(loc_c, self.global_dir_idx)
 
         B = self.Basis[loc_c,:]
         C_dofs = np.unique(B[B.getnnz(axis=1)==1].indices)
@@ -1775,6 +1777,8 @@ class Multipatch:
                 T_dofs[t][1] = T_dofs[t][1] & (set(self.Constr[self.Constr.tocsc()[:,i].indices,:].indices)-{i})
         T_dofs = {t:[np.sort(T_dofs[t][0]),np.sort(list(T_dofs[t][1]))] for t in T_dofs}
         Nodes.update(T_dofs)
+        if not dir_boundary:
+            Nodes = {key:Nodes[key] for key in Nodes if len(np.intersect1d(Nodes[key][0],self.global_dir_idx))==0}
         return Nodes
 
     def get_boundary_dofs(self, bidx):

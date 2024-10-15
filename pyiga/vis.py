@@ -66,13 +66,13 @@ def plot_mp_quiver():
 def plot_geo(geo,
              grid=10, gridx=None, gridy=None, gridz=None,
              res=50,
-             linewidth=None, lcolor='black', color=None, boundary=True):
+             linewidth=None, lcolor='black', color=None, boundary=True, bcolor='black', controlgrid=False, zorder=1):
     """Plot a wireframe representation of a geometry."""
     assert (geo.dim == 2 or geo.dim == 3), 'Can only represent geometries in 2D or 3D!' 
     if geo.sdim == 1:
-        return plot_curve(geo, res=res, linewidth=linewidth, lcolor=color)
+        return plot_curve(geo, res=res, linewidth=linewidth, lcolor=color, controlgrid=controlgrid, zorder=zorder)
     if geo.sdim == 2:
-        return plot_surface(geo, grid=grid, gridx=gridx, gridy=gridy, res=res, linewidth=linewidth, lcolor=lcolor, color=color, boundary=boundary)
+        return plot_surface(geo, grid=grid, gridx=gridx, gridy=gridy, res=res, linewidth=linewidth, lcolor=lcolor, color=color, boundary=boundary, bcolor=bcolor, controlgrid=controlgrid, zorder=zorder)
     else:
         if gridx is None: gridx = grid
         if gridy is None: gridy = grid
@@ -84,11 +84,11 @@ def plot_geo(geo,
 
     # if gridx/gridy is not an array, build an array with given number of ticks
     if np.isscalar(gridx):
-        gridx = np.linspace(supp[0][0], supp[0][1], gridx)
+        gridx = np.linspace(supp[0][0], supp[0][1], max(gridx,2))
     if np.isscalar(gridy):
-        gridy = np.linspace(supp[1][0], supp[1][1], gridy)
+        gridy = np.linspace(supp[1][0], supp[1][1], max(gridy,2))
     if np.isscalar(gridz):
-        gridz = np.linspace(supp[2][0], supp[2][1], gridz)
+        gridz = np.linspace(supp[2][0], supp[2][1], max(gridz,2))
 
     meshx = np.linspace(supp[0][0], supp[0][1], res)
     meshy = np.linspace(supp[1][0], supp[1][1], res)
@@ -121,11 +121,11 @@ def plot_geo(geo,
                 plotline(pts[:,i,j,:], capstyle='round')
             else:
                 plotline(pts[:,i,j,:])
-    
+            
 def plot_surface(geo,
                  grid=10, gridx=None, gridy=None,
                  res=50,
-                 linewidth=None, lcolor='black', color=None, boundary=True):
+                 linewidth=None, lcolor='black', color=None, boundary=True, bcolor='black', controlgrid = False, zorder=1):
     """Plot a 2D or 3D surface."""
     assert geo.sdim == 2 and (geo.dim == 2 or geo.dim == 3), "Can only plot surfaces."
     if gridx is None: gridx = grid
@@ -137,37 +137,43 @@ def plot_surface(geo,
 
     # if gridx/gridy is not an array, build an array with given number of ticks
     if np.isscalar(gridx):
-        gridx = np.linspace(supp[1][0], supp[1][1], gridx)
+        gridx = np.linspace(supp[1][0], supp[1][1], max(gridx,2))
     if np.isscalar(gridy):
-        gridy = np.linspace(supp[0][0], supp[0][1], gridy)
+        gridy = np.linspace(supp[0][0], supp[0][1], max(gridy,2))
 
     meshx = np.linspace(supp[1][0], supp[1][1], res)
     meshy = np.linspace(supp[0][0], supp[0][1], res)
     
-    def plotline(pts, capstyle='butt', color=color, linewidth=None):
+    def plotline(pts, capstyle='butt', color=color, linewidth=None, zorder=1):
         if geo.dim == 3:
             plt.plot(pts[:,0], pts[:,1], pts[:,2], color=color, linewidth=linewidth,
-                                       solid_joinstyle='round', solid_capstyle=capstyle)
+                                       solid_joinstyle='round', solid_capstyle=capstyle, zorder=zorder)
         if geo.dim == 2:
             plt.plot(pts[:,0], pts[:,1], color=color, linewidth=linewidth,
-                solid_joinstyle='round', solid_capstyle=capstyle)
+                solid_joinstyle='round', solid_capstyle=capstyle, zorder = zorder)
 
-    
     #print(meshy)
     pts1 = utils.grid_eval(geo, (gridy, meshx))
     pts2 = utils.grid_eval(geo, (meshy, gridx))
+
+    if controlgrid:
+        ctr = geo.control_points()
+        plt.scatter(ctr[:,:,0],ctr[:,:,1], c="red",zorder=100+zorder)
+        plt.plot(ctr[:,:,0],ctr[:,:,1], c="red",zorder=10)+zorder;
+        ctr=np.transpose(ctr,(1,0,2));
+        plt.plot(ctr[:,:,0],ctr[:,:,1], c="red",zorder=10+zorder);
+
+    if boundary:
+        plotline(pts1[0,:,:], capstyle='round', linewidth=linewidth, color=bcolor, zorder=1000+zorder)
+        plotline(pts1[-1,:,:], capstyle='round', linewidth=linewidth, color=bcolor,zorder=1000+zorder)
+        plotline(pts2[:,0,:], capstyle='round', linewidth=linewidth, color=bcolor, zorder=1000+zorder)
+        plotline(pts2[:,-1,:], capstyle='round', linewidth=linewidth, color=bcolor,zorder=1000+zorder)
     
     for i in range(1, pts1.shape[0]-1):
         plotline(pts1[i,:,:], linewidth=linewidth, color=lcolor)
 
     for j in range(1, pts2.shape[1]-1):
         plotline(pts2[:,j,:], linewidth=linewidth, color=lcolor)
-        
-    if boundary:
-        plotline(pts1[0,:,:], capstyle='round', linewidth=linewidth, color="black")
-        plotline(pts1[-1,:,:], capstyle='round', linewidth=linewidth, color="black")
-        plotline(pts2[:,0,:], capstyle='round', linewidth=linewidth, color="black")
-        plotline(pts2[:,-1,:], capstyle='round', linewidth=linewidth, color="black")
     
     if color:
         bpts0 = utils.grid_eval(geo,(meshy, np.linspace(supp[1][0], supp[1][1], 2)))
@@ -176,7 +182,7 @@ def plot_surface(geo,
         y=np.concatenate([bpts1[0,:,1],bpts0[:,1,1],np.flip(bpts1[1,:,1]),np.flip(bpts0[:,0,1])])
         plt.fill(x,y,color=color)
 
-def plot_curve(geo, res=50, linewidth=None, lcolor='black'):
+def plot_curve(geo, res=50, linewidth=None, lcolor='black', controlgrid=False, zorder=1):
     """Plot a 2D curve."""
     if not lcolor:
         lcolor='black'
@@ -187,10 +193,18 @@ def plot_curve(geo, res=50, linewidth=None, lcolor='black'):
         supp = geo.support
     mesh = np.linspace(supp[0][0], supp[0][1], res)
     pts = utils.grid_eval(geo, (mesh,))
+    if controlgrid:
+        ctr = geo.control_points()
     if geo.dim == 3:
-        plt.axes(projection='3d').plot3D(pts[:,0], pts[:,1], pts[:,2], color=lcolor, linewidth=linewidth)
+        if controlgrid:
+            plt.axes(projection='3d').scatter(ctr[:,0], ctr[:,1], ctr[:,2], color="red", zorder=100+zorder)
+            plt.axes(projection='3d').plot3D(ctr[:,0], ctr[:,1], ctr[:,2], color="red", linewidth=linewidth, zorder=10+zorder)
+        plt.axes(projection='3d').plot3D(pts[:,0], pts[:,1], pts[:,2], color=lcolor, linewidth=linewidth, zorder=zorder)
     if geo.dim == 2:
-        plt.plot(pts[:,0], pts[:,1], color=lcolor, linewidth=linewidth)
+        if controlgrid:
+            plt.scatter(ctr[:,0], ctr[:,1], color="red", zorder=100+zorder)
+            plt.plot(ctr[:,0], ctr[:,1], color='red',  linewidth=linewidth, zorder=10+zorder)
+        plt.plot(pts[:,0], pts[:,1], color=lcolor, linewidth=linewidth, zorder=zorder)
 
 
 def animate_field(fields, geo, vrange=None, res=(50,50), cmap=None, interval=50, progress=False):

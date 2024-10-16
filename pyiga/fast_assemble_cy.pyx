@@ -11,7 +11,7 @@ import scipy.sparse
 #
 # Imports from fastasm.cc:
 #
-cdef extern void set_log_func(void (*logfunc)(const char * str, size_t))
+cdef extern void set_log_func(void (*logfunc)(char * str, size_t))
 
 cdef extern void fast_assemble_2d_cimpl "fast_assemble_2d"(
         MatrixEntryFn entryfunc, void * data,
@@ -35,7 +35,7 @@ cdef extern void fast_assemble_3d_cimpl "fast_assemble_3d"(
 
 
 # this is so that IPython notebooks can capture the output
-cdef void _stdout_log_func(const char * s, size_t nbytes):
+cdef void _stdout_log_func(char * s, size_t nbytes):
     import sys
     sys.stdout.write(s[:nbytes].decode('ascii'))
 

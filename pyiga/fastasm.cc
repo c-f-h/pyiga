@@ -55,7 +55,7 @@ void cout_logfunc(const char * str, size_t)
 FunctionStringBuf log_stringbuf(cout_logfunc);
 std::ostream logger(&log_stringbuf);
 
-extern void set_log_func(LogFuncPtr logfunc)
+extern "C" void set_log_func(LogFuncPtr logfunc)
 {
     if (logfunc)
         log_stringbuf.set_func(logfunc);
@@ -698,7 +698,7 @@ void inflate_3d(const Array3D<double>& X,
 // Main entry points
 ////////////////////////////////////////////////////////////////////////////////
 
-extern void fast_assemble_2d(
+extern "C" void fast_assemble_2d(
         // matrix specification
         MatrixEntryFn entryfunc,
         void * data,
@@ -728,7 +728,7 @@ extern void fast_assemble_2d(
 }
 
 
-extern void fast_assemble_3d(
+extern "C" void fast_assemble_3d(
         // matrix specification
         MatrixEntryFn entryfunc,
         void * data,

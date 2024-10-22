@@ -1290,21 +1290,16 @@ class Multipatch:
     a hierarchy between the interface knots
 
     Args:
-        pm: A :class:`PatchMesh` instance representing the patches 
+        M:  A :class:`PatchMesh` instance representing the patches 
             via their discretization and their geometry function 
-            as well as the generated mesh between the patches (vertices, interfaces).
-            
-        b_data: A dictionary of the form {'D':dir_data, 'N':neu_data, 'R': robin_data}
-            dir_data: A list of triples (patch, bdspec, dir_func) prescribing the function `dir_func` to boundary dofs of `patch` on side `bdspec`.
-            neu_data: A list of triples (patch, bdspec, neu_func) in order to assemble natural boundary conditions for boundary dofs of `patch` on side `bdspec`.
-            robin_data: A list of triples (patch, bd_spec, (gamma, robin_func))
+            as well as the generated mesh between the patches (vertices, interfaces).. 
         
         automatch (bool): if True, attempt to automatically apply the interface information from the PatchMesh object to couple the patches.
             If False, the user has to manually join the patches by calling
             :meth:`join_boundaries` as often as needed, followed by
             :meth:`finalize`.
     """
-    def __init__(self, M, automatch=False, space='H1', dim=1):
+    def __init__(self, M, automatch=False, space='H1'):
         """Initialize a multipatch structure."""
         # underlying PatchMesh object describing the geometry
         if isinstance(M, topology.PatchMesh):

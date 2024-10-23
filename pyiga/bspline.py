@@ -32,6 +32,9 @@ def _parse_bdspec(bdspec, dim):
                 % (bdspec, dim))
     return bd
 
+def unit(n,k):
+    return np.eye(1,n,k).ravel()
+
 def is_sub_space(kv1,kv2):
     """Checks if the spline space induced by the knot vector kv1 is a subspace of the corresponding spline space induced by kv2 in some subinterval of kv1.
     
@@ -198,6 +201,19 @@ class KnotVector:
             # due to rounding errors, some points may not be contained in the
             # support interval; clamp them manually to avoid problems later on
             return np.clip(g, self.kv[0], self.kv[-1])
+
+    def maxima(self, maxiter=10): #TODO: cythonize
+        n = self.numdofs
+        M = self.greville() #greville starting points are a good initial guess
+        for j in range(n):
+            e = unit(n,j) #write function to evaluate individual b-splines instead of all basis functions?
+            if not np.isclose(deriv(self,e,0,M[j]),1):
+                i=0
+                while abs(deriv(self,e,1,M[j])) > 1e-12 and i<maxiter: #simple Newton for non-nodal basis functions
+                    M[j] = M[j] - deriv(self,e,1,M[j])/deriv(self,e,2,M[j])
+                    i+=1
+                if i==maxiter: print("maxiter reached")
+        return M
 
     def h_refine(self, new_knots=None, mult=1):
         """Return the refinement of this knot vector by inserting `new_knots`,

@@ -27,13 +27,13 @@ import itertools
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cdef inline void from_seq1(size_t i, size_t[1] ndofs, size_t[1] out) nogil:
+cdef void from_seq1(size_t i, size_t[1] ndofs, size_t[1] out) noexcept nogil:
     out[0] = i
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cdef inline void from_seq2(size_t i, size_t[2] ndofs, size_t[2] out) nogil:
+cdef void from_seq2(size_t i, size_t[2] ndofs, size_t[2] out) noexcept nogil:
     out[1] = i % ndofs[1]
     i /= ndofs[1]
     out[0] = i
@@ -41,7 +41,7 @@ cdef inline void from_seq2(size_t i, size_t[2] ndofs, size_t[2] out) nogil:
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cdef inline void from_seq3(size_t i, size_t[3] ndofs, size_t[3] out) nogil:
+cdef void from_seq3(size_t i, size_t[3] ndofs, size_t[3] out) noexcept nogil:
     out[2] = i % ndofs[2]
     i /= ndofs[2]
     out[1] = i % ndofs[1]
@@ -146,24 +146,24 @@ cdef struct IntInterval:
     int a
     int b
 
-cdef IntInterval make_intv(int a, int b) nogil:
+cdef IntInterval make_intv(int a, int b) noexcept nogil:
     cdef IntInterval intv
     intv.a = a
     intv.b = b
     return intv
 
-cdef IntInterval intersect_intervals(IntInterval intva, IntInterval intvb) nogil:
+cdef IntInterval intersect_intervals(IntInterval intva, IntInterval intvb) noexcept nogil:
     return make_intv(max(intva.a, intvb.a), min(intva.b, intvb.b))
 
 
-cdef int next_lexicographic1(size_t[1] cur, size_t start[1], size_t end[1]) nogil:
+cdef int next_lexicographic1(size_t[1] cur, size_t start[1], size_t end[1]) noexcept nogil:
     cur[0] += 1
     if cur[0] == end[0]:
         return 0
     else:
         return 1
 
-cdef int next_lexicographic2(size_t[2] cur, size_t start[2], size_t end[2]) nogil:
+cdef int next_lexicographic2(size_t[2] cur, size_t start[2], size_t end[2]) noexcept nogil:
     cdef size_t i
     for i in reversed(range(2)):
         cur[i] += 1
@@ -175,7 +175,7 @@ cdef int next_lexicographic2(size_t[2] cur, size_t start[2], size_t end[2]) nogi
         else:
             return 1
 
-cdef int next_lexicographic3(size_t[3] cur, size_t start[3], size_t end[3]) nogil:
+cdef int next_lexicographic3(size_t[3] cur, size_t start[3], size_t end[3]) noexcept nogil:
     cdef size_t i
     for i in reversed(range(3)):
         cur[i] += 1
@@ -189,7 +189,7 @@ cdef int next_lexicographic3(size_t[3] cur, size_t start[3], size_t end[3]) nogi
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef IntInterval find_joint_support_functions(ssize_t[:,::1] meshsupp, long i) nogil:
+cdef IntInterval find_joint_support_functions(ssize_t[:,::1] meshsupp, long i) noexcept nogil:
     cdef long j, n, minj, maxj
     minj = j = i
     while j >= 0 and meshsupp[j,1] > meshsupp[i,0]:
@@ -251,7 +251,7 @@ def inverses(X):
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cdef double[:,:,:,::1] det_and_inv_2x2(double[:,:,:,::1] X, double[:,::1] det_out):
+cdef double[:,:,:,::1] det_and_inv_2x2(double[:,:,:,::1] X, double[:,::1] det_out) noexcept:
     cdef long m,n, i,j
     cdef double det, a,b,c,d
     m,n = X.shape[0], X.shape[1]
@@ -271,7 +271,7 @@ cdef double[:,:,:,::1] det_and_inv_2x2(double[:,:,:,::1] X, double[:,::1] det_ou
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cdef double[:,:,:,::1] inverses_2x2(double[:,:,:,::1] X):
+cdef double[:,:,:,::1] inverses_2x2(double[:,:,:,::1] X) noexcept:
     cdef size_t m,n, i,j
     cdef double det, a,b,c,d
     m,n = X.shape[0], X.shape[1]
@@ -292,7 +292,7 @@ cdef double[:,:,:,::1] inverses_2x2(double[:,:,:,::1] X):
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cdef double[:,:,:,:,::1] det_and_inv_3x3(double[:,:,:,:,::1] X, double[:,:,::1] det_out):
+cdef double[:,:,:,:,::1] det_and_inv_3x3(double[:,:,:,:,::1] X, double[:,:,::1] det_out) noexcept:
     cdef long n0, n1, n2, i0, i1, i2
     cdef double det, invdet
     n0,n1,n2 = X.shape[0], X.shape[1], X.shape[2]
@@ -329,7 +329,7 @@ cdef double[:,:,:,:,::1] det_and_inv_3x3(double[:,:,:,:,::1] X, double[:,:,::1] 
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef double[:,:,::1] determinants_3x3(double[:,:,:,:,::1] X):
+cdef double[:,:,::1] determinants_3x3(double[:,:,:,:,::1] X) noexcept:
     cdef size_t n0, n1, n2, i0, i1, i2
     n0,n1,n2 = X.shape[0], X.shape[1], X.shape[2]
 
@@ -349,7 +349,7 @@ cdef double[:,:,::1] determinants_3x3(double[:,:,:,:,::1] X):
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cdef double[:,:,:,:,::1] inverses_3x3(double[:,:,:,:,::1] X):
+cdef double[:,:,:,:,::1] inverses_3x3(double[:,:,:,:,::1] X) noexcept:
     cdef size_t n0, n1, n2, i0, i1, i2
     cdef double det, invdet
     n0,n1,n2 = X.shape[0], X.shape[1], X.shape[2]

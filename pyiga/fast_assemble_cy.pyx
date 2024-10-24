@@ -32,7 +32,6 @@ cdef extern void fast_assemble_3d_cimpl "fast_assemble_3d"(
 #
 # Imports end
 #
-
 # this is so that IPython notebooks can capture the output
 cdef void _stdout_log_func(const char * s, size_t nbytes) noexcept:
     import sys

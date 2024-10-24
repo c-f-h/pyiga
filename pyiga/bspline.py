@@ -205,11 +205,12 @@ class KnotVector:
     def maxima(self, maxiter=10): #TODO: cythonize
         n = self.numdofs
         M = self.greville() #greville starting points are a good initial guess
+        h = self.meshsize_min()
         for j in range(n):
             e = unit(n,j) #write function to evaluate individual b-splines instead of all basis functions?
             if not np.isclose(deriv(self,e,0,M[j]),1):
                 i=0
-                while abs(deriv(self,e,1,M[j])) > 1e-12 and i<maxiter: #simple Newton for non-nodal basis functions
+                while abs(deriv(self,e,1,M[j])) > 1e-10/h and i<maxiter: #simple Newton for non-nodal basis functions
                     M[j] = M[j] - deriv(self,e,1,M[j])/deriv(self,e,2,M[j])
                     i+=1
                 if i==maxiter: print("maxiter reached")
@@ -243,9 +244,11 @@ class KnotVector:
     
     def meshsize_max(self):
         """Compute average length of the knot spans of this knot vector"""
-        nspans = self.numspans
-        support = abs(self.kv[-1] - self.kv[0])
         return np.max(self.kv[1:]-self.kv[:-1])
+
+    def meshsize_min(self):
+        """Compute average length of the knot spans of this knot vector"""
+        return np.min(self.mesh[1:]-self.mesh[:-1])
     
     def deriv(self, deriv=1, coeffs=None):
         assert isinstance(deriv,int) and deriv>0, "ambiguous"

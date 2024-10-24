@@ -11,7 +11,7 @@ import scipy.sparse
 #
 # Imports from fastasm.cc:
 #
-cdef extern void set_log_func(void (*logfunc)(char * str, size_t))
+cdef extern void set_log_func(void (*logfunc)(const char * str, size_t))
 
 cdef extern void fast_assemble_2d_cimpl "fast_assemble_2d"(
         MatrixEntryFn entryfunc, void * data,

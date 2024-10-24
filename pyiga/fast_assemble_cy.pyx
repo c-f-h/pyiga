@@ -19,7 +19,7 @@ cdef extern void fast_assemble_2d_cimpl "fast_assemble_2d"(
         size_t n1, int bw1,
         double tol, int maxiter, int skipcount, int tolcount,
         int verbose,
-        vector[size_t]& entries_i, vector[size_t]& entries_j, vector[double]& entries)
+        vector[size_t]& entries_i, vector[size_t]& entries_j, vector[double]& entries) noexcept
 
 cdef extern void fast_assemble_3d_cimpl "fast_assemble_3d"(
         MatrixEntryFn entryfunc, void * data,
@@ -28,7 +28,7 @@ cdef extern void fast_assemble_3d_cimpl "fast_assemble_3d"(
         size_t n2, int bw2,
         double tol, int maxiter, int skipcount, int tolcount,
         int verbose,
-        vector[size_t]& entries_i, vector[size_t]& entries_j, vector[double]& entries)
+        vector[size_t]& entries_i, vector[size_t]& entries_j, vector[double]& entries) noexcept
 #
 # Imports end
 #

@@ -11,7 +11,7 @@ from scipy.sparse.linalg import LinearOperator, onenormest, splu
 from . import solvers
 from . import algebra_cy
 import time
-import numba as nb
+#import numba as nb
 
 def condest(A, spd=False):
     luA = splu(A)

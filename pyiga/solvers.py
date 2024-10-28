@@ -1030,18 +1030,18 @@ rowdaind2 = adaptive_rosenbrock_method(*coeffs_rowdaind2(), 'rowdaind2', 'ROWDAI
 rodasp = adaptive_rosenbrock_method(*coeffs_rodasp(), 'rodasp', 'RODASP Rosenbrock')
 rosi2p1 = adaptive_rosenbrock_method(*coeffs_rosi2p1(), 'rosi2p1', 'ROSI2P1 Rosenbrock')
 
-import sys
-import time
-import numpy as np
-import numba as nb
-import scipy.sparse as sps
-from numba import float64,float32,int64
+# import sys
+# import time
+# import numpy as np
+# import numba as nb
+# import scipy.sparse as sps
+# from numba import float64,float32,int64
 
-import importlib.util
-spam_spec = importlib.util.find_spec("sksparse")
-found = spam_spec is not None
+# import importlib.util
+# spam_spec = importlib.util.find_spec("sksparse")
+# found = spam_spec is not None
 
-from scipy.sparse.linalg import splu
+# from scipy.sparse.linalg import splu
 
 # def fastBlockInverse2(Mh):
 #     spluMh = splu(Mh)

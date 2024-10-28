@@ -1,6 +1,7 @@
 """Classes and functions for creating custom instances of :class:`scipy.sparse.linalg.LinearOperator`."""
 import numpy as np
 import scipy.sparse.linalg
+from sksparse.cholmod import cholesky
 from builtins import range   # Python 2 compatibility
 
 from . import kronecker
@@ -258,10 +259,14 @@ def make_solver(B, symmetric=False, spd=False):
             solver.factor()
             return PardisoSolverWrapper(B.shape, B.dtype, solver)
         else:
-            # use SuperLU (unless scipy uses UMFPACK?) -- really slow!
-            spLU = scipy.sparse.linalg.splu(B.tocsc(), permc_spec='NATURAL')
-            return scipy.sparse.linalg.LinearOperator(B.shape, dtype=B.dtype,
-                    matvec=spLU.solve, matmat=spLU.solve)
+            if symmetric:
+                chol = cholesky(B.tocsc())
+                return scipy.sparse.linalg.LinearOperator(B.shape, dtype=B.dtype, matvec=chol.solve_A, matmat=chol.solve_A)
+            else:
+                # use SuperLU (unless scipy uses UMFPACK?) -- really slow!
+                spLU = scipy.sparse.linalg.splu(B.tocsc(), permc_spec='NATURAL')
+                return scipy.sparse.linalg.LinearOperator(B.shape, dtype=B.dtype,
+                        matvec=spLU.solve, matmat=spLU.solve)
     else:
         if symmetric:
             chol = scipy.linalg.cho_factor(B, check_finite=False)

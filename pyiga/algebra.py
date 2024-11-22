@@ -141,7 +141,7 @@ def compute_basis(Constr, maxiter):
     nonderivedDofs = allLocalDofs=np.arange(n)
     allderivedDofs={}
     activeConstraints=np.arange(Constr.shape[0])
-    Basis=scipy.sparse.csc_matrix(scipy.sparse.identity(n))
+    Basis=scipy.sparse.identity(n, format="csc")
     time_find_active = 0
     time_find_ddofs = 0
     time_update = 0

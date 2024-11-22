@@ -5,6 +5,7 @@ import numpy
 
 import Cython.Compiler.Options
 Cython.Compiler.Options.cimport_from_pyx = True
+#Cython.Compiler.Options.annotate = True
 
 USE_OPENMP = True
 
@@ -16,6 +17,11 @@ else:
     c_args_openmp = l_args_openmp = []
 
 extensions = [
+    Extension("pyiga.geometry_cy",
+             ["pyiga/geometry_cy.pyx"],
+        include_dirs = [numpy.get_include()],
+        extra_compile_args=c_args,
+    ),
     Extension("pyiga.ieti_cy",
              ["pyiga/ieti_cy.pyx"],
         include_dirs = [numpy.get_include()],
@@ -26,6 +32,7 @@ extensions = [
              ["pyiga/algebra_cy.pyx"],
         include_dirs = [numpy.get_include()],
         extra_compile_args=c_args,
+        language="c++",
     ),
     Extension("pyiga.bspline_cy",
              ["pyiga/bspline_cy.pyx"],
@@ -89,7 +96,7 @@ setup(
     ],
     packages = ['pyiga', 'pyiga.codegen'],
 
-    ext_modules = cythonize(extensions, compiler_directives={'language_level': 3}),
+    ext_modules = cythonize(extensions, compiler_directives={'language_level': 3, 'annotation_typing' : True}),
     package_data = {
         'pyiga': [ '*.pyx' , '*.pxd' , '*.pxi' ,],
     },

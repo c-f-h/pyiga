@@ -1,3 +1,5 @@
+# distutils: define_macros=NPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION
+
 cimport cython
 from libcpp.vector cimport vector
 from cython cimport view    # avoid compiler crash

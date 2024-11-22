@@ -1,3 +1,5 @@
+# distutils: define_macros=NPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION
+# cython: linetrace=True
 cimport cython
 
 import numpy as np
@@ -8,53 +10,55 @@ from scipy.sparse import coo_matrix, csr_matrix, csc_matrix
 
 cimport numpy as np
 cimport libc.math as math
+from libcpp.map cimport map
+from libc.stdlib cimport malloc, free
+from cython.operator cimport dereference as deref, postincrement as inc
+#from cython.cimports.cpython.mem import PyMem_Malloc, PyMem_Realloc, PyMem_Free
 
 @cython.cdivision(False)
-@cython.boundscheck(False)
-@cython.wraparound(False)
-cpdef tuple pyx_compute_basis(object Constr, int maxiter):  #in general this function could probably be optimized a bit more
-    cdef int n = Constr.shape[1]
-    cdef int m = Constr.shape[0]
-    cdef np.ndarray[np.int32_t] active = np.arange(m, dtype=np.int32)
-    Basis=scipy.sparse.csc_matrix(scipy.sparse.identity(n))
-    cdef dict alldDofs = {}
-    cdef dict dDofs
-    cdef int it = 1
+@cython.boundscheck(True)
+@cython.wraparound(True)
+cpdef object pyx_compute_basis(int m, int n, object Constr, int maxiter): 
+    cdef int *active = <int *>malloc(m * sizeof(int))
+    cdef int i, j=0, it=1, num_active=m
+    cdef map[int,int] alldDofs, dDofs
     
-    while len(active)!=0:
+    cdef object Basis=scipy.sparse.identity(n, format="csr")
+    
+    for i in range(m):
+        active[i]=i
+        
+    while num_active!=0:
         if it>maxiter:
             print("maxiter reached.")
             break
-        dDofs = pyx_find_ddofs(Constr, active)
-        alldDofs.update(dDofs)                               #not yet sure if ddofs should stay a dictionary
-        assert dDofs, 'Unable to derive further dofs.'
-        Basis = pyx_update_basis(Constr, dDofs, Basis)
+        dDofs = pyx_find_ddofs(Constr.indptr, Constr.indices, Constr.data, active, num_active)
+        assert not dDofs.empty(), 'Unable to derive further dofs.'
+        Basis = pyx_update_basis(Constr.indptr, Constr.indices, Constr.data, dDofs, alldDofs, Basis, n)
         Constr = Constr @ Basis   
-        active = pyx_compute_active_constr(Constr)
+        num_active = pyx_compute_active_constr(m, n, Constr.indptr, Constr.data, active)
         it+=1
-    
-    nonderivedDofs = np.setdiff1d(np.arange(n),np.array(list(alldDofs.keys()))) #not yet completely optimal
-    return Basis[:,nonderivedDofs].tocsr(), Constr
+        
+    free(active)
+    cdef int[:] ndDofs = np.empty(n-alldDofs.size(), dtype=np.int32)
+    for i in range(n):
+        if alldDofs.count(i)==0:
+            ndDofs[j]=i
+            j+=1
+    return Basis[:,ndDofs.base].tocsr()#, Constr
 
 @cython.cdivision(False)
-@cython.boundscheck(False)
-@cython.wraparound(False)
-cpdef object pyx_find_ddofs(object Constr, int[:] active):
-    cdef int n = len(active)
-    cdef dict ddofs={}
-    
-    cdef int[:] Cindptr = Constr.indptr
-    cdef int[:] Cindices = Constr.indices
-    cdef double[:] Cdata = Constr.data
-    
-    cdef int r, elim_dof
+@cython.boundscheck(True)
+@cython.wraparound(True)
+cdef map[int,int] pyx_find_ddofs(int[:] Cindptr, int[:] Cindices, double[:] Cdata, int* active, int num_active):
+    cdef map[int,int] ddofs
+    cdef int r, elim_dof, ind
     cdef bint feasible
-    
-    for i in range(n):
+
+    for i in range(num_active):
         r=active[i]
         elim_dof = -1
         feasible = True
-        
         for ind in range(Cindptr[r], Cindptr[r+1]):
             c = Cindices[ind]
             v = Cdata[ind]
@@ -68,7 +72,7 @@ cpdef object pyx_find_ddofs(object Constr, int[:] active):
         for ind in range(Cindptr[r], Cindptr[r+1]):
             c = Cindices[ind]
             v = Cdata[ind]
-            if abs(v) > 1e-12 and c in ddofs:
+            if abs(v) > 1e-12 and ddofs.count(c)>0:
                 #print("{} cannot be eliminated (constraint #{}) because it refers to eliminated dof {}.".format(dofToBeEliminated,r,c))
                 feasible = False
         if feasible:
@@ -76,64 +80,55 @@ cpdef object pyx_find_ddofs(object Constr, int[:] active):
     return ddofs
         
 @cython.cdivision(False)
-@cython.boundscheck(False)
-@cython.wraparound(False)
-cpdef np.ndarray[np.int32_t] pyx_compute_active_constr(object Constr):
-    cdef int n = Constr.shape[0]
-    cdef int[:] active= np.empty(n, dtype=np.int32)
-    cdef int k = 0
-    cdef int r, a, b
+@cython.boundscheck(True)
+@cython.wraparound(True)
+cdef int pyx_compute_active_constr(int m, int n, int[:] Cindptr, double[:] Cdata, int* active):
+    cdef int r, a, b, ind, num_active= 0
     
-    cdef int[:] indptr = Constr.indptr
-    cdef double[:] data = Constr.data
-
-    for r in range(Constr.shape[0]):
+    for r in range(m):
         a=0
         b=0
-        for ind in range(indptr[r], indptr[r+1]):
-            if data[ind] > 1e-12:
+        for ind in range(Cindptr[r], Cindptr[r+1]):
+            if Cdata[ind] > 1e-12:
                 a += 1
-            if data[ind] < -1e-12:
+            if Cdata[ind] < -1e-12:
                 b += 1
         if (a==1 and b>0):
-            active[k]=r
-            k+=1
+            active[num_active]=r
+            num_active+=1
         if (b==1 and a>0):
-            active[k]=r
-            k+=1
-            for ind in range(indptr[r], indptr[r+1]):
-                data[ind]=-data[ind]
-
-    return np.asarray(active)[:k]
+            active[num_active]=r
+            num_active+=1
+            for ind in range(Cindptr[r], Cindptr[r+1]):
+                Cdata[ind]=-Cdata[ind]
+    return num_active
     
 @cython.cdivision(False)
-@cython.boundscheck(False)
-@cython.wraparound(False)
-cpdef object pyx_update_basis(object Constr, dict Ddofs, object Basis):   
+@cython.boundscheck(True)
+@cython.wraparound(True)
+cdef object pyx_update_basis(int[:] Cindptr, int[:] Cindices, double[:] Cdata, map[int,int]& Ddofs, map[int,int]& alldDofs, object Basis, int n):   
     #assert isinstance(Constr, csr_matrix), "Constraint matrix is not CSR."
     #assert isinstance(Basis, csc_matrix), "Basis matrix is not CSC."
-    cdef int[:] ddofs = np.array(list(Ddofs.keys()),dtype = np.int32)
-    cdef int[:] dconstr = np.array(list(Ddofs.values()), dtype=np.int32)
-    cdef int n_dd = len(Ddofs)
-    cdef int n = Constr.shape[1]
-
-    cdef int num_elem = Constr[np.asarray(dconstr),:].nnz - 2*n_dd + n 
-    
-    cdef int[:] Cindptr = Constr.indptr
-    cdef int[:] Cindices = Constr.indices
-    cdef double[:] Cdata = Constr.data
-    
-    cdef int i, r, c, ind
+    cdef int i=0, nnz=0, r, c, ind, n_dd = Ddofs.size(), k=0
     cdef double v, v0
+    cdef map[int, int].iterator it = Ddofs.begin()
+    cdef int *ddofs = <int *>malloc(n_dd * sizeof(int)) 
     
-    cdef int[:] ii = np.empty(num_elem, dtype=np.int32)       ###
-    cdef int[:] jj = np.empty(num_elem, dtype=np.int32)       ### Is it an advantage to use memoryview here???
-    cdef double[:] data = np.empty(num_elem, dtype=float) ###
+    while it!=Ddofs.end():
+        ddofs[i]= deref(it).first
+        alldDofs[deref(it).first]=deref(it).second
+        i+=1
+        nnz+=Cindptr[deref(it).second+1]-Cindptr[deref(it).second]
+        inc(it)
 
-    cdef int k = 0
+    cdef int num_elem = nnz - 2*n_dd + n
+        
+    cdef int[:] ii = np.empty(num_elem, dtype=np.int32)        
+    cdef int[:] jj = np.empty(num_elem, dtype=np.int32)        
+    cdef double[:] data = np.empty(num_elem, dtype=np.float64) 
     
-    for i in range(n):                              #lBasis is assembled here as a COO matrix. Is it possible also with CSC?
-        if not i in Ddofs:
+    for i in range(n): #lBasis is assembled here as a COO matrix. Is it possible also with CSC?
+        if Ddofs.count(i)==0:
             ii[k] = i
             jj[k] = i
             data[k] = 1.0
@@ -153,21 +148,23 @@ cpdef object pyx_update_basis(object Constr, dict Ddofs, object Basis):
                     data[k] = - v / v0
                     k+=1
                     
-    lBasis = scipy.sparse.coo_matrix((np.asarray(data),(np.asarray(ii),np.asarray(jj))),(n,n)).tocsc()@Basis
-    while pyx_check_col(lBasis, ddofs, n_dd):
+    cdef object lBasis = scipy.sparse.coo_matrix((data.base,(ii.base,jj.base)),(n,n)).tocsc()@Basis
+    while pyx_check_col(lBasis.indptr, ddofs, n_dd):
         lBasis = lBasis @ lBasis
-    
+
+    free(ddofs)
     return lBasis
 
 @cython.cdivision(False)
-@cython.boundscheck(False)
-@cython.wraparound(False)
-cpdef bint pyx_check_col(object lBasis, int[:] ddofs, int n_dd):
-    cdef int[:] indptr = lBasis.indptr
+@cython.boundscheck(True)
+@cython.wraparound(True)
+cdef bint pyx_check_col(int[:] Bindptr, int* ddofs, int n_dd):
+    cdef int i, dof
     cdef bint check = False
     
     for i in range(n_dd):
-        if indptr[ddofs[i]+1]-indptr[ddofs[i]] != 0:  #check if there are entries in columns that correspond to derived dofs.
+        dof = ddofs[i]
+        if Bindptr[dof+1]-Bindptr[dof] != 0:  #check if there are entries in columns that correspond to derived dofs.
             check=True
             break;
     return check
@@ -175,7 +172,8 @@ cpdef bint pyx_check_col(object lBasis, int[:] ddofs, int n_dd):
 @cython.cdivision(False)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef tuple pyx_eval_charPolynomial(double[::1] delta, double[::1] gamma, double lambda_):
+cpdef tuple pyx_eval_charPolynomial(double[:] delta, double[:] gamma, double lambda_):
+    cdef int i
     cdef int n = delta.shape[0]
     cdef double[:] v = np.empty(n+1, dtype=float) #actually just need vector with 3 entries
     cdef double[:] d = np.empty(n+1, dtype=float)
@@ -192,59 +190,60 @@ cpdef tuple pyx_eval_charPolynomial(double[::1] delta, double[::1] gamma, double
         d2[i] = (delta[i-1]-lambda_) * d2[i-1] - 2*d[i-1] - gamma[i-2] * gamma[i-2] * d2[i-2]
     return v[n],d[n],d2[n]
 
-@cython.cdivision(False)
+@cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef object pyx_HilbertMatrix(int n): 
-    cdef double[:,:] out = np.empty((n,n), dtype=float)
-    cdef int i
-    cdef int j
+cpdef np.ndarray[np.float64_t, ndim=2] HilbertMatrix(int n): 
+    cdef double[:,:] out = np.empty((n,n), dtype=np.float64)
+    cdef int i, j
     for i in range(n):
         for j in range(n):
-            out[i,j]=1/(i+j+1)
+            out[i,j]=1./(i+j+1)
     return out.base
 
-@cython.cdivision(False)
+@cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef object pyx_HilbertMatrixInv(int n): 
-    cdef double[:,:] out = np.empty((n,n), dtype=float)
-    cdef double[::1] temp = np.empty(n, dtype=float)
-    cdef int i, j, m
+cpdef np.ndarray[np.float64_t, ndim=2] HilbertMatrixInv(int n): 
+    assert n<=10 , "Dimension of matrix must not exceed 10."
+    cdef double[:,:] out = np.empty((n,n), dtype=np.float64)
+    #cdef double[:] temp = np.empty(n, dtype=np.float64)
+    cdef double *temp = <double *>malloc(n * sizeof(double))
+    cdef int i, j
     for i in range(1,n+1):
         for j in range(1,n+1):
             if i == 1:
-                m = factorial(j-1)
-                temp[j]=factorial(n+j-1)/m/m/factorial(n-j)
-            out[i-1,j-1]=(-1)**(i+j)*(i+j-1)/(i+j-1)**2*temp[i]*temp[j]
+                temp[j-1]=(-1.)**j*factorial(n+j-1)/factorial(n-j)/(factorial(j-1)**2)
+            out[i-1,j-1]=temp[i-1]*temp[j-1]/(i+j-1)
+    free(temp)
     return out.base
 
-@cython.cdivision(False)
+@cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef object pyx_CauchyMatrix(int n): 
-    cdef double[:,:] out = np.empty((n,n), dtype=float)
-    cdef long long[::1] temp = np.empty(n, dtype=int) 
-    cdef int i
-    cdef int j
+cpdef np.ndarray[np.float64_t, ndim=2] CauchyMatrix(int n): 
+    cdef double[:,:] out = np.empty((n,n), dtype=np.float64)
+    #cdef long[:] temp = np.empty(n, dtype=np.int64) 
+    cdef long *temp = <long *>malloc(n * sizeof(long)) 
+    cdef int i, j
     for i in range(1,n+1):
         for j in range(1,n+1):
             if i==1:
-                temp[j]=factorial(n-j)
-            out[i-1,j-1]=1/temp[i]/temp[j]/(2*n+1-i-j)
+                temp[j-1]=factorial(n-j)
+            out[i-1,j-1]=1./temp[i-1]/temp[j-1]/(2*n+1-i-j)
+    free(temp)
     return out.base
 
-@cython.cdivision(False)
+@cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef object pyx_CauchyMatrixInv(int n): 
-    cdef double[:,:] out = np.empty((n,n), dtype=float)
-    cdef double[::1] temp = np.empty(n, dtype=float) 
-    cdef int i
-    cdef int j
-    cdef int r
-    cdef int prod1
-    cdef int prod2
+cpdef np.ndarray[np.float64_t, ndim=2] CauchyMatrixInv(int n): 
+    assert n<=10 , "Dimension of matrix must not exceed 10."
+    cdef double[:,:] out = np.empty((n,n), dtype=np.float64)
+    #cdef double[:] temp = np.empty(n, dtype=np.float64) 
+    cdef double *temp = <double *>malloc(n * sizeof(double))
+    cdef int i, j, r
+    cdef long prod1, prod2
     for i in range(1,n+1):
         for j in range(1,n+1):
             if i==1:
@@ -254,16 +253,17 @@ cpdef object pyx_CauchyMatrixInv(int n):
                     prod1 *= 2*n-j-r+1
                     if r!=j:
                         prod2 *= r-j
-                temp[j]=factorial(n-j)*prod1/prod2
-            out[i-1,j-1]=temp[i]*temp[j]/(2*n+1-i-j)
+                temp[j-1]=factorial(n-j)*prod1/prod2
+            out[i-1,j-1]=temp[i-1]*temp[j-1]/(2*n+1-i-j)
+    free(temp)
     return out.base
 
-@cython.cdivision(False)
+@cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef int factorial(int n):
+cdef long factorial(int n) noexcept:
     cdef int i
-    cdef int r = 1
+    cdef long r = 1
     for i in range(1,n):
-        r *= i
+        r *= (i+1)
     return r

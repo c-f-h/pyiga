@@ -1299,7 +1299,7 @@ class Multipatch:
             :meth:`join_boundaries` as often as needed, followed by
             :meth:`finalize`.
     """
-    def __init__(self, M, automatch=False, space='H1'):
+    def __init__(self, M, automatch=False, cython=False):
         """Initialize a multipatch structure."""
         # underlying PatchMesh object describing the geometry
         if isinstance(M, topology.PatchMesh):
@@ -1310,6 +1310,7 @@ class Multipatch:
             print('unknown mesh object.')
             
         self.mesh = M
+        self.cython=cython
             
         # number of tensor product dofs per patch
         self.n = [tuple([kv.numdofs for kv in kvs]) for ((kvs,_),_) in self.mesh.patches]
@@ -1433,7 +1434,10 @@ class Multipatch:
         # local-to-global offset per patch
         self.M_ofs = np.concatenate(([0], np.cumsum(self.M)))
         t=time.time()
-        self.Basis, _ = algebra.compute_basis(self.Constr, maxiter=5)
+        if self.cython:
+            self.Basis = algebra_cy.pyx_compute_basis(self.Constr.shape[0], self.Constr.shape[1], self.Constr, maxiter=5)
+        else:
+            self.Basis, _ = algebra.compute_basis(self.Constr, maxiter=5)
         print("Basis setup took "+str(time.time()-t)+" seconds")
         data, indices, indptr = self.Basis.data, self.Basis.indices, self.Basis.indptr
         m, n = self.Basis.shape

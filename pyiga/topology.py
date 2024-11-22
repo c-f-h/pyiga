@@ -388,41 +388,44 @@ class PatchMesh:
         # find segment where xi_split would need to be inserted to maintain order
         return np.searchsorted(bd_vtx_xi, xi_split) - 1
 
-    def split_patch(self, p, axis = None, mult=1):
+    def split_patch(self, p, axis = None, mult=1, ref="rs"):
         if axis == None:
-            (p1, p2) = self.split_patch(p,  axis=1, mult=mult)
-            (p1, p3) = self.split_patch(p1, axis=0, mult=mult)
-            (p2, p4) = self.split_patch(p2, axis=0, mult=mult)
+            (p1, p2) = self.split_patch(p,  axis=1, mult=mult, ref=ref)
+            (p1, p3) = self.split_patch(p1, axis=0, mult=mult, ref=ref)
+            (p2, p4) = self.split_patch(p2, axis=0, mult=mult, ref=ref)
             
             #new_kvs = (new_kvs1[0], new_kvs0[1])
             return (p1, p2, p3, p4)
-        
+
         (kvs, geo), (bds, bds_par) = self.patches[p]
-        kv = kvs[axis].h_refine(mult=mult)
+        kv = kvs[axis]
+        if ref=="rs":
+            kv = kv.h_refine(mult=mult)
         dim = len(kvs)
         
-        #split_xi = sum(kv.support())/2.0
-        #split_idx = kv.findspan(split_xi)+1
-     
-        m_idx = len(kv.mesh)//2
-        mesh_ofs = kv.mesh_span_indices()
-        split_idx = mesh_ofs[m_idx]
-        split_mult = mesh_ofs[m_idx]-mesh_ofs[m_idx-1]
-        split_xi = kv.kv[split_idx]    # parameter value where we split the KV
-        new_knots1 = np.concatenate((kv.kv[:split_idx], (kv.p+1-(mult-1)) * (split_xi,)))
-        new_knots2 = np.concatenate(((kv.p) * (split_xi,), kv.kv[split_idx:]))
-        new_kvs = tuple([bspline.KnotVector(np.concatenate((kv.kv[:split_idx], (kv.p-1) * (split_xi,), kv.kv[split_idx:])),kv.p) if d==axis else kvs[d] for d in range(dim)])
+        split_xi = sum(kv.support())/2.0
+        split_idx = kv.findspan(split_xi)
+        split_xi_mult =sum(np.isclose(kv.kv,split_xi))
+        new_knots1 = np.concatenate((kv.kv[:(split_idx-split_xi_mult+1)], (kv.p+1) * (split_xi,)))
+        new_knots2 = np.concatenate(((kv.p+1) * (split_xi,), kv.kv[(split_idx+1):]))
+        new_kvs = tuple([bspline.KnotVector(np.concatenate((new_knots1[:-(kv.p+1)],new_knots2[1:])),kv.p) if d==axis else kvs[d] for d in range(dim)])
             
         # create new kvs and geo for first patch
         kvs1 = list(kvs)
-        kvs1[axis] = bspline.KnotVector(new_knots1, kv.p)
+        if ref=="sr":
+            kvs1[axis] = bspline.KnotVector(new_knots1, kv.p).h_refine(mult=mult)
+        if ref=="rs":
+            kvs1[axis] = bspline.KnotVector(new_knots1, kv.p)
         geo1 = copy.copy(geo)
         geo1.support = tuple(kv.support() for kv in kvs1)
         kvs1 = tuple(kvs1)
         
         # create new kvs and geo for second patch
         kvs2 = list(kvs)
-        kvs2[axis] = bspline.KnotVector(new_knots2, kv.p) 
+        if ref=="sr":
+            kvs2[axis] = bspline.KnotVector(new_knots2, kv.p).h_refine(mult=mult)
+        if ref=="rs":
+            kvs2[axis] = bspline.KnotVector(new_knots2, kv.p)
         geo2 = copy.copy(geo)
         geo2.support = tuple(kv.support() for kv in kvs2)
         kvs2 = tuple(kvs2)

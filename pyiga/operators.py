@@ -9,7 +9,7 @@ from . import kronecker
 HAVE_MKL = True
 try:
     import pyMKL
-except:P
+except:
     HAVE_MKL = False
 
 

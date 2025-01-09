@@ -1223,7 +1223,7 @@ class PatchMesh3D:
         
         for p,((kvs, geo),_) in enumerate(self.patches):
             if knots:
-                vis.plot_geo(geo, gridx=kvs[0].mesh, gridy=kvs[1].mesh, gridz=kvs[2].mesh, lcolor='lightgray')   
+                vis.plot_geo(geo, gridx=kvs[0].mesh, gridy=kvs[1].mesh, gridz=kvs[2].mesh, lcolor='gray', zorder=100000)   
             vis.plot_geo(geo, grid=2,lcolor='black')
            
         if nodes:

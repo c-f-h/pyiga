@@ -267,3 +267,82 @@ cdef long factorial(int n) noexcept:
     for i in range(1,n):
         r *= (i+1)
     return r
+
+# @cython.cdivision(True)
+# @cython.boundscheck(False)
+# @cython.wraparound(False)
+# cpdef object csr_multiply(
+#     double[:] data_a,
+#     int[:] indices_a,
+#     int[:] indptr_a,
+#     int rows_a, int cols_a,
+#     double[:] data_b,
+#     int[:] indices_b,
+#     int[:] indptr_b,
+#     int rows_b, int cols_b):
+#     """
+#     Multiplies two CSR matrices.
+
+#     Parameters:
+#         data_a, indices_a, indptr_a: CSR representation of matrix A.
+#         rows_a, cols_a: Dimensions of matrix A.
+
+#         data_b, indices_b, indptr_b: CSR representation of matrix B.
+#         rows_b, cols_b: Dimensions of matrix B.
+
+#     Returns:
+#         data_c, indices_c, indptr_c: CSR representation of the result matrix.
+#     """
+#     if cols_a != rows_b:
+#         raise ValueError("Matrix dimensions do not allow multiplication.")
+
+#     cdef:
+#         int i, j, k, nnz_c
+#         double value
+#         int[:] indptr_c = np.zeros(rows_a + 1, dtype=np.int32)
+#         double[:] data_c
+#         int[:] indices_c
+#         map[int, double] row_accumulator
+#         int pos
+#         int col_a, col_b
+#         double val_a, val_b
+
+#     # First pass: calculate row pointers and nnz
+#     nnz_c = 0
+#     for i in range(rows_a):
+#         row_accumulator.clear()
+#         for j in range(indptr_a[i], indptr_a[i + 1]):
+#             col_a = indices_a[j]
+#             val_a = data_a[j]
+#             for k in range(indptr_b[col_a], indptr_b[col_a + 1]):
+#                 col_b = indices_b[k]
+#                 val_b = data_b[k]
+#                 if col_b not in row_accumulator:
+#                     row_accumulator[col_b] = 0.0
+#                 row_accumulator[col_b] += val_a * val_b
+#         nnz_c += len(row_accumulator)
+#         indptr_c[i + 1] = nnz_c
+
+#     # Preallocate arrays for data and indices
+#     data_c = np.zeros(nnz_c, dtype=np.float64)
+#     indices_c = np.zeros(nnz_c, dtype=np.int32)
+
+#     # Second pass: fill data and indices arrays
+#     pos = 0
+#     for i in range(rows_a):
+#         row_accumulator.clear()
+#         for j in range(indptr_a[i], indptr_a[i + 1]):
+#             col_a = indices_a[j]
+#             val_a = data_a[j]
+#             for k in range(indptr_b[col_a], indptr_b[col_a + 1]):
+#                 col_b = indices_b[k]
+#                 val_b = data_b[k]
+#                 if col_b not in row_accumulator:
+#                     row_accumulator[col_b] = 0.0
+#                 row_accumulator[col_b] += val_a * val_b
+#         for key, value in row_accumulator.items():
+#             indices_c[pos] = key
+#             data_c[pos] = value
+#             pos += 1
+
+#     return data_c, indices_c, indptr_c

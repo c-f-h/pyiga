@@ -159,7 +159,7 @@ def plot_surface(geo,
     if controlgrid:
         ctr = geo.control_points()
         plt.scatter(ctr[:,:,0],ctr[:,:,1], c="red",zorder=100+zorder)
-        plt.plot(ctr[:,:,0],ctr[:,:,1], c="red",zorder=10)+zorder;
+        plt.plot(ctr[:,:,0],ctr[:,:,1], c="red",zorder=10+zorder);
         ctr=np.transpose(ctr,(1,0,2));
         plt.plot(ctr[:,:,0],ctr[:,:,1], c="red",zorder=10+zorder);
 
@@ -180,7 +180,7 @@ def plot_surface(geo,
         bpts1 = utils.grid_eval(geo, (np.linspace(supp[0][0], supp[0][1], 2),meshx))
         x=np.concatenate([bpts1[0,:,0],bpts0[:,1,0],np.flip(bpts1[1,:,0]),np.flip(bpts0[:,0,0])])
         y=np.concatenate([bpts1[0,:,1],bpts0[:,1,1],np.flip(bpts1[1,:,1]),np.flip(bpts0[:,0,1])])
-        plt.fill(x,y,color=color)
+        plt.fill(x,y,color=color, zorder=0)
 
 def plot_curve(geo, res=50, linewidth=None, lcolor='black', controlgrid=False, zorder=1):
     """Plot a 2D curve."""

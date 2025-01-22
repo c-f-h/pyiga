@@ -238,7 +238,7 @@ class MLMatrix(scipy.sparse.linalg.LinearOperator):
             dtype = self._data.dtype
         else:
             self._data = None
-            dtype = np.float_
+            dtype = np.float64
 
         scipy.sparse.linalg.LinearOperator.__init__(self, shape=self.shape, dtype=dtype)
 

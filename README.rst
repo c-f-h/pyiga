@@ -40,16 +40,16 @@ Installation
 
 ``pyiga`` is compatible with Python 3.6 and higher.
 
-Before installing, make
-sure you have recent versions of **Numpy**, **Scipy** and **Cython** installed
-and that your environment can compile Python extension modules.
+Before installing, make sure that your environment can compile Python extension
+modules.
+Pyiga needs recent versions of **Numpy**, **Scipy** and **Cython**.
 Numpy 1.14 or higher is required.
 If you do not have such an environment set up yet, the easiest way to get it
 is by installing Anaconda_ (this can be done without administrator privileges).
 
 Clone this repository and execute ::
 
-    $ python setup.py install
+    $ python -m pip install .
 
 in the main directory. The installation script should now compile the Cython
 extensions and then install the package.
@@ -67,7 +67,7 @@ version, assuming that you have cloned it from Github, you can simply move to
 the project directory and execute ::
 
     $ git pull
-    $ python setup.py install
+    $ python -m pip install .
 
 Running tests
 -------------

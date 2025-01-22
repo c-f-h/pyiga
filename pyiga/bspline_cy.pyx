@@ -10,7 +10,7 @@ cimport numpy as np
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef int pyx_findspan(double[::1] kv, int p, double u) nogil:
+cpdef int pyx_findspan(double[::1] kv, int p, double u) noexcept nogil:
     cdef int n = kv.shape[0]
 
     if u >= kv[n - p - 1]:

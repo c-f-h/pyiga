@@ -33,19 +33,19 @@ def reindex_from_reordered(size_t i, size_t j, size_t m1, size_t n1, size_t m2, 
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef inline void from_seq2(np.int_t i, np.int_t[:] dims, size_t[2] out):
+cdef inline void from_seq2(np.int64_t i, np.int64_t[:] dims, size_t[2] out):
     out[0] = i // dims[1]
     out[1] = i % dims[1]
 
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef object from_seq(np.int_t i, np.int_t[:] dims):
+cdef object from_seq(np.int64_t i, np.int64_t[:] dims):
     """Convert sequential (lexicographic) index into multiindex.
 
     Same as np.unravel_index(i, dims) except for returning a list.
     """
-    cdef np.int_t L, k
+    cdef np.int64_t L, k
     L = len(dims)
     I = L * [0]
     for k in reversed(range(L)):
@@ -57,12 +57,12 @@ cdef object from_seq(np.int_t i, np.int_t[:] dims):
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef np.int_t to_seq(np.int_t* I, np.int_t* dims, int n) nogil:
+cdef np.int64_t to_seq(np.int64_t* I, np.int64_t* dims, int n) noexcept nogil:
     """Convert multiindex into sequential (lexicographic) index.
 
     Same as np.ravel_multiindex(I, dims).
     """
-    cdef np.int_t i, k
+    cdef np.int64_t i, k
     i = 0
     for k in range(n):
         i *= dims[k]
@@ -75,7 +75,7 @@ cdef np.int_t to_seq(np.int_t* I, np.int_t* dims, int n) nogil:
 #    I, J = from_seq(i, bs[:,0]), from_seq(j, bs[:,1])  # multilevel indices
 #    return tuple(to_seq((I[k],J[k]), bs[k,:]) for k in range(bs.shape[0]))   # <<- to_seq() expects buffers
 
-def reindex_from_multilevel(M, np.int_t[:,:] bs):
+def reindex_from_multilevel(M, np.int64_t[:,:] bs):
     """Convert a multiindex M with length L into sequential indices (i,j)
     of a multilevel matrix with L levels and block sizes bs.
 
@@ -116,15 +116,15 @@ def get_transpose_idx_for_bidx(bidx):
 # computes the Cartesian product of indices and ravels them according to the size `dims`
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef pyx_raveled_cartesian_product(arrays, np.int_t[::1] dims):
+cdef pyx_raveled_cartesian_product(arrays, np.int64_t[::1] dims):
     cdef int L = len(arrays)
-    cdef np.int_t[8] I      # iteration index
-    cdef np.int_t[8] K      # corresponding indices K[k] = arrays[k][I[k]]
-    cdef np.int_t[8] shp    # size of Cartesian product
+    cdef np.int64_t[8] I      # iteration index
+    cdef np.int64_t[8] K      # corresponding indices K[k] = arrays[k][I[k]]
+    cdef np.int64_t[8] shp    # size of Cartesian product
     cdef int i, k, N
 
-    cdef (np.int_t*)[8] arr_ptrs
-    cdef np.int_t[:] arr
+    cdef (np.int64_t*)[8] arr_ptrs
+    cdef np.int64_t[:] arr
 
     N = 1
     for k in range(L):
@@ -141,7 +141,7 @@ cdef pyx_raveled_cartesian_product(arrays, np.int_t[::1] dims):
         K[k] = arr_ptrs[k][I[k]]
 
     out_buf = np.empty(N, dtype=int)
-    cdef np.int_t[::1] out = out_buf
+    cdef np.int64_t[::1] out = out_buf
 
     with nogil:
         for i in range(N):
@@ -163,7 +163,7 @@ cdef pyx_raveled_cartesian_product(arrays, np.int_t[::1] dims):
 # helper function for nonzeros_for_rows
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def pyx_rowwise_cartesian_product(lvia, np.int_t[:, ::1] ix, np.int_t[::1] block_sizes):
+def pyx_rowwise_cartesian_product(lvia, np.int64_t[:, ::1] ix, np.int64_t[::1] block_sizes):
     cdef int N = ix.shape[0]
     cdef int L = ix.shape[1]
     assert L <= 8, 'pyx_raveled_cartesian_product only implemented for L <= 8'
@@ -335,12 +335,12 @@ cpdef object ml_nonzero_nd(bidx, block_sizes, bint lower_tri=False):
     assert L <= 8, 'ml_nonzero_nd only implemented for L <= 8'
 
     cdef (unsigned*)[8] bidx_ptr
-    cdef np.int_t NN[8]             # number of nonzeros per dimension
-    cdef np.int_t block_rows[8]     # number of rows in dimension k
-    cdef np.int_t block_cols[8]     # number of columns in dimension k
-    cdef np.int_t cur_idx[8]        # current nonzero idx (0..NN[k])
-    cdef np.int_t block_i[8]        # row of current nonzero corresponding to cur_idx[k]
-    cdef np.int_t block_j[8]        # column of current nonzero corresponding to cur_idx[k]
+    cdef np.int64_t NN[8]             # number of nonzeros per dimension
+    cdef np.int64_t block_rows[8]     # number of rows in dimension k
+    cdef np.int64_t block_cols[8]     # number of columns in dimension k
+    cdef np.int64_t cur_idx[8]        # current nonzero idx (0..NN[k])
+    cdef np.int64_t block_i[8]        # row of current nonzero corresponding to cur_idx[k]
+    cdef np.int64_t block_j[8]        # column of current nonzero corresponding to cur_idx[k]
 
     cdef unsigned[:,::1] bidx_temp
     cdef size_t k, idx, N, I, J

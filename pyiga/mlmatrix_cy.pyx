@@ -33,14 +33,14 @@ def reindex_from_reordered(size_t i, size_t j, size_t m1, size_t n1, size_t m2, 
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef inline void from_seq2(np.int64_t i, np.int64_t[:] dims, size_t[2] out):
+cdef inline void from_seq2(np.int64_t i, np.int64_t[:] dims, size_t[2] out) noexcept:
     out[0] = i // dims[1]
     out[1] = i % dims[1]
 
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef object from_seq(np.int64_t i, np.int64_t[:] dims):
+cdef object from_seq(np.int64_t i, np.int64_t[:] dims) noexcept:
     """Convert sequential (lexicographic) index into multiindex.
 
     Same as np.unravel_index(i, dims) except for returning a list.
@@ -116,7 +116,7 @@ def get_transpose_idx_for_bidx(bidx):
 # computes the Cartesian product of indices and ravels them according to the size `dims`
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef pyx_raveled_cartesian_product(arrays, np.int64_t[::1] dims):
+cdef pyx_raveled_cartesian_product(arrays, np.int64_t[::1] dims) noexcept:
     cdef int L = len(arrays)
     cdef np.int64_t[8] I      # iteration index
     cdef np.int64_t[8] K      # corresponding indices K[k] = arrays[k][I[k]]

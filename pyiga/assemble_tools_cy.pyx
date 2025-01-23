@@ -251,7 +251,7 @@ def inverses(X):
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cdef double[:,:,:,::1] det_and_inv_2x2(double[:,:,:,::1] X, double[:,::1] det_out):
+cdef double[:,:,:,::1] det_and_inv_2x2(double[:,:,:,::1] X, double[:,::1] det_out) noexcept:
     cdef long m,n, i,j
     cdef double det, a,b,c,d
     m,n = X.shape[0], X.shape[1]
@@ -271,7 +271,7 @@ cdef double[:,:,:,::1] det_and_inv_2x2(double[:,:,:,::1] X, double[:,::1] det_ou
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cdef double[:,:,:,::1] inverses_2x2(double[:,:,:,::1] X):
+cdef double[:,:,:,::1] inverses_2x2(double[:,:,:,::1] X) noexcept:
     cdef size_t m,n, i,j
     cdef double det, a,b,c,d
     m,n = X.shape[0], X.shape[1]
@@ -292,7 +292,7 @@ cdef double[:,:,:,::1] inverses_2x2(double[:,:,:,::1] X):
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cdef double[:,:,:,:,::1] det_and_inv_3x3(double[:,:,:,:,::1] X, double[:,:,::1] det_out):
+cdef double[:,:,:,:,::1] det_and_inv_3x3(double[:,:,:,:,::1] X, double[:,:,::1] det_out) noexcept:
     cdef long n0, n1, n2, i0, i1, i2
     cdef double det, invdet
     n0,n1,n2 = X.shape[0], X.shape[1], X.shape[2]
@@ -329,7 +329,7 @@ cdef double[:,:,:,:,::1] det_and_inv_3x3(double[:,:,:,:,::1] X, double[:,:,::1] 
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef double[:,:,::1] determinants_3x3(double[:,:,:,:,::1] X):
+cdef double[:,:,::1] determinants_3x3(double[:,:,:,:,::1] X) noexcept:
     cdef size_t n0, n1, n2, i0, i1, i2
     n0,n1,n2 = X.shape[0], X.shape[1], X.shape[2]
 
@@ -349,7 +349,7 @@ cdef double[:,:,::1] determinants_3x3(double[:,:,:,:,::1] X):
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cdef double[:,:,:,:,::1] inverses_3x3(double[:,:,:,:,::1] X):
+cdef double[:,:,:,:,::1] inverses_3x3(double[:,:,:,:,::1] X) noexcept:
     cdef size_t n0, n1, n2, i0, i1, i2
     cdef double det, invdet
     n0,n1,n2 = X.shape[0], X.shape[1], X.shape[2]
@@ -392,7 +392,7 @@ def chunk_tasks(tasks, num_chunks):
 
 cdef object _threadpool = None
 
-cdef object get_thread_pool():
+cdef object get_thread_pool() noexcept:
     global _threadpool
     if _threadpool is None:
         _threadpool = ThreadPoolExecutor(pyiga.get_max_threads())

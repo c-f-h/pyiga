@@ -39,7 +39,7 @@ cpdef object pyx_findspans(double[::1] kv, int p, double[::1] u):
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef double[:,:] bspline_active_deriv_single(object knotvec, double u, int numderiv, double[:,:] result=None):
+cdef double[:,:] bspline_active_deriv_single(object knotvec, double u, int numderiv, double[:,:] result=None) noexcept:
     """Evaluate all active B-spline basis functions and their derivatives
     up to `numderiv` at a single point `u`"""
     cdef double[::1] kv

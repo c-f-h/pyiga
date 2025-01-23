@@ -1149,7 +1149,7 @@ class TensorProd:
             I = I + (self.ndim - len(I)) * (slice(None),)
         Ys = tuple(X[I[sl]] for (X,sl) in zip(self.Xs, self.slices))
         if all(np.isscalar(Y) for Y in Ys):
-            return np.product(Ys)
+            return np.prod(Ys)
         else:
             return TensorProd(*Ys)
 

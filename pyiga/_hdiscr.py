@@ -40,7 +40,7 @@ class HDiscretization:
         if rows is not None and len(rows) == 0:
             # work around a Cython bug with contiguity of 0-sized arrays:
             # https://github.com/cython/cython/issues/2093
-            n = np.product(self.hs.mesh(k).numdofs)
+            n = np.prod(self.hs.mesh(k).numdofs)
             return scipy.sparse.csr_matrix((n,n))
 
         # get needed assembler arguments

@@ -40,7 +40,7 @@ cdef inline void from_seq2(np.int64_t i, np.int64_t[:] dims, size_t[2] out) noex
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef object from_seq(np.int64_t i, np.int64_t[:] dims) noexcept:
+cdef object from_seq(np.int64_t i, np.int64_t[:] dims):
     """Convert sequential (lexicographic) index into multiindex.
 
     Same as np.unravel_index(i, dims) except for returning a list.
@@ -116,7 +116,7 @@ def get_transpose_idx_for_bidx(bidx):
 # computes the Cartesian product of indices and ravels them according to the size `dims`
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef pyx_raveled_cartesian_product(arrays, np.int64_t[::1] dims) noexcept:
+cdef pyx_raveled_cartesian_product(arrays, np.int64_t[::1] dims):
     cdef int L = len(arrays)
     cdef np.int64_t[8] I      # iteration index
     cdef np.int64_t[8] K      # corresponding indices K[k] = arrays[k][I[k]]
@@ -221,7 +221,7 @@ cpdef object ml_nonzero_2d(bidx, block_sizes, bint lower_tri=False):
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef void ml_matvec_2d(double[:,::1] X, bidx, block_sizes, double[::1] x, double[::1] y):
+cpdef void ml_matvec_2d(double[:,::1] X, bidx, block_sizes, double[::1] x, double[::1] y) noexcept:
     cdef unsigned[:,::1] bidx1, bidx2
     bidx1,bidx2 = bidx
 
@@ -292,7 +292,7 @@ cpdef object ml_nonzero_3d(bidx, block_sizes, bint lower_tri=False):
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef void ml_matvec_3d(double[:,:,::1] X, bidx, block_sizes, double[::1] x, double[::1] y):
+cpdef void ml_matvec_3d(double[:,:,::1] X, bidx, block_sizes, double[::1] x, double[::1] y) noexcept:
     cdef unsigned[:,::1] bidx1, bidx2, bidx3
     bidx1,bidx2,bidx3 = bidx
 

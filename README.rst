@@ -42,8 +42,8 @@ Installation
 
 Before installing, make sure that your environment can compile Python extension
 modules.
-Pyiga needs recent versions of **Numpy**, **Scipy** and **Cython**.
-Numpy 1.14 or higher is required.
+Pyiga needs recent versions of **Numpy** (1.14 or higher), **Scipy**, **setuptools**,
+and **Cython**.
 If you do not have such an environment set up yet, the easiest way to get it
 is by installing Anaconda_ (this can be done without administrator privileges).
 
@@ -58,6 +58,10 @@ If you have Intel MKL installed on your machine, be sure to install the
 **pyMKL** package; if ``pyiga`` detects this package, it will use the
 MKL PARDISO sparse direct solver instead of the internal scipy solver
 (typically SuperLU).
+
+In order to run the Jupyterhub notebooks, you might also want to install **jupyterlab**,
+**matplotlib**, and **sympy**.
+
 
 Updating
 ~~~~~~~~

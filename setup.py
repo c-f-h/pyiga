@@ -85,11 +85,13 @@ setup(
 
     setup_requires = ['numpy', 'Cython'],
     install_requires = [
+        'Cython',
         'numpy>=1.11',
         'scipy',
         'appdirs',
         'networkx',
         'jinja2',
+        'tqdm',
         'future;python_version<"3.0"',
         'futures;python_version<"3.0"'   # backport of concurrent.futures to Py2
     ],

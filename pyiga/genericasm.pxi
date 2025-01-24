@@ -27,10 +27,10 @@ cdef class _CommonBase1D:
 
 
 cdef class BaseAssembler1D(_CommonBase1D):
-    cdef void entry_impl(self, size_t[1] i, size_t[1] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[1] i, size_t[1] j, double result[]) noexcept nogil:
         pass
 
-    cpdef double entry1(self, size_t i):
+    cpdef double entry1(self, size_t i) noexcept:
         """Compute an entry of the vector to be assembled."""
         if self.arity != 1:
             return 0.0
@@ -41,7 +41,7 @@ cdef class BaseAssembler1D(_CommonBase1D):
             self.entry_impl(I, <size_t*>0, &result)
             return result
 
-    cpdef double entry(self, size_t i, size_t j):
+    cpdef double entry(self, size_t i, size_t j) noexcept:
         """Compute an entry of the matrix."""
         if self.arity != 2:
             return 0.0
@@ -55,7 +55,7 @@ cdef class BaseAssembler1D(_CommonBase1D):
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef void multi_entries_chunk(self, size_t[:,::1] idx_arr, double[::1] out) nogil:
+    cdef void multi_entries_chunk(self, size_t[:,::1] idx_arr, double[::1] out) noexcept nogil:
         if self.arity != 2:
             return
         cdef size_t[1] I, J
@@ -149,7 +149,7 @@ cdef class BaseAssembler1D(_CommonBase1D):
 
 
 # helper function for fast low-rank assembler
-cdef double _entry_func_1d(size_t i, size_t j, void * data):
+cdef double _entry_func_1d(size_t i, size_t j, void * data) noexcept:
     return (<BaseAssembler1D>data).entry(i, j)
 
 
@@ -158,12 +158,12 @@ cdef class BaseVectorAssembler1D(_CommonBase1D):
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
 
-    cdef void entry_impl(self, size_t[1] i, size_t[1] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[1] i, size_t[1] j, double result[]) noexcept nogil:
         pass
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef void multi_blocks_chunk(self, size_t[:,::1] idx_arr, double[:,:,::1] out) nogil:
+    cdef void multi_blocks_chunk(self, size_t[:,::1] idx_arr, double[:,:,::1] out) noexcept nogil:
         if self.arity != 2:
             return
         cdef size_t[1] I, J
@@ -279,7 +279,7 @@ cdef void _asm_core_vec_1d_kernel(
     size_t[2] numcomp,
     double[:, ::1] entries,
     long _mu0
-) nogil:
+) noexcept nogil:
     cdef size_t[1] i, j
     cdef int diag0
     cdef long mu0, MU0
@@ -336,10 +336,10 @@ cdef class _CommonBase2D:
 
 
 cdef class BaseAssembler2D(_CommonBase2D):
-    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) noexcept nogil:
         pass
 
-    cpdef double entry1(self, size_t i):
+    cpdef double entry1(self, size_t i) noexcept:
         """Compute an entry of the vector to be assembled."""
         if self.arity != 1:
             return 0.0
@@ -350,7 +350,7 @@ cdef class BaseAssembler2D(_CommonBase2D):
             self.entry_impl(I, <size_t*>0, &result)
             return result
 
-    cpdef double entry(self, size_t i, size_t j):
+    cpdef double entry(self, size_t i, size_t j) noexcept:
         """Compute an entry of the matrix."""
         if self.arity != 2:
             return 0.0
@@ -364,7 +364,7 @@ cdef class BaseAssembler2D(_CommonBase2D):
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef void multi_entries_chunk(self, size_t[:,::1] idx_arr, double[::1] out) nogil:
+    cdef void multi_entries_chunk(self, size_t[:,::1] idx_arr, double[::1] out) noexcept nogil:
         if self.arity != 2:
             return
         cdef size_t[2] I, J
@@ -458,7 +458,7 @@ cdef class BaseAssembler2D(_CommonBase2D):
 
 
 # helper function for fast low-rank assembler
-cdef double _entry_func_2d(size_t i, size_t j, void * data):
+cdef double _entry_func_2d(size_t i, size_t j, void * data) noexcept:
     return (<BaseAssembler2D>data).entry(i, j)
 
 
@@ -467,12 +467,12 @@ cdef class BaseVectorAssembler2D(_CommonBase2D):
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
 
-    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) noexcept nogil:
         pass
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef void multi_blocks_chunk(self, size_t[:,::1] idx_arr, double[:,:,::1] out) nogil:
+    cdef void multi_blocks_chunk(self, size_t[:,::1] idx_arr, double[:,:,::1] out) noexcept nogil:
         if self.arity != 2:
             return
         cdef size_t[2] I, J
@@ -589,7 +589,7 @@ cdef void _asm_core_vec_2d_kernel(
     size_t[2] numcomp,
     double[:, :, ::1] entries,
     long _mu0
-) nogil:
+) noexcept nogil:
     cdef size_t[2] i, j
     cdef int diag0, diag1
     cdef long mu0, mu1, MU0, MU1
@@ -660,10 +660,10 @@ cdef class _CommonBase3D:
 
 
 cdef class BaseAssembler3D(_CommonBase3D):
-    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) noexcept nogil:
         pass
 
-    cpdef double entry1(self, size_t i):
+    cpdef double entry1(self, size_t i) noexcept:
         """Compute an entry of the vector to be assembled."""
         if self.arity != 1:
             return 0.0
@@ -674,7 +674,7 @@ cdef class BaseAssembler3D(_CommonBase3D):
             self.entry_impl(I, <size_t*>0, &result)
             return result
 
-    cpdef double entry(self, size_t i, size_t j):
+    cpdef double entry(self, size_t i, size_t j) noexcept:
         """Compute an entry of the matrix."""
         if self.arity != 2:
             return 0.0
@@ -688,7 +688,7 @@ cdef class BaseAssembler3D(_CommonBase3D):
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef void multi_entries_chunk(self, size_t[:,::1] idx_arr, double[::1] out) nogil:
+    cdef void multi_entries_chunk(self, size_t[:,::1] idx_arr, double[::1] out) noexcept nogil:
         if self.arity != 2:
             return
         cdef size_t[3] I, J
@@ -782,7 +782,7 @@ cdef class BaseAssembler3D(_CommonBase3D):
 
 
 # helper function for fast low-rank assembler
-cdef double _entry_func_3d(size_t i, size_t j, void * data):
+cdef double _entry_func_3d(size_t i, size_t j, void * data) noexcept:
     return (<BaseAssembler3D>data).entry(i, j)
 
 
@@ -791,12 +791,12 @@ cdef class BaseVectorAssembler3D(_CommonBase3D):
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
 
-    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) noexcept nogil:
         pass
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef void multi_blocks_chunk(self, size_t[:,::1] idx_arr, double[:,:,::1] out) nogil:
+    cdef void multi_blocks_chunk(self, size_t[:,::1] idx_arr, double[:,:,::1] out) noexcept nogil:
         if self.arity != 2:
             return
         cdef size_t[3] I, J
@@ -914,7 +914,7 @@ cdef void _asm_core_vec_3d_kernel(
     size_t[2] numcomp,
     double[:, :, :, ::1] entries,
     long _mu0
-) nogil:
+) noexcept nogil:
     cdef size_t[3] i, j
     cdef int diag0, diag1, diag2
     cdef long mu0, mu1, mu2, MU0, MU1, MU2

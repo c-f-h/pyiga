@@ -392,7 +392,7 @@ def chunk_tasks(tasks, num_chunks):
 
 cdef object _threadpool = None
 
-cdef object get_thread_pool() noexcept:
+cdef object get_thread_pool():
     global _threadpool
     if _threadpool is None:
         _threadpool = ThreadPoolExecutor(pyiga.get_max_threads())

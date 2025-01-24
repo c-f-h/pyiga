@@ -41,7 +41,7 @@ cdef void _stdout_log_func(const char * s, size_t nbytes) noexcept:
 
 # slightly higher-level wrapper for the C++ implementation
 cdef object fast_assemble_2d_wrapper(MatrixEntryFn entry_func, void * data, kvs,
-        double tol, int maxiter, int skipcount, int tolcount, int verbose) noexcept:
+        double tol, int maxiter, int skipcount, int tolcount, int verbose):
     cdef vector[size_t] entries_i
     cdef vector[size_t] entries_j
     cdef vector[double] entries
@@ -69,7 +69,7 @@ cdef object fast_assemble_2d_wrapper(MatrixEntryFn entry_func, void * data, kvs,
 
 # slightly higher-level wrapper for the C++ implementation
 cdef object fast_assemble_3d_wrapper(MatrixEntryFn entry_func, void * data, kvs,
-        double tol, int maxiter, int skipcount, int tolcount, int verbose) noexcept:
+        double tol, int maxiter, int skipcount, int tolcount, int verbose):
     cdef vector[size_t] entries_i
     cdef vector[size_t] entries_j
     cdef vector[double] entries

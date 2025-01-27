@@ -34,10 +34,13 @@ def _compile_cython_module_nocache(src, modname, verbose=False):
     ]
     extra_compile_args = ['-O3', '-march=native', '-ffast-math', '-fopenmp', '-g1']
 
+    c_macros = [("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]
+
     extension = Extension(name=modname,
                           sources=[modfile],
                           include_dirs=include_dirs,
-                          extra_compile_args=extra_compile_args)
+                          extra_compile_args=extra_compile_args,
+                          define_macros=c_macros)
 
     cython_include_dirs = [PYIGAPATH]
     build_extension = _get_build_extension()

@@ -9,6 +9,7 @@ Cython.Compiler.Options.cimport_from_pyx = True
 USE_OPENMP = True
 
 c_args = ['-O3', '-march=native', '-ffast-math']
+c_macros = [("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]
 
 if USE_OPENMP:
     c_args_openmp = l_args_openmp = ['-fopenmp']
@@ -20,29 +21,34 @@ extensions = [
              ["pyiga/bspline_cy.pyx"],
         include_dirs = [numpy.get_include()],
         extra_compile_args=c_args,
+        define_macros=c_macros,
     ),
     Extension("pyiga.lowrank_cy",
              ["pyiga/lowrank_cy.pyx"],
         include_dirs = [numpy.get_include()],
         extra_compile_args=c_args,
+        define_macros=c_macros,
     ),
     Extension("pyiga.mlmatrix_cy",
              ["pyiga/mlmatrix_cy.pyx"],
         include_dirs = [numpy.get_include()],
         extra_compile_args=c_args + c_args_openmp,
         extra_link_args=l_args_openmp,
+        define_macros=c_macros,
     ),
     Extension("pyiga.assemble_tools_cy",
              ["pyiga/assemble_tools_cy.pyx"],
         include_dirs = [numpy.get_include()],
         extra_compile_args=c_args + c_args_openmp,
         extra_link_args=l_args_openmp,
+        define_macros=c_macros,
     ),
     Extension("pyiga.assemblers",
              ["pyiga/assemblers.pyx"],
         include_dirs = [numpy.get_include()],
         extra_compile_args=c_args + c_args_openmp,
         extra_link_args=l_args_openmp,
+        define_macros=c_macros,
     ),
     Extension("pyiga.fast_assemble_cy",
              ["pyiga/fastasm.cc",
@@ -50,10 +56,12 @@ extensions = [
         include_dirs = [numpy.get_include()],
         language='c++',
         extra_compile_args=c_args,
+        define_macros=c_macros,
     ),
     Extension("pyiga.relaxation_cy",
              ["pyiga/relaxation_cy.pyx"],
         extra_compile_args=c_args,
+        define_macros=c_macros,
     ),
 ]
 

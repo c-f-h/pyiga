@@ -343,7 +343,7 @@ class AsmGenerator(CodegenVisitor):
 
         self.put('double result[]')     # output argument
         self.dedent()
-        self.put(') nogil:')
+        self.put(') noexcept nogil:')
 
         # local variables
         if not self.vec:
@@ -388,7 +388,7 @@ class AsmGenerator(CodegenVisitor):
 
     def gen_entry_impl_header(self):
         self.cython_pragmas()
-        self.putf('cdef void entry_impl(self, size_t[{dim}] i, size_t[{dim}] j, double result[]) nogil:')
+        self.putf('cdef void entry_impl(self, size_t[{dim}] i, size_t[{dim}] j, double result[]) noexcept nogil:')
         self.indent()
         self.putf('cdef IntInterval intv')
         self.putf('cdef size_t g_sta[{dim}]')
@@ -854,7 +854,7 @@ cdef class BaseAssembler{{DIM}}D(_CommonBase{{DIM}}D):
     cdef void entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j, double result[]) nogil:
         pass
 
-    cpdef double entry1(self, size_t i):
+    cpdef double entry1(self, size_t i) noexcept:
         """Compute an entry of the vector to be assembled."""
         if self.arity != 1:
             return 0.0
@@ -865,7 +865,7 @@ cdef class BaseAssembler{{DIM}}D(_CommonBase{{DIM}}D):
             self.entry_impl(I, <size_t*>0, &result)
             return result
 
-    cpdef double entry(self, size_t i, size_t j):
+    cpdef double entry(self, size_t i, size_t j) noexcept:
         """Compute an entry of the matrix."""
         if self.arity != 2:
             return 0.0
@@ -879,7 +879,7 @@ cdef class BaseAssembler{{DIM}}D(_CommonBase{{DIM}}D):
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef void multi_entries_chunk(self, size_t[:,::1] idx_arr, double[::1] out) nogil:
+    cdef void multi_entries_chunk(self, size_t[:,::1] idx_arr, double[::1] out) noexcept nogil:
         if self.arity != 2:
             return
         cdef size_t[{{DIM}}] I, J
@@ -973,21 +973,21 @@ cdef class BaseAssembler{{DIM}}D(_CommonBase{{DIM}}D):
 
 
 # helper function for fast low-rank assembler
-cdef double _entry_func_{{DIM}}d(size_t i, size_t j, void * data):
+cdef double _entry_func_{{DIM}}d(size_t i, size_t j, void * data) noexcept:
     return (<BaseAssembler{{DIM}}D>data).entry(i, j)
 
 
 
-cdef class BaseVectorAssembler{{DIM}}D(_CommonBase{{DIM}}D):
+cdef class BaseVectorAssembler{{DIM}}D(_CommonBase{{DIM}}D) noexcept:
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
 
-    cdef void entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j, double result[]) noexcept nogil:
         pass
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef void multi_blocks_chunk(self, size_t[:,::1] idx_arr, double[:,:,::1] out) nogil:
+    cdef void multi_blocks_chunk(self, size_t[:,::1] idx_arr, double[:,:,::1] out) noexcept nogil:
         if self.arity != 2:
             return
         cdef size_t[{{DIM}}] I, J
@@ -1105,7 +1105,7 @@ cdef void _asm_core_vec_{{DIM}}d_kernel(
     size_t[2] numcomp,
     double[{{ dimrepeat(':') }}, ::1] entries,
     long _mu0
-) nogil:
+) noexcept nogil:
     cdef size_t[{{DIM}}] i, j
     cdef int {{ dimrepeat('diag{}') }}
     cdef long {{ dimrepeat('mu{}') }}, {{ dimrepeat('MU{}') }}

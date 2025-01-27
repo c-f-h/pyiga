@@ -74,7 +74,7 @@ def test_cells():
     def contains(A, B):
         return all(a[0] <= b[0] <= b[1] <= a[1] for (a,b) in zip(A,B))
     def area(A):
-        return np.product([b-a for (a,b) in A])
+        return np.prod([b-a for (a,b) in A])
 
     L = hs.numlevels
     for f_lv in range(L):

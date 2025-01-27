@@ -35,7 +35,7 @@ def grid_eval(f, grid):
     if hasattr(f, 'grid_eval'):
         return f.grid_eval(grid)
     else:
-        mesh = np.meshgrid(*grid, sparse=True, indexing='ij')
+        mesh = list(np.meshgrid(*grid, sparse=True, indexing='ij'))
         mesh.reverse() # convert order ZYX into XYZ
         values = f(*mesh)
         return _ensure_grid_shape(values, grid)

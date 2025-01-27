@@ -704,7 +704,7 @@ def prolongation(kv1, kv2):
         csr_matrix: sparse matrix which prolongs coefficients from `kv1` to `kv2`
     """
     g = kv2.greville()
-    C1 = collocation(kv1, g).A
+    C1 = collocation(kv1, g).toarray()
     C2 = collocation(kv2, g)
     P = scipy.sparse.linalg.spsolve(C2, C1)
     # prune matrix

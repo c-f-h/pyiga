@@ -20,15 +20,13 @@ See the section :doc:`/guide/vforms` for further details.
 
 .. autoclass:: Assembler
     :members:
-
-
+final
 Tensor product Gauss quadrature assemblers
 ------------------------------------------
 
 Standard Gauss quadrature assemblers for mass and stiffness matrices.
 They take one or two arguments:
-
-- `kvs` (list of :class:`.KnotVector`):
+f):
   Describes the tensor product B-spline basis for which to assemble
   the matrix. One :class:`KnotVector` per coordinate direction.
   In the 1D case, a single :class:`.KnotVector` may be passed
@@ -100,11 +98,16 @@ Integration
 .. autofunction:: integrate
 
 """
+import warnings
+
 import numpy as np
+import matplotlib.pyplot as plt
 import scipy
 import scipy.sparse
 import itertools
 import math
+#from sksparse.cholmod import cholesky
+import time
 
 from . import bspline
 from . import assemble_tools
@@ -114,6 +117,12 @@ from . import tensor
 from . import operators
 from . import utils
 from . import geometry
+from . import algebra
+from . import algebra_cy
+from . import topology
+from . import vis
+from . import vform
+from . import solvers
 
 from .quadrature import make_iterated_quadrature, make_tensor_quadrature
 from .mlmatrix import MLStructure
@@ -343,46 +352,126 @@ def inner_products(kvs, f, f_physical=False, geo=None):
 # Incorporating essential boundary conditions
 ################################################################################
 
-def slice_indices(ax, idx, shape, ravel=False, flip=None):
+# def slice_indices(ax, idx, shape, ravel=False, flip=None):
+#     """Return dof indices for a slice of a tensor product basis with size
+#     `shape`. The slice is taken across index `idx` on axis `ax`.
+#     The indices are returned either as a `N × dim` array of multiindices or,
+#     with `ravel=True`, as an array of sequential (raveled) indices.
+#     """
+#     shape = tuple(shape)
+#     #assert len(axis) == len(sides) == len(shape) - len(flip)
+#     #for ax,idx in zip(axis,sides):
+#     if idx < 0:
+#         idx += shape[ax]     # wrap around
+#     axdofs = [range(n) for n in shape]
+#     if flip is not None:
+#         flip = tuple(flip)
+#         flip = flip[:ax] + (False,) + flip[ax:]     # insert trivial axis
+#         for i, flp in enumerate(flip):
+#             if flp:
+#                 axdofs[i] = reversed(axdofs[i])
+#     axdofs[ax] = [idx]
+#     multi_indices = np.array(list(itertools.product(*axdofs)))
+#     if ravel:
+#         multi_indices = np.ravel_multi_index(multi_indices.T, shape)
+#     return multi_indices
+def slice_indices(axis, sides, shape, ravel=False, swap=None, flip=None):
     """Return dof indices for a slice of a tensor product basis with size
     `shape`. The slice is taken across index `idx` on axis `ax`.
-
     The indices are returned either as a `N × dim` array of multiindices or,
     with `ravel=True`, as an array of sequential (raveled) indices.
     """
     shape = tuple(shape)
-    if idx < 0:
-        idx += shape[ax]     # wrap around
-    axdofs = [range(n) for n in shape]
+    dim = len(shape)
+    not_axis = tuple(np.setdiff1d(range(dim),axis))
+    sides=list(sides)
+    
+    for i,ax in enumerate(axis):
+        if sides[i] < 0:
+            sides[i] += shape[ax]     # wrap around
+    axdofs = [np.arange(n) for n in shape]
+
     if flip is not None:
-        flip = tuple(flip)
-        flip = flip[:ax] + (False,) + flip[ax:]     # insert trivial axis
+        flip = list(flip)
+        #flip = flip[:ax] + (False,) + flip[ax:]     # insert trivial axis
+        for ax in axis:
+            flip.insert(ax, False)    # insert trivial axis
         for i, flp in enumerate(flip):
             if flp:
-                axdofs[i] = reversed(axdofs[i])
-    axdofs[ax] = [idx]
+                axdofs[i] = np.flip(axdofs[i])
+    for ax, idx in zip(axis,sides):
+        axdofs[ax]=np.array([idx])
+        
+    axdofs_ = [axdofs[ax] for ax in not_axis]
+    if swap is not None:
+        k=0
+        for i in range(dim):
+            if i in axis:
+                axdofs[i] = axdofs[i]
+            else:
+                axdofs[i]=axdofs_[swap[k]] 
+                k += 1
+    #return axdofs
+    
     multi_indices = np.array(list(itertools.product(*axdofs)))
+    if swap is not None:
+        multi_indices[:,not_axis] = multi_indices[:,not_axis][:,swap]
     if ravel:
         multi_indices = np.ravel_multi_index(multi_indices.T, shape)
     return multi_indices
 
-def boundary_dofs(kvs, bdspec, ravel=False, flip=None):
+def boundary_dofs(kvs, bdspec=None, m=None, ravel=False, swap=None, flip=None):
     """Indices of the dofs which lie on the given boundary of the tensor
     product basis `kvs`. Output format is as for :func:`slice_indices`.
     """
-    bdax, bdside = bspline._parse_bdspec(bdspec, len(kvs))
-    idx = (0 if bdside==0 else -1)
-    N = tuple(kv.numdofs for kv in kvs)
-    return slice_indices(bdax, idx, N, ravel=ravel, flip=flip)
+    kvs = tuple(kvs)
+    n = len(kvs)
+    if m is None:
+        m = n-1
+    if bdspec:
+        bdspec = bspline._parse_bdspec(bdspec, len(kvs))
+        axis, sides = tuple(ax for ax, _ in bdspec), tuple(-idx for _, idx in bdspec)
+        N = tuple(kv.numdofs for kv in kvs)
+        return slice_indices(axis, sides, N, ravel=ravel, swap=swap, flip=flip)
+    else:
+        manifolds = topology.face_indices(n,m)
+        if ravel==True:
+            return np.unique(np.concatenate([boundary_dofs(kvs, M, ravel=True) for M in manifolds]))
+        else:
+            return [boundary_dofs(kvs, M, ravel=True) for M in manifolds]
+        
+def boundary_kv(kvs, bdspec, swap=None, flip=None):
+    kvs=list(kvs)
+    if flip is None:
+        flip=(len(kvs)-1)*(False,)
+    bdspec = bspline._parse_bdspec(bdspec, len(kvs))
+    axis, sides = tuple(ax for ax, _ in bdspec), tuple(-idx for _, idx in bdspec)
+    not_axis = tuple(np.setdiff1d(range(len(kvs)),axis))
+    #bkvs = (bspline.KnotVector(1-np.flip(kv.kv),kv.p) if flp else kv for kv, flp in zip(not_axis,flip))
+    for ax in sorted(axis,reverse=True):
+        del kvs[ax]
+    if flip is not None:
+        for i, flp in enumerate(flip):
+            if flp:
+                kvs[i] = bspline.KnotVector(1-np.flip(kvs[i].kv),kvs[i].p)
+    if swap is not None:
+        kvs=[kvs[i] for i in swap]
+    return tuple(kvs)
+        
+#     bdaxes, bdsides = [bdspec[0] for bdspec in bdspecs], [bdspec[1] for bdspec in bdspecs]
+#     idx = [np.arange(k_+1) if bdsides[i]==0 else np.arange(-1,-k_-2,-1) for i,k_ in enumerate(k)]
+#     dofs=[slice_indices(bdaxes[0], i, N, ravel=ravel) for i in idx[0]]
+#     dofs=[dofs_[idx[1]] for dofs_ in dofs]
+#     return np.concatenate(dofs)
 
-def boundary_cells(kvs, bdspec, ravel=False):
+def boundary_cells(kvs, bdspec, swap=None, ravel=False):
     """Indices of the cells which lie on the given boundary of the tensor
     product basis `kvs`. Output format is as for :func:`slice_indices`.
     """
-    bdax, bdside = bspline._parse_bdspec(bdspec, len(kvs))
-    idx = (0 if bdside==0 else -1)
+    bd = bspline._parse_bdspec(bdspec, len(kvs))
+    axis, sides = tuple(ax for ax, _ in bd), tuple(-idx for _, idx in bd)
     N = tuple(kv.numspans for kv in kvs)
-    return slice_indices(bdax, idx, N, ravel=ravel)
+    return slice_indices(bdax, idx, N, swap=swap, ravel=ravel)
 
 def _drop_nans(indices, values):
     isnan = np.isnan(values)
@@ -428,12 +517,12 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
         boundary and their computed values, respectively.
     """
     bdspec = bspline._parse_bdspec(bdspec, len(kvs))
-    bdax, bdside = bdspec
-
+    axis, sides = tuple(ax for ax, _ in bdspec), tuple(-idx for _, idx in bdspec)
     # get basis for the boundary face
     bdbasis = list(kvs)
     assert len(bdbasis) == geo.sdim, 'Invalid dimension of geometry'
-    del bdbasis[bdax]
+    for ax in sorted(axis,reverse=True):
+        del bdbasis[ax]
 
     # get boundary geometry and interpolate dir_func
     bdgeo = geo.boundary(bdspec)
@@ -445,7 +534,7 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
 
     # compute sequential indices for eliminated dofs
     N = tuple(kv.numdofs for kv in kvs)
-    bdindices = slice_indices(bdax, 0 if bdside==0 else -1, N, ravel=True)
+    bdindices = slice_indices(axis, sides, N, ravel=True)
 
     extra_dims = dircoeffs.ndim - len(bdbasis)
     if extra_dims == 0:
@@ -936,8 +1025,8 @@ def instantiate_assembler(problem, kvs, args, bfuns, boundary=None, updatable=[]
             # parse the bdspec and pass both `boundary` and the `Jac_to_boundary` matrix
             # to the assembler
             bdspec = bspline._parse_bdspec(boundary, len(kvs))
-            used_args['boundary'] = bdspec
-            args['Jac_to_boundary'] = _Jac_to_boundary_matrix(bdspec, len(kvs))
+            used_args['boundary'] = bdspec[0]
+            args['Jac_to_boundary'] = _Jac_to_boundary_matrix(bdspec[0], len(kvs))
 
         for inp in itertools.chain(problem.inputs().keys(), problem.parameters().keys()):
             if inp not in args:
@@ -1005,6 +1094,17 @@ class Assembler:
 ################################################################################
 # Convenience functions
 ################################################################################
+
+def bdspec_to_int(bdspec):
+    if isinstance(bdspec, int):
+        return bdspec
+    return 2 * bdspec[0][0] + bdspec[0][1]    # convert to a boundary index (0..3)
+
+def int_to_bdspec(bdspec):
+    if isinstance(bdspec,tuple) and len(bdspec)==2:
+        return bdspec
+    else:
+        return (bdspec//2,bdspec%2)
 
 def _detect_dim(kvs):
     if isinstance(kvs, bspline.KnotVector):
@@ -1115,33 +1215,38 @@ def _bb_rect(G):
 def _check_geo_match(G1, G2, grid=4):
     # check if the two geos match with any possible flip
     if G1.sdim != G2.sdim or G1.dim != G2.dim:
-        return False, None
+        return False, (None, None)
     if not np.allclose(G1.support, G2.support):
-        return False, None
+        return False, (None, None)
     grid = [np.linspace(s[0], s[1], grid) for s in G1.support]
     X1 = G1.grid_eval(grid)
-    all_flips = itertools.product(*(G2.sdim * [(False, True)]))
-    for flip in all_flips:  # try all 2^d possible flips
-        flipped_grid = list(grid)
-        for (i, f) in enumerate(flip):
-            if f: flipped_grid[i] = np.ascontiguousarray(np.flip(flipped_grid[i]))
-        X2 = G2.grid_eval(flipped_grid)
-        if np.allclose(X1, X2):
-            return True, flip
-    return False, None
+
+    for k, perm in enumerate(itertools.permutations(np.arange(G1.sdim))):
+        all_flips = itertools.product(*(G2.sdim * [(False, True)]))
+        for flip in all_flips:  # try all 2^d possible flips
+            flipped_grid = list(grid)
+            for (i, f) in enumerate(flip):
+                if f: flipped_grid[i] = np.ascontiguousarray(np.flip(flipped_grid[i]))
+            X2 = G2.grid_eval(flipped_grid).transpose(perm + (G2.sdim,))
+            if np.allclose(X1, X2):
+                #if G1.sdim == 1 or k==0:
+                    #return True, (None, flip)
+                return True, (perm, flip)
+    return False, (None, None)
 
 def _find_matching_boundaries(G1, G2):
     # find all interfaces which match between G1 and G2
     assert G1.sdim == G2.sdim and G1.dim == G2.dim
+    #all_bds = list(itertools.product(range(G1.sdim), (0,1)))
     all_bds = list(itertools.product(range(G1.sdim), (0,1)))
     matches = []
     for bdspec1 in all_bds:
-        bd1 = G1.boundary(bdspec1)
+        bd1 = G1.boundary((bdspec1,))
         for bdspec2 in all_bds:
-            bd2 = G2.boundary(bdspec2)
-            match, flip = _check_geo_match(bd1, bd2)
+            bd2 = G2.boundary((bdspec2,))
+            match, conn_info = _check_geo_match(bd1, bd2)
             if match:
-                matches.append((bdspec1, bdspec2, flip))
+                matches.append(((bdspec1,), (bdspec2,), conn_info))
     return matches
 
 def detect_interfaces(patches):
@@ -1171,55 +1276,74 @@ def detect_interfaces(patches):
             maxdiam = max(diams[p1], diams[p2])
             if mindist < 1e-10 * maxdiam:    # do the bounding boxes touch?
                 matches = _find_matching_boundaries(patches[p1][1], patches[p2][1])
-                for (bd1, bd2, flip) in matches:
-                    interfaces.append((p1, bd1, p2, bd2, flip))
+                for (bd1, bd2, conn_info) in matches:
+                    interfaces.append((p1, bd1, p2, bd2, conn_info))
                 if matches:
                     patch_graph.add_edge(p1, p2)
 
     return nx.is_connected(patch_graph), interfaces
 
-
 class Multipatch:
     """Represents a multipatch structure, consisting of a number of patches
     together with their discretizations and the information about shared dofs
-    between patches. Currently, only conforming patches are supported.
+    between patches. Nonconforming patches (both geometrically and knotwise non conforming) are allowed as long as there exists 
+    a hierarchy between the interface knots
 
     Args:
-        patches: a list of `(kvs, geo)` pairs, each of which describes a patch.
-            Here `kvs` is a tuple of :class:`.KnotVector` instances describing
-            the tensor product spline space used for discretization and `geo`
-            is the geometry map.
-        automatch (bool): if True, attempt to automatically determine the
-            matching interfaces between all patches and finalize then. If
-            False, the user has to manually join the patches by calling
+        M:  A :class:`PatchMesh` instance representing the patches 
+            via their discretization and their geometry function 
+            as well as the generated mesh between the patches (vertices, interfaces).. 
+        
+        automatch (bool): if True, attempt to automatically apply the interface information from the PatchMesh object to couple the patches.
+            If False, the user has to manually join the patches by calling
             :meth:`join_boundaries` as often as needed, followed by
             :meth:`finalize`.
     """
-    def __init__(self, patches, automatch=False):
+    def __init__(self, M, automatch=False, cython=False):
         """Initialize a multipatch structure."""
-        self.patches = patches
+        # underlying PatchMesh object describing the geometry
+        if isinstance(M, topology.PatchMesh):
+            self.sdim = 2
+        elif isinstance(M, topology.PatchMesh3D):
+            self.sdim = 3
+        else:
+            print('unknown mesh object.')
+            
+        self.mesh = M
+        self.cython=cython
+            
         # number of tensor product dofs per patch
-        self.N = [bspline.numdofs(kvs) for (kvs,_) in self.patches]
+        self.n = [tuple([kv.numdofs for kv in kvs]) for ((kvs,_),_) in self.mesh.patches]
+        self.N = [np.prod(n) for n in self.n]
+        self.Z = [bspline.numspans(kvs) for ((kvs,_),_) in self.mesh.patches]
+        self.Z_ofs = np.concatenate(([0], np.cumsum(self.Z)))
         # offset to the dofs of the i-th patch
         self.N_ofs = np.concatenate(([0], np.cumsum(self.N)))
-        # per patch, a dict of local-to-shared indices
-        self.shared_per_patch = [dict() for i in range(len(self.patches))]
-        # per shared dof, a set of local dofs (patch, index)
-        self.shared_dofs = []
+        # per patch, a dict of shared indices
+        self.shared_pp = dict(zip([p for p in range(self.mesh.numpatches)],self.mesh.numpatches*[set(),]))
+        # a list of interfaces (patch1, boundary dofs1, patch2, boundary dofs2)
+        self.intfs = set()
+        self.Constr=scipy.sparse.csr_matrix((0,self.N_ofs[-1]))
+        self.global_dir_idx = np.array([])
 
         if automatch:
-            connected, interfaces = detect_interfaces(self.patches)
-            if not connected:
-                print('WARNING: patch graph is not connected - ' +
-                        'interface detection may have failed')
-            for intf in interfaces:
-                self.join_boundaries(*intf)
+            interfaces = self.mesh.interfaces
+            
+            for ((p1,bd1,s1),((p2,bd2,s2),flip)) in interfaces.items():
+                if ((p2,bd2,s2),(p1,bd1,s1),flip) not in self.intfs:
+                    self.intfs.add(((p1,bd1,s1),(p2,bd2,s2),flip))
+        
+            t=time.time()
+            C=[self.join_boundaries(p1, (int_to_bdspec(bd1),), s1 , p2, (int_to_bdspec(bd2),), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
+            print('setting up constraints took '+str(time.time()-t)+' seconds.')
+            if len(C)!=0:
+                self.Constr = scipy.sparse.vstack(C)
             self.finalize()
 
     @property
     def numpatches(self):
         """Number of patches in the multipatch structure."""
-        return len(self.patches)
+        return len(self.mesh.patches)
 
     @property
     def numdofs(self):
@@ -1227,34 +1351,23 @@ class Multipatch:
 
         May only be called after :func:`finalize`.
         """
-        return self.M_ofs[-1] + len(self.shared_dofs)
+        return self.Basis.shape[1]
+    
+    @property
+    def numloc_dofs(self):
+        return self.N_ofs[-1]
+    
+    @property
+    def numcells(self):
+        """Number of cells throughout the Multipatch structure."""
+        return 
+    
+    def reset(self):
+        self.__init__(M=self.mesh, automatch=True)
 
-    def join_dofs(self, p1, I1, p2, I2):
-        """Join the dofs `I1` of patch `p1` with the dofs `I2` of patch `p2`."""
-        assert len(I1) == len(I2), 'dof arrays must have the same length'
-        assert p1 != p2, 'patches must be different'
-
-        def add_to_shared(sd, p, i):
-            # add dof (p, i) to the shared dof `sd`
-            self.shared_per_patch[p][i] = sd
-            self.shared_dofs[sd].add((p, i))
-
-        for (i1, i2) in zip(I1, I2):
-            if i1 in self.shared_per_patch[p1]:
-                sd = self.shared_per_patch[p1][i1]
-                add_to_shared(sd, p2, i2)
-            elif i2 in self.shared_per_patch[p2]:
-                sd = self.shared_per_patch[p2][i2]
-                add_to_shared(sd, p1, i1)
-            else:
-                # none of them are shared yet - create a new shared dof
-                sd = self._new_shared_dof()
-                add_to_shared(sd, p1, i1)
-                add_to_shared(sd, p2, i2)
-
-    def join_boundaries(self, p1, bdspec1, p2, bdspec2, flip=None):
+    def join_boundaries(self, p1, bdspec1, s1, p2, bdspec2, s2, flip=None):
         """Join the dofs lying along boundary `bdspec1` of patch `p1` with
-        those lying along boundary `bdspec2` of patch `p2`.
+        those lying along boundary `bdspec2` of patch `p2`. 
 
         See :func:`compute_dirichlet_bc` for the format of the boundary
         specification.
@@ -1263,78 +1376,127 @@ class Multipatch:
         each coordinate axis of the boundary if the coordinates of `p2` have to
         be flipped along that axis.
         """
-        P1, P2 = self.patches[p1], self.patches[p2]
-        dofs1 = boundary_dofs(P1[0], bdspec1, ravel=True)
-        dofs2 = boundary_dofs(P2[0], bdspec2, ravel=True, flip=flip)
-        self.join_dofs(p1, dofs1, p2, dofs2)
+        kvs1, kvs2 = self.mesh.patches[p1][0][0], self.mesh.patches[p2][0][0]
+        if flip is None:
+            flip=(self.sdim-1)*(False,)
+        
+        bkv1 = boundary_kv(kvs1, bdspec1)
+        bkv2 = boundary_kv(kvs2, bdspec2, flip=flip) 
+        
+        #retrieve local dofs for each patch on the boundary
+        dofs1 = boundary_dofs(self.mesh.patches[p1][0][0], bdspec1, ravel=True)
+        dofs2 = boundary_dofs(self.mesh.patches[p2][0][0], bdspec2, ravel=True, flip=flip)
+                
+        #check for hierarchy of the boundary knot vectors. currently only supports knot vectors with equal degree.
+        if all([bspline.is_sub_space(kv1,kv2) for kv1, kv2 in zip(bkv1,bkv2)]):
+            pass
+        elif all([bspline.is_sub_space(kv2,kv1) for kv1, kv2 in zip(bkv1,bkv2)]):      
+            self.intfs.remove(((p1,2*bdspec1[0][0]+bdspec1[0][1],s1),(p2,2*bdspec2[0][0]+bdspec2[0][1],s2),flip))
+            self.intfs.add(((p2,2*bdspec2[0][0]+bdspec2[0][1],s2),(p1,2*bdspec1[0][0]+bdspec1[0][1],s1),flip))
+            p1, p2 = p2, p1
+            bdspec1, bdspec2 = bdspec2, bdspec1
+            bkv1, bkv2 = bkv2, bkv1
+            dofs1, dofs2 = dofs2, dofs1
+        else:
+            print(p1, bkv1, p2, bkv2)
+            print('interface coupling not possible')
+            
+        self.shared_pp[p1]=self.shared_pp[p1] | set(dofs1)
+        self.shared_pp[p2]=self.shared_pp[p2] | set(dofs2)
+            
+        #Prolongation operator  
+        P = -scipy.sparse.coo_matrix(bspline.prolongation_tp(bkv1,bkv2))   #TODO: make paramater to generate prolongation matrix as coo_matrix directly?
+        #construct constraints for this interface
+        data = np.concatenate([P.data, np.ones(len(dofs2))])
+        I = np.concatenate([P.row, np.arange(len(dofs2))])
+        J = np.concatenate([dofs1[P.col] + self.N_ofs[p1],dofs2 + self.N_ofs[p2]])
+        A = scipy.sparse.coo_matrix((data,(I,J)),(len(dofs2), self.numloc_dofs)).tocsr()
+        
+        # idx_old = A.indices[A.indptr[np.where(A.getnnz(axis=1)==2)[0]]]
+        # idx_new = A.indices[A.indptr[np.where(A.getnnz(axis=1)==2)[0]]+1]
+        # i = np.arange(A.shape[1])
+        # i[idx_old]=idx_new
+        # i[idx_new]=idx_old
 
-    def _new_shared_dof(self):
-        i = len(self.shared_dofs)
-        self.shared_dofs.append(set())
-        return i
-
+        #M = scipy.sparse.coo_matrix((np.ones(A.shape[1]),(i,np.arange(A.shape[1]))),2*(A.shape[1],))
+        
+        #self.Constr = scipy.sparse.vstack([self.Constr,scipy.sparse.coo_matrix((data,(I,J)),(len(dofs2), self.numloc_dofs)).tocsr()])
+        return A.tocsr()
+        
     def finalize(self):
         """After all shared dofs have been declared using
         :meth:`join_boundaries` or :meth:`join_dofs`, call this function to set
         up the internal data structures.
         """
-        num_shared = [len(spp) for spp in self.shared_per_patch]
+        num_shared = [len(self.shared_pp[p]) for p in range(self.numpatches)]
         # number of local dofs per patch
         self.M = [n - s for (n, s) in zip(self.N, num_shared)]
         # local-to-global offset per patch
         self.M_ofs = np.concatenate(([0], np.cumsum(self.M)))
-
-    def patch_to_global_idx(self, p):
-        """Return an array which maps local tensor product indices for patch
-        `p` to global indices.
-        """
-        tpdofs = np.arange(self.N[p])   # local TP indices
-        # construct array with one column for local and one for corresponding
-        # shared indices
-        sdofs = np.array([l_s for l_s in self.shared_per_patch[p].items()])
-        # which TP indices are local (non-shared)?
-        local_dofs = np.setdiff1d(tpdofs, sdofs[:,0], assume_unique=True)
-
-        # reuse tpdofs for the output
-        m_ofs = self.M_ofs[p]   # offset to global indices for this patch
-        tpdofs[local_dofs] = np.arange(m_ofs, m_ofs + local_dofs.shape[0])
-        tpdofs[sdofs[:,0]] = self.M_ofs[-1] + sdofs[:,1]
-        return tpdofs
-
-    def patch_to_global(self, p, j_global=False):
-        """Compute a sparse binary matrix which maps dofs local to patch `p` to
-        the corresponding global dofs.
-
-        Args:
-            p (int): the index of the patch
-            j_global (bool): if False, the matrix has only as many columns as
-                `p` has dofs; if True, the number of columns is the sum of the
-                number of local dofs over all patches
-
-        Returns:
-            a CSR sparse matrix
-        """
-        shape = (self.numdofs, self.N_ofs[-1] if j_global else self.N[p])
-        n_ofs = self.N_ofs[p] if j_global else 0
-        I = self.patch_to_global_idx(p)
-        J = np.arange(n_ofs, n_ofs + self.N[p])
-        X = scipy.sparse.coo_matrix((np.ones(len(I)), (I,J)), shape=shape)
-        return X.tocsr()
-
-    def global_to_patch(self, p):
-        """Compute a sparse binary matrix which maps global dofs to local dofs
-        in patch `p`. This is just the transpose of :meth:`patch_to_global` and
-        also its left-inverse.
-
-        Args:
-            p (int): the index of the patch
-
-        Returns:
-            a sparse matrix
-        """
-        return self.patch_to_global(p).T
-
-    def assemble_system(self, problem, rhs, args=None, bfuns=None,
+        t=time.time()
+        if self.cython:
+            self.Basis = algebra_cy.pyx_compute_basis(self.Constr.shape[0], self.Constr.shape[1], self.Constr, maxiter=5)
+        else:
+            self.Basis, _ = algebra.compute_basis(self.Constr, maxiter=5)
+        print("Basis setup took "+str(time.time()-t)+" seconds")
+        data, indices, indptr = self.Basis.data, self.Basis.indices, self.Basis.indptr
+        m, n = self.Basis.shape
+        #self.P2G = scipy.sparse.csc_matrix((data[indptr[:-1]],indices[indptr[:-1]],np.arange(n+1)),shape=(m,n)).T
+        X = scipy.sparse.coo_matrix(self.Basis)
+        idx = np.where(np.isclose(X.data,1))
+        X.data, X.row, X.col = X.data[idx], X.row[idx], X.col[idx]
+        self.G2P_idx = X.row
+        D = (X.T@self.Basis).sum(axis=1).A.ravel()
+        self.P2G = scipy.sparse.csr_matrix(scipy.sparse.spdiags(1/D,[0],len(D),len(D))@X.T)
+        self.Basis = scipy.sparse.csr_matrix(self.Basis)
+        #print("Basis setup took "+str(time.time()-t)+" seconds")
+        #self.mesh.sanity_check()
+        #self.sanity_check()
+        
+    def assemble_volume(self, problem, arity=1, domain_id=None, args=None, bfuns=None,
+            symmetric=False, format='csr', layout='blocked', decoupled=False, **kwargs):
+        n = self.numdofs
+        X=self.Basis
+        if isinstance(problem, vform.VForm):
+            arity = problem.arity
+        if args is None:
+            args = dict()
+        if domain_id is not None:
+            domain_id=(domain_id,)
+        else:
+            domain_id=set(self.mesh.domains)
+            
+        if arity==2:
+            A = []
+            dofs=[] 
+            for d_idx in domain_id:
+                for p in self.mesh.domains[d_idx]:
+                    kvs, geo = self.mesh.patches[p][0]
+                    args.update(geo=geo)
+                    A.append(assemble(problem, kvs, args=args, bfuns=bfuns,
+                            symmetric=symmetric, format=format, layout=layout,
+                            **kwargs))
+                    dofs.append(np.arange(self.N_ofs[p],self.N_ofs[p+1]))
+            X = self.Basis[np.concatenate(dofs),:]
+            if decoupled:
+                return scipy.sparse.block_diag(A)
+            else:
+                return X.T@scipy.sparse.block_diag(A)@X
+        else:
+            F=np.zeros(self.numloc_dofs)
+            for d_idx in domain_id:
+                for p in self.mesh.domains[d_idx]:
+                    kvs, geo = self.mesh.patches[p][0]
+                    vals=assemble(problem, kvs, geo=geo, args=args, bfuns=bfuns,
+                        symmetric=symmetric, format=format, layout=layout,
+                        **kwargs).ravel()
+                    F[self.N_ofs[p]:self.N_ofs[p+1]]+=vals
+            if decoupled:
+                return F
+            else:
+                return X.T@F
+        
+    def assemble_system(self, problem, rhs, arity=1, domain_id=None, args=None, bfuns=None,
             symmetric=False, format='csr', layout='blocked', **kwargs):
         """Assemble both the system matrix and the right-hand side vector
         for a variational problem over the multipatch geometry.
@@ -1347,43 +1509,428 @@ class Multipatch:
             right-hand side vector.
         """
         n = self.numdofs
-        A = scipy.sparse.csr_matrix((n, n)).asformat(format)
-        b = np.zeros(n)
+        X = self.Basis
+        
+        A = []
+        b = []
         if args is None:
             args = dict()
+        if domain_id is not None:
+            domain_id={domain_id}
+        else:
+            domain_id=set(self.mesh.domains)
+            
         for p in range(self.numpatches):
-            X = self.patch_to_global(p)
-            kvs, geo = self.patches[p]
+            kvs, geo = self.mesh.patches[p][0]
             args.update(geo=geo)
             # TODO: vector-valued problems
-            A_p = assemble(problem, kvs, args=args, bfuns=bfuns,
+            A.append(assemble(problem, kvs, args=args, bfuns=bfuns,
                     symmetric=symmetric, format=format, layout=layout,
-                    **kwargs)
-            A += X @ A_p @ X.T
-            b_p = assemble(rhs, kvs, args=args, bfuns=bfuns,
+                    **kwargs))
+    
+            b.append(assemble(rhs, kvs, args=args, bfuns=bfuns,
                     symmetric=symmetric, format=format, layout=layout,
-                    **kwargs).ravel()
-            b += X @ b_p
+                    **kwargs).ravel())
+    
+        A = X.T @ scipy.sparse.block_diag(A) @ X
+        b = X.T @ np.concatenate(b)
+            
         return A, b
+    
+    def assemble_surface(self, problem, arity=1, boundary_idx=0, args=None, bfuns=None,
+            symmetric=False, format='csr', layout='blocked', **kwargs):
+        X = self.Basis
+        if args is None:
+            args = dict()
+        if arity==2:
+            R=[]
+            bdofs=[]
+            for (p,b) in self.mesh.outer_boundaries[boundary_idx]:
+                kvs, geo = self.mesh.patches[p][0]
+                bdofs.append(boundary_dofs(kvs, [(b//2,b%2)], ravel=True) + self.N_ofs[p])
+                args.update(geo = geo)
+                
+                R.append(assemble(problem, kvs, args=args, bfuns=bfuns,
+                        symmetric=symmetric, format='coo', layout=layout,
+                        **kwargs, boundary=[(b//2,b%2)]))
+            X=self.Basis[np.concatenate(bdofs),:]
 
-    def compute_dirichlet_bcs(self, bdconds):
+            
+            return X.T @ scipy.sparse.block_diag(R) @ X
+        else:
+            N=np.zeros(self.numloc_dofs)
+            for (p,b) in self.mesh.outer_boundaries[boundary_idx]:
+                kvs, geo = self.mesh.patches[p][0]
+                bdspec=[(b//2,b%2)]
+                bdofs = boundary_dofs(kvs, [(b//2,b%2)], ravel=True) + self.N_ofs[p]
+                args.update(geo = geo)
+    
+                vals=assemble(problem, kvs, args=args, bfuns=bfuns,
+                        symmetric=symmetric, format=format, layout=layout,
+                        **kwargs, boundary=bdspec).ravel()
+                N[bdofs] += vals 
+            
+            return X.T @ N
+            
+    
+#     def assemble_boundary(self, problem, boundary_idx = None, args=None, bfuns=None,
+#             symmetric=False, format='csr', layout='blocked', **kwargs):
+        
+    
+#     def C1_coupling(self, p1, bdspec1, p2, bdspec2, flip=None):
+        
+#         (ax1, sd1), (ax2, sd2) = bdspec1, bdspec2
+#         ((kvs1, geo1),_), ((kvs2, geo2),_) = self.mesh.patches[p1], self.mesh.patches[p2]
+#         sup1, sup2 = geo1.support, geo2.support
+#         dim=len(kvs1)
+#         if flip is None:
+#             flip=(dim-1)*(False,)
+ 
+#         bkv1, bkv2 = Ass.boundary_kv(kvs1, bdspec1), Ass.boundary_kv(kvs2, bdspec2)
+#         dofs1, dofs2 = Ass.boundary_dofs(kvs1, bdspec1, ravel = True, k=1), Ass.boundary_dofs(kvs2, bdspec2, ravel = True, flip=flip, k=1)
+#         G = tuple(kv.greville() for kv in kvs2)
+#         G2 = G[:ax2] + (np.array([sup2[ax2][0] if sd2==0 else sup2[ax2][-1]]),) + G[ax2+1:]
+#         G1 = G[:ax2] + G[ax2+1:]
+#         G1 = G1[:ax1] + (np.array([sup1[ax1][0] if sd1==0 else sup1[ax1][-1]]),) + G1[ax1:] #still need to add flip
+
+#         M=tuple(len(g) for g in G2)
+#         m=np.prod(M)
+#         n1,n2=len(dofs1), len(dofs2)
+        
+#         C1, D1 = bspline.collocation_derivs_tp(kvs1, G1, derivs=1)
+#         C2, D2 = bspline.collocation_derivs_tp(kvs2, G2, derivs=1)
+    
+#         C1, C2 = C1[0].tocsr()[:,dofs1], C2[0].tocsr()[:,dofs2]
+#         for i in range(dim):
+#             D1[i], D2[i] = D1[i].tocsr()[:,dofs1], D2[i].tocsr()[:,dofs2]
+#         N2=geo2.boundary(bdspec2).grid_outer_normal(G2[:ax2]+G2[ax2+1:]).reshape(m,dim)
+
+#         J1=geo1.grid_jacobian(G1).reshape(m,dim,dim)
+#         J2=geo2.grid_jacobian(G2).reshape(m,dim,dim)
+        
+#         invJ1=np.array([inv(jac) for jac in J1[:]])
+#         invJ2=np.array([inv(jac) for jac in J2[:]])
+
+#         NC1=scipy.sparse.csr_matrix((m, n1))
+#         for i in range(dim):
+#             NC1_ = scipy.sparse.csr_matrix((m, n1))
+#             for j in range(dim):
+#                 NC1_ += scipy.sparse.spdiags(invJ1[:,i,j], 0, m, m)*D1[dim-1-j]
+#             NC1 += scipy.sparse.spdiags(N2[:,i], 0, m, m)*NC1_
+            
+#         NC2=scipy.sparse.csr_matrix((m, n2))
+#         for i in range(dim):
+#             NC2_ = scipy.sparse.csr_matrix((m, n2))
+#             for j in range(dim):
+#                 NC2_ += scipy.sparse.spdiags(invJ2[:,i,j], 0, m, m)*D2[dim-1-j]
+#             NC2 += scipy.sparse.spdiags(N2[:,i], 0, m, m)*NC2_
+            
+#         A = scipy.sparse.vstack([C1, NC1])
+#         B = scipy.sparse.vstack([C2, NC2])
+#         P = scipy.sparse.linalg.spsolve(B,A.A)
+#         # prune matrix
+#         P[np.abs(P) < 1e-15] = 0.0
+#         return scipy.sparse.csr_matrix(P) 
+    
+#     def refine(self, patches=None, mult=1, return_prol=False):
+#         if isinstance(patches, dict):
+#             assert max(patches.keys())<self.numpatches and min(patches.keys())>=0, "patch index out of bounds."
+#             patches = patches.keys()
+#         elif isinstance(patches, (list, set, np.ndarray)):
+#             assert max(patches)<self.numpatches and min(patches)>=0, "patch index out of bounds."
+#         elif patches==None:
+#             patches = np.arange(self.numpatches)
+#         elif np.isscalar(patches):
+#             patches=(patches,)
+#         else:
+#             assert 0, "unknown input type"
+#         if return_prol:
+#             n=self.numdofs
+#             old_kvs=[kvs for (kvs,_),_ in self.mesh.patches]
+#             old_global_to_patch = [self.global_to_patch(p) for p in range(self.numpatches)]
+            
+#         self.mesh.refine(patches, mult=mult)
+#         self.reset()
+#         #MP = Multipatch(self.mesh, automatch=True, k=self.k)
+        
+#         if return_prol:
+#             m = self.numdofs
+#             P = scipy.sparse.csr_matrix((m, n))
+            
+#             for p in range(self.numpatches):
+#                 if p in patches:
+#                     kvs=old_kvs[p]
+#                     new_kvs=MP.mesh.patches[p][0][0]
+#                     C = bspline.prolongation_tp(kvs, new_kvs)
+#                 else:
+#                     C = scipy.sparse.identity(self.N[p])
+
+#                 P += MP.patch_to_global(p) @ C @ old_global_to_patch[p]
+#             factors = [1/sum([sum(dof[p][1]) for p in dof]) for dof in MP.shared_dofs]
+#             P[MP.M_ofs[-1]:] = scipy.sparse.spdiags(factors, 0, len(factors), len(factors)) @ P[MP.M_ofs[-1]:]
+#             return P
+        
+    def h_refine(self, h_ref=None, mult=1, return_P = False, ref="rs"):
+        """Refines the Mesh by splitting patches
+        
+        The dictionary `h_ref` specifies which patches (dict keys) are to be split 
+        and how to split them (dict values: 0 to dim-1 or None or -1)
+        
+        The `return_P` keyword enables also the generation of a prolongation matrix from one mesh to the split mesh.
+        
+        Returns:
+            A new :class:`Multipatch` object `MP`
+            A sparse matrix `P` suitable for prolongation.
+        """
+        if isinstance(h_ref, dict):
+            if len(h_ref)>0:
+                assert max(h_ref.keys())<self.numpatches and min(h_ref.keys())>=0, "patch index out of bounds."
+        elif isinstance(h_ref,int):
+            #assert patches >=0 and patches < self.sdim, "dimension error."
+            h_ref = {p:h_ref for p in range(self.numpatches)}
+        elif isinstance(h_ref, (list, set, np.ndarray)):
+            assert max(h_ref)<self.numpatches and min(h_ref)>=0, "patch index out of bounds."
+            h_ref = {p:None for p in patches}
+        elif h_ref==None or h_ref=='q':
+            h_ref = {p:h_ref for p in range(self.numpatches)}
+        else:
+            assert 0, "unknown input type"
+        # if isinstance(p_ref,int):
+        #     p_ref = {p:p_ref for p in range(self.numpatches)}
+        
+        num_p_old = self.numpatches
+        N_old=self.N
+        B_old = self.Basis
+        N_ofs_old = self.N_ofs
+        new_patches = dict()
+        new_kvs_ = dict()
+        P_loc=dict()
+        
+        kvs_old = self.mesh.kvs
+        t=time.time()
+        new_patches=self.mesh.h_refine(h_ref, ref=ref)
+        
+        print("Refinement took " + str(time.time()-t) + " seconds for "+str(len(h_ref))+' patches.')
+        self.reset()
+        
+        if return_P:
+            t = time.time()
+            refined_patches = h_ref
+            for p in refined_patches:
+                P_loc[p]={new_p: scipy.sparse.coo_matrix(bspline.prolongation_tp(kvs_old[p],self.mesh.kvs[new_p])) for new_p in new_patches[p]}
+            if len(refined_patches)!=0:
+                data=np.concatenate([np.concatenate([P_loc[p][new_p].data for new_p in new_patches[p]]) for p in refined_patches])
+                I = np.concatenate([np.concatenate([P_loc[p][new_p].row + self.N_ofs[new_p] for new_p in new_patches[p]]) for p in refined_patches])
+                J = np.concatenate([np.concatenate([P_loc[p][new_p].col + N_ofs_old[p] for new_p in new_patches[p]]) for p in refined_patches])
+                P_loc = scipy.sparse.coo_matrix((data,(I, J)),(sum(self.N),sum(N_old)))
+            else:
+                P_loc = scipy.sparse.coo_matrix((sum(self.N),sum(N_old)))
+            if len(refined_patches)!=num_p_old:
+                data_id=np.ones(sum([self.N[p] for p in range(num_p_old) if p not in refined_patches]))
+                I_id = np.concatenate([np.arange(self.N[p]) + self.N_ofs[p] for p in range(num_p_old) if p not in refined_patches])
+                J_id = np.concatenate([np.arange(self.N[p]) + N_ofs_old[p] for p in range(num_p_old) if p not in refined_patches])
+                P_loc = P_loc +  scipy.sparse.coo_matrix((data_id,(I_id, J_id)),(sum(self.N),sum(N_old)))
+            P = self.P2G@P_loc@B_old
+            print("Prolongation took "+str(time.time()-t)+" seconds")
+            return P
+        
+    def p_refine(self, p_inc=1, return_P = False):
+        N_old=self.N
+        B_old = self.Basis
+        N_ofs_old = self.N_ofs
+        kvs_old = self.mesh.kvs
+        P_loc=dict()
+        
+        self.mesh.p_refine(p_inc)
+        self.reset()
+        
+        if return_P:
+            t = time.time()
+            for p in range(self.numpatches):
+                P_loc[p]= scipy.sparse.coo_matrix(bspline.prolongation_tp(kvs_old[p],self.mesh.kvs[p]))
+            data=np.concatenate([P_loc[p].data for p in range(self.numpatches)])
+            I = np.concatenate([P_loc[p].row + self.N_ofs[p] for p in range(self.numpatches)])
+            J = np.concatenate([P_loc[p].col + N_ofs_old[p] for p in range(self.numpatches)])
+            P_loc = scipy.sparse.coo_matrix((data,(I, J)),(sum(self.N),sum(N_old)))
+            P = self.P2G@P_loc@B_old
+            return P
+        
+    def get_nodes(self, dir_boundary=False):
+        """Get global vertices of the multipatch object as well as local nodal degrees of freedom corresponding to the vertices. 
+        In case of T-junctions also obtain the $p$ global degrees of freedom and $p$ local degrees of freedom on the coarse patch.
+        Additionally may include nodes on the Dirichlet boundary if desired."""
+        loc_c = np.concatenate([boundary_dofs(kvs,m=0,ravel=True)+self.N_ofs[p] for p, kvs in enumerate(self.mesh.kvs)])
+
+        #loc_c = np.setdiff1d(loc_c, self.global_dir_idx)
+
+        B = self.Basis[loc_c,:]
+        C_dofs = np.unique(B[B.getnnz(axis=1)==1].indices)
+        X = scipy.sparse.coo_matrix(self.Basis)
+        idx = np.where(np.isclose(X.data,1))
+        X.data, X.row, X.col = X.data[idx], X.row[idx], X.col[idx]
+        X = X.tocsc()
+        Nodes = {c:[X[:,c].indices] for c in C_dofs}
+        t_idx = loc_c[np.where(B.getnnz(axis=1)>1)[0]]
+        T_dofs = {}
+        for i in t_idx:
+            t = tuple(self.Basis[i,:].indices)
+            coeff = tuple()
+            if t not in T_dofs:
+                T_dofs[t] = [(i,),set(self.Constr[self.Constr.tocsc()[:,i].indices,:].indices)-{i}]
+            else:
+                T_dofs[t][0] = T_dofs[t][0]+(i,)
+                T_dofs[t][1] = T_dofs[t][1] & (set(self.Constr[self.Constr.tocsc()[:,i].indices,:].indices)-{i})
+        T_dofs = {t:[np.sort(T_dofs[t][0]),np.sort(list(T_dofs[t][1]))] for t in T_dofs}
+        Nodes.update(T_dofs)
+        if not dir_boundary:
+            Nodes = {key:Nodes[key] for key in Nodes if len(np.intersect1d(Nodes[key][0],self.global_dir_idx))==0}
+        return Nodes
+
+    def get_boundary_dofs(self, bidx):
+        """Computes the global dof indices of the boundary specified by 'bidx'
+
+        The integer `bidx` indicates the index of the boundary.
+
+        Returns:
+            A numpy array `bnd_idx` that contains the global dof indices of the boundary 'bidx'.
+        """
+        bnd_idx = np.array([])
+        for p, bdspec in self.mesh.outer_boundaries[bidx]:
+            (kvs, _), _ = self.mesh.patches[p]
+            bdofs = boundary_dofs(kvs, ((bdspec // 2, bdspec % 2),), ravel=True)
+
+            idx, _ = self._get_idx(bdofs, p)
+            bnd_idx = np.union1d(bnd_idx, idx)
+
+        return bnd_idx
+    
+    def set_dirichlet_boundary(self, dir_data):
+        self.dir_idx=dict()
+        self.dir_vals=dict()
+        kvs = self.mesh.kvs
+        geos = self.mesh.geos
+        for key in dir_data:
+            for p,b in self.mesh.outer_boundaries[key]:
+                idx_, vals_ = compute_dirichlet_bc(kvs[p], geos[p], [(b//2,b%2)], dir_data[key])
+                if p in self.dir_idx:
+                    self.dir_idx[p].append(idx_)
+                    self.dir_vals[p].append(vals_)
+                else:
+                    self.dir_idx[p]=[idx_]
+                    self.dir_vals[p]=[vals_]
+                
+        for p in self.dir_idx:
+            self.dir_idx[p], lookup = np.unique(self.dir_idx[p], return_index = True)
+            self.dir_vals[p] = np.concatenate(self.dir_vals[p])[lookup]
+            
+        self.global_dir_idx = np.concatenate([self.dir_idx[p] + self.N_ofs[p] for p in self.dir_idx])
+
+    def compute_dirichlet_bcs(self, b_data):
         """Performs the same operation as the global function
         :func:`compute_dirichlet_bcs`, but for a multipatch problem.
-
-        The sequence `bdconds` should contain triples of the form `(patch,
-        bdspec, dir_func)`.
-
+        The dictionary `b_data` should contain tuples of the form `(bd_idx, dir_func)`, 
+        where `bd_idx` relates to a part of the boundary of the mesh. 
         Returns:
             A pair `(indices, values)` suitable for passing to
             :class:`RestrictedLinearSystem`.
         """
         bcs = []
         p2g = dict()        # cache the patch-to-global indices for efficiency
-        for (p, bdspec, g) in bdconds:
-            kvs, geo = self.patches[p]
-            bc = compute_dirichlet_bc(kvs, geo, bdspec, g)
-            if p not in p2g:
-                p2g[p] = self.patch_to_global_idx(p)
-            idx = p2g[p]    # maps local dofs to global dofs
-            bcs.append((idx[bc[0]], bc[1]))
+        for bidx, g in b_data.items():
+            for p, bdspec in self.mesh.outer_boundaries[bidx]:
+                (kvs, geo), _ = self.mesh.patches[p]
+                bc = compute_dirichlet_bc(kvs, geo, ((bdspec//2,bdspec%2),), g)# + self.N_ofs[p]
+                B = self.Basis[bc[0] + self.N_ofs[p]]       
+                feasible = (B.indptr[1:]-B.indptr[:-1])==1
+                idx, feasible = self._get_idx(bc[0], p)
+                idx = B[np.arange(len(bc[0]))[feasible]]@np.arange(self.numdofs)
+                bcs.append((idx.astype(int), bc[1][feasible]))
         return combine_bcs(bcs)
+    
+    def _get_idx(self, ids, p):
+        """Helper to get global dof indices from the local indices 'ids' and patch 'p'.
+
+        Returns:
+            A pair '(idx, feasible)' with global indices  'idx' and an array to indicate whether the entries in idx can be considered feasible.
+        """
+        B = self.Basis[ids + self.N_ofs[p]]
+        feasible = (B.indptr[1:] - B.indptr[:-1]) == 1
+        idx = B[np.arange(len(ids))[feasible]] @ np.arange(self.numdofs)
+
+        return idx, feasible
+    
+    def integrate(self, problem, u_=None, nu=None, domain_id=None, **kwargs):
+        u_loc=np.zeros(self.N_ofs[-1])
+        if u_ is not None:
+            u_loc=self.Basis@u_
+        if domain_id is not None:
+            if isscalar(domain_id):
+                domain_id={domain_id}
+        else:
+            domain_id=set(self.mesh.domains)
+        if nu is None:
+            nu={d_id:0. for d_id in domain_id}
+            
+        I = 0
+        for d_id in domain_id:
+            I += np.array([assemble(problem, kvs=tuple(bspline.KnotVector(kv.mesh,0) for kv in kvs), geo=geo, nu=nu[d_id], uh=geometry.BSplineFunc(kvs,u_loc[self.N_ofs[p]:self.N_ofs[p+1]]), **kwargs).ravel() for p,((kvs,geo),_) in enumerate(self.mesh.patches) if p in self.mesh.domains[d_id]]).sum()
+        return I
+    
+    def plot(self, u, cmap = plt.cm.jet, cbar=True, mesh=False, axis='scaled', contour=False, **kwargs):
+        assert self.sdim==2, 'visualization only possible for 2D.'
+        assert (len(u)==self.numdofs) or (len(u)==self.N_ofs[-1]), 'wrong size of coefficient vector.'
+        
+        fig = plt.figure(figsize=kwargs.get('figsize'))
+        ax = plt.axes()
+        
+        u_funcs = self.function(u)
+        
+        if 'range' not in kwargs:
+            u_max=max(u)
+            u_min=min(u)
+        else:
+            assert isinstance(kwargs['range'],tuple) and len(kwargs['range'])==2, 'wrong input for image range'
+            u_max=kwargs['range'][1]
+            u_min=kwargs['range'][0]
+            
+        if abs(u_max-u_min)<1e-12:
+            mid=(u_min+u_max)/2
+            u_max=mid+1e-12
+            u_min=mid-1e-12
+
+        if mesh:
+            self.mesh.draw(fig=fig)
+            
+        for (u_func, ((kvs, geo),_)) in zip(u_funcs, self.mesh.patches):
+            vis.plot_field(u_func, geo, vmin=u_min, vmax=u_max, cmap = cmap, contour=contour)
+        
+        plt.axis(axis);
+        if cbar:
+            cax = fig.add_axes([ax.get_position().x1+0.03,ax.get_position().y0,0.02,ax.get_position().height])
+            plt.colorbar(cax=cax) # Similar to fig.colorbar(im, cax = cax)
+        plt.show()
+        
+    def plot_quiver(self, u, mesh=False, axis='scaled', **kwargs):
+        
+        for (u_func, ((kvs, geo),_)) in zip(u_funcs, self.mesh.patches):
+            vis.plot_field(u_func, geo, vmin=u_min, vmax=u_max, cmap = cmap, contour=contour)
+        
+        
+    def L2projection(self, u):
+        Mh = self.assemble_volume(vform.mass_vf(2))
+        u_rhs = self.assemble_volume(vform.L2functional_vf(2, physical=True),f=u)
+        return solvers.make_solver(Mh, spd=True).dot(u_rhs)
+        
+    def function(self, u):
+        if len(u)==self.numdofs:
+            u_loc=self.Basis@u
+        else:
+            u_loc = u
+        return [geometry.BSplineFunc(kvs,u_loc[self.N_ofs[p]:self.N_ofs[p+1]]) for p, kvs in enumerate(self.mesh.kvs)]
+    
+    def sanity_check(self):
+        assert self.Basis != None, 'Basis for function space not yet computed.'
+        assert all(np.isclose(self.Basis@np.ones(self.numdofs),1)), 'No partition of unity.'
+        assert abs(self.Constr@self.Basis).max()<1e-12, 'Not an H^1-conforming function space.'
+        assert scipy.sparse.linalg.norm(self.P2G@self.Basis-scipy.sparse.identity(self.numdofs)) <1e-12
+

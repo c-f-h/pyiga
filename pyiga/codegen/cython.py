@@ -343,7 +343,7 @@ class AsmGenerator(CodegenVisitor):
 
         self.put('double result[]')     # output argument
         self.dedent()
-        self.put(') nogil:')
+        self.put(') noexcept nogil:')
 
         # local variables
         if not self.vec:
@@ -388,7 +388,7 @@ class AsmGenerator(CodegenVisitor):
 
     def gen_entry_impl_header(self):
         self.cython_pragmas()
-        self.putf('cdef void entry_impl(self, size_t[{dim}] i, size_t[{dim}] j, double result[]) nogil:')
+        self.putf('cdef void entry_impl(self, size_t[{dim}] i, size_t[{dim}] j, double result[]) noexcept nogil:')
         self.indent()
         self.putf('cdef IntInterval intv')
         self.putf('cdef size_t g_sta[{dim}]')
@@ -690,7 +690,7 @@ class AsmGenerator(CodegenVisitor):
             self.put('# constant parameters')
             self.put('double constants[],')    # array for constant parameters
         self.dedent()
-        self.put(') nogil:')
+        self.put(') noexcept nogil:')
 
         # start main loop
         self.start_loop_with_fields(local_vars=vf.precomp, temp=True)
@@ -851,7 +851,7 @@ cdef class _CommonBase{{DIM}}D:
 
 
 cdef class BaseAssembler{{DIM}}D(_CommonBase{{DIM}}D):
-    cdef void entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j, double result[]) noexcept nogil:
         pass
 
     cpdef double entry1(self, size_t i):
@@ -982,12 +982,12 @@ cdef class BaseVectorAssembler{{DIM}}D(_CommonBase{{DIM}}D):
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
 
-    cdef void entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j, double result[]) noexcept nogil:
         pass
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef void multi_blocks_chunk(self, size_t[:,::1] idx_arr, double[:,:,::1] out) nogil:
+    cdef void multi_blocks_chunk(self, size_t[:,::1] idx_arr, double[:,:,::1] out) noexcept nogil:
         if self.arity != 2:
             return
         cdef size_t[{{DIM}}] I, J

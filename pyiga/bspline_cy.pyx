@@ -1,6 +1,7 @@
 # cython: profile=False
 # cython: linetrace=False
 # cython: binding=False
+# distutils: define_macros=NPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION
 
 cimport cython
 
@@ -119,7 +120,6 @@ cdef double[:,:] bspline_active_deriv_single(object knotvec, double u, int numde
             (a1,a2) = (a2,a1)
 
     return result
-
 
 @cython.boundscheck(False)
 @cython.wraparound(False)

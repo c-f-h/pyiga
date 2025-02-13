@@ -8,30 +8,59 @@ import scipy.sparse
 import scipy.sparse.linalg
 import scipy.interpolate
 
-from .tensor import apply_tprod
+from .tensor import apply_tprod, _multi_kron
+from . import solvers
 
 def _parse_bdspec(bdspec, dim):
     if bdspec == 'left':
-        bd = (dim - 1, 0)
+        bd = ((dim - 1, 0),)
     elif bdspec == 'right':
-        bd = (dim - 1, 1)
+        bd = ((dim - 1, 1),)
     elif bdspec == 'bottom':
-        bd = (dim - 2, 0)
+        bd = ((dim - 2, 0),)
     elif bdspec == 'top':
-        bd = (dim - 2, 1)
+        bd = ((dim - 2, 1),)
     elif bdspec == 'front':
-        bd = (dim - 3, 0)
+        bd = ((dim - 3, 0),)
     elif bdspec == 'back':
-        bd = (dim - 3, 1)
+        bd = ((dim - 3, 1),)
     else:
-        bd = bdspec
-    if not (len(bd) == 2 and bd[1] in (0,1)):
-        raise ValueError('invalid bdspec ' + str(bd))
-    if bd[0] < 0 or bd[0] >= dim:
-        raise ValueError('invalid bdspec %s for space of dimension %d'
+        bd=bdspec
+        if not all((side in (0,1) for _, side in bd)):
+            raise ValueError('invalid bdspec ' + str(bd))
+        if any(( ax < 0 or ax >= dim for ax, _ in bd)):
+            raise ValueError('invalid bdspec %s for space of dimension %d'
                 % (bdspec, dim))
     return bd
 
+def unit(n,k):
+    return np.eye(1,n,k).ravel()
+
+def is_sub_space(kv1,kv2):
+    """Checks if the spline space induced by the knot vector kv1 is a subspace of the corresponding spline space induced by kv2 in some subinterval of kv1.
+    
+    Currently only covers cases with the same spline degree `p`.
+    
+    """
+    assert kv1.p == kv2.p
+    
+    a1, b1 = kv1.support()
+    a2, b2 = kv2.support()
+    
+    if a2 < a1 or b2 > b1:
+        return False
+
+    return all([any(np.isclose(k,kv2.mesh)) for k in kv1.mesh if a2 <= k <= b2])
+
+
+def multi_indices(N, k=0):
+    assert N>0 and k>=0, "N must be positive and k non-negative."
+    if N==1:
+        yield (k,)
+    else:
+        for i in range(k,-1,-1):
+            for j in multi_indices(N-1,k-i):
+                yield (i,) + j
 
 class KnotVector:
     """Represents an open B-spline knot vector together with a spline degree.
@@ -65,6 +94,7 @@ class KnotVector:
         # sanity check: knots should be monotonically increasing
         assert np.all(self.kv[1:] - self.kv[:-1] >= 0), 'knots should be increasing'
         self.p = p
+        assert isinstance(self.p,int) and self.p >= 0, 'polynomial degree is not a integer'
         self._mesh = None    # knots with duplicates removed (on demand)
         self._knots_to_mesh = None   # knot indices to mesh indices (on demand)
 
@@ -173,21 +203,66 @@ class KnotVector:
             # support interval; clamp them manually to avoid problems later on
             return np.clip(g, self.kv[0], self.kv[-1])
 
-    def refine(self, new_knots=None):
+    def maxima(self, maxiter=10): #TODO: cythonize
+        n = self.numdofs
+        M = self.greville() #greville starting points are a good initial guess
+        h = self.meshsize_min()
+        for j in range(n):
+            e = unit(n,j) #write function to evaluate individual b-splines instead of all basis functions?
+            if not np.isclose(deriv(self,e,0,M[j]),1):
+                i=0
+                while abs(deriv(self,e,1,M[j])) > 1e-10/h and i<maxiter: #simple Newton for non-nodal basis functions
+                    M[j] = M[j] - deriv(self,e,1,M[j])/deriv(self,e,2,M[j])
+                    i+=1
+                if i==maxiter: print("maxiter reached")
+        return M
+
+    def h_refine(self, new_knots=None, mult=1):
         """Return the refinement of this knot vector by inserting `new_knots`,
         or performing uniform refinement if none are given."""
         if new_knots is None:
             mesh = self.mesh
             new_knots = (mesh[1:] + mesh[:-1]) / 2
+            if mult>1:
+                new_knots = np.hstack(mult*[new_knots,])
         kvnew = np.sort(np.concatenate((self.kv, new_knots)))
         return KnotVector(kvnew, self.p)
+    
+    def b_refine(self, q):
+        mesh=self.mesh
+        return self.h_refine(new_knots=[mesh[0]*q + mesh[1]*(1-q),mesh[-1]*q + mesh[-2]*(1-q)])
+    
+    def p_refine(self, p_inc):
+        KV = self.h_refine(new_knots=np.repeat(self.mesh,p_inc))
+        KV.p=self.p+p_inc
+        return KV
 
     def meshsize_avg(self):
         """Compute average length of the knot spans of this knot vector"""
         nspans = self.numspans
         support = abs(self.kv[-1] - self.kv[0])
         return support / nspans
+    
+    def meshsize_max(self):
+        """Compute average length of the knot spans of this knot vector"""
+        return np.max(self.kv[1:]-self.kv[:-1])
 
+    def meshsize_min(self):
+        """Compute average length of the knot spans of this knot vector"""
+        return np.min(self.mesh[1:]-self.mesh[:-1])
+    
+    def deriv(self, deriv=1, coeffs=None):
+        assert isinstance(deriv,int) and deriv>0, "ambiguous"
+        new_coeffs = np.multiply((self.p/(self.kv[self.p+2:]-self.kv[:-self.p-2]))[None].T,coeffs[1:,...]-coeffs[:-1,...])
+        new_kv=KnotVector(self.kv[1:-1],self.p-1)
+        if deriv==1:
+            return new_kv, new_coeffs
+        else:
+            return new_kv.deriv(deriv=deriv-1, coeffs=new_coeffs)
+    
+def mapto(kv, f):
+        """Transform mesh of the knots by the mapping f"""
+        return KnotVector(f(kv.kv), kv.p)
 
 def make_knots(p, a, b, n, mult=1):
     """Create an open knot vector of degree `p` over an interval `(a,b)` with `n` knot spans.
@@ -220,7 +295,15 @@ def numdofs(kvs):
         return kvs.numdofs
     else:
         return np.prod([kv.numdofs for kv in kvs])
-
+    
+def numspans(kvs):
+    """Convenience function which returns the number of dofs in a single knot vector
+    or in a tensor product space represented by a tuple of knot vectors.
+    """
+    if isinstance(kvs, KnotVector):
+        return kvs.numspans
+    else:
+        return np.prod([kv.numspans for kv in kvs])
 ################################################################################
 
 def ev(knotvec, coeffs, u):
@@ -433,6 +516,9 @@ def single_ev(knotvec, i, u):
             result[j] = _bspline_single_ev_single(knotvec, i, u[j])
         return result
 
+def tp_findspan(kvs,U):
+    return tuple(kv.findspan(u) for kv,u in zip(kvs,U))
+    
 def tp_bsp_eval_pointwise(kvs, coeffs, points):
     """Evaluate a tensor-product B-spline function at an unstructured list of points.
 
@@ -611,6 +697,21 @@ def collocation(kv, nodes):
 
     return scipy.sparse.coo_matrix((values.ravel(), (I,J)), shape=(m,n)).tocsr()
 
+def collocation_tp(kvs, gridaxes):
+    """Compute collocation matrix for Tensor product B-spline basis at the given interpolation grid"""
+    dim=len(kvs)
+    assert len(gridaxes)==dim,"Input has wrong dimension."
+    if not all(np.ndim(ax) == 1 for ax in gridaxes):
+            gridaxes = tuple(np.squeeze(ax) for ax in gridaxes)
+            assert all(ax.ndim == 1 for ax in gridaxes), \
+                "Grid axes should be one-dimensional"
+    
+    C = [collocation(kvs[d],gridaxes[d]) for d in range(dim)]
+    # C = Colloc[0]
+    # for d in range(1,dim):
+    #     C = scipy.sparse.kron(C,Colloc[d])
+    return _multi_kron(C)
+
 def collocation_info(kv, nodes):
     """Return two arrays: one containing the index of the first active B-spline
     per evaluation node, and one containing, per node, the coefficient vector
@@ -645,6 +746,29 @@ def collocation_derivs(kv, nodes, derivs=1):
 
     return [scipy.sparse.coo_matrix((values[d].ravel(), (I,J)), shape=(m,n)).tocsr()
             for d in range(derivs + 1)]
+
+def collocation_derivs_tp(kvs, gridaxes, derivs=1):
+    """Compute collocation matrix and derivative collocation matrices for Tensor product B-spline
+    basis at the given grid.
+
+    Returns a list of derivs+1 lists containing collocation matrices for derivatives of order derivs as sparse CSR matrices with shape (m,n) where me is the number of gridpoints
+    and n the  overall number of basis functions related to kvs."""
+    dim=len(kvs)
+    assert len(gridaxes)==dim,"Input has wrong dimension."
+    if not all(np.ndim(ax) == 1 for ax in gridaxes):
+            gridaxes = tuple(np.squeeze(ax) for ax in gridaxes)
+            assert all(ax.ndim == 1 for ax in gridaxes), \
+                "Grid axes should be one-dimensional"
+    
+    Colloc = [collocation_derivs(kvs[d],gridaxes[d],derivs=derivs) for d in range(dim)]
+    D = [[] for k in range(derivs+1)]
+    for k in range(derivs+1):
+        for ind in multi_indices(dim,k):
+            C=Colloc[0][ind[0]]
+            for d in range(1,dim):
+                C = scipy.sparse.kron(C,Colloc[d][ind[d]])
+            D[k].append(C)
+    return D
 
 def collocation_derivs_info(kv, nodes, derivs=1):
     """Similar to :func:`collocation_info`, but the second array also contains
@@ -704,13 +828,38 @@ def prolongation(kv1, kv2):
         csr_matrix: sparse matrix which prolongs coefficients from `kv1` to `kv2`
     """
     g = kv2.greville()
-    C1 = collocation(kv1, g).A
+    C1 = collocation(kv1, g).toarray()
     C2 = collocation(kv2, g)
-    P = scipy.sparse.linalg.spsolve(C2, C1)
+    P = scipy.sparse.linalg.spsolve(C2,C1)
     # prune matrix
-    P[np.abs(P) < 1e-15] = 0.0
+    P[np.abs(P) < 1e-12] = 0.0
     return scipy.sparse.csr_matrix(P)
 
+def prolongation_tp(kvs1, kvs2):
+    """Compute prolongation matrix between Tensor product B-spline bases.
+
+    Given two Tensor product B-spline bases, where the first spans a subspace of the second
+    one, compute the matrix which maps spline coefficients from the first
+    basis to the coefficients of the same function in the second basis.
+
+    Args:
+        kvs1 (tuple(:class:`KnotVector`)): tuple of source B-spline basis knot vectors
+        kvs2 (tuple(:class:`KnotVector`)): tuple of target B-spline basis knot vectors
+
+    Returns:
+        csr_matrix: sparse matrix which prolongs coefficients from `kvs1` to `kvs2`
+    """
+    assert len(kvs1)==len(kvs2), "Number of dimensions does not match!"
+    dim = len(kvs1)
+    
+    Prol = [prolongation(kvs1[d],kvs2[d]) for d in range(dim)]
+    P = Prol[0]
+    for d in range(1,dim):
+        P = scipy.sparse.kron(P, Prol[d])
+    P=scipy.sparse.csr_matrix(P)
+    P.eliminate_zeros()
+    return P
+    
 def knot_insertion(kv, u):
     """Return a sparse matrix of size `(n+1) x n`, with `n = kv.numdofs´, which
     maps coefficients from `kv` to a new knot vector obtained by inserting the
@@ -749,7 +898,7 @@ class _BaseGeoFunc:
         """Returns True if the function is vector-valued."""
         return len(self.output_shape()) == 1
 
-    def bounding_box(self, grid=1):
+    def bounding_box(self, grid=1, full=False):
         """Compute a bounding box for the image of this geometry.
 
         By default, only the corners are taken into account. By choosing
@@ -758,7 +907,10 @@ class _BaseGeoFunc:
         Returns:
             a tuple of `(lower,upper)` limits per dimension (in XY order)
         """
-        supp = self.support
+        if full:
+            supp=((0.0,1.0),)*self.sdim
+        else:
+            supp = self.support
         grid = [np.linspace(s[0], s[1], grid+1) for s in supp]
         X = self.grid_eval(grid)
         X.shape = (-1, self.dim)
@@ -784,7 +936,7 @@ class _BaseGeoFunc:
         else:
             raise ValueError('Could not find coordinates for desired point %s' % (x,))
 
-    def boundary(self, bdspec):
+    def boundary(self, bdspec, flip = None):
         """Return one side of the boundary as a :class:`.UserFunction`.
 
         Args:
@@ -795,7 +947,7 @@ class _BaseGeoFunc:
             has `sdim` reduced by 1 and the same `dim` as this function
         """
         from .geometry import _BoundaryFunction
-        return _BoundaryFunction(self, bdspec)
+        return _BoundaryFunction(self, bdspec, flip=flip)
 
 class _BaseSplineFunc(_BaseGeoFunc):
     def eval(self, *x):
@@ -844,7 +996,7 @@ class BSplineFunc(_BaseSplineFunc):
         sdim (int): dimension of the parameter domain
         dim (int): dimension of the output of the function
     """
-    def __init__(self, kvs, coeffs):
+    def __init__(self, kvs, coeffs, support = None):
         if isinstance(kvs, KnotVector):
             kvs = (kvs,)
         self.kvs = tuple(kvs)
@@ -866,7 +1018,10 @@ class BSplineFunc(_BaseSplineFunc):
             dim = dim[0]
         self.dim = dim
 
-        self._support_override = None
+        if support:
+            self._support_override = support
+        else:
+            self._support_override = None
 
     def output_shape(self):
         return self.coeffs.shape[self.sdim:]
@@ -919,6 +1074,25 @@ class BSplineFunc(_BaseSplineFunc):
             ops = [colloc[j][1 if j==i else 0] for j in range(self.sdim)] # deriv. in i-th direction
             grad_components.append(apply_tprod(ops, self.coeffs))   # shape: shape(grid) x self.dim
         return np.stack(grad_components, axis=-1)   # shape: shape(grid) x self.dim x self.sdim
+    
+    def grid_outer_normal(self, gridaxes):
+        gridaxes = list(gridaxes)
+        N = [len(grid) for grid in gridaxes]
+        #gridaxes.insert(self.axis, np.array([self.fixed_coord]))
+        jacs = self.grid_jacobian(gridaxes)
+        if self.dim==2 and self.sdim==1:     # line integral
+            x = jacs
+            #di=-1 if self.axis != self.side else 1
+            x[:,0]=-x[:,0]
+            x[:,[0,1]]=x[:,[1,0]]
+            return x/np.linalg.norm(x,axis=1)[:,None]
+        elif self.dim==3 and self.sdim==2:   # surface integral
+            #di=-1 if (self.axis+self.side)%2==0 else 1
+            x, y = jacs[:,:,:,0], jacs[:,:,:,1]
+            un=np.cross(x, y).reshape(N[0],N[1],3,1)
+            return un/np.linalg.norm(un,axis=2)[:,:,None]
+        else:
+            assert False, 'do not know how to compute normal vector for Jacobian shape {}'.format(jacs.shape)
 
     def grid_hessian(self, gridaxes):
         """Evaluate the Hessian matrix of a scalar or vector function on a tensor product grid.
@@ -1025,14 +1199,18 @@ class BSplineFunc(_BaseSplineFunc):
             # if we have reduced support, the boundary may not be
             # interpolatory; return a custom function
             return _BaseGeoFunc.boundary(self, bdspec)
+        
+        bdspec = _parse_bdspec(bdspec, self.sdim)
+        axis, sides = tuple(ax for ax, _ in bdspec), tuple(-idx for _, idx in bdspec)
 
-        axis, side = _parse_bdspec(bdspec, self.sdim)
-        assert 0 <= axis < self.sdim, 'Invalid axis'
+        assert all([0 <= ax < self.sdim for ax in axis]), 'Invalid axis'
         slices = self.sdim * [slice(None)]
-        slices[axis] = (0 if side==0 else -1)
+        for ax, idx in zip(axis, sides):
+            slices[ax] = idx
         coeffs = self.coeffs[tuple(slices)]
         kvs = list(self.kvs)
-        del kvs[axis]
+        for ax in sorted(axis,reverse=True):
+            del kvs[ax]
         return BSplineFunc(kvs, coeffs)
 
     @property
@@ -1059,13 +1237,13 @@ class BSplineFunc(_BaseSplineFunc):
 
     def translate(self, offset):
         """Return a version of this geometry translated by the specified offset."""
-        return BSplineFunc(self.kvs, self.coeffs + offset)
+        return BSplineFunc(self.kvs, self.coeffs + offset, support = self._support_override)
 
     def scale(self, factor):
         """Scale all control points either by a scalar factor or componentwise by
         a vector and return the resulting new function.
         """
-        return BSplineFunc(self.kvs, self.coeffs * factor)
+        return BSplineFunc(self.kvs, self.coeffs * factor, support = self._support_override)
 
     def apply_matrix(self, A):
         """Apply a matrix to each control point of this function and return the result.
@@ -1076,7 +1254,7 @@ class BSplineFunc(_BaseSplineFunc):
         assert self.is_vector(), 'Can only apply matrices to vector-valued functions'
         C = np.matmul(A, self.coeffs[..., None])
         assert C.shape[-1] == 1  # this should have created a new singleton axis
-        return BSplineFunc(self.kvs, np.squeeze(C, axis=-1))
+        return BSplineFunc(self.kvs, np.squeeze(C, axis=-1), support = self._support_override)
 
     def rotate_2d(self, angle):
         """Rotate a geometry with :attr:`dim` = 2 by the given angle and return the result."""
@@ -1085,6 +1263,18 @@ class BSplineFunc(_BaseSplineFunc):
         R = np.array([
             [c, -s],
             [s, c]
+        ])
+        return self.apply_matrix(R)
+    
+    def rotate_3d(self, angle, n):
+        """Rotate a geometry with :attr:`dim` = 3 by the given angle around a given line generated by n and return the result."""
+        assert self.dim == 3, 'Must be 3D vector function'
+        (n1,n2,n3) = n = n/np.linalg.norm(n)
+        s, c = np.sin(angle), np.cos(angle)
+        R = np.array([
+            [n1**2*(1-c) + c   , n1*n2*(1-c) - n3*s, n1*n3*(1-c) + n2*s],
+            [n1*n2*(1-c) + n3*s, n2**2*(1-c) + c   , n2*n3*(1-c) - n1*s],
+            [n1*n3*(1-c) - n2*s, n2*n3*(1-c) + n1*s, n3**2*(1-c) + c   ]
         ])
         return self.apply_matrix(R)
 
@@ -1108,7 +1298,7 @@ class BSplineFunc(_BaseSplineFunc):
     def as_nurbs(self):
         """Return a NURBS version of this function with constant weights equal to 1."""
         from .geometry import NurbsFunc
-        return NurbsFunc(self.kvs, self.coeffs.copy(), np.ones(self.coeffs.shape[:self.sdim]))
+        return NurbsFunc(self.kvs, self.coeffs.copy(), np.ones(self.coeffs.shape[:self.sdim]), support = self._support_override)
 
     def as_vector(self):
         """Convert a scalar function to a 1D vector function."""
@@ -1116,7 +1306,7 @@ class BSplineFunc(_BaseSplineFunc):
             return self
         else:
             assert self.is_scalar()
-            return BSplineFunc(self.kvs, self.coeffs[..., np.newaxis])
+            return BSplineFunc(self.kvs, self.coeffs[..., np.newaxis], support = self._support_override)
 
     def __getitem__(self, I):
         return BSplineFunc(self.kvs, self.coeffs[..., I])
@@ -1132,9 +1322,12 @@ class PhysicalGradientFunc(_BaseGeoFunc):
         self.geo = geo
         self.dim = self.sdim = func.sdim
         self.support = func.support
+        self._support_override = func._support_override
 
     def output_shape(self):
         return self.func.output_shape() + (self.sdim,)
+    
+    #def eval(self, *x):
 
     def grid_eval(self, gridaxes):
         geojac = self.geo.grid_jacobian(gridaxes)

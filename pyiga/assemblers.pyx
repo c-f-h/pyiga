@@ -92,7 +92,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
             double[:, :, ::1] _temp_fields,
             # output
             double[:, :, ::1] _fields,
-        ) nogil:
+        ) noexcept nogil:
         cdef double GaussWeight
         cdef double* fields
         cdef double* temp_fields
@@ -120,7 +120,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
             double result[]
-        ) nogil:
+        ) noexcept nogil:
         cdef double r = 0.0
 
         cdef double* fields
@@ -137,7 +137,7 @@ cdef class MassAssembler2D(BaseAssembler2D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) noexcept nogil:
         cdef IntInterval intv
         cdef size_t g_sta[2]
         cdef size_t g_end[2]
@@ -240,7 +240,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
             double[:, :, ::1] _temp_fields,
             # output
             double[:, :, ::1] _fields,
-        ) nogil:
+        ) noexcept nogil:
         cdef double GaussWeight
         cdef double _tmp2
         cdef double W
@@ -285,7 +285,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
             double result[]
-        ) nogil:
+        ) noexcept nogil:
         cdef double r = 0.0
 
         cdef double _du_10
@@ -314,7 +314,7 @@ cdef class StiffnessAssembler2D(BaseAssembler2D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) noexcept nogil:
         cdef IntInterval intv
         cdef size_t g_sta[2]
         cdef size_t g_end[2]
@@ -418,7 +418,7 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
             double[:, :, ::1] _temp_fields,
             # output
             double[:, :, ::1] _fields,
-        ) nogil:
+        ) noexcept nogil:
         cdef double GaussWeight
         cdef double _tmp2
         cdef double _tmp1
@@ -457,7 +457,7 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
             double result[]
-        ) nogil:
+        ) noexcept nogil:
         cdef double r = 0.0
 
         cdef double _du_10
@@ -483,7 +483,7 @@ cdef class HeatAssembler_ST2D(BaseAssembler2D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) noexcept nogil:
         cdef IntInterval intv
         cdef size_t g_sta[2]
         cdef size_t g_end[2]
@@ -587,7 +587,7 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
             double[:, :, ::1] _temp_fields,
             # output
             double[:, :, ::1] _fields,
-        ) nogil:
+        ) noexcept nogil:
         cdef double GaussWeight
         cdef double _tmp2
         cdef double _tmp1
@@ -626,7 +626,7 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
             double result[]
-        ) nogil:
+        ) noexcept nogil:
         cdef double r = 0.0
 
         cdef double _du_02
@@ -655,7 +655,7 @@ cdef class WaveAssembler_ST2D(BaseAssembler2D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) noexcept nogil:
         cdef IntInterval intv
         cdef size_t g_sta[2]
         cdef size_t g_end[2]
@@ -760,7 +760,7 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
             double[:, :, ::1] _temp_fields,
             # output
             double[:, :, ::1] _fields,
-        ) nogil:
+        ) noexcept nogil:
         cdef double GaussWeight
         cdef double _tmp2
         cdef double _tmp1
@@ -799,7 +799,7 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
             double* VDu0, double* VDu1,
             double* VDv0, double* VDv1,
             double result[]
-        ) nogil:
+        ) noexcept nogil:
         cdef double* r = [ 0.0, 0.0, 0.0, 0.0 ]
 
         cdef double _du_10
@@ -846,7 +846,7 @@ cdef class DivDivAssembler2D(BaseVectorAssembler2D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) noexcept nogil:
         cdef IntInterval intv
         cdef size_t g_sta[2]
         cdef size_t g_end[2]
@@ -952,7 +952,7 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
             double[:, :, ::1] _temp_fields,
             # output
             double[:, :, ::1] _fields,
-        ) nogil:
+        ) noexcept nogil:
         cdef double GaussWeight
         cdef double* fields
         cdef double* temp_fields
@@ -979,7 +979,7 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
             double[:, :, :] _fields,
             double* VDu0, double* VDu1,
             double result[]
-        ) nogil:
+        ) noexcept nogil:
         cdef double r = 0.0
 
         cdef double* fields
@@ -996,7 +996,7 @@ cdef class L2FunctionalAssembler2D(BaseAssembler2D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) noexcept nogil:
         cdef IntInterval intv
         cdef size_t g_sta[2]
         cdef size_t g_end[2]
@@ -1090,7 +1090,7 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
             double[:, :, ::1] _temp_fields,
             # output
             double[:, :, ::1] _fields,
-        ) nogil:
+        ) noexcept nogil:
         cdef double GaussWeight
         cdef double* fields
         cdef double* temp_fields
@@ -1117,7 +1117,7 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
             double[:, :, :] _fields,
             double* VDu0, double* VDu1,
             double result[]
-        ) nogil:
+        ) noexcept nogil:
         cdef double r = 0.0
 
         cdef double* fields
@@ -1134,7 +1134,7 @@ cdef class L2FunctionalAssemblerPhys2D(BaseAssembler2D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[2] i, size_t[2] j, double result[]) noexcept nogil:
         cdef IntInterval intv
         cdef size_t g_sta[2]
         cdef size_t g_end[2]
@@ -1229,7 +1229,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
             double[:, :, :, ::1] _temp_fields,
             # output
             double[:, :, :, ::1] _fields,
-        ) nogil:
+        ) noexcept nogil:
         cdef double GaussWeight
         cdef double* fields
         cdef double* temp_fields
@@ -1259,7 +1259,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
             double result[]
-        ) nogil:
+        ) noexcept nogil:
         cdef double r = 0.0
 
         cdef double* fields
@@ -1278,7 +1278,7 @@ cdef class MassAssembler3D(BaseAssembler3D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) noexcept nogil:
         cdef IntInterval intv
         cdef size_t g_sta[3]
         cdef size_t g_end[3]
@@ -1395,7 +1395,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
             double[:, :, :, ::1] _temp_fields,
             # output
             double[:, :, :, ::1] _fields,
-        ) nogil:
+        ) noexcept nogil:
         cdef double GaussWeight
         cdef double _tmp3
         cdef double _tmp4
@@ -1459,7 +1459,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
             double result[]
-        ) nogil:
+        ) noexcept nogil:
         cdef double r = 0.0
 
         cdef double _du_100
@@ -1496,7 +1496,7 @@ cdef class StiffnessAssembler3D(BaseAssembler3D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) noexcept nogil:
         cdef IntInterval intv
         cdef size_t g_sta[3]
         cdef size_t g_end[3]
@@ -1614,7 +1614,7 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
             double[:, :, :, ::1] _temp_fields,
             # output
             double[:, :, :, ::1] _fields,
-        ) nogil:
+        ) noexcept nogil:
         cdef double GaussWeight
         cdef double _tmp3
         cdef double _tmp4
@@ -1669,7 +1669,7 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
             double result[]
-        ) nogil:
+        ) noexcept nogil:
         cdef double r = 0.0
 
         cdef double _du_100
@@ -1703,7 +1703,7 @@ cdef class HeatAssembler_ST3D(BaseAssembler3D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) noexcept nogil:
         cdef IntInterval intv
         cdef size_t g_sta[3]
         cdef size_t g_end[3]
@@ -1821,7 +1821,7 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
             double[:, :, :, ::1] _temp_fields,
             # output
             double[:, :, :, ::1] _fields,
-        ) nogil:
+        ) noexcept nogil:
         cdef double GaussWeight
         cdef double _tmp3
         cdef double _tmp4
@@ -1876,7 +1876,7 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
             double result[]
-        ) nogil:
+        ) noexcept nogil:
         cdef double r = 0.0
 
         cdef double _du_002
@@ -1913,7 +1913,7 @@ cdef class WaveAssembler_ST3D(BaseAssembler3D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) noexcept nogil:
         cdef IntInterval intv
         cdef size_t g_sta[3]
         cdef size_t g_end[3]
@@ -2032,7 +2032,7 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
             double[:, :, :, ::1] _temp_fields,
             # output
             double[:, :, :, ::1] _fields,
-        ) nogil:
+        ) noexcept nogil:
         cdef double GaussWeight
         cdef double _tmp9
         cdef double _tmp10
@@ -2087,7 +2087,7 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
             double* VDu0, double* VDu1, double* VDu2,
             double* VDv0, double* VDv1, double* VDv2,
             double result[]
-        ) nogil:
+        ) noexcept nogil:
         cdef double* r = [ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ]
 
         cdef double _du_100
@@ -2158,7 +2158,7 @@ cdef class DivDivAssembler3D(BaseVectorAssembler3D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) noexcept nogil:
         cdef IntInterval intv
         cdef size_t g_sta[3]
         cdef size_t g_end[3]
@@ -2278,7 +2278,7 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
             double[:, :, :, ::1] _temp_fields,
             # output
             double[:, :, :, ::1] _fields,
-        ) nogil:
+        ) noexcept nogil:
         cdef double GaussWeight
         cdef double* fields
         cdef double* temp_fields
@@ -2307,7 +2307,7 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
             double[:, :, :, :] _fields,
             double* VDu0, double* VDu1, double* VDu2,
             double result[]
-        ) nogil:
+        ) noexcept nogil:
         cdef double r = 0.0
 
         cdef double* fields
@@ -2326,7 +2326,7 @@ cdef class L2FunctionalAssembler3D(BaseAssembler3D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) noexcept nogil:
         cdef IntInterval intv
         cdef size_t g_sta[3]
         cdef size_t g_end[3]
@@ -2429,7 +2429,7 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
             double[:, :, :, ::1] _temp_fields,
             # output
             double[:, :, :, ::1] _fields,
-        ) nogil:
+        ) noexcept nogil:
         cdef double GaussWeight
         cdef double* fields
         cdef double* temp_fields
@@ -2458,7 +2458,7 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
             double[:, :, :, :] _fields,
             double* VDu0, double* VDu1, double* VDu2,
             double result[]
-        ) nogil:
+        ) noexcept nogil:
         cdef double r = 0.0
 
         cdef double* fields
@@ -2477,7 +2477,7 @@ cdef class L2FunctionalAssemblerPhys3D(BaseAssembler3D):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.initializedcheck(False)
-    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[3] i, size_t[3] j, double result[]) noexcept nogil:
         cdef IntInterval intv
         cdef size_t g_sta[3]
         cdef size_t g_end[3]

@@ -11,7 +11,6 @@ import networkx
 import copy
 import numbers
 
-
 def set_union(sets):
     return reduce(operator.or_, sets, set())
 
@@ -1602,6 +1601,21 @@ def curl(expr):
         expr[1].dx(0) - expr[0].dx(1),
     ))
 
+def curl2D(expr):
+    """The vector to scalar curl of a 2D vector expression."""
+    expr = as_expr(expr)
+    if not (expr.is_vector() and len(expr) == 2):
+        raise TypeError('can only compute curl2D of 2D vector expression')
+    return expr[1].dx(0) - expr[0].dx(1)
+
+def Curl2D(expr):
+    """The scalar to vector curl of a scalar expression."""
+    expr = as_expr(expr)    
+    return as_vector((
+          expr.dx(1),
+        - expr.dx(0),
+    ))
+
 def as_expr(x):
     """Interpret input as an expression; useful for constants."""
     if isinstance(x, Expr):
@@ -1699,8 +1713,12 @@ def cross(x, y):
     """Cross product of two 3D vectors."""
     x = as_expr(x)
     y = as_expr(y)
-    return VectorCrossExpr(x, y)
-
+    
+    if (x.is_vector() and len(x) == 2) and (y.is_vector() and len(y) == 2):
+        return x[0]*y[1]-x[1]*y[0]
+    else:
+        return VectorCrossExpr(x, y)
+    
 def outer(x, y):
     """Outer product of two vectors, resulting in a matrix."""
     x = as_expr(x)
@@ -1737,17 +1755,17 @@ def tan(x):
 # concrete variational forms
 ################################################################################
 
-def mass_vf(dim):
+def mass_vf(dim, c=1):
     V = VForm(dim)
     u, v = V.basisfuns()
-    V.add(u * v * dx)
+    V.add(c * u * v * dx)
     return V
 
-def stiffness_vf(dim):
+def stiffness_vf(dim, a=1):
     V = VForm(dim)
     u, v = V.basisfuns()
     B = V.let('B', V.W * dot(V.JacInv, V.JacInv.T), symmetric=True)
-    V.add(B.dot(grad(u, parametric=True)).dot(grad(v, parametric=True)))
+    V.add(a*B.dot(grad(u, parametric=True)).dot(grad(v, parametric=True)))
     return V
 
 ### slower:
@@ -1779,16 +1797,30 @@ def divdiv_vf(dim):
 
 def L2functional_vf(dim, physical=False, updatable=False):
     V = VForm(dim, arity=1)
-    u = V.basisfuns()
+    v = V.basisfuns()
     f = V.input('f', shape=(), physical=physical, updatable=updatable)
-    V.add(f * u * dx)
+    V.add(f * v * dx)
     return V
 
+#surface variational forms
+
+def mass_Bvf(dim):
+    V = VForm(dim, boundary=True)
+    u, v = V.basisfuns()
+    V.add(u * v * ds)
+    return V
+
+def L2functional_Bvf(dim, physical=False, updatable=False):
+    V = VForm(dim, arity=1, boundary=True)
+    v = V.basisfuns()
+    f = V.input('f', shape=(), physical=physical, updatable=updatable)
+    V.add(f * v * ds)
+    return V
 ################################################################################
 # parse strings to VForms
 ################################################################################
 
-def _check_input_field(kvs, f):
+def _check_input_field(kvs, geo, f):
     # return (shape, physical) pair for function f
     # NB: by default, _BaseGeoFuncs are considered parametric and explicitly
     #     given functions physical!
@@ -1798,7 +1830,7 @@ def _check_input_field(kvs, f):
     else:   # assume a callable function
         supp = tuple(kv.support() for kv in kvs)
         mid = tuple((a+b)/2 for (a,b) in supp)
-        result = f(*mid)        # evaluate it at the midpoint
+        result = f(*geo(*mid))        # evaluate it at the midpoint
         return np.shape(result), True
 
 def parse_vf(expr, kvs, args=dict(), bfuns=None, boundary=False, updatable=[]):
@@ -1814,6 +1846,7 @@ def parse_vf(expr, kvs, args=dict(), bfuns=None, boundary=False, updatable=[]):
 
     dim = len(kvs)
     loc = dict()
+    geo=args['geo']
 
     # parse all identifiers in the expression string
     import re
@@ -1867,7 +1900,7 @@ def parse_vf(expr, kvs, args=dict(), bfuns=None, boundary=False, updatable=[]):
     for inp in sorted(set(args.keys()) & words):
         upd = (inp in updatable)
         if callable(args[inp]):     # function - treat as input field
-            shp, phys = _check_input_field(kvs, args[inp])
+            shp, phys = _check_input_field(kvs, geo, args[inp])
             loc[inp] = vf.input(inp, shape=shp, physical=phys, updatable=upd)
         else:       # constant value or array - treat as parameter
             shp = np.shape(args[inp])

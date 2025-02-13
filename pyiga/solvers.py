@@ -2,17 +2,15 @@
 import numpy as np
 import scipy.linalg
 from .operators import make_solver, KroneckerOperator, DiagonalOperator
-from . import utils
+from . import utils, algebra
 
 from functools import reduce
-
 
 def _asdense(X):
     try:
         return X.A
     except:
         return X
-
 
 def fastdiag_solver(KM):
     """The fast diagonalization solver as described in [Sangalli, Tani 2016].
@@ -336,13 +334,13 @@ def newton(F, J, x0, atol=1e-6, rtol=1e-6, maxiter=100, freeze_jac=1):
     """Solve the nonlinear problem F(x) == 0 using Newton iteration.
 
     Args:
-        F (function): function computing the residual of the nonlinear equation
-        J (function): function computing the Jacobian matrix of `F`
-        x0 (ndarray): the initial guess as a vector
-        atol (float): absolute tolerance for the norm of the residual
-        rtol (float): relative tolerance with respect to the initial residual
-        maxiter (int): the maximum number of iterations
-        freeze_jac (int): if >1, the Jacobian is only updated every `freeze_jac` steps
+        F (function):      function computing the residual of the nonlinear equation
+        J (function):      function computing the Jacobian matrix of `F`
+        x0 (ndarray):      the initial guess as a vector
+        atol (float):      absolute tolerance for the norm of the residual
+        rtol (float):      relative tolerance with respect to the initial residual
+        maxiter (int):     the maximum number of iterations
+        freeze_jac (int):  if >1, the Jacobian is only updated every `freeze_jac` steps
 
     Returns:
         ndarray: a vector `x` which approximately satisfies F(x) == 0
@@ -359,6 +357,100 @@ def newton(F, J, x0, atol=1e-6, rtol=1e-6, maxiter=100, freeze_jac=1):
         x -= jac_inv.dot(res)
         res = F(x)
     raise NoConvergenceError('newton', maxiter, x)
+    
+def pcg(A, f, x0 = None, P = 1, rtol = 1e-5, atol = 0.0, maxiter = 100, output = False):    
+    """Solve the the linear system Ax = f by conjugated gradient method.
+    
+    Args:
+        A (LinearOperator or ndarray or sparse matrix):  the symmetric and positive definite matrix of the linear system
+        f (ndarray):                                     the right-hand side vector of the system
+        x0 (ndarray):                                    initial guess for the solution, by default the zero vector
+        P (LinearOperator or ndarray or sparse matrix):  preconditioner to use for the system. by default the identity map.
+        rtol (float), atol (float) :                     iteration stops if relative error of residual and initial residual has reached rtol or if absolute error has reached atol
+        maxiter (int) :                                  maximum number of iterations if the stopping criterion is not met
+        output (boolean) :                               information to be printed after iteration stops
+    """
+    maxiter = int(maxiter)
+    
+    if not callable(A):
+        Afun = lambda x : A@x
+    else:
+        Afun = A
+        
+    if not isinstance(f,np.ndarray):
+        f_ = f.A.ravel()
+    else:
+        f_ = f.ravel()
+        
+    if x0 is not None:
+        if not isinstance(x0, np.ndarray):
+            x = x0.A.ravel()
+        else:
+            x = x0.ravel() 
+    else:
+        x = np.zeros(len(f_))
+        
+    if not callable(P):
+        if isinstance(P, np.ndarray) or scipy.sparse.issparse(P):
+            assert P.shape==2*(len(f),), 'dimension mismatch'
+            Pfun = lambda x: P@x
+        else:
+            Pfun = lambda x : x
+    else:
+        Pfun = P
+        # splu_pfun = sp.linalg.splu(pfuns,permc_spec='COLAMD')
+        # pfun = lambda x : splu_pfun.solve(x)
+    # print('Cond about',condest(pfuns@Afuns))
+    # x, it, delta, gamma, d = solvers_cy.pyx_pcg(Afun, f, x0, Pfun, tol, maxiter)
+    r = f_ - Afun(x)
+    h = Pfun(r)
+    rho = h@r
+    err = np.sqrt(rho)
+    err0 = np.sqrt(Pfun(f_)@f_)
+    d = h
+    
+    delta = np.zeros(maxiter+1, dtype=float)
+    gamma = np.zeros(maxiter,   dtype=float)
+    
+    if err < max(rtol * err0, atol):
+        #L = algebra.LanczosMatrix(delta[:1], gamma[:0])
+        delta[0] = (Afun(d)@d)/rho
+        if output:
+            print('pcg with preconditioned condition number '+ str('\N{greek small letter kappa}')+ ' ~ ' + str(1.) + ' stopped after ' + str(0) + ' iterations with relres ' + str(err/err0))
+        return x, 0 , delta[0], delta[0], err
+
+    #while err > max(rtol * err0, atol) and it < maxiter:
+    for it in range(maxiter):
+        z = Afun(d)
+        alpha = rho/(z@d)
+        delta[it]+=1/alpha
+        x += alpha*d
+        r -= alpha*z
+        h = Pfun(r)
+        rho_old = rho
+        rho = h@r
+        err = np.sqrt(rho)
+        if err < max(rtol * err0, atol):
+            break
+        beta = rho/rho_old
+        d = h + beta*d
+        gamma[it] = -np.sqrt(beta)/alpha
+        delta[it+1] = beta/alpha
+        if it==maxiter-1:
+            delta[it+1] += (Afun(d)@d)/rho
+        
+    #print(delta,gamma)
+    eigs = scipy.linalg.eigvalsh_tridiagonal(delta[:(it+1)],gamma[:it])
+    m = min(abs(eigs))
+    M = max(abs(eigs))
+    #L = algebra.LanczosMatrix(delta[:(it+1)], gamma[:(it)])
+    # m = L.minEigenvalue()
+    # M = L.maxEigenvalue()
+    cond = abs(M/m)
+    
+    if output:
+        print('pcg with preconditioned condition number ' + str('\N{greek small letter kappa}')+ ' ~ ' + str(cond) + ' stopped after ' + str(it+1) + ' iterations with relres ' + str(err/err0))
+    return x, it+1 , m, M, err
 
 
 ## Time stepping
@@ -937,3 +1029,173 @@ ros3pw = adaptive_rosenbrock_method(*coeffs_ros3pw(), 'ros3pw', 'ROS3PW Rosenbro
 rowdaind2 = adaptive_rosenbrock_method(*coeffs_rowdaind2(), 'rowdaind2', 'ROWDAIND2 Rosenbrock')
 rodasp = adaptive_rosenbrock_method(*coeffs_rodasp(), 'rodasp', 'RODASP Rosenbrock')
 rosi2p1 = adaptive_rosenbrock_method(*coeffs_rosi2p1(), 'rosi2p1', 'ROSI2P1 Rosenbrock')
+
+# import sys
+# import time
+# import numpy as np
+# import numba as nb
+# import scipy.sparse as sps
+# from numba import float64,float32,int64
+
+# import importlib.util
+# spam_spec = importlib.util.find_spec("sksparse")
+# found = spam_spec is not None
+
+# from scipy.sparse.linalg import splu
+
+# def fastBlockInverse2(Mh):
+#     spluMh = splu(Mh)
+#     L = spluMh.L; U = spluMh.U
+
+#     Pv2 = spluMh.perm_r
+#     Pv3 = spluMh.perm_c
+
+#     P2 = sps.csc_matrix((np.ones(Pv2.size),(np.r_[0:Pv2.size],Pv2)), shape = (Pv2.size,Pv2.size))
+#     P3 = sps.csc_matrix((np.ones(Pv3.size),(np.r_[0:Pv3.size],Pv3)), shape = (Pv3.size,Pv3.size))
+    
+#     L = L.tocsc()
+#     UT = (U.T).tocsc()
+    
+    
+#     #####################################################################################
+#     # Find indices where the blocks begin/end
+#     #####################################################################################
+#     tm = time.time()
+    
+#     L_diag = L.diagonal(k=-1) # Nebendiagonale anfangen
+#     block_ends_L = np.r_[np.argwhere(abs(L_diag)==0)[:,0],L.shape[0]-1]
+    
+#     for i in range(L.shape[0]):
+#         L_diag = np.r_[L.diagonal(k=-(i+2)),np.zeros(i+2)]
+        
+#         for j in range(i+1):
+#             arg = np.argwhere(abs(L_diag[block_ends_L-j])>0)[:,0]
+#             block_ends_L = np.delete(block_ends_L,arg).copy()
+            
+#         if np.linalg.norm(L_diag)==0: break
+    
+#     block_ends_L = np.r_[0,block_ends_L+1]
+    
+#     #####################################################################################
+    
+    
+#     #####################################################################################
+#     # Find indices where the blocks begin/end
+#     #####################################################################################
+    
+#     UT_diag = UT.diagonal(k=-1) # Nebendiagonale anfangen
+#     block_ends_UT = np.r_[np.argwhere(abs(UT_diag)==0)[:,0],UT.shape[0]-1]
+    
+#     for i in range(UT.shape[0]):
+#         UT_diag = np.r_[UT.diagonal(k=-(i+2)),np.zeros(i+2)]
+        
+#         for j in range(i+1):
+#             arg = np.argwhere(abs(UT_diag[block_ends_UT-j])>0)[:,0]
+#             block_ends_UT = np.delete(block_ends_UT,arg).copy()
+            
+#         if np.linalg.norm(UT_diag)==0: break
+    
+#     block_ends_UT = np.r_[0,block_ends_UT+1]
+    
+#     #####################################################################################
+    
+#     tm = time.time()
+#     data_iUT,indices_iUT,indptr_iUT = createIndicesInversion(UT.data,UT.indices,UT.indptr,block_ends_UT)
+#     iUT = sps.csc_matrix((data_iUT, indices_iUT, indptr_iUT), shape = UT.shape)
+    
+#     data_iL,indices_iL,indptr_iL = createIndicesInversion(L.data,L.indices,L.indptr,block_ends_L)
+#     iL = sps.csc_matrix((data_iL, indices_iL, indptr_iL), shape = L.shape)
+    
+#     iMh = P3@(iUT.T@iL)@P2.T
+#     iMh.data = iMh.data*(np.abs(iMh.data)>1e-13)
+#     iMh.eliminate_zeros()
+    
+#     return iMh#P3@(iUT.T@iL)@P2.T
+
+# if found == True:
+#     from sksparse.cholmod import cholesky
+#     def fastBlockInverse(Mh):
+        
+#         cholMh = cholesky(Mh)
+#         N = cholMh.L()
+#         Pv = cholMh.P()
+#         P = sps.csc_matrix((np.ones(Pv.size),(np.r_[0:Pv.size],Pv)), shape = (Pv.size,Pv.size))
+#         N = N.tocsc()
+        
+#         #####################################################################################
+#         # Find indices where the blocks begin/end
+#         #####################################################################################
+        
+#         tm = time.time()
+        
+#         N_diag = N.diagonal(k=-1) # Nebendiagonale anfangen
+#         block_ends = np.r_[np.argwhere(abs(N_diag)==0)[:,0],N.shape[0]-1]
+        
+#         for i in range(N.shape[0]):
+#             N_diag = np.r_[N.diagonal(k=-(i+2)),np.zeros(i+2)]
+            
+#             for j in range(i+1):
+#                 arg = np.argwhere(abs(N_diag[block_ends-j])>0)[:,0]
+#                 block_ends = np.delete(block_ends,arg).copy()
+                
+#             if np.linalg.norm(N_diag)==0: break
+        
+#         block_ends = np.r_[0,block_ends+1]
+        
+        
+#         #####################################################################################
+#         # Inversion of the blocks, 2nd try.
+#         #####################################################################################
+        
+#         tm = time.time()
+#         data_iN,indices_iN,indptr_iN = createIndicesInversion(N.data,N.indices,N.indptr,block_ends)
+#         iN = sps.csc_matrix((data_iN, indices_iN, indptr_iN), shape = N.shape)
+#         iMh = P.T@(iN.T@iN)@P
+#         return iMh
+
+
+
+# @nb.njit(cache = True, parallel = True, fastmath = False)
+# def createIndicesInversion(dataN,indicesN,indptrN,block_ends) -> (float64[:],int64[:],int64[:]):
+
+#     block_lengths = block_ends[1:]-block_ends[0:-1]
+    
+#     sbl = np.sum(block_lengths)+1
+#     sbl2 = np.sum(block_lengths**2)
+    
+#     blicum = np.zeros(block_lengths.size+1, dtype = np.int64)
+#     bli2cum = np.zeros(block_lengths.size+1, dtype = np.int64)
+    
+#     for z in range(block_lengths.size):
+#         blicum[z+1] = blicum[z] + block_lengths[z]
+#         bli2cum[z+1] = bli2cum[z] + block_lengths[z]**2
+        
+#     C = np.zeros(sbl2)
+#     indptr_iN = np.zeros(sbl, dtype = int64)
+#     indices_iN = np.zeros(sbl2, dtype = int64)
+    
+#     blis = 0; blis2 = 0
+    
+#     for i in range(block_lengths.size):
+        
+#         blis = blicum[i]
+#         blis2 = bli2cum[i]
+        
+#         bli = block_lengths[i]
+#         bei = block_ends[i]
+        
+#         blis2p1 = blis2 + bli**2
+        
+#         CC = np.zeros(shape = (bli,bli), dtype = np.float64)
+        
+#         for k in range(bli):
+#             in_k = np.arange(indptrN[bei+k],indptrN[bei+k+1])
+#             for _,jj in enumerate(in_k):
+#                 CC[k,indicesN[jj]-bei] = dataN[jj]
+                                
+#             indptr_iN[k+blis+1] = blis2+bli*(k+1)
+#             indices_iN[blis2+bli*np.repeat(k,bli)+np.arange(0,bli)] = np.arange(bei,bei+bli)
+        
+#         iCCflat = np.linalg.inv(CC).flatten()
+#         C[blis2:blis2p1] = iCCflat
+#     return C,indices_iN,indptr_iN

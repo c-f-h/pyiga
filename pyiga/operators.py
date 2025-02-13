@@ -1,7 +1,6 @@
 """Classes and functions for creating custom instances of :class:`scipy.sparse.linalg.LinearOperator`."""
 import numpy as np
 import scipy.sparse.linalg
-from sksparse.cholmod import cholesky
 from builtins import range   # Python 2 compatibility
 
 from . import kronecker
@@ -237,6 +236,8 @@ class PardisoSolverWrapper(scipy.sparse.linalg.LinearOperator):
     def __del__(self):
         self.solver.clear()
         self.solver = None
+    def toarray(self):
+        return self._matmat(np.eye(self.shape[1]))
 
 
 def make_solver(B, symmetric=False, spd=False):

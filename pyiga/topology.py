@@ -404,8 +404,10 @@ class PatchMesh:
         dim = len(kvs)
         
         split_xi = sum(kv.support())/2.0
-        split_idx = kv.findspan(split_xi)
-        split_xi_mult =sum(np.isclose(kv.kv,split_xi))
+        split_idx = np.where(np.isclose(kv.kv,split_xi))[0][0]
+        #split_idx = kv.findspan(split_xi)
+        split_xi_mult = sum(np.isclose(kv.kv,split_xi))
+        #print(kv.kv,split_idx,split_xi,kv.kv[:(split_idx-split_xi_mult+1)])
         new_knots1 = np.concatenate((kv.kv[:(split_idx-split_xi_mult+1)], (kv.p+1) * (split_xi,)))
         new_knots2 = np.concatenate(((kv.p+1) * (split_xi,), kv.kv[(split_idx+1):]))
         new_kvs = tuple([bspline.KnotVector(np.concatenate((new_knots1[:-(kv.p+1)],new_knots2[1:])),kv.p) if d==axis else kvs[d] for d in range(dim)])
@@ -536,7 +538,7 @@ class PatchMesh:
                                 self.outer_boundaries[s].append((n, bd))
     
             
-    def h_refine(self, patches=None, mult=1):
+    def h_refine(self, patches=None, mult=1, ref="rs"):
         if isinstance(patches, dict):
             if len(patches)>0:
                 assert max(patches.keys())<self.numpatches and min(patches.keys())>=0, "patch index out of bounds."
@@ -568,7 +570,7 @@ class PatchMesh:
                 new_p=(p,)
             else:    
                 t=time.time()
-                new_p = self.split_patch(p, axis=patches[p], mult=mult)
+                new_p = self.split_patch(p, axis=patches[p], mult=mult, ref=ref)
                 #print(time.time()-t)
             new_patches[p] = new_p
             #new_kvs[p] = new_kvs_  

@@ -1454,7 +1454,7 @@ class Multipatch:
         #self.sanity_check()
         
     def assemble_volume(self, problem, arity=1, domain_id=None, args=None, bfuns=None,
-            symmetric=False, format='csr', layout='blocked', **kwargs):
+            symmetric=False, format='csr', layout='blocked', decoupled=False, **kwargs):
         n = self.numdofs
         X=self.Basis
         if isinstance(problem, vform.VForm):
@@ -1478,7 +1478,10 @@ class Multipatch:
                             **kwargs))
                     dofs.append(np.arange(self.N_ofs[p],self.N_ofs[p+1]))
             X = self.Basis[np.concatenate(dofs),:]
-            return X.T@scipy.sparse.block_diag(A)@X
+            if decoupled:
+                return scipy.sparse.block_diag(A)
+            else:
+                return X.T@scipy.sparse.block_diag(A)@X
         else:
             F=np.zeros(self.numloc_dofs)
             for d_idx in domain_id:
@@ -1488,7 +1491,10 @@ class Multipatch:
                         symmetric=symmetric, format=format, layout=layout,
                         **kwargs).ravel()
                     F[self.N_ofs[p]:self.N_ofs[p+1]]+=vals
-            return X.T@F
+            if decoupled:
+                return F
+            else:
+                return X.T@F
         
     def assemble_system(self, problem, rhs, arity=1, domain_id=None, args=None, bfuns=None,
             symmetric=False, format='csr', layout='blocked', **kwargs):
@@ -1664,7 +1670,7 @@ class Multipatch:
 #             P[MP.M_ofs[-1]:] = scipy.sparse.spdiags(factors, 0, len(factors), len(factors)) @ P[MP.M_ofs[-1]:]
 #             return P
         
-    def h_refine(self, h_ref=None, mult=1, return_P = False):
+    def h_refine(self, h_ref=None, mult=1, return_P = False, ref="rs"):
         """Refines the Mesh by splitting patches
         
         The dictionary `h_ref` specifies which patches (dict keys) are to be split 
@@ -1702,7 +1708,7 @@ class Multipatch:
         
         kvs_old = self.mesh.kvs
         t=time.time()
-        new_patches=self.mesh.h_refine(h_ref)
+        new_patches=self.mesh.h_refine(h_ref, ref=ref)
         
         print("Refinement took " + str(time.time()-t) + " seconds for "+str(len(h_ref))+' patches.')
         self.reset()

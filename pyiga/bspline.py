@@ -631,7 +631,7 @@ def collocation_derivs(kv, nodes, derivs=1):
     basis at the given interpolation nodes.
 
     Returns a list of derivs+1 sparse CSR matrices with shape (nodes.size, kv.numdofs)."""
-    nodes = np.array(nodes, copy=False)
+    nodes = np.asarray(nodes)
     m = nodes.size
     n = kv.numdofs
     p = kv.p
@@ -664,7 +664,7 @@ def interpolate(kv, func, nodes=None):
     if nodes is None:
         nodes = kv.greville()
     else:
-        nodes = np.array(nodes, copy=False)
+        nodes = np.asarray(nodes)
     C = collocation(kv, nodes)
     vals = func(nodes)
     return scipy.sparse.linalg.spsolve(C, vals)

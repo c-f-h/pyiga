@@ -5,7 +5,7 @@ import numpy as np
 import scipy.linalg
 from pyiga import bspline, assemble, hierarchical, solvers, vform, geometry, utils
 
-from test_hierarchical import create_example_hspace
+from .test_hierarchical import create_example_hspace
 
 def run_local_multigrid(p, dim, n0, disparity, smoother, smooth_steps, strategy, tol):
     hs = create_example_hspace(p, dim, n0, disparity, num_levels=3)

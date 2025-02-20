@@ -64,10 +64,10 @@ def test_solver():
     _test_oper(make_solver(B, symmetric=True), np.linalg.inv(B))
     _test_oper(make_solver(B, spd=True), np.linalg.inv(B))
     A = scipy.sparse.csr_matrix(A)
-    _test_oper(make_solver(A), np.linalg.inv(A.A))
+    _test_oper(make_solver(A), np.linalg.inv(A.toarray()))
     B = scipy.sparse.csr_matrix(B)
-    _test_oper(make_solver(B, symmetric=True), np.linalg.inv(B.A))
-    _test_oper(make_solver(B, spd=True), np.linalg.inv(B.A))
+    _test_oper(make_solver(B, symmetric=True), np.linalg.inv(B.toarray()))
+    _test_oper(make_solver(B, spd=True), np.linalg.inv(B.toarray()))
 
 def test_kronecker():
     A = rand(2,3)
@@ -83,4 +83,4 @@ def test_kron_solver():
     _test_oper(make_kronecker_solver(A, B), np.linalg.inv(np.kron(A, B)))
     A = scipy.sparse.csr_matrix(A)
     B = scipy.sparse.csr_matrix(B)
-    _test_oper(make_kronecker_solver(A, B), np.linalg.inv(np.kron(A.A, B.A)))
+    _test_oper(make_kronecker_solver(A, B), np.linalg.inv(np.kron(A.toarray(), B.toarray())))

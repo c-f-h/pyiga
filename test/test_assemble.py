@@ -20,7 +20,7 @@ def test_mass():
          [  0.            ,   0.            ,   0.            ,   1.18765551e-07, 8.21448165e-05,   7.81923076e-03,   2.49975292e-02,   3.18639867e-02, 1.98353624e-02,   5.40162735e-03],
          [  0.            ,   0.            ,   0.            ,   0.            , 1.54256714e-07,   1.09644036e-03,   7.52169657e-03,   1.98353624e-02, 2.57855523e-02,   1.57607941e-02],
          [  0.            ,   0.            ,   0.            ,   0.            , 0.            ,   7.15774525e-05,   9.88223305e-04,   5.40162735e-03, 1.57607941e-02,   2.77777778e-02]])
-    M = bsp_mass_1d(kv).A
+    M = bsp_mass_1d(kv).toarray()
     assert np.abs(test_M - M).max() < 1e-10
 
 def test_stiffness():
@@ -36,7 +36,7 @@ def test_stiffness():
            [ 0.          ,  0.          ,  0.          , -0.000855112 , -0.1399435607, -1.3996319341,  0.4981488415,  2.9602480448,  0.8890945645, -2.807060844 ],
            [ 0.          ,  0.          ,  0.          ,  0.          , -0.0011106483, -0.5004312176, -1.2538584045,  0.8890945645,  6.3440233236, -5.4777176177],
            [ 0.          ,  0.          ,  0.          ,  0.          ,  0.          , -0.0824572253, -0.7756214559, -2.807060844 , -5.4777176177,  9.1428571429]])
-    K = bsp_stiffness_1d(kv).A
+    K = bsp_stiffness_1d(kv).toarray()
     assert np.abs(test_K - K).max() < 1e-10
 
 def test_mass_asym():
@@ -84,8 +84,8 @@ def test_stiffness_2d():
     kvs = (bspline.make_knots(4, 0.0, 1.0, 10),
            bspline.make_knots(3, 0.0, 1.0, 12))
     assert(np.allclose(
-        bsp_stiffness_2d(kvs, geo=None).A,
-        bsp_stiffness_2d(kvs, geo=geometry.unit_square()).A,
+        bsp_stiffness_2d(kvs, geo=None).toarray(),
+        bsp_stiffness_2d(kvs, geo=geometry.unit_square()).toarray(),
         rtol=0, atol=1e-14)
     )
 
@@ -94,8 +94,8 @@ def test_stiffness_3d():
            bspline.make_knots(3, 0.0, 1.0, 5),
            bspline.make_knots(3, 0.0, 1.0, 6))
     assert(np.allclose(
-        bsp_stiffness_3d(kvs, geo=None).A,
-        bsp_stiffness_3d(kvs, geo=geometry.unit_cube()).A,
+        bsp_stiffness_3d(kvs, geo=None).toarray(),
+        bsp_stiffness_3d(kvs, geo=geometry.unit_cube()).toarray(),
         rtol=0, atol=1e-14)
     )
 
@@ -298,7 +298,7 @@ def test_assemble_vf():
     # assemble
     A = assemble_vf(vf, kvs, geo=geo)
     A_ref = stiffness(kvs, geo)
-    assert np.allclose(A.A, A_ref.A)
+    assert np.allclose(A.toarray(), A_ref.toarray())
 
     # right-hand side vform
     vf_f = VForm(2, arity=1)
@@ -397,7 +397,7 @@ def test_assemble_boundary_matrix():
     A = assemble('inner(cross(n, grad(u)), cross(n, grad(v))) * ds', kvs, geo=geo_3d, boundary='front')
     assert A.shape == (7 * 8, 7 * 8)
     A2 = stiffness(kvs[1:], geo=geometry.quarter_annulus())
-    assert np.allclose(A.A, A2.A)
+    assert np.allclose(A.toarray(), A2.toarray())
 
 def test_assemble_vf_with_params():
     geo = geometry.quarter_annulus()
@@ -411,12 +411,12 @@ def test_assemble_string():
     geo = geometry.quarter_annulus()
     A1 = assemble('inner(grad(u), grad(v)) * dx', kvs, geo=geo)
     A2 = stiffness(kvs, geo)
-    assert np.allclose(A1.A, A2.A)
+    assert np.allclose(A1.toarray(), A2.toarray())
 
     # use Assembler class
     asm = Assembler('inner(grad(u), grad(v)) * dx', kvs, geo=geo, symmetric=True, updatable=['geo'])
     A3 = asm.assemble()
-    assert np.allclose(A2.A, A3.A)
+    assert np.allclose(A2.toarray(), A3.toarray())
 
     with unittest.TestCase().assertRaises(RuntimeError):
         asm.assemble(f=geo)       # not an updatable field
@@ -437,7 +437,7 @@ def test_assemble_string():
     geo = geometry.unit_cube(dim=1)
     A1 = assemble('inner(grad(u), grad(v)) * dx', kvs[:1], geo=geo)
     A2 = stiffness(kvs[0])
-    assert np.allclose(A1.A, A2.A)
+    assert np.allclose(A1.toarray(), A2.toarray())
     # 1D problem - rhs
     f = lambda x: 1 + x**2
     f1 = assemble('f * v * dx', kvs[:1], geo=geo, f=f)
@@ -461,7 +461,7 @@ def test_assemble_nonsym_vec():
     # test the blockwise assembling using multi_blocks
     asm = instantiate_assembler(problem, kvs, args={'geo': geo}, bfuns=[('u',2), ('v',2)])
     blocks = np.array(asm.multi_blocks([(0,0), (0,1), (2,1)]))
-    AA = A.A        # bsr does not support slicing
+    AA = A.toarray()        # bsr does not support slicing
     assert np.array_equal(blocks[0], AA[0:2, 0:2])
     assert np.array_equal(blocks[1], AA[0:2, 2:4])
     assert np.array_equal(blocks[2], AA[4:6, 2:4])
@@ -500,7 +500,7 @@ def test_solution_1d():
     A = stiffness(kv)
     f = inner_products(kv, lambda x: 1.0)
     LS = RestrictedLinearSystem(A, f, [(0,kv.numdofs-1), (0.0,1.0)])
-    u = LS.complete(np.linalg.solve(LS.A.A, LS.b))
+    u = LS.complete(np.linalg.solve(LS.A.toarray(), LS.b))
     u_ex = interpolate(kv, lambda x: 0.5*x*(3-x))
     assert np.linalg.norm(u - u_ex) < 1e-12
 
@@ -576,4 +576,4 @@ def test_multipatch_assemble():
         Ix[2*9*10:].reshape((10,1)),    # second patch
         Ix[9*10:2*9*10].reshape((10,9)))).ravel()   # interface
     assert np.allclose(b[Ix], b2.ravel())
-    assert np.allclose(A.A[Ix][:, Ix], A2.A)
+    assert np.allclose(A.toarray()[Ix][:, Ix], A2.toarray())

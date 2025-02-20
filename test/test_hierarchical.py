@@ -114,13 +114,13 @@ def test_thb_to_hb():
     T = hs.thb_to_hb()
     I_hb = hs.represent_fine()
     I_thb = hs.represent_fine(truncate=True)
-    assert np.allclose((I_hb @ T).A, I_thb.A)
+    assert np.allclose((I_hb @ T).toarray(), I_thb.toarray())
 
 def test_hb_to_thb():
     hs = create_example_hspace(p=4, dim=2, n0=4, disparity=np.inf, num_levels=3)
     T = hs.thb_to_hb()
     T_inv = hs.hb_to_thb()
-    assert np.allclose((T_inv @ T).A, np.eye(hs.numdofs))
+    assert np.allclose((T_inv @ T).toarray(), np.eye(hs.numdofs))
 
 def test_truncate():
     hs = create_example_hspace(p=4, dim=2, n0=4, disparity=np.inf, num_levels=3)
@@ -129,7 +129,7 @@ def test_truncate():
         Tk = hs.truncate_one_level(k)
         Tk_inv = hs.truncate_one_level(k, inverse=True)
         X = Tk_inv @ Tk
-        assert np.allclose(X.A, np.eye(X.shape[0]))
+        assert np.allclose(X.toarray(), np.eye(X.shape[0]))
 
 def test_cellextents():
     hs = _make_hs(p=2, n=2)
@@ -154,7 +154,7 @@ def test_incidence():
     hs.refine_region(0, lambda x: 1./4 < x < 3./4)
     hs.refine_region(1, lambda x: 3./8 < x < 5./8)
 
-    Z = hs.incidence_matrix().A
+    Z = hs.incidence_matrix().toarray()
 
     naf = tuple(len(A) for A in hs.active_indices())    # (6, 2, 2)
     nac = tuple(len(A) for A in hs.active_cells())      # (2, 2, 4)
@@ -186,10 +186,10 @@ def test_hierarchical_assemble():
     A_fine = assemble.stiffness(hs.knotvectors(-1), geo=geo)
     I_hb = hs.represent_fine()
     A_hb = (I_hb.T @ A_fine @ I_hb)
-    assert np.allclose(A.A, A_hb.A)
+    assert np.allclose(A.toarray(), A_hb.toarray())
     #
     A3 = assemble.assemble(vform.stiffness_vf(dim=2), hs, geo=geo)
-    assert np.allclose(A.A, A3.A)
+    assert np.allclose(A.toarray(), A3.toarray())
     #
     def f(x, y):
         return np.cos(x) * np.exp(y)
@@ -212,7 +212,7 @@ def test_hierarchical_assemble_nonsym():
     A_fine = assemble.assemble(_convdiff_vf(2, (1.0, 1.0)), hs.knotvectors(-1), geo=geo)
     I_hb = hs.represent_fine()
     A_hb = (I_hb.T @ A_fine @ I_hb)
-    assert np.allclose(A.A, A_hb.A)
+    assert np.allclose(A.toarray(), A_hb.toarray())
 
 def test_grid_eval():
     hs = create_example_hspace(p=3, dim=2, n0=6, num_levels=3)

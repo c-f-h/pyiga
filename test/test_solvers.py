@@ -8,7 +8,7 @@ def test_fastdiag_solver():
         bspline.make_knots(2, 0.0, 1.0, 5)
     ]
     # compute Dirichlet matrices
-    KM = [(assemble.stiffness(kv)[1:-1, 1:-1].A, assemble.mass(kv)[1:-1, 1:-1].A) for kv in kvs]
+    KM = [(assemble.stiffness(kv)[1:-1, 1:-1].toarray(), assemble.mass(kv)[1:-1, 1:-1].toarray()) for kv in kvs]
     solver = fastdiag_solver(KM)
 
     def multikron(*Xs):

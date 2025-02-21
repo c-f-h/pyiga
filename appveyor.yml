@@ -5,6 +5,15 @@ environment:
     - PYTHON: "C:\\Python310-x64"
       PYTHON_VERSION: "3.10"
       PYTHON_ARCH: "64"
+    - PYTHON: "C:\\Python311-x64"
+      PYTHON_VERSION: "3.11"
+      PYTHON_ARCH: "64"
+    - PYTHON: "C:\\Python312-x64"
+      PYTHON_VERSION: "3.12"
+      PYTHON_ARCH: "64"
+    - PYTHON: "C:\\Python313-x64"
+      PYTHON_VERSION: "3.13"
+      PYTHON_ARCH: "64"
 
 init:
   - "ECHO Python %PYTHON_VERSION% %PYTHON_ARCH% bit"
@@ -12,9 +21,9 @@ init:
 install:
   - "%PYTHON%\\python.exe -m pip install --upgrade pip"
   - "%PYTHON%\\python.exe -m pip install -r requirements.txt"
+  - "%PYTHON%\\python.exe -m pip install pytest matplotlib wheel build setuptools"
   - "%PYTHON%\\python.exe -m pip install ."
   - "%PYTHON%\\python.exe setup.py build_ext -i"
-  - "%PYTHON%\\python.exe -m pip install pytest matplotlib wheel"
 
 build: off
 
@@ -23,7 +32,7 @@ test_script:
 
 after_test:
   # build the wheels
-  - "%PYTHON%\\python.exe setup.py bdist_wheel"
+  - "%PYTHON%\\python.exe -m build --wheel"
 
 artifacts:
   # bdist_wheel puts the built wheel in the dist directory

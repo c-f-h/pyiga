@@ -269,13 +269,13 @@ private:
 // find the index of the largest entry in absolute value
 size_t argmax_abs(const std::vector<double>& v)
 {
-    size_t n = v.size();
+    const size_t n = v.size();
     assert(n > 0);
 
     double max = std::abs(v[0]);
     size_t argmax = 0;
 
-    for (size_t i = 1; i < v.size(); ++i)
+    for (size_t i = 1; i < n; ++i)
     {
         double z = std::abs(v[i]);
         if (z > max)

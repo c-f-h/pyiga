@@ -1,4 +1,3 @@
-Cython
-numpy
 nbsphinx
+sphinx-rtd-theme
 ipykernel

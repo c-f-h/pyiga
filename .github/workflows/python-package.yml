@@ -33,12 +33,10 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Compile and install
       run: |
-        python setup.py install
-        # also build the extensions in-place so the test runner will find them
-        python setup.py build_ext -i
+        python -m pip install . -v
     - name: Test with pytest
       run: |
-        pytest -v --cov=pyiga --cov-report=xml
+        cd test && pytest -v --cov=pyiga --cov-report=xml --import-mode=importlib
     - name: Upload coverage data
       run: |
         codecov

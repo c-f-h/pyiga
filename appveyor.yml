@@ -21,19 +21,19 @@ init:
 install:
   - "%PYTHON%\\python.exe -m pip install --upgrade pip"
   - "%PYTHON%\\python.exe -m pip install -r requirements.txt"
-  - "%PYTHON%\\python.exe -m pip install pytest matplotlib wheel build setuptools"
-  - "%PYTHON%\\python.exe -m pip install ."
-  - "%PYTHON%\\python.exe setup.py build_ext -i"
+  - "%PYTHON%\\python.exe -m pip install pytest matplotlib"
+  - "%PYTHON%\\python.exe -m pip install . -v"
 
 build: off
 
 test_script:
-  - "%PYTHON%\\python.exe -m pytest -v"
+  - "cd test"
+  - "%PYTHON%\\python.exe -m pytest -v --import-mode=importlib"
 
 after_test:
   # build the wheels
-  - "%PYTHON%\\python.exe -m build --wheel"
+  #- "%PYTHON%\\python.exe -m build --wheel"
 
 artifacts:
   # bdist_wheel puts the built wheel in the dist directory
-  - path: dist\*
+  #- path: dist\*

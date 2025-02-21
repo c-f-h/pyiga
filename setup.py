@@ -76,7 +76,6 @@ setup(
     url = 'https://github.com/c-f-h/pyiga',
 
     classifiers=[
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Science/Research',
@@ -99,8 +98,6 @@ setup(
         'platformdirs',
         'networkx',
         'jinja2',
-        'tqdm',
-        'future;python_version<"3.0"',
-        'futures;python_version<"3.0"'   # backport of concurrent.futures to Py2
+        'setuptools',
     ],
 )

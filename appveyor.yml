@@ -14,7 +14,7 @@ install:
   - "%PYTHON%\\python.exe -m pip install -r requirements.txt"
   - "%PYTHON%\\python.exe -m pip install ."
   - "%PYTHON%\\python.exe setup.py build_ext -i"
-  - "%PYTHON%\\python.exe -m pip install pytest matplotlib"
+  - "%PYTHON%\\python.exe -m pip install pytest matplotlib wheel"
 
 build: off
 
@@ -23,7 +23,7 @@ test_script:
 
 after_test:
   # build the wheels
-  - python setup.py bdist_wheel
+  - "%PYTHON%\\python.exe setup.py bdist_wheel"
 
 artifacts:
   # bdist_wheel puts the built wheel in the dist directory

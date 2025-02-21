@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 """Methods for approximating functions in spline spaces."""
-from __future__ import print_function
-
 from . import bspline
 from . import assemble
 from . import tensor

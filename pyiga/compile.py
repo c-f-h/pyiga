@@ -10,8 +10,7 @@ import hashlib
 
 import numpy
 
-import distutils
-from distutils.core import Extension
+from setuptools import Extension
 
 import Cython
 import Cython.Compiler.Options
@@ -51,7 +50,7 @@ def _compile_cython_module_nocache(src, modname, verbose=False):
     build_extension.build_temp = MODDIR
     build_extension.build_lib = MODDIR
 
-    distutils.log.set_verbosity(verbose)
+    #distutils.log.set_verbosity(verbose)
     build_extension.run()
     return importlib.import_module(modname)
 

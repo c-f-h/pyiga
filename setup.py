@@ -96,7 +96,7 @@ setup(
         'Cython',
         'numpy>=1.11',
         'scipy',
-        'appdirs',
+        'platformdirs',
         'networkx',
         'jinja2',
         'tqdm',

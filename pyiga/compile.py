@@ -5,7 +5,7 @@ import tempfile
 import importlib
 import sys
 import os.path
-import appdirs
+import platformdirs
 import hashlib
 
 import numpy
@@ -20,7 +20,7 @@ from Cython.Build.Dependencies import cythonize
 
 
 PYIGAPATH = os.path.normpath(os.path.join(os.path.split(pyiga.__file__)[0], '..'))
-MODDIR = os.path.join(appdirs.user_cache_dir('pyiga'), 'modules')
+MODDIR = os.path.join(platformdirs.user_cache_dir('pyiga'), 'modules')
 
 
 def _compile_cython_module_nocache(src, modname, verbose=False):

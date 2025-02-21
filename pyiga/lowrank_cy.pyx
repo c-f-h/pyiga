@@ -2,7 +2,7 @@ cimport cython
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef void rank_1_update(double[:,::1] X, double alpha, double[::1] u, double[::1] v):
+cpdef void rank_1_update(double[:,::1] X, double alpha, double[::1] u, double[::1] v) noexcept:
     """Perform the update `X += alpha * u * v^T`.
 
     This does the same thing as the BLAS function `dger`, but OpenBLAS
@@ -20,7 +20,7 @@ cpdef void rank_1_update(double[:,::1] X, double alpha, double[::1] u, double[::
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef void aca3d_update(double[:,:,::1] X, double alpha, double[::1] u, double[:,::1] V):
+cpdef void aca3d_update(double[:,:,::1] X, double alpha, double[::1] u, double[:,::1] V) noexcept:
     cdef double au
     cdef size_t i, j, k
     for i in range(X.shape[0]):

@@ -690,7 +690,7 @@ class AsmGenerator(CodegenVisitor):
             self.put('# constant parameters')
             self.put('double constants[],')    # array for constant parameters
         self.dedent()
-        self.put(') nogil:')
+        self.put(') noexcept nogil:')
 
         # start main loop
         self.start_loop_with_fields(local_vars=vf.precomp, temp=True)
@@ -851,7 +851,7 @@ cdef class _CommonBase{{DIM}}D:
 
 
 cdef class BaseAssembler{{DIM}}D(_CommonBase{{DIM}}D):
-    cdef void entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j, double result[]) nogil:
+    cdef void entry_impl(self, size_t[{{DIM}}] i, size_t[{{DIM}}] j, double result[]) noexcept nogil:
         pass
 
     cpdef double entry1(self, size_t i) noexcept:
@@ -978,7 +978,7 @@ cdef double _entry_func_{{DIM}}d(size_t i, size_t j, void * data) noexcept:
 
 
 
-cdef class BaseVectorAssembler{{DIM}}D(_CommonBase{{DIM}}D) noexcept:
+cdef class BaseVectorAssembler{{DIM}}D(_CommonBase{{DIM}}D):
     def num_components(self):
         return self.numcomp[0], self.numcomp[1]
 

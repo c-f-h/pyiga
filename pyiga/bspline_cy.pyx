@@ -340,6 +340,33 @@ from libc.stdio cimport snprintf
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
+cpdef tuple pyx_unique_knots(double[::1] knots, int size, double atol = 1e-14, double rtol=1e-14):
+    cdef np.ndarray[np.float64_t, ndim=1] unique_knots = np.empty(size, dtype=np.float64)
+    cdef np.ndarray[np.int32_t, ndim=1] m = np.empty(size, dtype=np.int32)
+    cdef np.ndarray[np.intp_t, ndim=1] knots_to_mesh = np.empty(size, dtype=np.intp)
+    
+    cdef int i, k=0, count=1
+    cdef double prev = knots[0]
+    knots_to_mesh[0] = 0
+
+    for i in range(1,size):
+        if fabs(prev - knots[i])<atol+rtol*fabs(knots[i]):
+            count += 1
+        else:
+            m[k]=count
+            unique_knots[k]=prev
+            prev=knots[i]
+            count=1
+            k += 1
+        knots_to_mesh[i]=k
+    m[k]=count
+    unique_knots[k]=prev
+
+    return unique_knots[:k+1], knots_to_mesh, m[:k+1]
+    
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cpdef bint pyx_knots_leq(double[:] kv1, int n1, int p1, double a1, double b1,
                          double[:] kv2, int n2, int p2, double a2, double b2):
     cdef int i1=0, i2=0

@@ -1410,12 +1410,12 @@ class Multipatch:
             bkv1, bkv2 = bkv2, bkv1
             dofs1, dofs2 = dofs2, dofs1
         else:
-            match 2*b1[0]+b1[1]:
+            match 2*bdspec1[0]+bspec1[1]:
                 case 0: side1='bottom'
                 case 1: side1='top'
                 case 2: side1='left'
                 case 3: side1='right'
-            match 2*b2[0]+b2[1]:
+            match 2*bdspec2[0]+bdspec2[1]:
                 case 0: side2='bottom'
                 case 1: side2='top'
                 case 2: side2='left'

@@ -84,14 +84,14 @@ class KnotVector:
 
     def __init__(self, knots, p):
         """Construct an open B-spline knot vector with given `knots` and degree `p`."""
-        self.kv = knots.astype(float)
+        self.kv = np.sort(knots).astype(float)
         self.p = p
         # sanity check: knots should be monotonically increasing
         assert np.all(self.kv[1:] - self.kv[:-1] >= 0), 'knots should be increasing'
         assert isinstance(p,int), 'polynomial degree must be an integer'
         assert np.isclose(self.kv[:p+1], self.kv[0]).all() and np.isclose(self.kv[-(p+1):], self.kv[-1]).all(), 'knots should be p-open'
-        self._mesh, self._knots_to_mesh, self.m = np.unique(self.kv,return_inverse=True, return_counts=True)
-        assert (self.m<=p+1).all(), 'multiplicites exceed degree by more than 1'
+        self._mesh, self._knots_to_mesh, self.m = bspline_cy.pyx_unique_knots(self.kv, len(self.kv), atol = 1e-14, rtol=0.0)
+        assert (self.m<=p+1).all(), 'multiplicites exceed degree by more than 1 in the following knot array:'+str(self.kv)
         assert isinstance(self.p,int) and self.p >= 0, 'polynomial degree is not a integer'
 
     def __str__(self):
@@ -102,7 +102,7 @@ class KnotVector:
 
     def __eq__(self, other):
         """Returns True iff the spaces spanned by the respective knot vectors is the same, i.e., the knot vectors are the same."""
-        return self.p == other.p and len(self.kv) == len(other.kv) and np.allclose(self.kv, other.kv, atol=1e-8, rtol=1e-8)
+        return self.p == other.p and len(self.kv) == len(other.kv) and np.allclose(self.kv, other.kv, atol=1e-14, rtol=0.0)
 
     def __le__(self, other):
         return bspline_cy.pyx_knots_leq(self.kv,  len(self.kv),  self.p,  *self.support(),
@@ -150,7 +150,7 @@ class KnotVector:
     def _ensure_mesh(self):
         """Make sure that the _mesh and _knots_to_mesh arrays are set up"""
         if self._knots_to_mesh is None:
-            self._mesh, self._knots_to_mesh = np.unique(self.kv, return_inverse=True)
+            self._mesh, self._knots_to_mesh, self.m = bspline_cy.pyx_unique_knots(self.kv, len(self.kv), atol = 1e-14, rtol=0.0)
 
     @property
     def mesh(self):

@@ -387,7 +387,7 @@ class PatchMesh:
             
         try:
             # is the vertex already contained in the boundary?
-            vtx_idx = np.where(np.isclose(self.boundaries(p)[1][b], xi))[0][0]
+            vtx_idx = np.where(np.isclose(self.boundaries(p)[1][b], xi, atol=1e-14, rtol=0.0))[0][0]
             if (p,b) in self.L_intfs:
                 intfs = self.L_intfs[(p,b)]
                 self.L_intfs[(p,b)] = intfs[:vtx_idx]
@@ -445,25 +445,25 @@ class PatchMesh:
         dim = len(kvs)
         
         split_xi = sum(kv.support())/2.0
-        split_idx = np.where(np.isclose(kv.kv,split_xi))[0][0]
-        #split_idx = kv.findspan(split_xi)
-        split_xi_mult = sum(np.isclose(kv.kv,split_xi))
-        #print(kv.kv,split_idx,split_xi,kv.kv[:(split_idx-split_xi_mult+1)])
+        is_split = abs(kv.kv-split_xi)<1e-14
+        split_idx = np.where(is_split)[0][0]
+        split_xi_mult = sum(is_split)
 
         extra_mult = max(0, kv.p + 1 - split_xi_mult)
         split_xi_knots = np.full(extra_mult+split_xi_mult, split_xi)
 
         new_knots1 = np.concatenate((kv.kv[:split_idx], split_xi_knots))
         new_knots2 = np.concatenate((split_xi_knots, kv.kv[(split_idx + split_xi_mult):]))
-        
-        new_kvs = tuple([bspline.KnotVector(np.concatenate((new_knots1[:-(kv.p+1)],new_knots2[1:])),kv.p) if d==axis else kvs[d] for d in range(dim)])
             
         # create new kvs and geo for first patch
         kvs1 = list(kvs)
         if ref=="sr":
             kvs1[axis] = bspline.KnotVector(new_knots1, kv.p).h_refine(mult=mult)
         if ref=="rs":
-            kvs1[axis] = bspline.KnotVector(new_knots1, kv.p)
+            try:
+                kvs1[axis] = bspline.KnotVector(new_knots1, kv.p)
+            except:
+                print(p, axis, kvs[axis].kv)
         geo1 = copy.copy(geo)
         geo1.support = tuple(kv.support() for kv in kvs1)
         kvs1 = tuple(kvs1)

@@ -1634,14 +1634,14 @@ class Multipatch:
         P_loc = dict()
         
         kvs_old = self.mesh.kvs
-        t=time.time()
+        #t=time.time()
         new_patches=self.mesh.h_refine(h_ref, ref=ref)
         
-        print("Refinement took " + str(time.time()-t) + " seconds for "+str(len(h_ref))+' patches.')
+        #print("Refinement took " + str(time.time()-t) + " seconds for "+str(len(h_ref))+' patches.')
         self.reset(automatch=False)
         
         if return_P:
-            t = time.time()
+            #t = time.time()
             refined_patches = h_ref
             for p in refined_patches:
                 P_loc[p]={new_p: scipy.sparse.coo_matrix(bspline.prolongation_tp(kvs_old[p],self.mesh.kvs[new_p])) for new_p in new_patches[p]}
@@ -1662,7 +1662,7 @@ class Multipatch:
             else:
                 self.reset() ### needed to compute new basis and generate the new P2G matrix
                 P = self.P2G@P_loc@B_old
-            print("Prolongation took "+str(time.time()-t)+" seconds")
+            #print("Prolongation took "+str(time.time()-t)+" seconds")
             return P
         
     def p_refine(self, p_inc=1, return_P = False, decoupled=False):

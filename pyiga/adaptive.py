@@ -15,6 +15,10 @@ def mp_resPois(MP, uh, f=0., nu=1., M=(0.,0.), divMaT =0., neu_data={}, **kwargs
         nu={d:nu for d in MP.mesh.domains}
     if isinstance(f,(int,float)):
         f={d:f for d in MP.mesh.domains}
+    if isinstance(M,(tuple,list,set,np.ndarray)):
+        assert len(M)==2, 'coefficient has wrong dimension'
+        if all([isinstance(m,(int,float)) for m in M]):
+            M={d:M for d in MP.mesh.domains}
     n = MP.mesh.numpatches
     indicator = np.zeros(n)
     if MP.coupled and len(uh)==MP.nDofs:
@@ -63,6 +67,7 @@ def mp_resPois(MP, uh, f=0., nu=1., M=(0.,0.), divMaT =0., neu_data={}, **kwargs
             ((kvs, geo), _) = MP.mesh.patches[p]
             bdspec = bspline._parse_bdspec(b,2)
             bkv = assemble.boundary_kv(kvs, bdspec)
+            h = bkv[0].meshsize_max() * np.linalg.norm([b - a for a, b in geo_b.bounding_box(full=True)])
             kv0 = tuple([bspline.KnotVector(kv.mesh, 0) for kv in bkv])
             geo_b = geo.boundary(bdspec)
             uh_grad = geometry.BSplineFunc(kvs, uh_per_patch[p]).transformed_jacobian(geo).boundary(bdspec)

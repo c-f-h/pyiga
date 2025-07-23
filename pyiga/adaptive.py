@@ -23,7 +23,7 @@ def mp_resPois(MP, uh, f=0., nu=1., M=(0.,0.), divMaT =0., neu_data={}, **kwargs
     indicator = np.zeros(n)
     if MP.coupled and len(uh)==MP.nDofs:
         uh_loc = MP.Basis@uh
-    if len(uh)==MP.N_ofs[-1]:
+    elif len(uh)==MP.N_ofs[-1]:
         uh_loc = uh
     else:
         raise Exception("Dimension of solution vector is incompatible!")

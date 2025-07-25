@@ -340,29 +340,52 @@ from libc.stdio cimport snprintf
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef tuple pyx_unique_knots(double[::1] knots, int size, double atol = 1e-14, double rtol=1e-14):
-    cdef np.ndarray[np.float64_t, ndim=1] unique_knots = np.empty(size, dtype=np.float64)
-    cdef np.ndarray[np.int32_t, ndim=1] m = np.empty(size, dtype=np.int32)
+cpdef tuple pyx_unique_knots(double[::1] knots, int size, double atol=1e-14, double rtol=1e-14):
+    """
+    Identifies unique knot values and their multiplicities from a non-decreasing knot vector.
+
+    Parameters:
+        knots : 1D array of knot values (assumed sorted non-decreasing)
+        size  : number of knot entries
+        atol  : absolute tolerance for float comparison
+        rtol  : relative tolerance for float comparison
+
+    Returns:
+        mesh_to_knots : np.ndarray[int] mapping each unique knot index to the corresponding index in `knots`
+        knots_to_mesh : np.ndarray[int] mapping each knot index to its unique-knot index
+        m             : np.ndarray[int] giving the multiplicity of each unique knot
+    """
+    if size == 0:
+        return (
+            np.empty(0, dtype=np.intp),
+            np.empty(0, dtype=np.intp),
+            np.empty(0, dtype=np.intp)
+        )
+
+    cdef np.ndarray[np.intp_t, ndim=1] mesh_to_knots = np.empty(size, dtype=np.intp)
     cdef np.ndarray[np.intp_t, ndim=1] knots_to_mesh = np.empty(size, dtype=np.intp)
-    
-    cdef int i, k=0, count=1
+    cdef np.ndarray[np.intp_t, ndim=1] m             = np.empty(size, dtype=np.intp)
+
+    cdef int i, k = 0, count = 1
     cdef double prev = knots[0]
+
+    mesh_to_knots[0] = 0
     knots_to_mesh[0] = 0
 
-    for i in range(1,size):
-        if fabs(prev - knots[i])<atol+rtol*fabs(knots[i]):
+    for i in range(1, size):
+        if fabs(prev - knots[i]) < atol + rtol * fabs(knots[i]):
             count += 1
         else:
-            m[k]=count
-            unique_knots[k]=prev
-            prev=knots[i]
-            count=1
+            m[k] = count
             k += 1
-        knots_to_mesh[i]=k
-    m[k]=count
-    unique_knots[k]=prev
+            mesh_to_knots[k] = i
+            count = 1
+            prev = knots[i]
+        knots_to_mesh[i] = k
 
-    return unique_knots[:k+1], knots_to_mesh, m[:k+1]
+    m[k] = count  # Final group
+
+    return mesh_to_knots[:k+1], knots_to_mesh, m[:k+1]
     
 @cython.cdivision(True)
 @cython.boundscheck(False)

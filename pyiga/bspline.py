@@ -4,6 +4,7 @@
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
 import scipy.sparse
 import scipy.sparse.linalg
 import scipy.interpolate
@@ -90,7 +91,8 @@ class KnotVector:
         assert np.all(self.kv[1:] - self.kv[:-1] >= 0), 'knots should be increasing'
         assert isinstance(p,int), 'polynomial degree must be an integer'
         assert np.isclose(self.kv[:p+1], self.kv[0]).all() and np.isclose(self.kv[-(p+1):], self.kv[-1]).all(), 'knots should be p-open'
-        self._mesh, self._knots_to_mesh, self.m = bspline_cy.pyx_unique_knots(self.kv, len(self.kv), atol = 1e-14, rtol=0.0)
+        
+        self._mesh_to_knots, self._knots_to_mesh, self.m = bspline_cy.pyx_unique_knots(self.kv, len(self.kv), atol = 1e-14, rtol=0.0)
         assert (self.m<=p+1).all(), 'multiplicites exceed degree by more than 1 in the following knot array:'+str(self.kv)
         assert isinstance(self.p,int) and self.p >= 0, 'polynomial degree is not a integer'
 
@@ -150,12 +152,12 @@ class KnotVector:
     def _ensure_mesh(self):
         """Make sure that the _mesh and _knots_to_mesh arrays are set up"""
         if self._knots_to_mesh is None:
-            self._mesh, self._knots_to_mesh, self.m = bspline_cy.pyx_unique_knots(self.kv, len(self.kv), atol = 1e-14, rtol=0.0)
+            self._mesh_to_knots, self._knots_to_mesh, self.m = bspline_cy.pyx_unique_knots(self.kv, len(self.kv), atol = 1e-14, rtol=0.0)
 
     @property
     def mesh(self):
         """Return the mesh, i.e., the vector of unique knots in the knot vector."""
-        return self._mesh
+        return self.kv[self._mesh_to_knots]
 
     def mesh_support_idx(self, j):
         """Return the first and last mesh index of the support of i"""
@@ -210,7 +212,7 @@ class KnotVector:
             # support interval; clamp them manually to avoid problems later on
             return np.clip(g, self.kv[0], self.kv[-1])
 
-    def maxima(self, maxiter=10): #TODO: cythonize
+    def maximum(self, maxiter=5): #TODO: cythonize
         n = self.numdofs
         M = self.greville() #greville starting points are a good initial guess
         h = self.meshsize_min()
@@ -265,6 +267,35 @@ class KnotVector:
             return new_kv, new_coeffs
         else:
             return new_kv.deriv(deriv=deriv-1, coeffs=new_coeffs)
+
+    def draw(self, knots=True):
+        """
+        Plot all B-spline basis functions defined on the knot vector.
+        """
+        x = np.linspace(self.kv[0], self.kv[-1], 1000)
+        
+        func = [
+            BSplineFunc(self, np.eye(1, self.numdofs, i).ravel())
+            for i in range(self.numdofs)
+        ]
+    
+        fig, ax = plt.subplots(figsize=(8, 4))
+    
+        for i, f in enumerate(func):
+            ax.plot(x, f(x), label=f"$B_{{{i}}}$")
+    
+        if knots:
+            offset = 0.02
+            for xi, mi in zip(self.mesh, self.m):
+                for j in range(mi):
+                    ax.plot(xi, -offset * (j + 1), marker="^", color="black", markersize=5)
+    
+        ax.set_title("B-spline Basis Functions")
+        ax.set_xlabel("x")
+        ax.set_ylabel("Basis Function Value")
+        ax.grid(True)
+        plt.tight_layout()
+        plt.show()
     
 def mapto(kv, f):
         """Transform mesh of the knots by the mapping f"""

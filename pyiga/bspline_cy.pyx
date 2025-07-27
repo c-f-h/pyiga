@@ -448,7 +448,7 @@ cpdef int pyx_findspan(double[::1] kv, int p, double u) noexcept nogil:
 @cython.boundscheck(False)
 @cython.wraparound(False)
 cpdef object pyx_findspans(double[::1] kv, int p, double[::1] u):
-    out = np.empty(u.shape[0], dtype=np.long)
+    out = np.empty(u.shape[0], dtype=np.int64)
     cdef long[::1] result = out
     cdef int i
     for i in range(u.shape[0]):

@@ -212,7 +212,7 @@ class KnotVector:
             # support interval; clamp them manually to avoid problems later on
             return np.clip(g, self.kv[0], self.kv[-1])
 
-    def maximum(self, maxiter=5): #TODO: cythonize
+    def maximum(self, maxiter=5): #only works for small p (<10)
         n = self.numdofs
         M = self.greville() #greville starting points are a good initial guess
         h = self.meshsize_min()
@@ -268,12 +268,12 @@ class KnotVector:
         else:
             return new_kv.deriv(deriv=deriv-1, coeffs=new_coeffs)
 
-    def draw(self, knots=True):
+    def plot(self, knots=True):
         """
         Plot all B-spline basis functions defined on the knot vector.
         """
         x = np.linspace(self.kv[0], self.kv[-1], 1000)
-        
+    
         func = [
             BSplineFunc(self, np.eye(1, self.numdofs, i).ravel())
             for i in range(self.numdofs)
@@ -287,16 +287,22 @@ class KnotVector:
         if knots:
             offset = 0.02
             for xi, mi in zip(self.mesh, self.m):
-                for j in range(mi):
-                    ax.plot(xi, -offset * (j + 1), marker="^", color="black", markersize=5)
+                ax.plot(xi, -offset, marker="^", color="black", markersize=5)
+                ax.annotate(
+                    str(mi),
+                    (xi, -offset * 2.2),         # Slightly below the triangle
+                    fontsize=6,
+                    ha="center",                 # Center horizontally
+                    va="top"                     # Align vertically above the annotation point
+                )
     
         ax.set_title("B-spline Basis Functions")
-        ax.set_xlabel("x")
+        ax.set_xlabel("\N{greek small letter xi}")
         ax.set_ylabel("Basis Function Value")
         ax.grid(True)
         plt.tight_layout()
         plt.show()
-    
+        
 def mapto(kv, f):
         """Transform mesh of the knots by the mapping f"""
         return KnotVector(f(kv.kv), kv.p)

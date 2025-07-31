@@ -340,6 +340,48 @@ from libc.stdio cimport snprintf
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
+cpdef bint pyx_checkSWcondition(double[::1] kv, int p, int size, double[::1] nodes, int m):
+    """
+    Check Schönberg-Whitney condition:
+    Given B-spline knot vector `kv` of degree `p` and `m` collocation `nodes`,
+    verify that each node can be assigned uniquely to a basis function
+    whose support contains it (with tolerance adjustments at boundaries).
+    """
+    cdef int n = size - p - 1  # number of basis functions
+    if n < m:
+        return False
+
+    cdef int i, j, k = 0
+    cdef double tol = 1e-14, start, end
+
+    # Check all nodes are strictly increasing and lie in the domain defined by kv[p] and kv[size-p-1]
+    for i in range(m):
+        if i<m-1:
+            if nodes[i] > nodes[i+1]-tol:
+                return False
+        if nodes[i] < kv[p] or nodes[i] > kv[size - p - 1]:
+            return False
+
+    for i in range(m):
+        for j in range(k, n):
+            start = -1.0 if j <= p else 1.0
+            end = -1.0 if j >= n - p else 1.0
+
+            if kv[j] + start * tol < nodes[i] < kv[j + p + 1] - end * tol:
+                k = j + 1
+                break
+            elif nodes[i] < kv[j] - tol:
+                return False
+        else:
+            # No valid basis function support found for nodes[i]
+            return False
+
+    return True
+
+
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cpdef tuple pyx_unique_knots(double[::1] knots, int size, double atol=1e-14, double rtol=1e-14):
     """
     Identifies unique knot values and their multiplicities from a non-decreasing knot vector.

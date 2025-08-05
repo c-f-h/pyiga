@@ -104,7 +104,7 @@ def edges(corners):
 #   of (p0,b0,s0) and (p1,b1,s1) reversed.
 #
 
-class PatchMesh:
+class MultiPatch:
     def __init__(self, patches = None, interfaces = None, domains=None, autodetect=True):
         self.vertices = []
         self.patches = []
@@ -167,7 +167,7 @@ class PatchMesh:
 
     def __copy__(self):
         import copy
-        M = PatchMesh()
+        M = MultiPatch()
         M.vertices = [v.copy() for v in self.vertices]  # list of numpy arrays or lists
         M.patches = copy.deepcopy(self.patches)         # includes kvs, geo, boundaries
         M.interfaces = self.interfaces.copy()
@@ -725,10 +725,10 @@ class PatchMesh:
         assert np.all(TR), "boundary information does not match on upper right corner on patches: " + str(np.where((TR==False)[0]))
                  
 ################################################################################################################
-###  3D PATCHMESH
+###  3D MultiPatch
 ################################################################################################################
             
-class PatchMesh3D:
+class MultiPatch3D:
     def __init__(self, patches = None, domains = None):
         self.vertices = []
         self.edges=[]
@@ -1246,7 +1246,7 @@ class PatchMesh3D:
             return None, False     # no matching segment - must be on the boundary
         
     def draw(self, knots = True, vertex_idx = False, edge_idx=False, patch_idx = False, nodes=False, figsize=(8,8)):
-        """draws a visualization of the patchmesh in 2D."""
+        """draws a visualization of the multi-patch domain in 2D."""
         fig=plt.figure(figsize=figsize)
         ax = plt.axes(projection='3d')
         ax.grid(False)

@@ -1290,7 +1290,56 @@ def detect_interfaces(patches):
 
     return nx.is_connected(patch_graph), interfaces
 
-class Multipatch:
+class MultiBasis:
+    def __init__(self, M):
+        if isinstance(M, topology.MultiPatch):
+            self.sdim = 2
+        elif isinstance(M, topology.MultiPatch3D):
+            self.sdim = 3
+        else:
+            print('unknown mesh object.')
+
+        self.mesh = M
+        self.N = [np.prod([kv.numdofs for kv in kvs]) for kvs in M.kvs]
+        self.N_ofs = np.concatenate(([0], np.cumsum(self.N)))
+        self.Z = [np.prod([kv.numspans for kv in kvs]) for kvs in M.kvs]
+        self.Z_ofs = np.concatenate(([0], np.cumsum(self.Z)))
+
+        self.B = scipy.sparse.csr_matrix((0,self.N_ofs[-1]))
+
+        I = self.interface_dofs = np.unique(self.B.indices)
+        F = self.free_dofs = np.setdiff1d(np.arange(self.N_ofs[-1]),I)
+
+        self.R_interface = scipy.sparse.coo_matrix((np.ones(len(I)),(np.arange(len(I)),I)),shape=(len(I),self.N_ofs[-1]))
+        self.R_free      = scipy.sparse.coo_matrix((np.ones(len(F)),(np.arange(len(F)),F)),shape=(len(F),self.N_ofs[-1]))
+
+    @property
+    def nPatches(self):
+        """Number of patches in the multipatch structure."""
+        return self.mesh.numpatches
+
+    @property
+    def nLocDofs(self):
+        return self.N_ofs[-1]
+
+    @property
+    def nCells(self):
+        """Number of cells throughout the Multipatch structure."""
+        return self.Z_ofs[-1]
+
+    def reduce():
+        t=time.time()
+        B=[self.computeInterfaceJump(p1, bspline._parse_bdspec(bd1,self.sdim), s1, 
+                                     p2, bspline._parse_bdspec(bd2,self.sdim), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
+        print('setting up constraints took {:3} seconds.'.format(time.time()-t))
+
+        if len(B)!=0:
+            self.B = scipy.sparse.vstack(B)
+        self.finalize()
+        
+        
+        
+class MultiBasis:
     """Represents a multipatch structure, consisting of a number of patches
     together with their discretizations and the information about shared dofs
     between patches. Nonconforming patches (both geometrically and knotwise non conforming) are allowed as long as there exists 
@@ -1307,11 +1356,11 @@ class Multipatch:
             :meth:`finalize`.
     """
     def __init__(self, M, automatch=False):
-        """Initialize a multipatch structure."""
+        """Initialize the MultiBasis structure."""
         # underlying PatchMesh object describing the geometry
-        if isinstance(M, topology.PatchMesh):
+        if isinstance(M, topology.MultiPatch):
             self.sdim = 2
-        elif isinstance(M, topology.PatchMesh3D):
+        elif isinstance(M, topology.MultiPatch3D):
             self.sdim = 3
         else:
             print('unknown mesh object.')
@@ -1501,7 +1550,7 @@ class Multipatch:
                 return X.T@F
     
     def assemble_surface(self, problem, arity=1, boundary_idx=0, args=None, bfuns=None,
-            symmetric=False, format='csr', layout='blocked', **kwargs):
+            symmetric=False, format='csr', layout='blocked', decoupled=False, **kwargs):
         decoupled = decoupled or not self.coupled
         if not decoupled:
             X = self.Basis

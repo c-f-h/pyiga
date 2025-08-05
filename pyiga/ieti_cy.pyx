@@ -232,7 +232,8 @@ cpdef np.ndarray[np.float64_t, ndim=1] pyx_weight_scaling(int[:] indptr, int[:] 
 @cython.wraparound(False)
 cpdef np.ndarray[np.int32_t, ndim=1] pyx_selection_scaling(int[:] indptr, int[:] indices, double[:] data, int m, int n):
 
-    cdef int[:] d = np.zeros(n, dtype=np.int32)
+    cdef np.ndarray[np.int32_t, ndim=1] d_ = np.zeros(n, dtype=np.int32)
+    cdef int[:] d = d_
     cdef char* valid = <char*> malloc(n * sizeof(char))
     cdef int i, j, ind
     
@@ -251,7 +252,7 @@ cpdef np.ndarray[np.int32_t, ndim=1] pyx_selection_scaling(int[:] indptr, int[:]
         if d[j] > 1 or not valid[j]:
             d[j]=0
     free(valid)
-    return d.base
+    return d_
 
 
                 

@@ -90,9 +90,9 @@ cdef int pyx_compute_active_constr(int m, int n, int[:] Cindptr, double[:] Cdata
         a=0
         b=0
         for ind in range(Cindptr[r], Cindptr[r+1]):
-            if Cdata[ind] > 1e-12:
+            if Cdata[ind] > 1e-14:
                 a += 1
-            if Cdata[ind] < -1e-12:
+            if Cdata[ind] < -1e-14:
                 b += 1
         if (a==1 and b>0):
             active[num_active]=r

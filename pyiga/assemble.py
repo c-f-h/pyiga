@@ -1336,7 +1336,7 @@ class MultiBasis:
         """Number of cells throughout the Multipatch structure."""
         return self.Z_ofs[-1]
 
-    def set_subspace(subspace='C0'):
+    def set_subspace(self, subspace='C0'):
         t=time.time()
         if subspace=='C0':
             B=[self.computeInterfaceJump(p1, bspline._parse_bdspec(bd1,self.sdim), s1, 
@@ -1355,14 +1355,14 @@ class MultiBasis:
 
         t=time.time()
         B = (self.B@self.R_related.T).tocsr()
-        if constraint=='C0':
+        if subspace=='C0':
             self.Basis = algebra_cy.pyx_compute_basis(B.shape[0], B.shape[1], B, maxiter=10)
-            self.subspace=subspace
+            self.Basis = scipy.sparse.hstack([self.R_free.T, self.R_related.T@self.Basis], format='csc')
             self.P2G = assemble_cy.pyx_right_inverse_C0_Basis(self.Basis.indptr, self.Basis.indices, self.Basis.data, *self.Basis.shape).tocsc()
-        self.Basis = scipy.sparse.hstack([self.R_free.T, self.R_related.T@self.Basis], format='csc')
         print("Basis setup took {:3} seconds".format(time.time()-t))
-        
-        self.sanity_check()
+
+        self.check_basis()
+        self.subspace=subspace
         
     def computeInterfaceJump(self, p1, bdspec1, s1, p2, bdspec2, s2, flip=None):
         """Join the dofs lying along boundary `bdspec1` of patch `p1` with
@@ -1420,8 +1420,8 @@ class MultiBasis:
 
     def assemble_volume(self, problem, arity=1, domain_id=None, args=None, bfuns=None,
             symmetric=False, format='csr', layout='blocked', decoupled=False, **kwargs):
-        decoupled = decoupled or not self.coupled
-        if not decoupled:
+        
+        if self.subspace:
             X = self.Basis
         else:
             X = scipy.sparse.identity(self.N_ofs[-1], format="csr")
@@ -1460,15 +1460,15 @@ class MultiBasis:
                         symmetric=symmetric, format=format, layout=layout,
                         **kwargs).ravel()
                     F[self.N_ofs[p]:self.N_ofs[p+1]]+=vals
-            if decoupled:
+            if not self.subspace:
                 return F
             else:
                 return X.T@F
     
     def assemble_surface(self, problem, arity=1, boundary_idx=0, args=None, bfuns=None,
             symmetric=False, format='csr', layout='blocked', decoupled=False, **kwargs):
-        decoupled = decoupled or not self.coupled
-        if not decoupled:
+
+        if self.subspace:
             X = self.Basis
         else:
             X = scipy.sparse.identity(self.N_ofs[-1], format="csr")
@@ -1531,7 +1531,9 @@ class MultiBasis:
                                                                               self.local_dir_idx.astype(np.int32), self.local_dir_vals)
 
             self.global_dir_idx, lookup = np.unique(global_dir_idx, return_index=True)
-        #return global_dir_idx, global_dir_vals[lookup]
+            return global_dir_idx, global_dir_vals[lookup]
+        else:
+            return self.local_dir_idx, self.local_dir_vals
 
     def h_refine(self, h_ref=None, mult=1, return_P = False, ref="rs", decoupled=False):
         """Refines the Mesh by splitting patches
@@ -1700,11 +1702,11 @@ class MultiBasis:
 
     def check_basis(self):
         assert self.Basis != None, 'Basis for function space not yet computed.'
-        assert np.allclose(self.Basis @ np.ones(self.nDofs), 1, atol=1e-12), 'No partition of unity.'
+        assert np.allclose(self.Basis @ np.ones(self.Basis.shape[1]), 1, atol=1e-12), 'No partition of unity.'
         assert spnorm(self.B@self.Basis)<1e-12*spnorm(self.B)*spnorm(self.Basis), 'Not an H^1-conforming function space.'
-        assert spnorm(self.P2G@self.Basis-scipy.sparse.identity(self.nDofs)) <1e-12
+        assert spnorm(self.P2G@self.Basis-scipy.sparse.identity(self.Basis.shape[1])) <1e-12*np.sqrt(self.Basis.shape[1])
         
-class MultiBasis:
+class _MultiBasis:
     """Represents a multipatch structure, consisting of a number of patches
     together with their discretizations and the information about shared dofs
     between patches. Nonconforming patches (both geometrically and knotwise non conforming) are allowed as long as there exists 
@@ -1869,8 +1871,8 @@ class MultiBasis:
         
     def assemble_volume(self, problem, arity=1, domain_id=None, args=None, bfuns=None,
             symmetric=False, format='csr', layout='blocked', decoupled=False, **kwargs):
-        decoupled = decoupled or not self.coupled
-        if not decoupled:
+        
+        if self.subspace:
             X = self.Basis
         else:
             X = scipy.sparse.identity(self.N_ofs[-1], format="csr")
@@ -1909,7 +1911,7 @@ class MultiBasis:
                         symmetric=symmetric, format=format, layout=layout,
                         **kwargs).ravel()
                     F[self.N_ofs[p]:self.N_ofs[p+1]]+=vals
-            if decoupled:
+            if not self.subspace:
                 return F
             else:
                 return X.T@F

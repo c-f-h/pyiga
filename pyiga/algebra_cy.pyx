@@ -63,7 +63,7 @@ cdef map[int,int] pyx_find_ddofs(int[:] Cindptr, int[:] Cindices, double[:] Cdat
         for ind in range(Cindptr[r], Cindptr[r+1]):
             c = Cindices[ind]
             v = Cdata[ind]
-            if v > 1e-12: # We know that there is only one (see assertion above!)
+            if v > 1e-14: # We know that there is only one (see assertion above!)
                 if elim_dof >= 0:
                     feasible = False
                 else:
@@ -73,7 +73,7 @@ cdef map[int,int] pyx_find_ddofs(int[:] Cindptr, int[:] Cindices, double[:] Cdat
         for ind in range(Cindptr[r], Cindptr[r+1]):
             c = Cindices[ind]
             v = Cdata[ind]
-            if abs(v) > 1e-12 and ddofs.count(c)>0:
+            if abs(v) > 1e-14 and ddofs.count(c)>0:
                 #print("{} cannot be eliminated (constraint #{}) because it refers to eliminated dof {}.".format(dofToBeEliminated,r,c))
                 feasible = False
         if feasible:

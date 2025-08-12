@@ -5,7 +5,11 @@ from scipy.sparse import coo_matrix
 
 from pyiga import bspline, vis, assemble, solvers, algebra, assemble
 from pyiga import ieti_cy
-from scipy.sparse.linalg import aslinearoperator
+from scipy.sparse.linalg import aslinearoperator as LinOp
+
+class IetiMapper:
+    def __init__(self, M, dir_data, neu_data, elim=False):
+        
 
 class IetiMapper:
     def __init__(self, MP, dir_data, neu_data=None, elim=False):

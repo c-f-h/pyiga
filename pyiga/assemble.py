@@ -1336,15 +1336,17 @@ class MultiBasis:
         """Number of cells throughout the Multipatch structure."""
         return self.Z_ofs[-1]
 
-    def set_subspace(self, subspace='C0'):
+    def set_constraints(self, subspace='C0'):
         t=time.time()
         if subspace=='C0':
             B=[self.computeInterfaceJump(p1, bspline._parse_bdspec(bd1,self.sdim), s1, 
                                          p2, bspline._parse_bdspec(bd2,self.sdim), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
         print('setting up constraints took {:3} seconds.'.format(time.time()-t))
-
         if len(B)!=0:
             self.B = scipy.sparse.vstack(B)
+
+    def set_subspace(self, subspace='C0'):
+        self.set_constraints(subspace=subspace)
 
         t=time.time()
         I = self.related_dofs = np.unique(self.B.indices)

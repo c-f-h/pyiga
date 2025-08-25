@@ -1291,7 +1291,7 @@ def detect_interfaces(patches):
     return nx.is_connected(patch_graph), interfaces
 
 class MultiBasis:
-    def __init__(self, M):
+    def __init__(self, M, dir_data=None, **kwargs):
         if isinstance(M, topology.MultiPatch):
             self.sdim = 2
         elif isinstance(M, topology.MultiPatch3D):
@@ -1305,6 +1305,8 @@ class MultiBasis:
         self.Z = [np.prod([kv.numspans for kv in kvs]) for kvs in M.kvs]
         self.Z_ofs = np.concatenate(([0], np.cumsum(self.Z)))
 
+        self.dir_data = dir_data
+
         self.B = scipy.sparse.csr_matrix((0,self.N_ofs[-1]))
         self.subspace=False
 
@@ -1315,6 +1317,11 @@ class MultiBasis:
             if ((p2,bd2,s2),(p1,bd1,s1),flip) not in self.intfs:
                 self.intfs.add(((p1,bd1,s1),(p2,bd2,s2),flip))
 
+        subspace = kwargs.get('subspace')
+        if subspace:
+            self.subspace=subspace
+            self.set_subspace(subspace=subspace)
+            
     @property
     def nPatches(self):
         """Number of patches in the multipatch structure."""
@@ -1343,10 +1350,10 @@ class MultiBasis:
                                          p2, bspline._parse_bdspec(bd2,self.sdim), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
         print('setting up constraints took {:3} seconds.'.format(time.time()-t))
         if len(B)!=0:
-            self.B = scipy.sparse.vstack(B)
+            return scipy.sparse.vstack(B)
 
     def set_subspace(self, subspace='C0'):
-        self.set_constraints(subspace=subspace)
+        self.B = self.set_constraints(subspace=subspace)
 
         t=time.time()
         I = self.related_dofs = np.unique(self.B.indices)
@@ -1421,9 +1428,10 @@ class MultiBasis:
         return scipy.sparse.csr_matrix((data,(I,J)),(len(dofs2), self.nLocDofs))
 
     def assemble_volume(self, problem, arity=1, domain_id=None, args=None, bfuns=None,
-            symmetric=False, format='csr', layout='blocked', decoupled=False, **kwargs):
+            symmetric=False, format='csr', layout='blocked', in_subspace=True, **kwargs):
         
-        if self.subspace:
+        in_subspace= bool(self.subspace) & bool(in_subspace)
+        if in_subspace:
             X = self.Basis
         else:
             X = scipy.sparse.identity(self.N_ofs[-1], format="csr")
@@ -1462,15 +1470,16 @@ class MultiBasis:
                         symmetric=symmetric, format=format, layout=layout,
                         **kwargs).ravel()
                     F[self.N_ofs[p]:self.N_ofs[p+1]]+=vals
-            if not self.subspace:
+            if not in_subspace:
                 return F
             else:
                 return X.T@F
     
     def assemble_surface(self, problem, arity=1, boundary_idx=0, args=None, bfuns=None,
-            symmetric=False, format='csr', layout='blocked', decoupled=False, **kwargs):
-
-        if self.subspace:
+            symmetric=False, format='csr', layout='blocked', in_subspace=True, **kwargs):
+        
+        in_subspace= bool(self.subspace) & bool(in_subspace)
+        if in_subspace:
             X = self.Basis
         else:
             X = scipy.sparse.identity(self.N_ofs[-1], format="csr")
@@ -1506,6 +1515,7 @@ class MultiBasis:
             return X.T @ N
 
     def set_dirichlet_boundary(self, dir_data):
+        self.dir_data = dir_data
         self.dir_idx = dict()
         self.dir_vals = dict()
         kvs = self.mesh.kvs
@@ -1532,12 +1542,12 @@ class MultiBasis:
             global_dir_idx , global_dir_vals= assemble_cy.pyx_find_global_indices(B.indptr, B.indices, B.data, 
                                                                               self.local_dir_idx.astype(np.int32), self.local_dir_vals)
 
-            self.global_dir_idx, lookup = np.unique(global_dir_idx, return_index=True)
+            global_dir_idx, lookup = np.unique(global_dir_idx, return_index=True)
             return global_dir_idx, global_dir_vals[lookup]
         else:
             return self.local_dir_idx, self.local_dir_vals
 
-    def h_refine(self, h_ref=None, mult=1, return_P = False, ref="rs", decoupled=False):
+    def h_refine(self, h_ref=None, mult=1, return_P = False, ref="rs", in_subspace=True):
         """Refines the Mesh by splitting patches
         
         The dictionary `h_ref` specifies which patches (dict keys) are to be split 
@@ -1565,9 +1575,10 @@ class MultiBasis:
         # if isinstance(p_ref,int):
         #     p_ref = {p:p_ref for p in range(self.nPatches)}
 
-        subspace = self.subspace
-
-        if self.subspace:
+        subspace=self.subspace
+        in_subspace = bool(self.subspace) & bool(in_subspace)
+        
+        if in_subspace:
             B_old = self.Basis
         
         num_p_old = self.nPatches
@@ -1580,7 +1591,7 @@ class MultiBasis:
         kvs_old = self.mesh.kvs
         #t=time.time()
         new_patches=self.mesh.h_refine(h_ref, ref=ref)
-        self.init(self.mesh)
+        self.__init__(self.mesh, self.dir_data)
         
         if return_P:
             #t = time.time()
@@ -1599,7 +1610,7 @@ class MultiBasis:
                 I_id = np.concatenate([np.arange(self.N[p]) + self.N_ofs[p] for p in range(num_p_old) if p not in refined_patches])
                 J_id = np.concatenate([np.arange(self.N[p]) + N_ofs_old[p] for p in range(num_p_old) if p not in refined_patches])
                 P_loc = P_loc +  scipy.sparse.coo_matrix((data_id,(I_id, J_id)),(sum(self.N),sum(N_old)))
-            if not subspace:
+            if not in_subspace:
                 P=P_loc
             else:
                 self.set_subspace(subspace) ### needed to compute new basis and generate the new P2G matrix
@@ -1607,9 +1618,12 @@ class MultiBasis:
             #print("Prolongation took "+str(time.time()-t)+" seconds")
             return P
 
-    def p_refine(self, p_inc=1, return_P = False, decoupled=False):
-        subspace = self.subspace
-        if self.subspace:
+    def p_refine(self, p_inc=1, return_P = False, subspace=True):
+        
+        subspace=self.subspace
+        in_subspace = bool(self.subspace) & bool(in_subspace)
+        
+        if in_subspace:
             B_old = self.Basis
         N_old=self.N
         N_ofs_old = self.N_ofs
@@ -1617,7 +1631,7 @@ class MultiBasis:
         P_loc=dict()
         
         self.mesh.p_refine(p_inc)
-        self.init(self.mesh)
+        self.__init__(self.mesh, self.dir_data)
         
         if return_P:
             t = time.time()
@@ -1627,7 +1641,7 @@ class MultiBasis:
             I = np.concatenate([P_loc[p].row + self.N_ofs[p] for p in range(self.nPatches)])
             J = np.concatenate([P_loc[p].col + N_ofs_old[p] for p in range(self.nPatches)])
             P_loc = scipy.sparse.coo_matrix((data,(I, J)),(sum(self.N),sum(N_old)))
-            if not subspace:
+            if not in_subspace:
                 P=P_loc
             else:
                 self.set_subspace(subspace) ### needed to compute new basis and generate the new P2G matrix
@@ -1872,9 +1886,10 @@ class _MultiBasis:
         self.sanity_check()
         
     def assemble_volume(self, problem, arity=1, domain_id=None, args=None, bfuns=None,
-            symmetric=False, format='csr', layout='blocked', decoupled=False, **kwargs):
+            symmetric=False, format='csr', layout='blocked', subspace=True, **kwargs):
         
-        if self.subspace:
+        subspace= bool(self.subspace) & bool(subspace)
+        if subspace:
             X = self.Basis
         else:
             X = scipy.sparse.identity(self.N_ofs[-1], format="csr")
@@ -1913,15 +1928,16 @@ class _MultiBasis:
                         symmetric=symmetric, format=format, layout=layout,
                         **kwargs).ravel()
                     F[self.N_ofs[p]:self.N_ofs[p+1]]+=vals
-            if not self.subspace:
+            if not subspace:
                 return F
             else:
                 return X.T@F
     
     def assemble_surface(self, problem, arity=1, boundary_idx=0, args=None, bfuns=None,
-            symmetric=False, format='csr', layout='blocked', decoupled=False, **kwargs):
-        decoupled = decoupled or not self.coupled
-        if not decoupled:
+            symmetric=False, format='csr', layout='blocked', subspace=True, **kwargs):
+        
+        subspace= bool(self.subspace) & bool(subspace)
+        if subspace:
             X = self.Basis
         else:
             X = scipy.sparse.identity(self.N_ofs[-1], format="csr")

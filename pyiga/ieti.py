@@ -8,11 +8,11 @@ from pyiga import ieti_cy, algebra_cy
 from scipy.sparse.linalg import aslinearoperator as LinOp
 
 class IetiMapper(assemble.MultiBasis):
-    def __init__(self, M, dir_data, neu_data=None, elim=False):
-        super().__init__(M)
+    def __init__(self, M, dir_data, neu_data=None, elim=False, **kwargs):
+        super().__init__(M, dir_data)
         self.elim=bool(elim)
 
-        self.set_constraints('C0')
+        self.B = self.set_constraints('C0')
         self.global_dir_idx,_ = self.set_dirichlet_boundary(dir_data)
 
         self.free={}

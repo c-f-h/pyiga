@@ -243,7 +243,7 @@ cpdef np.ndarray[np.int32_t, ndim=1] pyx_selection_scaling(int[:] indptr, int[:]
     for i in range(m):
         for ind in range(indptr[i],indptr[i+1]):
             j=indices[ind]
-            if fabs(1.0-data[ind])<1e-12:
+            if fabs(1.0-data[ind])<1e-14:
                 d[j]+=1
             else:
                 valid[j]=0

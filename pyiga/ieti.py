@@ -9,10 +9,11 @@ from scipy.sparse.linalg import aslinearoperator as LinOp
 
 class IetiMapper(assemble.MultiBasis):
     def __init__(self, M, dir_data, neu_data=None, elim=False, **kwargs):
-        super().__init__(M, dir_data)
+        super().__init__(M, dir_data, **kwargs)
         self.elim=bool(elim)
 
-        self.B = self.set_constraints('C0')
+        if not self.subspace=='C0':
+            self.B = self.set_constraints('C0')
         self.global_dir_idx,_ = self.set_dirichlet_boundary(dir_data)
 
         self.free={}
@@ -355,82 +356,8 @@ def EdgePreconditioner(IMap, S, B, C):
         B2 = scipy.sparse.hstack(B2)
         MsD+=B2@np.linalg.inv(S2_inv + P@S1_inv@P.T)@B2.T
     return MsD
-    
-def EdgePreconditionerOP(IMap, A, B, C):
-    M = len(IMap.L_intfs)*[None]
 
-    for i,(p1, b1) in enumerate(IMap.L_intfs):
-        R1 = scipy.sparse.vstack([
-            IMap.R_interior[p1],
-            IMap.R_interfaces[(p1, b1)]
-        ], format='csr')
-        c = C[p1] @ R1.T
-        c = c[c.getnnz(axis=1) > 0, :]
-
-        A_blocks = [scipy.sparse.bmat(
-            [[R1 @ A[p1] @ R1.T, c.T],
-             [c, None]], format='csc')]
-        B_blocks = [scipy.sparse.hstack([
-            B[p1] @ R1.T,
-            scipy.sparse.csc_matrix((B[p1].shape[0], c.shape[0]))
-        ], format='csc')]
-        P_blocks = []
-
-        for (p2, b2) in IMap.L_intfs[(p1, b1)]:
-            R2 = scipy.sparse.vstack([
-                IMap.R_interior[p2],
-                IMap.R_interfaces[(p2, b2)]
-            ], format='csr')
-
-            A_blocks.append(R2 @ A[p2] @ R2.T)
-            B_blocks.append(B[p2] @ R2.T)
-            P_blocks.append(B[p2] @ IMap.R_interfaces[(p2, b2)].T)
-
-        A_ = scipy.sparse.block_diag(A_blocks, format='csc')
-        B_ = scipy.sparse.hstack(B_blocks, format='csc')
-        P = scipy.sparse.hstack(P_blocks, format='csc') 
-
-        B_ = B_.tocsr()
-        r_idx = B_.getnnz(axis=1) > 0
-        B_=B_[r_idx,:]
-        n_c = r_idx.sum()
-
-        Mat = -scipy.sparse.bmat([
-            [A_, B_.T],
-            [B_, None]
-        ], format='csc')
-
-        B_coarse=B_.tocsc()
-        B_coarse = B_coarse[:, (R1.shape[0] + c.shape[0]):]
-        c_idx = B_coarse.getnnz(axis=0) > 0
-
-        n_total = Mat.shape[0]
-        X = LinOp(
-            scipy.sparse.hstack([
-                scipy.sparse.csc_matrix((P.shape[0], n_total - n_c)),
-                P @ B_coarse[:, c_idx].T
-            ])
-        )
-        solver = solvers.make_solver(Mat, symm=True, spd=False)
-        M[i] = X @ solver @ X.T
-
-    return operators.SumOperator(M)
-    
-def EdgePreconditionerFull(IMap, S, B, C):
-    S_ = [np.zeros(s.shape) for s in S]
-    B_ = len(B)*[None]
-    C_ = len(C)*[None]
-    for p in range(IMap.numpatches):
-        C_[p]=C[p]@IMap.R_skeleton[p].T
-        B_[p] = scipy.sparse.hstack([B[p],scipy.sparse.csr_matrix((B[p].shape[0],C_[p].shape[0]))])
-        for b in range(4):
-            if (p,b) in IMap.R_interfaces:
-                R = IMap.R_interfaces[(p,b)]@IMap.R_skeleton[p].T
-                S_[p] += R.T@R@S[p]@R.T@R
-        #print(S_[p].shape, C_[p].shape)
-    return np.linalg.inv(np.array([B_[p]@np.linalg.inv(scipy.sparse.block_array([[S_[p],C_[p].T],[C_[p],np.zeros(2*(C_[p].shape[0],))]]).toarray())@B_[p].T for p in range(len(S))]).sum(axis=0))
-    
-def EdgePreconditioner(IMap, S, B, C):
+def EdgePreconditioner2(IMap, S, B, C):
     m = B[0].shape[0]
     MsD = np.zeros((m,m))
     for (p1,b1) in IMap.L_intfs:
@@ -438,23 +365,23 @@ def EdgePreconditioner(IMap, S, B, C):
         c = C[p1]@IMap.R_interfaces[(p1,b1)].T
         c = c[c.getnnz(1)>0,:].toarray()
         if c.shape[0]>0:
-            S1_inv = np.linalg.inv(np.block([[R1@S[p1]@R1.T,c.T],[c, np.zeros((c.shape[0], c.shape[0]))]]))
+            S1 = np.block([[R1@S[p1]@R1.T,c.T],[c, np.zeros((c.shape[0], c.shape[0]))]])
         else:
-            S1_inv = np.linalg.inv(R1@S[p1]@R1.T)
-        S2_inv = []
+            S1 = R1@S[p1]@R1.T
+        S2 = []
         P = []
         B2 = []
         for (p2,b2) in IMap.L_intfs[(p1,b1)]:
             R2 = IMap.R_interfaces[(p2,b2)]@IMap.R_skeleton[p2].T
-            S2_inv.append(np.linalg.inv(R2@S[p2]@R2.T))
+            S2.append(R2@S[p2]@R2.T)
             X = (B[p2]@R2.T)
             constr = np.where(X.getnnz(1)>0)[0]
             B2.append(B[p2]@R2.T)
             P.append(B[p1][constr,:]@R1.T)
-        S2_inv = scipy.sparse.block_diag(S2_inv).toarray()
+        S2 = scipy.sparse.block_diag(S2).toarray()
         P = scipy.sparse.vstack(P)
         B2 = scipy.sparse.hstack(B2)
-        MsD+=B2@np.linalg.inv(S2_inv + P@S1_inv@P.T)@B2.T
+        MsD+=B2@(S2 + P@S1@P.T)@B2.T
     return MsD
     
 def EdgePreconditionerOP(IMap, A, B, C):
@@ -516,3 +443,104 @@ def EdgePreconditionerOP(IMap, A, B, C):
         M[i] = X @ solver @ X.T
 
     return operators.SumOperator(M)
+    
+# def EdgePreconditionerFull(IMap, S, B, C):
+#     S_ = [np.zeros(s.shape) for s in S]
+#     B_ = len(B)*[None]
+#     C_ = len(C)*[None]
+#     for p in range(IMap.numpatches):
+#         C_[p]=C[p]@IMap.R_skeleton[p].T
+#         B_[p] = scipy.sparse.hstack([B[p],scipy.sparse.csr_matrix((B[p].shape[0],C_[p].shape[0]))])
+#         for b in range(4):
+#             if (p,b) in IMap.R_interfaces:
+#                 R = IMap.R_interfaces[(p,b)]@IMap.R_skeleton[p].T
+#                 S_[p] += R.T@R@S[p]@R.T@R
+#         #print(S_[p].shape, C_[p].shape)
+#     return np.linalg.inv(np.array([B_[p]@np.linalg.inv(scipy.sparse.block_array([[S_[p],C_[p].T],[C_[p],np.zeros(2*(C_[p].shape[0],))]]).toarray())@B_[p].T for p in range(len(S))]).sum(axis=0))
+    
+# def EdgePreconditioner(IMap, S, B, C):
+#     m = B[0].shape[0]
+#     MsD = np.zeros((m,m))
+#     for (p1,b1) in IMap.L_intfs:
+#         R1 = IMap.R_interfaces[(p1,b1)]@IMap.R_skeleton[p1].T
+#         c = C[p1]@IMap.R_interfaces[(p1,b1)].T
+#         c = c[c.getnnz(1)>0,:].toarray()
+#         if c.shape[0]>0:
+#             S1_inv = np.linalg.inv(np.block([[R1@S[p1]@R1.T,c.T],[c, np.zeros((c.shape[0], c.shape[0]))]]))
+#         else:
+#             S1_inv = np.linalg.inv(R1@S[p1]@R1.T)
+#         S2_inv = []
+#         P = []
+#         B2 = []
+#         for (p2,b2) in IMap.L_intfs[(p1,b1)]:
+#             R2 = IMap.R_interfaces[(p2,b2)]@IMap.R_skeleton[p2].T
+#             S2_inv.append(np.linalg.inv(R2@S[p2]@R2.T))
+#             X = (B[p2]@R2.T)
+#             constr = np.where(X.getnnz(1)>0)[0]
+#             B2.append(B[p2]@R2.T)
+#             P.append(B[p1][constr,:]@R1.T)
+#         S2_inv = scipy.sparse.block_diag(S2_inv).toarray()
+#         P = scipy.sparse.vstack(P)
+#         B2 = scipy.sparse.hstack(B2)
+#         MsD+=B2@np.linalg.inv(S2_inv + P@S1_inv@P.T)@B2.T
+#     return MsD
+    
+# def EdgePreconditionerOP(IMap, A, B, C):
+#     M = len(IMap.L_intfs)*[None]
+
+#     for i,(p1, b1) in enumerate(IMap.L_intfs):
+#         R1 = scipy.sparse.vstack([
+#             IMap.R_interior[p1],
+#             IMap.R_interfaces[(p1, b1)]
+#         ], format='csr')
+#         c = C[p1] @ R1.T
+#         c = c[c.getnnz(axis=1) > 0, :]
+
+#         A_blocks = [scipy.sparse.bmat(
+#             [[R1 @ A[p1] @ R1.T, c.T],
+#              [c, None]], format='csc')]
+#         B_blocks = [scipy.sparse.hstack([
+#             B[p1] @ R1.T,
+#             scipy.sparse.csc_matrix((B[p1].shape[0], c.shape[0]))
+#         ], format='csc')]
+#         P_blocks = []
+
+#         for (p2, b2) in IMap.L_intfs[(p1, b1)]:
+#             R2 = scipy.sparse.vstack([
+#                 IMap.R_interior[p2],
+#                 IMap.R_interfaces[(p2, b2)]
+#             ], format='csr')
+
+#             A_blocks.append(R2 @ A[p2] @ R2.T)
+#             B_blocks.append(B[p2] @ R2.T)
+#             P_blocks.append(B[p2] @ IMap.R_interfaces[(p2, b2)].T)
+
+#         A_ = scipy.sparse.block_diag(A_blocks, format='csc')
+#         B_ = scipy.sparse.hstack(B_blocks, format='csc')
+#         P = scipy.sparse.hstack(P_blocks, format='csc') 
+
+#         B_ = B_.tocsr()
+#         r_idx = B_.getnnz(axis=1) > 0
+#         B_=B_[r_idx,:]
+#         n_c = r_idx.sum()
+
+#         Mat = -scipy.sparse.bmat([
+#             [A_, B_.T],
+#             [B_, None]
+#         ], format='csc')
+
+#         B_coarse=B_.tocsc()
+#         B_coarse = B_coarse[:, (R1.shape[0] + c.shape[0]):]
+#         c_idx = B_coarse.getnnz(axis=0) > 0
+
+#         n_total = Mat.shape[0]
+#         X = LinOp(
+#             scipy.sparse.hstack([
+#                 scipy.sparse.csc_matrix((P.shape[0], n_total - n_c)),
+#                 P @ B_coarse[:, c_idx].T
+#             ])
+#         )
+#         solver = solvers.make_solver(Mat, symm=True, spd=False)
+#         M[i] = X @ solver @ X.T
+
+#     return operators.SumOperator(M)

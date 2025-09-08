@@ -1314,13 +1314,30 @@ class MultiBasis:
             
         for ((p1,bd1,s1),((p2,bd2,s2),flip)) in interfaces.items():
             if ((p2,bd2,s2),(p1,bd1,s1),flip) not in self.intfs:
-                self.intfs.add(((p1,bd1,s1),(p2,bd2,s2),flip))
-
-        self.subspace=False
-        subspace = kwargs.get('subspace', False)
-        if subspace:
-            self.set_subspace(subspace=subspace)
-            
+                if boundary_kv(self.mesh.kvs[p1],bd1) <= boundary_kv(self.mesh.kvs[p2],bd2):
+                    self.intfs.add(((p1,bd1,s1),(p2,bd2,s2),flip))
+                elif boundary_kv(self.mesh.kvs[p1],bd1) > boundary_kv(self.mesh.kvs[p2],bd2):
+                    self.intfs.add(((p2,bd2,s2),(p1,bd1,s1),flip))
+                else:
+                    match bd1:
+                        case 0: side1='bottom'
+                        case 1: side1='top'
+                        case 2: side1='left'
+                        case 3: side1='right'
+                    match bd2:
+                        case 0: side2='bottom'
+                        case 1: side2='top'
+                        case 2: side2='left'
+                        case 3: side2='right'
+                    raise AssertionError(f"Interface coupling not possible between patch {p1} on the {side1} side and patch {p2} on the {side2} side")
+                
+        self.subspace = kwargs.get('subspace', None)
+        if self.subspace is not None:
+            try:
+                self.set_subspace(subspace=self.subspace)
+            except:
+                print('subspace not compatible.')
+                self.subspace=None
     @property
     def nPatches(self):
         """Number of patches in the multipatch structure."""
@@ -1393,30 +1410,6 @@ class MultiBasis:
         #retrieve local dofs for each patch on the boundary
         dofs1 = boundary_dofs(self.mesh.patches[p1][0][0], bdspec1, ravel=True)
         dofs2 = boundary_dofs(self.mesh.patches[p2][0][0], bdspec2, ravel=True, flip=flip)
-                
-        #check for hierarchy of the boundary knot vectors. currently only supports knot vectors with equal degree.
-        if all([kv1<=kv2 for kv1, kv2 in zip(bkv1,bkv2)]):
-            pass
-        elif all([kv2<=kv1 for kv1, kv2 in zip(bkv1,bkv2)]):      
-            self.intfs.remove(((p1,2*bdspec1[0][0]+bdspec1[0][1],s1),(p2,2*bdspec2[0][0]+bdspec2[0][1],s2),flip))
-            self.intfs.add(((p2,2*bdspec2[0][0]+bdspec2[0][1],s2),(p1,2*bdspec1[0][0]+bdspec1[0][1],s1),flip))
-            #switch variables so patch 1 is always coarse
-            p1, p2 = p2, p1
-            bdspec1, bdspec2 = bdspec2, bdspec1
-            bkv1, bkv2 = bkv2, bkv1
-            dofs1, dofs2 = dofs2, dofs1
-        else:
-            match 2*bdspec1[0]+bspec1[1]:
-                case 0: side1='bottom'
-                case 1: side1='top'
-                case 2: side1='left'
-                case 3: side1='right'
-            match 2*bdspec2[0]+bdspec2[1]:
-                case 0: side2='bottom'
-                case 1: side2='top'
-                case 2: side2='left'
-                case 3: side2='right'
-            raise AssertionError(f"Interface coupling not possible between patch {p1} on the {side1} side and patch {p2} on the {side2} side")
             
         #Prolongation operator  
         P = -scipy.sparse.coo_matrix(bspline.prolongation_tp(bkv1,bkv2))   #TODO: make paramater to generate prolongation matrix as coo_matrix directly?

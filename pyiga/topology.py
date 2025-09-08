@@ -607,7 +607,7 @@ class MultiPatch:
             if patches[p]==-1:
                 new_kvs = tuple([kv.h_refine(mult=mult) for kv in kvs])
                 self.patches[p]=((new_kvs, geo), (b, b_par))
-                new_p=(p,)
+                new_p=(p,)          
             elif patches[p]=='q':
                 new_kvs = tuple([kv.b_refine(q=0.75) for kv in kvs])
                 self.patches[p]=((new_kvs, geo), (b, b_par))
@@ -615,9 +615,16 @@ class MultiPatch:
             else:    
                 t=time.time()
                 new_p = self.split_patch(p, axis=patches[p], mult=mult, ref=ref)
-                #print(time.time()-t)
-            new_patches[p] = new_p
-            #new_kvs[p] = new_kvs_  
+            for b in range(4):
+                    if (p,b) in self.L_intfs:
+                        if len(self.L_intfs[(p,b)])==1:
+                            p2,b2 = self.L_intfs[(p,b)][0]
+                            kv1 = assemble.boundary_kv(self.kvs[p], b)
+                            kv2 = assemble.boundary_kv(self.kvs[p2], b2)
+                            if kv2 < kv1:
+                                del self.L_intfs[(p,b)]
+                                self.L_intfs[(p2,b2)]=[(p,b)]
+            new_patches[p] = new_p 
         return new_patches
 
     def boundaries(self, p):

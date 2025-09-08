@@ -293,6 +293,7 @@ class ScaledDirichletPreconditioner():
                 self.D[p2] += (a1)/(a1+a2)*R2.T@scipy.sparse.identity(R2.shape[0])@R2
         
     def setupSelectionScaling(self):
+        assert isinstance(self.B_full, scipy.sparse.csr_matrix)
         d = ieti_cy.pyx_selection_scaling(self.B_full.indptr, self.B_full.indices, self.B_full.data, *self.B_full.shape)
         self.D = [scipy.sparse.diags(d[self.BN_ofs[p]:self.BN_ofs[p+1]], format='csr') for p in range(self.K)] 
 
@@ -333,18 +334,18 @@ def EdgePreconditionerFull(IMap, S, B, C):
 def EdgePreconditioner(IMap, S, B, C):
     m = B[0].shape[0]
     MsD = np.zeros((m,m))
-    for (p1,b1) in IMap.L_intfs:
+    for (p1,b1) in IMap.mesh.L_intfs:
         R1 = IMap.R_interfaces[(p1,b1)]@IMap.R_skeleton[p1].T
         c = C[p1]@IMap.R_interfaces[(p1,b1)].T
         c = c[c.getnnz(1)>0,:].toarray()
         if c.shape[0]>0:
-            S1_inv = np.linalg.inv(np.block([[R1@S[p1]@R1.T,c.T],[c, np.zeros((c.shape[0], c.shape[0]))]]))
+            S1_inv = np.linalg.inv(np.block([[R1@S[p1]@R1.T,c.T],[c, np.zeros((c.shape[0], c.shape[0]))]]))[:c.shape[1],:c.shape[1]]
         else:
             S1_inv = np.linalg.inv(R1@S[p1]@R1.T)
         S2_inv = []
         P = []
         B2 = []
-        for (p2,b2) in IMap.L_intfs[(p1,b1)]:
+        for (p2,b2) in IMap.mesh.L_intfs[(p1,b1)]:
             R2 = IMap.R_interfaces[(p2,b2)]@IMap.R_skeleton[p2].T
             S2_inv.append(np.linalg.inv(R2@S[p2]@R2.T))
             X = (B[p2]@R2.T)
@@ -354,6 +355,7 @@ def EdgePreconditioner(IMap, S, B, C):
         S2_inv = scipy.sparse.block_diag(S2_inv).toarray()
         P = scipy.sparse.vstack(P)
         B2 = scipy.sparse.hstack(B2)
+        
         MsD+=B2@np.linalg.inv(S2_inv + P@S1_inv@P.T)@B2.T
     return MsD
 

@@ -433,31 +433,40 @@ cpdef tuple pyx_unique_knots(double[::1] knots, int size, double atol=1e-14, dou
 @cython.wraparound(False)
 cpdef bint pyx_knots_leq(double[:] kv1, int n1, int p1, double a1, double b1,
                          double[:] kv2, int n2, int p2, double a2, double b2):
-    cdef int i1=0, i2=0
-    cdef int m1, m2, delta_p=p2-p1
-    cdef double tol=1e-12
-    if delta_p<0: return 0
-    if a1 > a2 + tol or b2 > b1 + tol: return 0
-    while kv1[i1] < a2 - tol: 
+    cdef int i1 = 0, i2 = 0
+    cdef int m1, m2, delta_p = p2 - p1
+    cdef double tol = 1e-12
+    cdef double x
+
+    if delta_p < 0:
+        return 0
+
+    # support containment: [a2,b2] ⊆ [a1,b1]
+    if a1 > a2 + tol or b2 > b1 + tol:
+        return 0
+
+    # skip knots of kv1 before a2
+    while i1 < n1 and kv1[i1] < a2 - tol:
         i1 += 1
 
-    while i1 < n1 and i2 < n2:  
-        while i2 < n2 and kv2[i2] < kv1[i1] - tol:
-            i2 += 1
-        if i2 == n2:
-            break
+    # main walk
+    while i1 < n1 and kv1[i1] <= b2 + tol:
+        x = kv1[i1]
 
-        while i1 < n1 and kv1[i1] < kv2[i2] - tol:
-            i1 += 1
-        if i1 == n1:
-            break
-
+        # multiplicity of x in kv1
         m1 = 1
-        while (i1 + m1) < n1 and fabs(kv1[i1 + m1] - kv1[i1]) < tol:
+        while i1 + m1 < n1 and fabs(kv1[i1 + m1] - x) < tol:
             m1 += 1
 
+        # find x in kv2
+        while i2 < n2 and kv2[i2] < x - tol:
+            i2 += 1
+        if i2 == n2 or fabs(kv2[i2] - x) > tol:
+            return 0
+
+        # multiplicity of x in kv2
         m2 = 1
-        while (i2 + m2) < n2 and fabs(kv2[i2 + m2] - kv2[i2]) < tol:
+        while i2 + m2 < n2 and fabs(kv2[i2 + m2] - x) < tol:
             m2 += 1
 
         if m2 < m1 + delta_p:
@@ -465,6 +474,7 @@ cpdef bint pyx_knots_leq(double[:] kv1, int n1, int p1, double a1, double b1,
 
         i1 += m1
         i2 += m2
+
     return 1
 
 @cython.cdivision(True)

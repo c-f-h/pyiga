@@ -173,7 +173,7 @@ cpdef void pyx_parametersort(int[:] indptr, int[:] indices, double[:] data, int 
                 pos = ind
             if fabs(1.0+data[ind])<1e-12:
                 neg = ind
-        if (pos > 0) and (neg > 0):
+        if (pos >= 0) and (neg >= 0):
             if (a[indices[pos]] > a[indices[neg]]):
                 data[pos]*=-1
                 data[neg]*=-1
@@ -249,7 +249,7 @@ cpdef np.ndarray[np.int32_t, ndim=1] pyx_selection_scaling(int[:] indptr, int[:]
                 valid[j]=0
 
     for j in range(n):
-        if d[j] > 1 or not valid[j]:
+        if d[j] != 1 or not valid[j]:
             d[j]=0
     free(valid)
     return d_

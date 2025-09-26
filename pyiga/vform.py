@@ -42,6 +42,9 @@ def _integer_power(x, y):
     else:
         return _integer_power(x, y-1) * x
 
+# def _power(x,y):
+#     return x**y
+
 def _jac_to_unscaled_normal(jac):
     if jac.shape == (2, 1):     # line integral
         x = jac[:, 0]
@@ -772,9 +775,10 @@ class Expr:
             if y != z.value:
                 raise TypeError('only integer powers implemented')
             z = y
-        if not isinstance(z, numbers.Integral):
+        if not isinstance(z, numbers.Integral) and not z.is_scalar():
+            #return as_expr(self**z)
             raise TypeError('only integer powers implemented')
-        return as_expr(_integer_power(self, z))
+        return as_expr(_integer_power(self,z))
 
     def __bool__(self):  return True
     __nonzero__ = __bool__  # Python 2 compatibility
@@ -1224,6 +1228,7 @@ _oper_to_func = {
         '-': operator.sub,
         '*': operator.mul,
         '/': operator.truediv,
+        '**': operator.pow,
 }
 
 class TensorOperExpr(Expr):

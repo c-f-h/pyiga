@@ -42,9 +42,6 @@ def _integer_power(x, y):
     else:
         return _integer_power(x, y-1) * x
 
-# def _power(x,y):
-#     return x**y
-
 def _jac_to_unscaled_normal(jac):
     if jac.shape == (2, 1):     # line integral
         x = jac[:, 0]
@@ -775,9 +772,9 @@ class Expr:
             if y != z.value:
                 raise TypeError('only integer powers implemented')
             z = y
-        if not isinstance(z, numbers.Integral) and not z.is_scalar():
-            #return as_expr(self**z)
-            raise TypeError('only integer powers implemented')
+        if not isinstance(z, numbers.Integral):
+            return OperExpr('**', self, z)
+            #raise TypeError('only integer powers implemented')
         return as_expr(_integer_power(self,z))
 
     def __bool__(self):  return True

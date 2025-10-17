@@ -59,13 +59,15 @@ class IetiMapper(assemble.MultiBasis):
                     self.R_interfaces[(p,b)] = Id[mask_intf,:][:,self.free[p]]
             self.R_skeleton[p] = Id[mask_skeleton,:][:,self.free[p]]
             
-    def assemble(self, a, f):
+    def assemble(self, a, f, M):
+        if M is None:
+            M = {k:(0.0,0.0) for k in self.mesh.domains}
         if self.elim:
             A = [self.Basis.T @ assemble.assemble('a * inner(grad(u), grad(v)) * dx', kvs, a=a[self.mesh.patch_domains[k]], bfuns=[('u',1), ('v',1)], geo=geo) @ self.Basis for k, ((kvs, geo),_) in enumerate(self.mesh.patches)]
             RHS = [self.Basis.T @ assemble.assemble('f * v * dx', kvs, bfuns=[('v',1)], geo=geo, f=f[self.mesh.patch_domains[k]]).ravel() for k, ((kvs, geo),_) in enumerate(self.mesh.patches)]
         else:
             A = [assemble.assemble('a * inner(grad(u), grad(v)) * dx', kvs, a=a[self.mesh.patch_domains[k]], bfuns=[('u',1), ('v',1)], geo=geo) for k, ((kvs, geo),_) in enumerate(self.mesh.patches)]
-            RHS = [assemble.assemble('f * v * dx', kvs, bfuns=[('v',1)], geo=geo, f=f[self.mesh.patch_domains[k]]).ravel() for k, ((kvs, geo),_) in enumerate(self.mesh.patches)]
+            RHS = [assemble.assemble('(f * v - inner(Ma_T,grad(v))) * dx', kvs, bfuns=[('v',1)], geo=geo, f=f[self.mesh.patch_domains[k]], Ma_T = M[self.mesh.patch_domains[k]]).ravel() for k, ((kvs, geo),_) in enumerate(self.mesh.patches)]
         
         self.BCRestr = {p:assemble.RestrictedLinearSystem(A[p], RHS[p], (self.dir_idx[p],self.dir_vals[p])) for p in self.dir_idx}
         RHS = [rhs if p not in self.dir_idx else self.BCRestr[p].b for p, rhs in enumerate(RHS)]
@@ -284,9 +286,9 @@ class ScaledDirichletPreconditioner():
         
     def setupCoefficientScaling(self, a):  ###TODO: cythonize
         self.D = [scipy.sparse.csr_matrix((self.B[p].shape[1],self.B[p].shape[1])) for p in range(self.K)]
-        for (p1,b1) in self.IMap.L_intfs:
+        for (p1,b1) in self.IMap.mesh.L_intfs:
             R1 = self.IMap.R_interfaces[(p1,b1)]@self.IMap.R_skeleton[p1].T
-            for (p2,b2) in self.IMap.L_intfs[(p1,b1)]:
+            for (p2,b2) in self.IMap.mesh.L_intfs[(p1,b1)]:
                 R2 = self.IMap.R_interfaces[(p2,b2)]@self.IMap.R_skeleton[p2].T
                 a1, a2 = a[self.IMap.mesh.patch_domains[p1]], a[self.IMap.mesh.patch_domains[p2]]
                 self.D[p1] += (a2)/(a1+a2)*R1.T@scipy.sparse.identity(R1.shape[0])@R1

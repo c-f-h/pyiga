@@ -68,9 +68,9 @@ def mp_resPois(MP, uh, f=0., nu=1., M=(0.,0.), divMaT =0., neu_data={}, **kwargs
             ((kvs, geo), _) = MP.mesh.patches[p]
             bdspec = bspline._parse_bdspec(b,2)
             bkv = assemble.boundary_kv(kvs, bdspec)
+            geo_b = geo.boundary(bdspec)
             h = bkv[0].meshsize_max() * np.linalg.norm([b - a for a, b in geo_b.bounding_box(full=True)])
             kv0 = tuple([bspline.KnotVector(kv.mesh, 0) for kv in bkv])
-            geo_b = geo.boundary(bdspec)
             uh_grad = geometry.BSplineFunc(kvs, uh_per_patch[p]).transformed_jacobian(geo).boundary(bdspec)
             J = np.sum(assemble.assemble('((inner(nu * uh_grad + Ma, n) - g)**2 * v ) * ds', kv0 ,geo=geo_b,Ma=M[MP.mesh.patch_domains[p]],
                                          nu=nu[MP.mesh.patch_domains[p]],g=g, uh_grad=uh_grad, **kwargs))

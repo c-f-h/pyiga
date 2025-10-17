@@ -10,6 +10,7 @@ from scipy.sparse import coo_matrix, csr_matrix, csc_matrix
 
 cimport numpy as np
 cimport libc.math as math
+from libc.math cimport INFINITY
 from libcpp.map cimport map
 from libc.stdlib cimport malloc, free
 from cython.operator cimport dereference as deref, postincrement as inc
@@ -18,10 +19,93 @@ from cython.operator cimport dereference as deref, postincrement as inc
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
+cpdef object pyx_compute_basis_full_rank(int m, int n, object Constr, int maxiter): 
+    cdef bint *pivot = <bint *>malloc(n * sizeof(bint))
+    cdef int *pivot_row = <int *>malloc(m * sizeof(int))
+    memset(pivot, 0, n * sizeof(bint))
+    cdef int i,j=0, k=0
+        
+    pyx_find_pivot_full_rank(Constr.indptr, Constr.indices, Constr.data, pivot, pivot_row)
+    Basis = pyx_update_basis(Constr.indptr, Constr.indices, Constr.data, pivot, pivot_row, n)
+
+    cdef int[:] free = np.empty(n-m, dtype=np.int32)
+    for i in range(n):
+        if not pivot[i]:
+            free[j]=i
+            j+=1
+    free(pivot)
+    free(pivot_row)
+    return Basis[:,free.base]
+
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef void pyx_find_pivot_full_rank(int[:] Cindptr, int[:] Cindices, double[:] Cdata, int m, bint* pivot, int* pivot_row):
+    cdef int elim_dof, ind, c
+    cdef double v, elim_val
+
+    for i in range(m):
+        elim_dof = -1
+        elim_val = -INFINITY
+        for ind in range(Cindptr[i], Cindptr[i+1]):
+            c = Cindices[ind]
+            v = Cdata[ind]
+            if v > elim_val and not pivot[c]:
+                elim_dof = c
+                elim_val = v
+        pivot[elim_dof] = 1
+        pivot_row[i] = elim_dof
+    return 
+
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef object pyx_update_basis_full_rank(int[:] Cindptr, int[:] Cindices, double[:] Cdata, bint* pivot, int* pivot_row, int n):   
+    cdef int i=0, nnz=0, r, c, ind, k=0
+    cdef double v, v0 
+    
+    for i in range(m):
+        nnz+=Cindptr[i+1]-Cindptr[i]
+
+    cdef int num_elem = nnz - 2*m + n
+        
+    cdef int[:] ii = np.empty(num_elem, dtype=np.int32)        
+    cdef int[:] jj = np.empty(num_elem, dtype=np.int32)        
+    cdef double[:] data = np.empty(num_elem, dtype=np.float64) 
+    
+    for i in range(n): 
+        if not pivot[i]:
+            ii[k] = i
+            jj[k] = i
+            data[k] = 1.0
+            k+=1
+        else:
+            r = pivot_row[i]
+            for ind in range(Cindptr[r], Cindptr[r+1]):
+                if i == Cindices[ind]:
+                    v0 = Cdata[ind]
+                    break;
+            for ind in range(Cindptr[r], Cindptr[r+1]):
+                c = Cindices[ind]
+                v = Cdata[ind]
+                if i != c:
+                    ii[k] = i
+                    jj[k] = c
+                    data[k] = - v / v0
+                    k+=1
+                    
+    cdef object Basis = scipy.sparse.coo_matrix((data.base,(ii.base,jj.base)),(n,n)).tocsc()
+    return Basis
+
+##############################################################################################################################################
+
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cpdef object pyx_compute_basis(int m, int n, object Constr, int maxiter): 
     cdef int *active = <int *>malloc(m * sizeof(int))
     cdef int i, j=0, it=1, num_active=m
-    cdef map[int,int] alldDofs, dDofs
+    cdef map[int,int] dDofs, pivot
     
     cdef object Basis=scipy.sparse.identity(n, format="csr")
     
@@ -32,17 +116,17 @@ cpdef object pyx_compute_basis(int m, int n, object Constr, int maxiter):
         if it>maxiter:
             print("maxiter reached.")
             break
-        dDofs = pyx_find_ddofs(Constr.indptr, Constr.indices, Constr.data, active, num_active)
-        assert not dDofs.empty(), 'Unable to derive further dofs.'
-        Basis = pyx_update_basis(Constr.indptr, Constr.indices, Constr.data, dDofs, alldDofs, Basis, n)
+        pivot = pyx_find_pivot(Constr.indptr, Constr.indices, Constr.data, active, num_active)
+        assert not pivot.empty(), 'Unable to derive further dofs.'
+        Basis = pyx_update_basis(Constr.indptr, Constr.indices, Constr.data, pivot, dDofs, Basis, n)
         Constr = Constr @ Basis   
         num_active = pyx_compute_active_constr(m, n, Constr.indptr, Constr.data, active)
         it+=1
         
     free(active)
-    cdef int[:] ndDofs = np.empty(n-alldDofs.size(), dtype=np.int32)
+    cdef int[:] ndDofs = np.empty(n-dDofs.size(), dtype=np.int32)
     for i in range(n):
-        if alldDofs.count(i)==0:
+        if dDofs.count(i)==0:
             ndDofs[j]=i
             j+=1
     #print(Basis)
@@ -51,14 +135,16 @@ cpdef object pyx_compute_basis(int m, int n, object Constr, int maxiter):
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef map[int,int] pyx_find_ddofs(int[:] Cindptr, int[:] Cindices, double[:] Cdata, int* active, int num_active):
-    cdef map[int,int] ddofs
-    cdef int r, elim_dof, ind
+cdef map[int,int] pyx_find_pivot(int[:] Cindptr, int[:] Cindices, double[:] Cdata, int* active, int num_active):
+    cdef map[int,int] pivot
+    cdef int r, elim_dof, ind, c
+    cdef double v, elim_val
     cdef bint feasible
 
     for i in range(num_active):
         r=active[i]
         elim_dof = -1
+        elim_val = -1.
         feasible = True
         for ind in range(Cindptr[r], Cindptr[r+1]):
             c = Cindices[ind]
@@ -68,17 +154,18 @@ cdef map[int,int] pyx_find_ddofs(int[:] Cindptr, int[:] Cindices, double[:] Cdat
                     feasible = False
                 else:
                     elim_dof = c
+                    #elim_val = v
         if elim_dof == -1: # Empty row (TODO: check)
             feasible = False
         for ind in range(Cindptr[r], Cindptr[r+1]):
             c = Cindices[ind]
             v = Cdata[ind]
-            if abs(v) > 1e-14 and ddofs.count(c)>0:
+            if abs(v) > 1e-14 and pivot.count(c)>0:
                 #print("{} cannot be eliminated (constraint #{}) because it refers to eliminated dof {}.".format(dofToBeEliminated,r,c))
                 feasible = False
         if feasible:
-            ddofs[elim_dof] = r
-    return ddofs
+            pivot[elim_dof] = r
+    return pivot
         
 @cython.cdivision(True)
 @cython.boundscheck(False)
@@ -107,17 +194,17 @@ cdef int pyx_compute_active_constr(int m, int n, int[:] Cindptr, double[:] Cdata
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef object pyx_update_basis(int[:] Cindptr, int[:] Cindices, double[:] Cdata, map[int,int]& Ddofs, map[int,int]& alldDofs, object Basis, int n):   
+cdef object pyx_update_basis(int[:] Cindptr, int[:] Cindices, double[:] Cdata, map[int,int]& pivot, map[int,int]& dDofs, object Basis, int n):   
     #assert isinstance(Constr, csr_matrix), "Constraint matrix is not CSR."
     #assert isinstance(Basis, csc_matrix), "Basis matrix is not CSC."
-    cdef int i=0, nnz=0, r, c, ind, n_dd = Ddofs.size(), k=0
+    cdef int i=0, nnz=0, r, c, ind, n_dd = pivot.size(), k=0
     cdef double v, v0
-    cdef map[int, int].iterator it = Ddofs.begin()
+    cdef map[int, int].iterator it = pivot.begin()
     cdef int *ddofs = <int *>malloc(n_dd * sizeof(int)) 
     
-    while it!=Ddofs.end():
+    while it!=pivot.end():
         ddofs[i]= deref(it).first
-        alldDofs[deref(it).first]=deref(it).second
+        dDofs[deref(it).first]=deref(it).second
         i+=1
         nnz+=Cindptr[deref(it).second+1]-Cindptr[deref(it).second]
         inc(it)
@@ -129,13 +216,13 @@ cdef object pyx_update_basis(int[:] Cindptr, int[:] Cindices, double[:] Cdata, m
     cdef double[:] data = np.empty(num_elem, dtype=np.float64) 
     
     for i in range(n): #lBasis is assembled here as a COO matrix. Is it possible also with CSC?
-        if Ddofs.count(i)==0:
+        if pivot.count(i)==0:
             ii[k] = i
             jj[k] = i
             data[k] = 1.0
             k+=1
         else:
-            r  = Ddofs[i]
+            r  = pivot[i]
             for ind in range(Cindptr[r], Cindptr[r+1]):
                 if i == Cindices[ind]:
                     v0 = Cdata[ind]

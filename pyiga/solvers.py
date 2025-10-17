@@ -430,6 +430,7 @@ def pcg(A, f, x0 = None, P = 1, rtol = 1e-5, atol = 0.0, maxiter = 100, output =
         if err < max(rtol * err0, atol):
             break
         beta = rho/rho_old
+        print(beta)
         d = h + beta*d
         gamma[it] = -np.sqrt(beta)/alpha
         delta[it+1] = beta/alpha

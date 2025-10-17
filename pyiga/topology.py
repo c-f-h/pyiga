@@ -242,29 +242,41 @@ class MultiPatch:
         return {p:(p,) for p in patches}
             
     def set_boundary_id(self, boundary_id):
-        B = {key:set() for key in boundary_id}
-        for key in boundary_id:
-            for elem in boundary_id[key]:
-                match elem[1]:
-                    case 'bottom': B[key].add((elem[0],0))
-                    case 'top': B[key].add((elem[0],1))
-                    case 'left': B[key].add((elem[0],2))
-                    case 'right': B[key].add((elem[0],3))
-                    case _: continue
+        marked = set().union(*boundary_id.values())
+    
+        # remove them from existing boundaries
+        for key in list(self.outer_boundaries.keys()):
+            self.outer_boundaries[key] -= marked
+            if not self.outer_boundaries[key]:
+                del self.outer_boundaries[key]
+    
+        # now add them under the new keys
+        for key, pts in boundary_id.items():
+            self.outer_boundaries.setdefault(key, set()).update(pts)
+            
+        # B = {key:set() for key in boundary_id}
+        # for key in boundary_id:
+        #     for elem in boundary_id[key]:
+        #         match elem[1]:
+        #             case 'bottom': B[key].add((elem[0],0))
+        #             case 'top': B[key].add((elem[0],1))
+        #             case 'left': B[key].add((elem[0],2))
+        #             case 'right': B[key].add((elem[0],3))
+        #             case _: continue
                         
-        marked = set().union(*B.values())
-        empty_keys =[]
-        for key in self.outer_boundaries:
-            self.outer_boundaries[key]=self.outer_boundaries[key]-marked
-            if len(self.outer_boundaries[key])==0: empty_keys.append(key)
-        for key in empty_keys:
-            del self.outer_boundaries[key]
-        for key in B:
-            if key in self.outer_boundaries:
-                self.outer_boundaries[key]=self.outer_boundaries[key].union(B[key])
-            else:
-                self.outer_boundaries[key]=B[key]
-        #self.outer_boundaries.update(boundary_id)
+        # marked = set().union(*B.values())
+        # empty_keys =[]
+        # for key in self.outer_boundaries:
+        #     self.outer_boundaries[key]=self.outer_boundaries[key]-marked
+        #     if len(self.outer_boundaries[key])==0: empty_keys.append(key)
+        # for key in empty_keys:
+        #     del self.outer_boundaries[key]
+        # for key in B:
+        #     if key in self.outer_boundaries:
+        #         self.outer_boundaries[key]=self.outer_boundaries[key].union(B[key])
+        #     else:
+        #         self.outer_boundaries[key]=B[key]
+        # #self.outer_boundaries.update(boundary_id)
         
     def set_domain_id(self, domain_id):
         marked = set().union(*domain_id.values())
@@ -880,19 +892,18 @@ class MultiPatch3D:
         return {p:(p,) for p in patches}
               
     def set_boundary_id(self, boundary_id):
+        # collect all new points
         marked = set().union(*boundary_id.values())
-        empty_keys =[]
-        for key in self.outer_boundaries:
-            self.outer_boundaries[key]=self.outer_boundaries[key]-marked
-            if len(self.outer_boundaries[key])==0: empty_keys.append(key)
-        for key in empty_keys:
-            del self.outer_boundaries[key]
-        for key in boundary_id:
-            if key in self.outer_boundaries:
-                self.outer_boundaries[key]=self.outer_boundaries[key].union(boundary_id[key])
-            else:
-                self.outer_boundaries[key]=boundary_id[key]
-        #self.outer_boundaries.update(boundary_id)
+    
+        # remove them from existing boundaries
+        for key in list(self.outer_boundaries.keys()):
+            self.outer_boundaries[key] -= marked
+            if not self.outer_boundaries[key]:
+                del self.outer_boundaries[key]
+    
+        # now add them under the new keys
+        for key, pts in boundary_id.items():
+            self.outer_boundaries.setdefault(key, set()).update(pts)
         
     def set_domain_id(self, domain_id):
         marked = set().union(*domain_id.values())

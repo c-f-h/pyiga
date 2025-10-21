@@ -242,7 +242,16 @@ class MultiPatch:
         return {p:(p,) for p in patches}
             
     def set_boundary_id(self, boundary_id):
-        marked = set().union(*boundary_id.values())
+        B = {key:set() for key in boundary_id}
+        for key in boundary_id:
+            for elem in boundary_id[key]:
+                match elem[1]:
+                    case 'bottom': B[key].add((elem[0],0))
+                    case 'top': B[key].add((elem[0],1))
+                    case 'left': B[key].add((elem[0],2))
+                    case 'right': B[key].add((elem[0],3))
+                    case _: continue
+        marked = set().union(*B.values())
     
         # remove them from existing boundaries
         for key in list(self.outer_boundaries.keys()):
@@ -251,7 +260,7 @@ class MultiPatch:
                 del self.outer_boundaries[key]
     
         # now add them under the new keys
-        for key, pts in boundary_id.items():
+        for key, pts in B.items():
             self.outer_boundaries.setdefault(key, set()).update(pts)
             
         # B = {key:set() for key in boundary_id}

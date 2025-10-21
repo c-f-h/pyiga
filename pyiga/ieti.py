@@ -113,7 +113,8 @@ class IetiMapper(assemble.MultiBasis):
         c_B = B@R.T
         c_B.eliminate_zeros()
 
-        nodal_coeff = R.T@algebra_cy.pyx_compute_basis(c_B.shape[0], c_B.shape[1], c_B, maxiter=10)
+        Basis , _ = algebra_cy.pyx_compute_basis(c_B.shape[0], c_B.shape[1], c_B, maxiter=100, switch=0)
+        nodal_coeff = R.T@Basis
         #print(nodal_coeff)
 
         nodal_coeff += ieti_cy.identify_T_coefficients_from_corner_basis(nodal_coeff.indptr, nodal_coeff.indices, nodal_coeff.data, *nodal_coeff.shape,

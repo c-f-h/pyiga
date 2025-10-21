@@ -403,6 +403,7 @@ def pcg(A, f, x0 = None, P = 1, rtol = 1e-5, atol = 0.0, maxiter = 100, output =
     r = f_ - Afun(x)
     h = Pfun(r)
     rho = h@r
+    assert rho>0, "NaN encountered."
     err = np.sqrt(rho)
     err0 = np.sqrt(Pfun(f_)@f_)
     d = h

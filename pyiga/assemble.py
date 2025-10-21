@@ -1381,7 +1381,7 @@ class MultiBasis:
         t=time.time()
         B = (self.B@self.R_related.T).tocsr()
         if subspace=='C0':
-            self.Basis = algebra_cy.pyx_compute_basis(B.shape[0], B.shape[1], B, maxiter=10)
+            self.Basis, _ = algebra_cy.pyx_compute_basis(B.shape[0], B.shape[1], B, maxiter=100, switch=0)
             self.Basis = scipy.sparse.hstack([self.R_free.T, self.R_related.T@self.Basis], format='csc')
             self.P2G = assemble_cy.pyx_right_inverse_C0_Basis(self.Basis.indptr, self.Basis.indices, self.Basis.data, *self.Basis.shape).tocsc()
         print("Basis setup took {:3} seconds".format(time.time()-t))
@@ -1863,7 +1863,7 @@ class MultiBasis:
 
 #         t=time.time()
 #         B = (self.B@self.R_interface.T).tocsr()
-#         self.Basis = algebra_cy.pyx_compute_basis(B.shape[0], B.shape[1], B, maxiter=10)
+#         self.Basis = algebra_cy.pyx_compute_basis(B.shape[0], B.shape[1], B, maxiter=10, switch=0)
 #         self.Basis = scipy.sparse.hstack([self.R_free.T, self.R_interface.T@self.Basis], format='csc')
 #         print("Basis setup took {:3} seconds".format(time.time()-t))
 #         self.coupled = True

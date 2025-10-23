@@ -125,7 +125,7 @@ class IetiMapper(assemble.MultiBasis):
         return [self.BCRestr[p].complete(u) if p in self.BCRestr else u for p,u in enumerate(U)]
 
 class PrimalSystem():
-    def __init__(self, Prim):
+    def __init__(self, Prim, eliminate_constraints=False):
         self.Prim = Prim
         self.nPrim = self.Prim.shape[1]
 
@@ -133,10 +133,9 @@ class PrimalSystem():
         self.A_prim = scipy.sparse.csr_matrix(2*(self.nPrim,))
         self.RHS_prim = np.zeros(self.nPrim)
         self.R = []
-        self.eliminate_pointwise = False
+        self.eliminate_constraints = eliminate_constraints ###not implemented yet
 
-    def incorporate_PrimalConstraints(self, A, B, RHS, IMap, eliminate_pointwise=False):
-        self.eliminate_pointwise = eliminate_pointwise
+    def incorporate_PrimalConstraints(self, A, B, RHS, IMap):
         self.nLagrangeMultipliers = B[0].shape[0]
         
         if self.nPrim == 0:
@@ -152,8 +151,12 @@ class PrimalSystem():
             c = c[jj,:]
             self.C.append(c)
             self.R.append(scipy.sparse.coo_matrix((np.ones(c.shape[0]),(np.arange(c.shape[0]),jj)),(c.shape[0],self.nPrim)))
+        assert np.all(np.array([np.linalg.matrix_rank(c.toarray())==c.shape[0] for c in self.C]))
             
         self.nPrimConstr = [c.shape[0] for c in self.C]
+
+        #if self.eliminate_constraints:
+            #return A, B, RHS, self.C
 
         mod_A = [scipy.sparse.bmat([[A[p],self.C[p].T],[self.C[p], None]]) for p in range(K)]
         mod_RHS = [np.concatenate([RHS[p],np.zeros(self.nPrimConstr[p])]) for p in range(K)]
@@ -161,19 +164,18 @@ class PrimalSystem():
         mod_B = [scipy.sparse.hstack([B[p],scipy.sparse.csr_matrix((self.nLagrangeMultipliers, self.nPrimConstr[p]))]) for p in range(K)]
         return mod_A, mod_B, mod_RHS, self.C
 
-    def compute_PrimalBasis(self, mod_A, mod_B, mod_RHS):
+    def compute_PrimalBasis(self, mod_A, mod_B, mod_RHS, C):
         self.Psi = []
         Delta = []
     
         A_prim = []
         B_prim = []
     
-        loc_solvers = [
-            solvers.make_solver(A, spd=bool(self.nPrimConstr[i] == 0), symm=True)
-            for i, A in enumerate(mod_A)
-        ]
-    
-        for p, solver in enumerate(loc_solvers):
+        for p in range(self.K):    
+            
+            loc_solver[p] = solvers.make_solver(mod_A[p],spd=False, symm=True)
+
+                
             n_constr = self.nPrimConstr[p]
             n_total = solver.shape[0]
             n_free = n_total - n_constr
@@ -190,12 +192,14 @@ class PrimalSystem():
             self.Psi.append(csr_matrix(psi @ self.R[p]))
             Delta.append(csr_matrix(delta))
 
-            A_prim.append(self.R[p].T @ Delta[-1] @ self.R[p])
+            #A_prim.append(self.R[p].T @ Delta[-1] @ self.R[p])
+            A_prim.append(self.Psi[-1].T@(csr_matrix(mod_A[p])[:,:-self.nPrimConstr[p]][:-self.nPrimConstr[p],:])@self.Psi[-1])
             B_prim.append(mod_B[p][:, :n_free] @ self.Psi[-1])
             self.RHS_prim += self.Psi[-1].T@mod_RHS[p][:-self.nPrimConstr[p]]
     
         # One-time sparse sum
-        self.A_prim = -1*sum(A_prim)
+        #self.A_prim = -1*sum(A_prim)
+        self.A_prim = sum(A_prim)
         self.B_prim = sum(B_prim)
         #self.RHS_prim += sum(RHS_prim_contribs)
     
@@ -240,7 +244,8 @@ class IetiSystem():
         return F
 
     def RHSforSchurComplement(self):
-        return np.sum([self.B[p]@(self.loc_solver[p]@self.RHS[p]) for p in range(self.K)], axis=0)
+        #print("any NaN in RHS?", np.any([np.isnan(self.RHS[p]).any() for p in range(self.K)]))
+        return np.sum([self.B[p]@(self.loc_solver[p](self.RHS[p])) for p in range(self.K)], axis=0)
 
     def constructSolutionFromLagrangeMultipliers(self, lam):
         return [(self.loc_solver[p]@(self.RHS[p]-self.B[p].T@lam))[:self.N[p]] for p in range(self.K)]

@@ -424,7 +424,45 @@ def slice_indices(axis, sides, shape, ravel=False, swap=None, flip=None):
         multi_indices = np.ravel_multi_index(multi_indices.T, shape)
     return multi_indices
 
-def boundary_dofs(kvs, bdspec=None, m=None, ravel=False, swap=None, flip=None):
+def _boundary_dofs(kvs, bdspec=None, m=None, ravel=False,
+                  swap=None, flip=None, layer=0):
+    """
+    Indices of the dofs which lie on (or within `layer` elements of)
+    the given boundary of the tensor product basis `kvs`.
+    """
+    kvs = tuple(kvs)
+    n = len(kvs)
+    if m is None:
+        m = n - 1
+
+    N = tuple(kv.numdofs for kv in kvs)
+
+    # Single boundary specification
+    if bdspec is not None:
+        b = bspline._parse_bdspec(bdspec, len(kvs))
+        axis, sides = b[:, 0], -b[:, 1]
+
+        # Expand sides into ranges with 'layer' thickness
+        expanded = []
+        for ax, side in zip(axis, sides):
+            if side == -1:
+                sl = slice(0, min(layer + 1, N[ax]))
+            else:
+                start = max(N[ax] - (layer + 1), 0)
+                sl = slice(start, N[ax])
+            expanded.append((ax, sl))
+
+        return slice_indices(expanded, N, ravel=ravel, swap=swap, flip=flip)
+
+    # If no specific boundary: collect all faces
+    manifolds = topology.face_indices(n, m)
+    if ravel:
+        inds = [boundary_dofs(kvs, manifolds[i, :, :], ravel=True, swap=swap, flip=flip, layer=layer) for i in range(manifolds.shape[0])]
+        return np.unique(np.concatenate(inds))
+    else:
+        return [boundary_dofs(kvs, M, ravel=True, swap=swap, flip=flip, layer=layer) for M in manifolds]
+
+def boundary_dofs(kvs, bdspec=None, m=None, ravel=False, swap=None, flip=None, layer=0):
     """Indices of the dofs which lie on the given boundary of the tensor
     product basis `kvs`. Output format is as for :func:`slice_indices`.
     """

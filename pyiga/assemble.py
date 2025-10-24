@@ -129,6 +129,7 @@ from .quadrature import make_iterated_quadrature, make_tensor_quadrature
 from .mlmatrix import MLStructure
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+#from scipy.sparse import coo_matrix, csr_matrix, csc_matrix, spblock_diag, sp_vstack, sp_hstack
 from scipy.sparse.linalg import norm as spnorm
 
 ################################################################################
@@ -379,7 +380,7 @@ def inner_products(kvs, f, f_physical=False, geo=None):
 #     if ravel:
 #         multi_indices = np.ravel_multi_index(multi_indices.T, shape)
 #     return multi_indices
-def slice_indices(axis, sides, shape, ravel=False, swap=None, flip=None):
+def slice_indices(axis, sides, shape, ravel=False, swap=None, flip=None, layer=0):
     """Return dof indices for a slice of a tensor product basis with size
     `shape`. The slice is taken across index `idx` on axis `ax`.
     The indices are returned either as a `N × dim` array of multiindices or,
@@ -403,8 +404,14 @@ def slice_indices(axis, sides, shape, ravel=False, swap=None, flip=None):
         for i, flp in enumerate(flip):
             if flp:
                 axdofs[i] = np.flip(axdofs[i])
+                
     for ax, idx in zip(axis,sides):
-        axdofs[ax]=np.array([idx])
+        if idx==0:
+            axdofs[ax]=np.arange(0,min(shape[ax],layer+1))
+        elif idx==shape[ax]-1:
+            axdofs[ax]=np.arange(max(0,idx-layer),idx+1)
+        else:
+            raise ValueError(f"Invalid slice index {idx} (must be 0 or last index)")
         
     axdofs_ = [axdofs[ax] for ax in not_axis]
     if swap is not None:
@@ -440,19 +447,9 @@ def _boundary_dofs(kvs, bdspec=None, m=None, ravel=False,
     # Single boundary specification
     if bdspec is not None:
         b = bspline._parse_bdspec(bdspec, len(kvs))
-        axis, sides = b[:, 0], -b[:, 1]
-
-        # Expand sides into ranges with 'layer' thickness
-        expanded = []
-        for ax, side in zip(axis, sides):
-            if side == -1:
-                sl = slice(0, min(layer + 1, N[ax]))
-            else:
-                start = max(N[ax] - (layer + 1), 0)
-                sl = slice(start, N[ax])
-            expanded.append((ax, sl))
-
-        return slice_indices(expanded, N, ravel=ravel, swap=swap, flip=flip)
+        axis, sides = b[:,0], -b[:,1]
+        N = tuple(kv.numdofs for kv in kvs)
+        return slice_indices(axis, sides, N, ravel=ravel, swap=swap, flip=flip, layer=layer)
 
     # If no specific boundary: collect all faces
     manifolds = topology.face_indices(n, m)
@@ -1303,7 +1300,7 @@ def detect_interfaces(patches):
         A pair `(connected, interfaces)`, where `connected` is a `bool`
         describing whether the detected patch graph is connected, and
         `interfaces` is a list of the detected interfaces, each entry of
-        which is suitable for passing to :meth:`computeInterfaceJump`.
+        which is suitable for passing to :meth:`compute_C0_constraint`.
     """
     interfaces = []
     bbs = [_bb_rect(geo) for (_, geo) in patches]
@@ -1400,8 +1397,9 @@ class MultiBasis:
     def set_constraints(self, subspace='C0'):
         t=time.time()
         if subspace=='C0':
-            B=[self.computeInterfaceJump(p1, bspline._parse_bdspec(bd1,self.sdim), s1, 
-                                         p2, bspline._parse_bdspec(bd2,self.sdim), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
+            B=[self.compute_C0_constraint(p1, bd1, s1, p2, bd2, s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
+        elif subspace=='C1':
+            B=[self.compute_C1_constraint(p1, bd1, s1, p2, bd2, s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
         print('setting up constraints took {:3} seconds.'.format(time.time()-t))
         if len(B)!=0:
             return scipy.sparse.vstack(B)
@@ -1419,15 +1417,18 @@ class MultiBasis:
         t=time.time()
         B = (self.B@self.R_related.T).tocsr()
         if subspace=='C0':
-            self.Basis, _ = algebra_cy.pyx_compute_basis(B.shape[0], B.shape[1], B, maxiter=100, switch=0)
+            self.Basis, _ = algebra_cy.pyx_compute_basis(B.shape[0], B.shape[1], B, maxiter=10, switch=0)
             self.Basis = scipy.sparse.hstack([self.R_free.T, self.R_related.T@self.Basis], format='csc')
             self.P2G = assemble_cy.pyx_right_inverse_C0_Basis(self.Basis.indptr, self.Basis.indices, self.Basis.data, *self.Basis.shape).tocsc()
+        elif subspace=='C1':
+            self.Basis, _ = algebra_cy.pyx_compute_basis(B.shape[0], B.shape[1], B, maxiter=100, switch=1)
+            self.Basis = scipy.sparse.hstack([self.R_free.T, self.R_related.T@self.Basis], format='csc')
         print("Basis setup took {:3} seconds".format(time.time()-t))
 
         #self.check_basis()
         self.subspace=subspace
         
-    def computeInterfaceJump(self, p1, bdspec1, s1, p2, bdspec2, s2, flip=None):
+    def compute_C0_constraint(self, p1, bdspec1, s1, p2, bdspec2, s2, flip=None):
         """Join the dofs lying along boundary `bdspec1` of patch `p1` with
         those lying along boundary `bdspec2` of patch `p2`. 
 
@@ -1456,6 +1457,71 @@ class MultiBasis:
         I = np.concatenate([P.row, np.arange(len(dofs2))])
         J = np.concatenate([dofs1[P.col] + self.N_ofs[p1],dofs2 + self.N_ofs[p2]])
         return scipy.sparse.csr_matrix((data,(I,J)),(len(dofs2), self.nLocDofs))
+
+    def compute_C1_constraint(self, p1, bdspec1, s1, p2, bdspec2, s2, flip=None):
+
+        kvs1, geo1 =self.mesh.patches[p1][0]
+        kvs2, geo2 =self.mesh.patches[p2][0]
+        
+        ax1, sd1 = bspline._parse_bdspec(bdspec1,2)[0]
+        ax2, sd2 = bspline._parse_bdspec(bdspec2,2)[0]
+        #((kvs1, geo1),_), ((kvs2, geo2),_) = self.mesh.patches[p1], self.mesh.patches[p2]
+        sup1, sup2 = geo1.support, geo2.support
+        dim=len(kvs1)
+        if flip is None:
+            flip=(dim-1)*(False,)
+     
+        bkv1, bkv2 = boundary_kv(kvs1, bdspec1), boundary_kv(kvs2, bdspec2)
+        dofs1, dofs2 = _boundary_dofs(kvs1, bdspec1, ravel = True, layer=1), _boundary_dofs(kvs2, bdspec2, ravel = True, flip=flip, layer=1)
+        G = tuple(kv.greville() for kv in kvs2)
+        G2 = G[:ax2] + (np.array([sup2[ax2][0] if sd2==0 else sup2[ax2][-1]]),) + G[ax2+1:]
+        G1 = G[:ax2] + G[ax2+1:]
+        G1 = G1[:ax1] + (np.array([sup1[ax1][0] if sd1==0 else sup1[ax1][-1]]),) + G1[ax1:] #still need to add flip
+    
+        M=tuple(len(g) for g in G2)
+        m=np.prod(M)
+        n1,n2=len(dofs1), len(dofs2)
+            
+        C1, D1 = bspline.collocation_derivs_tp(kvs1, G1, derivs=1)
+        C2, D2 = bspline.collocation_derivs_tp(kvs2, G2, derivs=1)
+        
+        C1, C2 = C1[0].tocsr()[:,dofs1], C2[0].tocsr()[:,dofs2]
+        for i in range(dim):
+            D1[i], D2[i] = D1[i].tocsr()[:,dofs1], D2[i].tocsr()[:,dofs2]
+        N2=geo2.boundary(bdspec2).grid_outer_normal(G2[:ax2]+G2[ax2+1:]).reshape(m,dim)
+    
+        J1=geo1.grid_jacobian(G1).reshape(m,dim,dim)
+        J2=geo2.grid_jacobian(G2).reshape(m,dim,dim)
+            
+        invJ1=np.array([np.linalg.inv(jac) for jac in J1[:]])
+        invJ2=np.array([np.linalg.inv(jac) for jac in J2[:]])
+    
+        NC1=scipy.sparse.csr_matrix((m, n1))
+        for i in range(dim):
+            NC1_ = scipy.sparse.csr_matrix((m, n1))
+            for j in range(dim):
+                NC1_ += scipy.sparse.spdiags(invJ1[:,i,j], 0, m, m)*D1[dim-1-j]
+            NC1 += scipy.sparse.spdiags(N2[:,i], 0, m, m)*NC1_
+                
+        NC2=scipy.sparse.csr_matrix((m, n2))
+        for i in range(dim):
+            NC2_ = scipy.sparse.csr_matrix((m, n2))
+            for j in range(dim):
+                NC2_ += scipy.sparse.spdiags(invJ2[:,i,j], 0, m, m)*D2[dim-1-j]
+            NC2 += scipy.sparse.spdiags(N2[:,i], 0, m, m)*NC2_
+                
+        A = scipy.sparse.vstack([C1, NC1])
+        B = scipy.sparse.vstack([C2, NC2])
+        P = scipy.sparse.linalg.spsolve(B,A.toarray())
+        # prune matrix
+        P[np.abs(P) < 1e-15] = 0.0
+        P = scipy.sparse.coo_matrix(P)
+    
+        data = np.concatenate([-P.data, np.ones(len(dofs2))])
+        I = np.concatenate([P.row, np.arange(len(dofs2))])
+        J = np.concatenate([dofs1[P.col],dofs2 + bspline.numdofs(kvs1)])
+    
+        return scipy.sparse.csr_matrix((data,(I,J)),(len(dofs2), bspline.numdofs(kvs1)+bspline.numdofs(kvs2)))
 
     def assemble_volume(self, problem, arity=1, domain_id=None, args=None, bfuns=None,
             symmetric=False, format='csr', layout='blocked', in_subspace=True, **kwargs):
@@ -1759,7 +1825,7 @@ class MultiBasis:
         
 #         automatch (bool): if True, attempt to automatically apply the interface information from the PatchMesh object to couple the patches.
 #             If False, the user has to manually join the patches by calling
-#             :meth:`computeInterfaceJump` as often as needed, followed by
+#             :meth:`compute_C0_constraint` as often as needed, followed by
 #             :meth:`finalize`.
 #     """
 #     def __init__(self, M, automatch=False):
@@ -1796,7 +1862,7 @@ class MultiBasis:
 
 #         if automatch:
 #             t=time.time()
-#             B=[self.computeInterfaceJump(p1, bspline._parse_bdspec(bd1,self.sdim), s1, 
+#             B=[self.compute_C0_constraint(p1, bspline._parse_bdspec(bd1,self.sdim), s1, 
 #                                          p2, bspline._parse_bdspec(bd2,self.sdim), s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
 #             print('setting up constraints took {:3} seconds.'.format(time.time()-t))
 
@@ -1832,7 +1898,7 @@ class MultiBasis:
 #     def reset(self, automatch=True):
 #         self.__init__(M=self.mesh, automatch=automatch)
 
-#     def computeInterfaceJump(self, p1, bdspec1, s1, p2, bdspec2, s2, flip=None):
+#     def compute_C0_constraint(self, p1, bdspec1, s1, p2, bdspec2, s2, flip=None):
 #         """Join the dofs lying along boundary `bdspec1` of patch `p1` with
 #         those lying along boundary `bdspec2` of patch `p2`. 
 
@@ -1888,7 +1954,7 @@ class MultiBasis:
         
 #     def finalize(self):
 #         """After all interface constraints have been declared using
-#         :meth:`computeInterfaceJump`, call this function to 
+#         :meth:`compute_C0_constraint`, call this function to 
 #         compute a basis to parametrize the nullspace of the constraints
 #         and set up the internal data structures.
 #         """

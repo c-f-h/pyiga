@@ -1069,6 +1069,13 @@ class BSplineFunc(_BaseSplineFunc):
     def output_shape(self):
         return self.coeffs.shape[self.sdim:]
 
+    def control_points(self):
+        return np.mean(self.coeffs.reshape(-1,self.dim),axis=0)
+
+    def center(self):
+        param_center = np.mean(np.array(self.support),axis=1)
+        return self.eval(*param_center)
+
     def grid_eval(self, gridaxes):
         """Evaluate the function on a tensor product grid.
 
@@ -1117,25 +1124,54 @@ class BSplineFunc(_BaseSplineFunc):
             ops = [colloc[j][1 if j==i else 0] for j in range(self.sdim)] # deriv. in i-th direction
             grad_components.append(apply_tprod(ops, self.coeffs))   # shape: shape(grid) x self.dim
         return np.stack(grad_components, axis=-1)   # shape: shape(grid) x self.dim x self.sdim
-    
-    def grid_outer_normal(self, gridaxes):
+        
+    def grid_outer_normal(self, gridaxes, reference_point=None):
         gridaxes = list(gridaxes)
         N = [len(grid) for grid in gridaxes]
         #gridaxes.insert(self.axis, np.array([self.fixed_coord]))
+        grid = self.grid_eval(gridaxes)
         jacs = self.grid_jacobian(gridaxes)
-        if self.dim==2 and self.sdim==1:     # line integral
-            x = jacs
-            #di=-1 if self.axis != self.side else 1
-            x[:,0]=-x[:,0]
-            x[:,[0,1]]=x[:,[1,0]]
-            return x/np.linalg.norm(x,axis=1)[:,None]
-        elif self.dim==3 and self.sdim==2:   # surface integral
-            #di=-1 if (self.axis+self.side)%2==0 else 1
-            x, y = jacs[:,:,:,0], jacs[:,:,:,1]
-            un=np.cross(x, y).reshape(N[0],N[1],3,1)
-            return un/np.linalg.norm(un,axis=2)[:,:,None]
+
+        if self.dim == 2 and self.sdim == 1:
+            tang = jacs
+            normal = np.empty_like(tang)
+            normal[:, 0], normal[:, 1] = -tang[:, 1], tang[:, 0]
+            normal /= np.linalg.norm(normal, axis=1)[:, None]
+
+        elif self.dim == 3 and self.sdim == 2:
+            du, dv = jacs[..., 0], jacs[..., 1]
+            normal = np.cross(du, dv)
+            normal /= np.linalg.norm(normal, axis=-1)[..., None]
+
         else:
-            assert False, 'do not know how to compute normal vector for Jacobian shape {}'.format(jacs.shape)
+            raise ValueError(f"Cannot compute normal for Jacobian shape {jacs.shape}")
+
+        if reference_point is not None:
+            diff = grid - reference_point  # vector from interior to boundary
+            dots = np.sum(np.squeeze(normal, axis=-1) * diff, axis=-1)  # local alignment
+            avg_dot = np.mean(dots)                # aggregate test over boundary
+            if avg_dot < 0:
+                normal *= -1  # flip *all* normals
+        return normal
+            
+    # def grid_outer_normal(self, gridaxes, reference_point):
+    #     gridaxes = list(gridaxes)
+    #     N = [len(grid) for grid in gridaxes]
+    #     #gridaxes.insert(self.axis, np.array([self.fixed_coord]))
+    #     jacs = self.grid_jacobian(gridaxes)
+    #     if self.dim==2 and self.sdim==1:     # line integral
+    #         x = jacs
+    #         #di=-1 if self.axis != self.side else 1
+    #         x[:,0]=-x[:,0]
+    #         x[:,[0,1]]=x[:,[1,0]]
+    #         return x/np.linalg.norm(x,axis=1)[:,None]
+    #     elif self.dim==3 and self.sdim==2:   # surface integral
+    #         #di=-1 if (self.axis+self.side)%2==0 else 1
+    #         x, y = jacs[:,:,:,0], jacs[:,:,:,1]
+    #         un=np.cross(x, y).reshape(N[0],N[1],3,1)
+    #         return un/np.linalg.norm(un,axis=2)[:,:,None]
+    #     else:
+    #         assert False, 'do not know how to compute normal vector for Jacobian shape {}'.format(jacs.shape)
 
     def grid_hessian(self, gridaxes):
         """Evaluate the Hessian matrix of a scalar or vector function on a tensor product grid.

@@ -104,6 +104,10 @@ class NurbsFunc(bspline._BaseSplineFunc):
     def control_points(self):
         return self.coeffs[..., :-1] / self.coeffs[..., -1:]
 
+    def center(self):
+        param_center = np.mean(np.array(self.support),axis=1)
+        return self.eval(*param_center)
+
     def grid_eval(self, gridaxes):
         assert len(gridaxes) == self.sdim, "Input has wrong dimension"
         # make sure axes are one-dimensional
@@ -127,24 +131,34 @@ class NurbsFunc(bspline._BaseSplineFunc):
             J = np.squeeze(J, -2)           # eliminate scalar axis
         return J
     
-    def grid_outer_normal(self, gridaxes):
+    def grid_outer_normal(self, gridaxes, reference_point=None):
         gridaxes = list(gridaxes)
         N = [len(grid) for grid in gridaxes]
         #gridaxes.insert(self.axis, np.array([self.fixed_coord]))
-        jacs = self.grid_jacobian(gridaxes)
-        if self.dim==2 and self.sdim==1:     # line integral
-            x = jacs
-            #di=-1 if self.axis != self.side else 1
-            x[:,0]=-x[:,0]
-            x[:,[0,1]]=x[:,[1,0]]
-            return x/np.linalg.norm(x,axis=1)[:,None]
-        elif self.dim==3 and self.sdim==2:   # surface integral
-            #di=-1 if (self.axis+self.side)%2==0 else 1
-            x, y = jacs[:,:,:,0], jacs[:,:,:,1]
-            un=np.cross(x, y).reshape(N[0],N[1],3,1)
-            return un/np.linalg.norm(un,axis=2)[:,:,None]
+        grid = self.grid_eval(gridaxes)
+        jacs = self.grid_jacobian(gridaxes, keep_normal=False)
+
+        if self.dim == 2 and self.sdim == 1:
+            tang = jacs
+            normal = np.empty_like(tang)
+            normal[:, 0], normal[:, 1] = -tang[:, 1], tang[:, 0]
+            normal /= np.linalg.norm(normal, axis=1)[:, None]
+
+        elif self.dim == 3 and self.sdim == 2:
+            du, dv = jacs[..., 0], jacs[..., 1]
+            normal = np.cross(du, dv)
+            normal /= np.linalg.norm(normal, axis=-1)[..., None]
+
         else:
-            assert False, 'do not know how to compute normal vector for Jacobian shape {}'.format(jacs.shape)
+            raise ValueError(f"Cannot compute normal for Jacobian shape {jacs.shape}")
+
+        if reference_point is not None:
+            diff = grid - reference_point  # vector from interior to boundary
+            dots = np.sum(np.squeeze(normal, axis=-1) * diff, axis=-1)  # local alignment
+            avg_dot = np.mean(dots)                # aggregate test over boundary
+            if avg_dot < 0:
+                normal *= -1  # flip *all* normals
+        return normal
 
     def grid_hessian(self, gridaxes):
         bsp = BSplineFunc(self.kvs, self.coeffs)
@@ -371,6 +385,10 @@ class UserFunction(bspline._BaseGeoFunc):
     def output_shape(self):
         return self._output_shape
 
+    def center(self):
+        param_center = np.mean(np.array(self.support),axis=1)
+        return self.eval(*param_center)
+
     def grid_eval(self, grd):
         return utils.grid_eval(self.f, grd)
 
@@ -449,6 +467,10 @@ class _BoundaryFunction(bspline._BaseGeoFunc):
     def output_shape(self):
         return self.f.output_shape()
 
+    def center(self):
+        param_center = np.mean(np.array(self.support),axis=1)
+        return self.eval(*param_center)
+
     def eval(self, *x):
         x = list(x)
         for ax in self.axis:
@@ -480,20 +502,31 @@ class _BoundaryFunction(bspline._BaseGeoFunc):
         gridaxes = [1 - np.flip(grid) if flp else grid for grid, supp, flp in zip(gridaxes, self.support, self.flip)]
         N = [len(grid) for grid in gridaxes]
         #gridaxes.insert(self.axis, np.array([self.fixed_coord]))
-        jacs = self.grid_jacobian(gridaxes, keep_normal=False)
-        if self.dim==2 and self.sdim==1:     # line integral
-            x = jacs
-            di=-1 if self.axis != self.side else 1
-            x[:,0]=-x[:,0]
-            x[:,[0,1]]=x[:,[1,0]]
-            return di*x/np.linalg.norm(x,axis=1)[:,None]
-        elif self.dim==3 and self.sdim==2:   # surface integral
-            di=-1 if (self.axis[0]+self.sides[0])%2==0 else 1
-            x, y = jacs[:,:,:,0], jacs[:,:,:,1]
-            un=np.cross(x, y).reshape(N[0],N[1],3,1)
-            return di*un/np.linalg.norm(un,axis=2)[:,:,None]
+        grid = self.grid_eval(gridaxes)
+        jacs = self.grid_jacobian(gridaxes)
+        reference_point=self.f.center()
+
+        if self.dim == 2 and self.sdim == 1:
+            tang = jacs
+            normal = np.empty_like(tang)
+            normal[:, 0], normal[:, 1] = -tang[:, 1], tang[:, 0]
+            normal /= np.linalg.norm(normal, axis=1)[:, None]
+
+        elif self.dim == 3 and self.sdim == 2:
+            du, dv = jacs[..., 0], jacs[..., 1]
+            normal = np.cross(du, dv)
+            normal /= np.linalg.norm(normal, axis=-1)[..., None]
+
         else:
-            assert False, 'do not know how to compute normal vector for Jacobian shape {}'.format(jacs.shape)
+            raise ValueError(f"Cannot compute normal for Jacobian shape {jacs.shape}")
+
+        if reference_point is not None:
+            diff = grid - reference_point  # vector from interior to boundary
+            dots = np.sum(np.squeeze(normal, axis=-1) * diff, axis=-1)  # local alignment
+            avg_dot = np.mean(dots)                # aggregate test over boundary
+            if avg_dot < 0:
+                normal *= -1  # flip *all* normals
+        return normal
 
 ################################################################################
 # Examples of 2D geometries

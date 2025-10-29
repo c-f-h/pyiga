@@ -11,7 +11,7 @@ import sys
 import numpy as np
 import scipy.sparse.linalg
 
-def interpolate(kvs, f, geo=None, nodes=None):
+def interpolate(kvs, func, geo=None, nodes=None):
     """Perform interpolation in a spline space.
 
     Returns the coefficients for the interpolant of the function `f` in the
@@ -35,45 +35,78 @@ def interpolate(kvs, f, geo=None, nodes=None):
         nodes = [kv.greville() for kv in kvs]
 
     # evaluate f at interpolation nodes?
-    if isinstance(f, np.ndarray):
+    if isinstance(func, np.ndarray):
         # check that leading dimensions match the number of dofs
-        if np.shape(f)[:len(kvs)] != tuple(kv.numdofs for kv in kvs):
-            raise ValueError('array f has wrong shape')
-        rhs = f
+        if np.shape(func)[:len(kvs)] != tuple(kv.numdofs for kv in kvs):
+            raise ValueError('array func has wrong shape')
+        rhs = func
     else:
         if geo is not None:
-            rhs = utils.grid_eval_transformed(f, nodes, geo)
+            rhs = utils.grid_eval_transformed(func, nodes, geo)
         else:
-            rhs = utils.grid_eval(f, nodes)
+            rhs = utils.grid_eval(func, nodes)
 
     Cinvs = [operators.make_solver(bspline.collocation(kvs[i], nodes[i]))
                 for i in range(len(kvs))]
     return tensor.apply_tprod(Cinvs, rhs)
 
-def interpolate_tangential(kvs, f, geo=None, nodes=None, dim=2):
-    if isinstance(kvs, bspline.KnotVector):
-        kvs = (kvs,)
+def interpolate_normal(kvs, bdspec, func, func_deriv, geo=None, nodes=None):
+    print(2)
+    ax, sd = bspline._parse_bdspec(bdspec,2)[0]
+    sup = kvs[ax].support()
+    bkvs = assemble.boundary_kv(kvs, bdspec)
+    dofs = assemble.boundary_dofs(kvs, bdspec, ravel = True, layer=1)
     if nodes is None:
-        nodes = [kv.greville() for kv in kvs]
+        nodes = [kv.greville() for kv in bkvs]
+        nodes = nodes[:ax] + [np.array([sup[0] if sd==0 else sup[-1]])] + nodes[ax+1:]
+    
+    dim = len(kvs)
+    m = np.prod([len(nodes) for nodes in nodes])
+    n = len(dofs)
         
-    if isinstance(f, np.ndarray):
+    if isinstance(func, np.ndarray):
         # check that leading dimensions match the number of dofs
-        if np.shape(f)[:len(kvs)] != tuple(kv.numdofs for kv in kvs):
+        if np.shape(func)[:len(kvs)] != tuple(kv.numdofs for kv in kvs):
             raise ValueError('array f has wrong shape')
-        rhs = f
+        rhs1 = func
     else:
         if geo is not None:
-            rhs = utils.grid_eval_transformed(f, nodes, geo)
+            rhs1 = utils.grid_eval_transformed(func, nodes, geo)
         else:
-            rhs = utils.grid_eval(f, nodes)
-            
-    C = bspline.collocation_tp(kvs, nodes)
-    N = geo.grid_outer_normal(nodes).reshape(-1,dim).T
-    N0=scipy.sparse.spdiags(N[0], 0, len(N[0]), len(N[0]))
-    N1=scipy.sparse.spdiags(N[1], 0, len(N[1]), len(N[1]))
+            rhs1 = utils.grid_eval(func, nodes)
+
+    if isinstance(func_deriv, np.ndarray):
+        # check that leading dimensions match the number of dofs
+        if np.shape(func_deriv)[:len(kvs)] != tuple(kv.numdofs for kv in kvs):
+            raise ValueError('array f has wrong shape')
+        rhs2 = func_deriv
+    else:
+        if geo is not None:
+            rhs2 = utils.grid_eval_transformed(func_deriv, nodes, geo)
+        else:
+            rhs2 = utils.grid_eval(func_deriv, nodes)
+
+    C, D = bspline.collocation_derivs_tp(kvs, nodes, derivs=1)
+        
+    C = C[0].tocsr()[:,dofs]
+    for i in range(dim):
+        D[i] = D[i].tocsr()[:,dofs]
+    N=geo.boundary(bdspec).grid_outer_normal(nodes[:ax]+nodes[ax+1:], reference_point=geo.center()).reshape(m,dim)
     
-    if dim==2:
-        return operators.make_solver(N1@C-N0@C).dot(rhs)
+    J=geo.grid_jacobian(nodes).reshape(m,dim,dim)
+       
+    invJ=np.array([np.linalg.inv(jac) for jac in J[:]]) ###TODO: compute inverse manually for 2D and not call np.linalg.inv
+    
+    NC=scipy.sparse.csr_matrix((m, n))
+    for i in range(dim):
+        NC_ = scipy.sparse.csr_matrix((m, n))
+        for j in range(dim):
+            NC_ += scipy.sparse.spdiags(invJ[:,j,i], 0, m, m)*D[dim-1-j]
+        NC += scipy.sparse.spdiags(N[:,i], 0, m, m)*NC_
+
+    A = scipy.sparse.vstack([C, NC])
+    return operators.make_solver(A)@np.r_[rhs1,rhs2]
+    
 
 def _project_L2_hspace(hs, f, f_physical=False, geo=None):
     from . import vform, geometry

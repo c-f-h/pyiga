@@ -582,6 +582,28 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
     else:
         raise ValueError('invalid dimension of Dirichlet coefficients: %s' % dircoeffs.shape)
 
+def compute_dirichlet_neumann_bc(kvs, geo, bdspec,dir_func, neu_func):
+    b = bspline._parse_bdspec(bdspec, len(kvs))
+    axis, sides = b[:,0], -b[:,1]
+
+    bdbasis = list(kvs)
+    assert len(bdbasis) == geo.sdim, 'Invalid dimension of geometry'
+    for ax in sorted(axis,reverse=True):
+        del bdbasis[ax]
+
+    # get boundary geometry and interpolate dir_func
+
+    from .approx import interpolate_normal
+    if np.isscalar(dir_func):
+        const_value = dir_func
+        dir_func = lambda *x: const_value
+    if np.isscalar(neu_func):
+        const_value = neu_func
+        neu_func = lambda *x: const_value
+    coeffs = interpolate_normal(kvs, bdspec, dir_func, neu_func, geo=geo)
+    
+    
+
 def compute_dirichlet_bcs(kvs, geo, bdconds):
     """Compute indices and values for Dirichlet boundary conditions on
     several boundaries at once.
@@ -1471,7 +1493,7 @@ class MultiBasis:
         if flip is None:
             flip=(dim-1)*(False,)
      
-        bkv1, bkv2 = boundary_kv(kvs1, bdspec1), boundary_kv(kvs2, bdspec2)
+        bkv1, bkv2 = boundary_kv(kvs1, bdspec1), boundary_kv(kvs2, bdspec2, flip=flip)
         dofs1, dofs2 = _boundary_dofs(kvs1, bdspec1, ravel = True, layer=1), _boundary_dofs(kvs2, bdspec2, ravel = True, flip=flip, layer=1)
         G = tuple(kv.greville() for kv in kvs2)
         G2 = G[:ax2] + (np.array([sup2[ax2][0] if sd2==0 else sup2[ax2][-1]]),) + G[ax2+1:]
@@ -1488,40 +1510,40 @@ class MultiBasis:
         C1, C2 = C1[0].tocsr()[:,dofs1], C2[0].tocsr()[:,dofs2]
         for i in range(dim):
             D1[i], D2[i] = D1[i].tocsr()[:,dofs1], D2[i].tocsr()[:,dofs2]
-        N2=geo2.boundary(bdspec2).grid_outer_normal(G2[:ax2]+G2[ax2+1:]).reshape(m,dim)
+        N2=geo2.boundary(bdspec2).grid_outer_normal(G2[:ax2]+G2[ax2+1:], reference_point=geo2.center()).reshape(m,dim)
     
         J1=geo1.grid_jacobian(G1).reshape(m,dim,dim)
         J2=geo2.grid_jacobian(G2).reshape(m,dim,dim)
             
-        invJ1=np.array([np.linalg.inv(jac) for jac in J1[:]])
+        invJ1=np.array([np.linalg.inv(jac) for jac in J1[:]]) ###TODO: compute inverse manually for 2D and not call np.linalg.inv
         invJ2=np.array([np.linalg.inv(jac) for jac in J2[:]])
     
         NC1=scipy.sparse.csr_matrix((m, n1))
         for i in range(dim):
             NC1_ = scipy.sparse.csr_matrix((m, n1))
             for j in range(dim):
-                NC1_ += scipy.sparse.spdiags(invJ1[:,i,j], 0, m, m)*D1[dim-1-j]
+                NC1_ += scipy.sparse.spdiags(invJ1[:,j,i], 0, m, m)*D1[dim-1-j]
             NC1 += scipy.sparse.spdiags(N2[:,i], 0, m, m)*NC1_
                 
         NC2=scipy.sparse.csr_matrix((m, n2))
         for i in range(dim):
             NC2_ = scipy.sparse.csr_matrix((m, n2))
             for j in range(dim):
-                NC2_ += scipy.sparse.spdiags(invJ2[:,i,j], 0, m, m)*D2[dim-1-j]
+                NC2_ += scipy.sparse.spdiags(invJ2[:,j,i], 0, m, m)*D2[dim-1-j]
             NC2 += scipy.sparse.spdiags(N2[:,i], 0, m, m)*NC2_
                 
         A = scipy.sparse.vstack([C1, NC1])
         B = scipy.sparse.vstack([C2, NC2])
         P = scipy.sparse.linalg.spsolve(B,A.toarray())
         # prune matrix
-        P[np.abs(P) < 1e-15] = 0.0
+        P[np.abs(P) < 1e-14] = 0.0
         P = scipy.sparse.coo_matrix(P)
     
         data = np.concatenate([-P.data, np.ones(len(dofs2))])
         I = np.concatenate([P.row, np.arange(len(dofs2))])
-        J = np.concatenate([dofs1[P.col],dofs2 + bspline.numdofs(kvs1)])
+        J = np.concatenate([dofs1[P.col] + self.N_ofs[p1],dofs2 + self.N_ofs[p2]])
     
-        return scipy.sparse.csr_matrix((data,(I,J)),(len(dofs2), bspline.numdofs(kvs1)+bspline.numdofs(kvs2)))
+        return scipy.sparse.csr_matrix((data,(I,J)),(len(dofs2), self.nLocDofs))
 
     def assemble_volume(self, problem, arity=1, domain_id=None, args=None, bfuns=None,
             symmetric=False, format='csr', layout='blocked', in_subspace=True, **kwargs):

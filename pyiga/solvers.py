@@ -431,7 +431,7 @@ def pcg(A, f, x0 = None, P = 1, rtol = 1e-5, atol = 0.0, maxiter = 200, output =
         if rho<0: print(rho)
         assert rho>=0, "Preconditioner not SPD."
         err = np.sqrt(rho)
-        print(err)
+        print(err, err/err0)
         if err < max(rtol * err0, atol):
             break
         beta = rho/rho_old
@@ -448,9 +448,9 @@ def pcg(A, f, x0 = None, P = 1, rtol = 1e-5, atol = 0.0, maxiter = 200, output =
     eigs = scipy.linalg.eigvalsh_tridiagonal(delta[:(it+1)],gamma[:it])
     m = min(abs(eigs))
     M = max(abs(eigs))
-    #L = algebra.LanczosMatrix(delta[:(it+1)], gamma[:(it)])
-    # m = L.minEigenvalue()
-    # M = L.maxEigenvalue()
+    L = algebra.LanczosMatrix(delta[:(it+1)], gamma[:(it)])
+    m = L.minEigenvalue()
+    M = L.maxEigenvalue()
     cond = abs(M/m)
     
     if output:

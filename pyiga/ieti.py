@@ -14,24 +14,24 @@ class IetiMapper(assemble.MultiBasis):
 
         if not self.subspace=='C0':
             self.B = self.set_constraints('C0')
-        self.global_dir_idx,_ = self.set_dirichlet_boundary(dir_data)
+        self.global_fixed_idx,_ = self.set_fixed_boundary(dir_data)
 
         self.free={}
         for p in range(self.nPatches):
-            if p in self.dir_idx:
-                self.free[p] = np.setdiff1d(np.arange(self.N[p]),self.dir_idx[p],assume_unique=True)
+            if p in self.fixed_idx:
+                self.free[p] = np.setdiff1d(np.arange(self.N[p]),self.fixed_idx[p],assume_unique=True)
             else:
                 self.free[p] = np.arange(self.N[p])
             
-        self.global_free = np.setdiff1d(np.arange(self.N_ofs[-1]),self.global_dir_idx, assume_unique=True)
+        self.global_free = np.setdiff1d(np.arange(self.N_ofs[-1]),self.global_fixed_idx, assume_unique=True)
 
         self.corners = np.concatenate([assemble.boundary_dofs(kvs,m=0,ravel=True)+self.N_ofs[p] for p, kvs in enumerate(self.mesh.kvs)])
 
         self.Bk = [self.B[:,self.N_ofs[p]:self.N_ofs[p+1]] for p in range(self.nPatches)]
         nnz_per_col = self.B.getnnz(axis=0)
-        # self.intfs = np.setdiff1d(np.where(nnz_per_col > 0)[0], self.global_dir_idx)
-        self.skeleton = np.setdiff1d(np.where(nnz_per_col > 0)[0], self.global_dir_idx)
-        self.interior = np.setdiff1d(np.where(nnz_per_col == 0)[0], self.global_dir_idx)
+        # self.intfs = np.setdiff1d(np.where(nnz_per_col > 0)[0], self.global_fixed_idx)
+        self.skeleton = np.setdiff1d(np.where(nnz_per_col > 0)[0], self.global_fixed_idx)
+        self.interior = np.setdiff1d(np.where(nnz_per_col == 0)[0], self.global_fixed_idx)
         
         self.R_interior = self.nPatches*[None] ###TODO: without loops
         self.R_skeleton = self.nPatches*[None]
@@ -43,8 +43,8 @@ class IetiMapper(assemble.MultiBasis):
             intfs = np.where(self.Bk[p].getnnz(0) > 0)[0]
             mask_interior = np.ones(self.N[p], dtype=bool)
             mask_interior[intfs]=False
-            if p in self.dir_idx:
-                mask_interior[self.dir_idx[p]]=False
+            if p in self.fixed_idx:
+                mask_interior[self.fixed_idx[p]]=False
             self.R_interior[p]=Id[mask_interior,:][:,self.free[p]]
             for b in range(4):
                 if not any([(p,b) in self.mesh.outer_boundaries[key] for key in self.mesh.outer_boundaries]):
@@ -52,9 +52,9 @@ class IetiMapper(assemble.MultiBasis):
                     interface_dofs = assemble.boundary_dofs(self.mesh.kvs[p],bdspec=b,ravel=True)
                     mask_intf[interface_dofs[1:-1]] = True
                     mask_skeleton[interface_dofs] = True
-                    if p in self.dir_idx:
-                        mask_intf[self.dir_idx[p]]=False
-                        mask_skeleton[self.dir_idx[p]]=False
+                    if p in self.fixed_idx:
+                        mask_intf[self.fixed_idx[p]]=False
+                        mask_skeleton[self.fixed_idx[p]]=False
 
                     self.R_interfaces[(p,b)] = Id[mask_intf,:][:,self.free[p]]
             self.R_skeleton[p] = Id[mask_skeleton,:][:,self.free[p]]
@@ -63,15 +63,19 @@ class IetiMapper(assemble.MultiBasis):
         if M is None:
             M = {k:(0.0,0.0) for k in self.mesh.domains}
         if self.elim:
-            A = [self.Basis.T @ assemble.assemble('a * inner(grad(u), grad(v)) * dx', kvs, a=a[self.mesh.patch_domains[k]], bfuns=[('u',1), ('v',1)], geo=geo) @ self.Basis for k, ((kvs, geo),_) in enumerate(self.mesh.patches)]
-            RHS = [self.Basis.T @ assemble.assemble('f * v * dx', kvs, bfuns=[('v',1)], geo=geo, f=f[self.mesh.patch_domains[k]]).ravel() for k, ((kvs, geo),_) in enumerate(self.mesh.patches)]
+            A = [self.Basis.T @ assemble.assemble('a * inner(grad(u), grad(v)) * dx', kvs, a=a[self.mesh.patch_domains[k]], 
+                                                  bfuns=[('u',1), ('v',1)], geo=geo) @ self.Basis for k, ((kvs, geo),_) in enumerate(self.mesh.patches)]
+            RHS = [self.Basis.T @ assemble.assemble('f * v * dx', kvs, bfuns=[('v',1)], geo=geo, f=f[self.mesh.patch_domains[k]]).ravel() 
+                   for k, ((kvs, geo),_) in enumerate(self.mesh.patches)]
         else:
-            A = [assemble.assemble('a * inner(grad(u), grad(v)) * dx', kvs, a=a[self.mesh.patch_domains[k]], bfuns=[('u',1), ('v',1)], geo=geo) for k, ((kvs, geo),_) in enumerate(self.mesh.patches)]
-            RHS = [assemble.assemble('(f * v - inner(Ma_T,grad(v))) * dx', kvs, bfuns=[('v',1)], geo=geo, f=f[self.mesh.patch_domains[k]], Ma_T = M[self.mesh.patch_domains[k]]).ravel() for k, ((kvs, geo),_) in enumerate(self.mesh.patches)]
+            A = [assemble.assemble('a * inner(grad(u), grad(v)) * dx', kvs, a=a[self.mesh.patch_domains[k]], 
+                                   bfuns=[('u',1), ('v',1)], geo=geo) for k, ((kvs, geo),_) in enumerate(self.mesh.patches)]
+            RHS = [assemble.assemble('(f * v - inner(Ma_T,grad(v))) * dx', kvs, bfuns=[('v',1)], geo=geo, 
+                                    f=f[self.mesh.patch_domains[k]], Ma_T = M[self.mesh.patch_domains[k]]).ravel() for k, ((kvs, geo),_) in enumerate(self.mesh.patches)]
         
-        self.BCRestr = {p:assemble.RestrictedLinearSystem(A[p], RHS[p], (self.dir_idx[p],self.dir_vals[p])) for p in self.dir_idx}
-        RHS = [rhs if p not in self.dir_idx else self.BCRestr[p].b for p, rhs in enumerate(RHS)]
-        A = [a if p not in self.dir_idx else self.BCRestr[p].A for p, a in enumerate(A)]
+        self.BCRestr = {p:assemble.RestrictedLinearSystem(A[p], RHS[p], (self.fixed_idx[p],self.fixed_vals[p])) for p in self.fixed_idx}
+        RHS = [rhs if p not in self.fixed_idx else self.BCRestr[p].b for p, rhs in enumerate(RHS)]
+        A = [a if p not in self.fixed_idx else self.BCRestr[p].A for p, a in enumerate(A)]
 
         return A, RHS
 
@@ -100,13 +104,13 @@ class IetiMapper(assemble.MultiBasis):
         deg = self.mesh.patches[0][0][0][0].p
         n = self.N_ofs[-1]
         loc_c = self.corners
-        if not dir_boundary: loc_c = np.setdiff1d(loc_c, self.global_dir_idx, assume_unique=True) 
+        if not dir_boundary: loc_c = np.setdiff1d(loc_c, self.global_fixed_idx, assume_unique=True) 
   
         idx = (self.B[:,loc_c].getnnz(1)>0) & (self.B.getnnz(1)==2)
         B = self.B[idx,:]
         #B = B[B.getnnz(1)==2,:]
         loc_c = np.unique(B.indices)
-        if not dir_boundary: loc_c = np.setdiff1d(loc_c, self.global_dir_idx, assume_unique=True) 
+        if not dir_boundary: loc_c = np.setdiff1d(loc_c, self.global_fixed_idx, assume_unique=True) 
 
         q = np.where(B.getnnz(0)>0)[0]
         R = scipy.sparse.coo_matrix((np.ones(len(q)),(np.arange(len(q)),q)),shape=(len(q),n)).tocsr()
@@ -120,6 +124,44 @@ class IetiMapper(assemble.MultiBasis):
         nodal_coeff += ieti_cy.identify_T_coefficients_from_corner_basis(nodal_coeff.indptr, nodal_coeff.indices, nodal_coeff.data, *nodal_coeff.shape,
                                                                          self.B.indptr,      self.B.indices,      self.B.data,       self.B.shape[0], deg)
         return nodal_coeff
+
+    def interface_averages_as_primals(self):
+        def stepfunction(a,b):
+            def f(x):
+                if a<x and x<b: return 1.0
+                else: return 0.0
+            return np.vectorize(f)
+        vv = []
+        ii=[]
+        jj=[]
+        k=0
+        for (p1,b1) in self.mesh.L_intfs:
+            supp1 = self.mesh.boundaries(p1)[1][b1]
+            kv1 = assemble.boundary_kv(self.mesh.kvs[p1],b1)
+            dofs1 = assemble.boundary_dofs(self.mesh.kvs[p1],b1,ravel=True)
+            for (p2, b2) in self.mesh.L_intfs[(p1,b1)]:
+                kv2 = assemble.boundary_kv(self.mesh.kvs[p2],b2)
+                dofs2 = assemble.boundary_dofs(self.mesh.kvs[p2],b2,ravel=True)
+
+                a, b = self.mesh.boundaries(p2)[1][b2]
+                #a, b = (supp2-supp[0])/(supp[1]-supp[0])
+                #a, b = supp2
+
+                moments1 = assemble.assemble("v * ds", arity=1, kvs = self.mesh.kvs[p1], geo = self.mesh.geos[p1], boundary=b1).ravel()
+                moments2 = assemble.assemble("v * ds", arity=1, kvs = self.mesh.kvs[p2], geo = self.mesh.geos[p2], boundary=b2).ravel()
+
+                vv.append(np.r_[abs(moments1)/sum(moments1),abs(moments2)/sum(moments2)])
+                ii.append(np.r_[dofs1 + self.N_ofs[p1], dofs2+ self.N_ofs[p2]])
+                jj.append(np.repeat(k, len(dofs1)+len(dofs2)))
+                k+=1
+
+        vv = np.concatenate(vv)
+        ii = np.concatenate(ii)
+        jj = np.concatenate(jj)
+
+        Prim = csc_matrix((vv,(ii,jj)),(self.nLocDofs,k))
+        Prim.eliminate_zeros()
+        return Prim
 
     def completeDirichlet(self, U):
         return [self.BCRestr[p].complete(u) if p in self.BCRestr else u for p,u in enumerate(U)]
@@ -138,8 +180,8 @@ class PrimalSystem():
     def incorporate_PrimalConstraints(self, A, B, RHS, IMap):
         self.nLagrangeMultipliers = B[0].shape[0]
         
-        if self.nPrim == 0:
-            return A, B, RHS
+        #if self.nPrim == 0:
+            #return A, B, RHS
         K = len(A)
         self.C=[]
         
@@ -151,7 +193,8 @@ class PrimalSystem():
             c = c[jj,:]
             self.C.append(c)
             self.R.append(scipy.sparse.coo_matrix((np.ones(c.shape[0]),(np.arange(c.shape[0]),jj)),(c.shape[0],self.nPrim)))
-        assert np.all(np.array([np.linalg.matrix_rank(c.toarray())==c.shape[0] for c in self.C]))
+            #print(self.C[-1].toarray())
+        assert np.all(np.array([np.linalg.matrix_rank(c.toarray())==c.shape[0] for c in self.C if c.shape[0]!=0])), "Local saddle point system not full rank."
             
         self.nPrimConstr = [c.shape[0] for c in self.C]
 
@@ -165,27 +208,32 @@ class PrimalSystem():
         return mod_A, mod_B, mod_RHS, self.C
 
     def compute_PrimalBasis(self, mod_A, mod_B, mod_RHS, C):
+        K = len(mod_A)
         self.Psi = []
         Delta = []
     
         A_prim = []
         B_prim = []
+        loc_solvers = K*[None]
     
-        for p in range(self.K):    
+        for p in range(K):    
             
-            loc_solver[p] = solvers.make_solver(mod_A[p],spd=False, symm=True)
+            loc_solvers[p] = solvers.make_solver(mod_A[p],spd=False, symm=True)
 
-                
             n_constr = self.nPrimConstr[p]
-            n_total = solver.shape[0]
+            n_total = loc_solvers[p].shape[0]
             n_free = n_total - n_constr
+
+            if n_constr == 0:
+                self.Psi.append(csr_matrix((0,self.Prim.shape[1])))
+                Delta.append(None)
     
             # Build RHS: stacked [0; I]
             RHS = np.zeros((n_total, n_constr))
             RHS[n_free:, :] = np.eye(n_constr)
     
             # Solve with dense RHS (assumed requirement of solver)
-            sol = solver @ RHS
+            sol = loc_solvers[p] @ RHS
             psi = sol[:n_free, :]
             delta = sol[n_free:, :]
     
@@ -329,7 +377,7 @@ def EdgePreconditionerFull(IMap, S, B, C):
     S_ = [np.zeros(s.shape) for s in S]
     B_ = len(B)*[None]
     C_ = len(C)*[None]
-    for p in range(IMap.numpatches):
+    for p in range(IMap.nPatches):
         C_[p]=C[p]@IMap.R_skeleton[p].T
         B_[p] = scipy.sparse.hstack([B[p],scipy.sparse.csr_matrix((B[p].shape[0],C_[p].shape[0]))])
         for b in range(4):

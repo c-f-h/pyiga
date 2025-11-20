@@ -38,10 +38,11 @@ cpdef tuple pyx_find_global_indices(int[:] indptr, int[:] indices, double[:] dat
 
     for i in range(n):
         for r in range(indptr[local_dir_dofs[i]],indptr[local_dir_dofs[i]+1]):
-            if fabs(data[r]-1.)<1e-12: 
+            if fabs(data[r]-1.)<1e-14: 
                 g_dofs[k]=indices[r]
                 g_vals[k]=local_dir_vals[i]
                 k+=1
+                break;
     return g_dofs[:k].base, g_vals[:k].base
                 
         

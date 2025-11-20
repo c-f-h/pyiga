@@ -413,8 +413,9 @@ def pcg(A, f, x0 = None, P = 1, rtol = 1e-5, atol = 0.0, maxiter = 200, output =
     
     if err < max(rtol * err0, atol):
         delta[0] = (Afun(d)@d)/rho
+        t2=time.time()
         if output:
-            print('pcg with preconditioned condition number ' + str('\N{greek small letter kappa}')+ ' ~ {:.4} stopped after {} iterations with relres {:.4} after {:.3} seconds.'.format(1., 0, err/err0))
+            print('pcg with preconditioned condition number ' + str('\N{greek small letter kappa}')+ ' ~ {:.4} stopped after {} iterations with relres {:.4} after {:.3} seconds.'.format(1., 0, err/err0, t2-t1))
         return x, 0 , delta[0], delta[0], err
 
     #while err > max(rtol * err0, atol) and it < maxiter:
@@ -430,6 +431,7 @@ def pcg(A, f, x0 = None, P = 1, rtol = 1e-5, atol = 0.0, maxiter = 200, output =
         if rho<0: print(rho)
         assert rho>=0, "Preconditioner not SPD."
         err = np.sqrt(rho)
+        print(err)
         if err < max(rtol * err0, atol):
             break
         beta = rho/rho_old

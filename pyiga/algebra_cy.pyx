@@ -115,51 +115,36 @@ cpdef object pyx_compute_basis(int m, int n, object Constr, int maxiter, int swi
     cdef map[int,int] dDofs, pivot
     
     cdef object Basis=scipy.sparse.identity(n, format="csr")
-    num_active = pyx_compute_active_constr(m, n, Constr.indptr, Constr.data, active, 0)
+    num_active = pyx_compute_active_constr(m, n, Constr.indptr, Constr.data, active, False)
 
     it=0
     while num_active!=0:
         if it>maxiter:
             print("maxiter reached.")
             break
-        pivot = pyx_find_pivot(Constr.indptr, Constr.indices, Constr.data, active, num_active)
+        pivot = pyx_find_pivot(Constr.indptr, Constr.indices, Constr.data, active, num_active, take_max=False)
         #assert not pivot.empty(), 'Unable to derive further dofs.'
         Basis = pyx_update_basis(Constr.indptr, Constr.indices, Constr.data, pivot, dDofs, Basis, n)
         Constr = Constr @ Basis   
-        num_active = pyx_compute_active_constr(m, n, Constr.indptr, Constr.data, active, 0)
+        num_active = pyx_compute_active_constr(m, n, Constr.indptr, Constr.data, active, False)
         #print(0, num_active)
         it+=1
 
     if switch>=1:
-        num_active = pyx_compute_active_constr(m, n, Constr.indptr, Constr.data, active, 1)
+        num_active = pyx_compute_active_constr(m, n, Constr.indptr, Constr.data, active, True)
     
         it=0
         while num_active!=0:
             if it>maxiter:
                 print("maxiter reached.")
                 break
-            pivot = pyx_find_pivot(Constr.indptr, Constr.indices, Constr.data, active, num_active)
+            pivot = pyx_find_pivot(Constr.indptr, Constr.indices, Constr.data, active, num_active, take_max=True)
             #assert not pivot.empty(), 'Unable to derive further dofs.'
             Basis = pyx_update_basis(Constr.indptr, Constr.indices, Constr.data, pivot, dDofs, Basis, n)
             Constr = Constr @ Basis   
-            num_active = pyx_compute_active_constr(m, n, Constr.indptr, Constr.data, active, 1)
+            num_active = pyx_compute_active_constr(m, n, Constr.indptr, Constr.data, active, True)
             #print(0, num_active)
             it+=1
-
-    #num_active = pyx_compute_active_constr(m, n, Constr.indptr, Constr.data, active, 1)
-
-    # it=0
-    # while num_active!=0:
-    #     if it>maxiter:
-    #         print("maxiter reached.")
-    #         break
-    #     pivot = pyx_find_pivot(Constr.indptr, Constr.indices, Constr.data, active, num_active)
-    #     #assert not pivot.empty(), 'Unable to derive further dofs.'
-    #     Basis = pyx_update_basis(Constr.indptr, Constr.indices, Constr.data, pivot, dDofs, Basis, n)
-    #     Constr = Constr @ Basis   
-    #     num_active = pyx_compute_active_constr(m, n, Constr.indptr, Constr.data, active, 1)
-    #     #print(0, num_active)
-    #     it+=1
             
     free(active)
     cdef int[:] ndDofs = np.empty(n-dDofs.size(), dtype=np.int32)
@@ -173,7 +158,7 @@ cpdef object pyx_compute_basis(int m, int n, object Constr, int maxiter, int swi
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef map[int,int] pyx_find_pivot(int[:] Cindptr, int[:] Cindices, double[:] Cdata, int* active, int num_active):
+cdef map[int,int] pyx_find_pivot(int[:] Cindptr, int[:] Cindices, double[:] Cdata, int* active, int num_active, bint take_max=False):
     cdef map[int,int] pivot
     cdef int r, elim_dof, ind, c
     cdef double v, elim_val
@@ -187,23 +172,28 @@ cdef map[int,int] pyx_find_pivot(int[:] Cindptr, int[:] Cindices, double[:] Cdat
         for ind in range(Cindptr[r], Cindptr[r+1]):
             c = Cindices[ind]
             v = Cdata[ind]
-            if fabs(fabs(v)-elim_val)<1e-14:
-                if v>1e-14:
+            if take_max:
+                if fabs(fabs(v)-elim_val)<1e-14:
+                    if v>1e-14:
+                        # if elim_dof >= 0:
+                        #     feasible = False
+                        # else:
+                        elim_dof = c
+                        elim_val = fabs(v)
+                if fabs(v) > elim_val+1e-14: 
+                    elim_dof = c
+                    elim_val = fabs(v)
+            else:
+                if fabs(v-1.0)<1e-14:
                     # if elim_dof >= 0:
                     #     feasible = False
                     # else:
                     elim_dof = c
                     elim_val = fabs(v)
-            if fabs(v) > elim_val+1e-14: 
-                # if elim_dof >= 0:
-                #     feasible = False
-                # else:
-                elim_dof = c
-                elim_val = fabs(v)
         for ind in range(Cindptr[r], Cindptr[r+1]):
             c = Cindices[ind]
             v = Cdata[ind]
-            if abs(v) > 1e-14 and pivot.count(c)>0:
+            if fabs(v) > 1e-14 and pivot.count(c)>0:
                 feasible=False
         if elim_dof == -1: # Empty row (TODO: check)
             feasible = False
@@ -254,7 +244,7 @@ cdef int pyx_compute_active_constr(int m, int n, int[:] Cindptr, double[:] Cdata
             if switch:
                 active[num_active]=r
                 num_active+=1                
-    print(n1,n2,n3)
+    #print(n1,n2,n3)
     return num_active
     
 @cython.cdivision(True)

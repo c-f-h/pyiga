@@ -51,13 +51,12 @@ def interpolate(kvs, func, geo=None, nodes=None):
     return tensor.apply_tprod(Cinvs, rhs)
 
 def interpolate_normal(kvs, bdspec, func, func_deriv, geo=None, nodes=None):
-    print(2)
     ax, sd = bspline._parse_bdspec(bdspec,2)[0]
     sup = kvs[ax].support()
     bkvs = assemble.boundary_kv(kvs, bdspec)
     dofs = assemble.boundary_dofs(kvs, bdspec, ravel = True, layer=1)
     if nodes is None:
-        nodes = [kv.greville() for kv in bkvs]
+        nodes = [kv.greville() for kv in kvs]
         nodes = nodes[:ax] + [np.array([sup[0] if sd==0 else sup[-1]])] + nodes[ax+1:]
     
     dim = len(kvs)
@@ -105,7 +104,7 @@ def interpolate_normal(kvs, bdspec, func, func_deriv, geo=None, nodes=None):
         NC += scipy.sparse.spdiags(N[:,i], 0, m, m)*NC_
 
     A = scipy.sparse.vstack([C, NC])
-    return operators.make_solver(A)@np.r_[rhs1,rhs2]
+    return dofs, operators.make_solver(A)@np.c_[rhs1,rhs2].ravel()
     
 
 def _project_L2_hspace(hs, f, f_physical=False, geo=None):

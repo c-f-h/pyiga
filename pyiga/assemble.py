@@ -431,7 +431,7 @@ def slice_indices(axis, sides, shape, ravel=False, swap=None, flip=None, layer=0
         multi_indices = np.ravel_multi_index(multi_indices.T, shape)
     return multi_indices
 
-def _boundary_dofs(kvs, bdspec=None, m=None, ravel=False,
+def boundary_dofs(kvs, bdspec=None, m=None, ravel=False,
                   swap=None, flip=None, layer=0):
     """
     Indices of the dofs which lie on (or within `layer` elements of)
@@ -459,25 +459,25 @@ def _boundary_dofs(kvs, bdspec=None, m=None, ravel=False,
     else:
         return [boundary_dofs(kvs, M, ravel=True, swap=swap, flip=flip, layer=layer) for M in manifolds]
 
-def boundary_dofs(kvs, bdspec=None, m=None, ravel=False, swap=None, flip=None, layer=0):
-    """Indices of the dofs which lie on the given boundary of the tensor
-    product basis `kvs`. Output format is as for :func:`slice_indices`.
-    """
-    kvs = tuple(kvs)
-    n = len(kvs)
-    if m is None:
-        m = n-1
-    if bdspec is not None:
-        b = bspline._parse_bdspec(bdspec, len(kvs))
-        axis, sides = b[:,0], -b[:,1]
-        N = tuple(kv.numdofs for kv in kvs)
-        return slice_indices(axis, sides, N, ravel=ravel, swap=swap, flip=flip)
-    else:
-        manifolds = topology.face_indices(n,m)
-        if ravel==True:
-            return np.unique(np.concatenate([boundary_dofs(kvs, manifolds[i,:,:], ravel=True) for i in range(manifolds.shape[0])]))
-        else:
-            return [boundary_dofs(kvs, M, ravel=True) for M in manifolds]
+# def boundary_dofs(kvs, bdspec=None, m=None, ravel=False, swap=None, flip=None, layer=0):
+#     """Indices of the dofs which lie on the given boundary of the tensor
+#     product basis `kvs`. Output format is as for :func:`slice_indices`.
+#     """
+#     kvs = tuple(kvs)
+#     n = len(kvs)
+#     if m is None:
+#         m = n-1
+#     if bdspec is not None:
+#         b = bspline._parse_bdspec(bdspec, len(kvs))
+#         axis, sides = b[:,0], -b[:,1]
+#         N = tuple(kv.numdofs for kv in kvs)
+#         return slice_indices(axis, sides, N, ravel=ravel, swap=swap, flip=flip)
+#     else:
+#         manifolds = topology.face_indices(n,m)
+#         if ravel==True:
+#             return np.unique(np.concatenate([boundary_dofs(kvs, manifolds[i,:,:], ravel=True) for i in range(manifolds.shape[0])]))
+#         else:
+#             return [boundary_dofs(kvs, M, ravel=True) for M in manifolds]
         
 def boundary_kv(kvs, bdspec, swap=None, flip=None):
     kvs=list(kvs)
@@ -562,34 +562,34 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
     if np.isscalar(dir_func):
         const_value = dir_func
         dir_func = lambda *x: const_value
-    dircoeffs = interpolate(bdbasis, dir_func, geo=bdgeo)
+    dir_coeffs = interpolate(bdbasis, dir_func, geo=bdgeo)
 
     # compute sequential indices for eliminated dofs
     N = tuple(kv.numdofs for kv in kvs)
-    bdindices = slice_indices(axis, sides, N, ravel=True)
+    bd_indices = slice_indices(axis, sides, N, ravel=True)
 
-    extra_dims = dircoeffs.ndim - len(bdbasis)
+    extra_dims = dir_coeffs.ndim - len(bdbasis)
     if extra_dims == 0:
-        return _drop_nans(bdindices, dircoeffs.ravel())
+        return _drop_nans(bd_indices, dir_coeffs.ravel())
     elif extra_dims == 1:
         # vector function; assume blocked vector discretization
-        numcomp = dircoeffs.shape[-1]
+        numcomp = dir_coeffs.shape[-1]
         NN = np.prod(N)
         idx, val = combine_bcs(
-            (bdindices + j*NN, dircoeffs[..., j].ravel())
+            (bd_indices + j*NN, dir_coeffs[..., j].ravel())
                 for j in range(numcomp))
         return _drop_nans(idx, val)
     else:
         raise ValueError('invalid dimension of Dirichlet coefficients: %s' % dircoeffs.shape)
 
 def compute_dirichlet_neumann_bc(kvs, geo, bdspec,dir_func, neu_func):
-    b = bspline._parse_bdspec(bdspec, len(kvs))
-    axis, sides = b[:,0], -b[:,1]
+    #b = bspline._parse_bdspec(bdspec, len(kvs))
+    #axis, sides = b[:,0], -b[:,1]
 
-    bdbasis = list(kvs)
-    assert len(bdbasis) == geo.sdim, 'Invalid dimension of geometry'
-    for ax in sorted(axis,reverse=True):
-        del bdbasis[ax]
+    #bdbasis = list(kvs)
+    #assert len(bdbasis) == geo.sdim, 'Invalid dimension of geometry'
+    #for ax in sorted(axis,reverse=True):
+    #    del bdbasis[ax]
 
     # get boundary geometry and interpolate dir_func
 
@@ -600,10 +600,9 @@ def compute_dirichlet_neumann_bc(kvs, geo, bdspec,dir_func, neu_func):
     if np.isscalar(neu_func):
         const_value = neu_func
         neu_func = lambda *x: const_value
-    coeffs = interpolate_normal(kvs, bdspec, dir_func, neu_func, geo=geo)
+    bd_indices, dir_neu_coeffs = interpolate_normal(kvs, bdspec, dir_func, neu_func, geo=geo)
+    return _drop_nans(bd_indices, dir_neu_coeffs.ravel())
     
-    
-
 def compute_dirichlet_bcs(kvs, geo, bdconds):
     """Compute indices and values for Dirichlet boundary conditions on
     several boundaries at once.
@@ -630,6 +629,35 @@ def compute_dirichlet_bcs(kvs, geo, bdconds):
     return combine_bcs(
             compute_dirichlet_bc(kvs, geo, bdspec, g)
             for (bdspec, g) in bdconds
+    )
+
+def compute_dirichlet_neumann_bcs(kvs, geo, bdconds):
+    """Compute indices and values for Dirichlet boundary conditions on
+    several boundaries at once.
+
+    Args:
+        kvs: a tensor product B-spline basis
+        geo (:class:`.BSplineFunc` or :class:`.NurbsFunc`): the geometry transform
+        bdconds: a list of `(bdspec, dir_func)` pairs, where `bdspec`
+            specifies the boundary to apply a Dirichlet boundary condition to
+            and `dir_func` is the function providing the Dirichlet values. For
+            the exact meaning, refer to :func:`compute_dirichlet_bc`.
+            As a shorthand, it is possible to pass a single pair ``("all",
+            dir_func)`` which applies Dirichlet boundary conditions to all
+            boundaries.
+    Returns:
+        A pair `(indices, values)` suitable for passing to
+        :class:`RestrictedLinearSystem`.
+    """
+    if len(bdconds) == 3 and bdconds[0] == 'all':
+        dir_func = bdconds[1]
+        neu_func = bdconds[2]
+        bdconds = [((ax, bd), dir_func, neu_func)
+                for ax in range(len(kvs))
+                for bd in (0,1)]
+    return combine_bcs(
+            compute_dirichlet_neumann_bc(kvs, geo, bdspec, g1, g2)
+            for (bdspec, g1, g2) in bdconds
     )
 
 def compute_initial_condition_01(kvs, geo, bdspec, g0, g1, physical=True):
@@ -1062,7 +1090,6 @@ def _Jac_to_boundary_matrix(bdspec, dim):
 def instantiate_assembler(problem, kvs, args, bfuns, boundary=None, updatable=[]):
     from . import vform
 
-    
     # parse string to VForm
     if isinstance(problem, str):
         if boundary is not None:
@@ -1494,7 +1521,7 @@ class MultiBasis:
             flip=(dim-1)*(False,)
      
         bkv1, bkv2 = boundary_kv(kvs1, bdspec1), boundary_kv(kvs2, bdspec2, flip=flip)
-        dofs1, dofs2 = _boundary_dofs(kvs1, bdspec1, ravel = True, layer=1), _boundary_dofs(kvs2, bdspec2, ravel = True, flip=flip, layer=1)
+        dofs1, dofs2 = boundary_dofs(kvs1, bdspec1, ravel = True, layer=1), boundary_dofs(kvs2, bdspec2, ravel = True, flip=flip, layer=1)
         G = tuple(kv.greville() for kv in kvs2)
         G2 = G[:ax2] + (np.array([sup2[ax2][0] if sd2==0 else sup2[ax2][-1]]),) + G[ax2+1:]
         G1 = G[:ax2] + G[ax2+1:]
@@ -1624,7 +1651,7 @@ class MultiBasis:
                 bdspec=b
                 bdofs = boundary_dofs(kvs, b, ravel=True) + self.N_ofs[p]
                 args.update(geo = geo)
-    
+
                 vals=assemble(problem, kvs, args=args, bfuns=bfuns,
                         symmetric=symmetric, format=format, layout=layout,
                         **kwargs, boundary=bdspec).ravel()
@@ -1632,38 +1659,42 @@ class MultiBasis:
             
             return X.T @ N
 
-    def set_dirichlet_boundary(self, dir_data):
-        self.dir_data = dir_data
-        self.dir_idx = dict()
-        self.dir_vals = dict()
+    def set_fixed_boundary(self, data):
+        self.dir_data = data
+        #self.neu_data = neu_data
+        self.fixed_idx = dict()
+        self.fixed_vals = dict()
         kvs = self.mesh.kvs
         geos = self.mesh.geos
-        for key in dir_data:
+        for key in data:
             for p,b in self.mesh.outer_boundaries[key]:
-                idx_, vals_ = compute_dirichlet_bc(kvs[p], geos[p], b, dir_data[key])
-                if p in self.dir_idx:
-                    self.dir_idx[p].append(idx_)
-                    self.dir_vals[p].append(vals_)
+                if isinstance(data[key], tuple):
+                    if len(data[key])==2:
+                        idx_,vals_ = compute_dirichlet_neumann_bc(kvs[p], geos[p], b, *data[key])
                 else:
-                    self.dir_idx[p]=[idx_]
-                    self.dir_vals[p]=[vals_]
+                    idx_, vals_ = compute_dirichlet_bc(kvs[p], geos[p], b, data[key])
+                if p in self.fixed_idx:
+                    self.fixed_idx[p].append(idx_)
+                    self.fixed_vals[p].append(vals_)
+                else:
+                    self.fixed_idx[p]=[idx_]
+                    self.fixed_vals[p]=[vals_]
                 
-        for p in self.dir_idx:
-            self.dir_idx[p], lookup = np.unique(np.concatenate(self.dir_idx[p]), return_index = True)
-            self.dir_vals[p] = np.concatenate(self.dir_vals[p])[lookup]
+        for p in self.fixed_idx:
+            self.fixed_idx[p], lookup = np.unique(np.concatenate(self.fixed_idx[p]), return_index = True)
+            self.fixed_vals[p] = np.concatenate(self.fixed_vals[p])[lookup]
             
-        self.local_dir_idx = np.concatenate([self.dir_idx[p] + self.N_ofs[p] for p in self.dir_idx])
-        self.local_dir_vals = np.concatenate([self.dir_vals[p] for p in self.dir_idx])
+        self.local_fixed_idx = np.concatenate([self.fixed_idx[p] + self.N_ofs[p] for p in self.fixed_idx])
+        self.local_fixed_vals = np.concatenate([self.fixed_vals[p] for p in self.fixed_idx])
 
         if self.subspace:
             B=self.Basis.tocsr()
-            global_dir_idx , global_dir_vals= assemble_cy.pyx_find_global_indices(B.indptr, B.indices, B.data, 
-                                                                              self.local_dir_idx.astype(np.int32), self.local_dir_vals)
+            global_fixed_idx , global_fixed_vals= assemble_cy.pyx_find_global_indices(B.indptr, B.indices, B.data, self.local_fixed_idx.astype(np.int32), self.local_fixed_vals)
 
-            global_dir_idx, lookup = np.unique(global_dir_idx, return_index=True)
-            return global_dir_idx, global_dir_vals[lookup]
+            global_fixed_idx, lookup = np.unique(global_fixed_idx, return_index=True)
+            return global_fixed_idx, global_fixed_vals[lookup]
         else:
-            return self.local_dir_idx, self.local_dir_vals
+            return self.local_fixed_idx, self.local_fixed_vals
 
     def h_refine(self, h_ref=None, mult=1, return_P = False, ref="rs", in_subspace=True):
         """Refines the Mesh by splitting patches

@@ -268,21 +268,34 @@ class KnotVector:
         else:
             return new_kv.deriv(deriv=deriv-1, coeffs=new_coeffs)
 
-    def plot(self, knots=True):
+    def plot(self, ax=None, idx=None, knots=True, res=1000, color=None, linestyle=None):
         """
         Plot all B-spline basis functions defined on the knot vector.
         """
-        x = np.linspace(self.kv[0], self.kv[-1], 1000)
-    
+        x = np.linspace(self.kv[0], self.kv[-1], res + 1)
+
+        if idx is not None:
+            if isinstance(idx,int):
+                idx = np.array([idx])
+            if isinstance(idx, tuple):
+                idx = np.array(idx)
+            for i in range(len(idx)):
+                idx[i]=idx[i]%self.numdofs
+            idx = np.unique(idx)
+        else:
+            idx = range(self.numdofs)
+
+
         func = [
             BSplineFunc(self, np.eye(1, self.numdofs, i).ravel())
-            for i in range(self.numdofs)
+            for i in idx
         ]
-    
-        fig, ax = plt.subplots(figsize=(8, 4))
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(8, 4))
     
         for i, f in enumerate(func):
-            ax.plot(x, f(x), label=f"$B_{{{i}}}$")
+            plt.plot(x, f(x), label=f"$B_{{{i}}}$",color=color, linestyle=linestyle)
     
         if knots:
             offset = 0.02
@@ -291,17 +304,18 @@ class KnotVector:
                 ax.annotate(
                     str(mi),
                     (xi, -offset * 2.2),         # Slightly below the triangle
-                    fontsize=6,
+                    fontsize=10,
                     ha="center",                 # Center horizontally
                     va="top"                     # Align vertically above the annotation point
                 )
     
-        ax.set_title("B-spline Basis Functions")
-        ax.set_xlabel("\N{greek small letter xi}")
-        ax.set_ylabel("Basis Function Value")
+        #ax.set_title("B-spline Basis Functions")
+        #ax.set_xlabel("\N{greek small letter xi}")
+        #ax.set_ylabel("Basis Function Value")
+        plt.ylim(-0.12,1.05)
         ax.grid(True)
         plt.tight_layout()
-        plt.show()
+        #plt.show()
         
 def mapto(kv, f):
         """Transform mesh of the knots by the mapping f"""

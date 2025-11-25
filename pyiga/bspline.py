@@ -730,6 +730,20 @@ def tp_bsp_eval_with_jac_pointwise(kvs, coeffs, points):
     return result_val, result_jac
 
 ################################################################################
+def collocation_info(kv, nodes):
+    """Return two arrays: one containing the index of the first active B-spline
+    per evaluation node, and one containing, per node, the coefficient vector
+    of length `p+1` for the linear combination of basis functions which yields
+    the point evaluation at that node.
+
+    Corresponds to a row-wise representation of the collocation matrix (see
+    :func:`collocation`).
+    """
+    nodes = np.ascontiguousarray(nodes) # pyx_findspans requires a contiguous array
+    values = active_ev(kv, nodes) # (p+1) x n
+    #indices = [kv.first_active_at(u) for u in nodes]
+    indices = pyx_findspans(kv.kv, kv.p, nodes) - kv.p        # faster version
+    return indices, np.asarray(values.T)
 
 def collocation(kv, nodes):
     """Compute collocation matrix for B-spline basis at the given interpolation nodes.
@@ -768,21 +782,6 @@ def collocation_tp(kvs, gridaxes):
     # for d in range(1,dim):
     #     C = scipy.sparse.kron(C,Colloc[d])
     return _multi_kron(C)
-
-def collocation_info(kv, nodes):
-    """Return two arrays: one containing the index of the first active B-spline
-    per evaluation node, and one containing, per node, the coefficient vector
-    of length `p+1` for the linear combination of basis functions which yields
-    the point evaluation at that node.
-
-    Corresponds to a row-wise representation of the collocation matrix (see
-    :func:`collocation`).
-    """
-    nodes = np.ascontiguousarray(nodes) # pyx_findspans requires a contiguous array
-    values = active_ev(kv, nodes) # (p+1) x n
-    #indices = [kv.first_active_at(u) for u in nodes]
-    indices = pyx_findspans(kv.kv, kv.p, nodes) - kv.p        # faster version
-    return indices, np.asarray(values.T)
 
 def collocation_derivs(kv, nodes, derivs=1):
     """Compute collocation matrix and derivative collocation matrices for B-spline

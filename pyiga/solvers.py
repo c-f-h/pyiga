@@ -431,7 +431,7 @@ def pcg(A, f, x0 = None, P = 1, rtol = 1e-5, atol = 0.0, maxiter = 200, output =
         if rho<0: print(rho)
         assert rho>=0, "Preconditioner not SPD."
         err = np.sqrt(rho)
-        print(err, err/err0)
+        #print(err, err/err0)
         if err < max(rtol * err0, atol):
             break
         beta = rho/rho_old

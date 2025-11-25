@@ -135,22 +135,23 @@ class IetiMapper(assemble.MultiBasis):
         ii=[]
         jj=[]
         k=0
+        B = self.B.tocsc()
         for (p1,b1) in self.mesh.L_intfs:
             supp1 = self.mesh.boundaries(p1)[1][b1]
-            kv1 = assemble.boundary_kv(self.mesh.kvs[p1],b1)
+            kv1 = assemble.boundary_kv(self.mesh.kvs[p1],b1)[0]
             dofs1 = assemble.boundary_dofs(self.mesh.kvs[p1],b1,ravel=True)
+            #P = B[:,dofs1+self.N_ofs[p1]].tocsr()
             for (p2, b2) in self.mesh.L_intfs[(p1,b1)]:
-                kv2 = assemble.boundary_kv(self.mesh.kvs[p2],b2)
+                kv2 = assemble.boundary_kv(self.mesh.kvs[p2],b2)[0]
                 dofs2 = assemble.boundary_dofs(self.mesh.kvs[p2],b2,ravel=True)
 
-                a, b = self.mesh.boundaries(p2)[1][b2]
-                #a, b = (supp2-supp[0])/(supp[1]-supp[0])
-                #a, b = supp2
+                P = bspline.prolongation(kv1,kv2)
+                #a, b = self.Constr[(p1,p2)]
 
-                moments1 = assemble.assemble("v * ds", arity=1, kvs = self.mesh.kvs[p1], geo = self.mesh.geos[p1], boundary=b1).ravel()
                 moments2 = assemble.assemble("v * ds", arity=1, kvs = self.mesh.kvs[p2], geo = self.mesh.geos[p2], boundary=b2).ravel()
+                #moments1 = assemble.assemble("v * ds", arity=1, kvs = self.mesh.kvs[p1], geo = self.mesh.geos[p1], boundary=b1).ravel()
 
-                vv.append(np.r_[abs(moments1)/sum(moments1),abs(moments2)/sum(moments2)])
+                vv.append(np.r_[P.T@moments2,moments2]/sum(moments2))
                 ii.append(np.r_[dofs1 + self.N_ofs[p1], dofs2+ self.N_ofs[p2]])
                 jj.append(np.repeat(k, len(dofs1)+len(dofs2)))
                 k+=1
@@ -193,8 +194,8 @@ class PrimalSystem():
             c = c[jj,:]
             self.C.append(c)
             self.R.append(scipy.sparse.coo_matrix((np.ones(c.shape[0]),(np.arange(c.shape[0]),jj)),(c.shape[0],self.nPrim)))
-            #print(self.C[-1].toarray())
-        assert np.all(np.array([np.linalg.matrix_rank(c.toarray())==c.shape[0] for c in self.C if c.shape[0]!=0])), "Local saddle point system not full rank."
+            assert np.linalg.matrix_rank(c.toarray())==c.shape[0], "Local saddle point system not full row rank in patch "+str(p)+": number of rows: "+str(c.shape[0])+", row rank: "+str(np.linalg.matrix_rank(c.toarray()))+" ."
+        #assert np.all(np.array([np.linalg.matrix_rank(c.toarray())==c.shape[0] for c in self.C if c.shape[0]!=0])), "Local saddle point system not full rank."
             
         self.nPrimConstr = [c.shape[0] for c in self.C]
 

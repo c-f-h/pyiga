@@ -12,8 +12,8 @@ cimport numpy as np
 
 from libc.stdlib cimport malloc, free
 from libc.math cimport fabs, fmin, fmax
-from libcpp.string cimport string
-from libc.stdio cimport snprintf
+#from libcpp.string cimport string
+#from libc.stdio cimport snprintf
 
 ###Helper functions
 # cdef inline int count_multiplicity(double[:] kv, int idx, int n, double tol):
@@ -340,42 +340,56 @@ from libc.stdio cimport snprintf
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef bint pyx_checkSWcondition(double[::1] kv, int p, int size, double[::1] nodes, int m):
+cpdef bint pyx_checkSWcondition(double[::1] kv, int p, int size, double[::1] nodes, int m, bint with_edges):
     """
     Check Schönberg-Whitney condition:
     Given B-spline knot vector `kv` of degree `p` and `m` collocation `nodes`,
     verify that each node can be assigned uniquely to a basis function
     whose support contains it (with tolerance adjustments at boundaries).
+    If with_edges is true it is also checked if we can assign basis functions 
+    that are nonzero for each interval between the nodes.
     """
     cdef int n = size - p - 1  # number of basis functions
-    if n < m:
+    if n < m + (m-1 if with_edges else 0):
         return False
 
     cdef int i, j, k = 0
-    cdef double tol = 1e-14, start, end
+    cdef double tol = 1e-14, s0, s1
 
     # Check all nodes are strictly increasing and lie in the domain defined by kv[p] and kv[size-p-1]
     for i in range(m):
-        if i<m-1:
-            if nodes[i] > nodes[i+1]-tol:
-                return False
-        if nodes[i] < kv[p] or nodes[i] > kv[size - p - 1]:
-            return False
+        if i < m-1 and nodes[i] > nodes[i+1]: return False
+        if nodes[i] < kv[p] - tol or nodes[i] > kv[size-p-1] + tol: return False
 
     for i in range(m):
+        #check to find a basis function for the node itself
         for j in range(k, n):
-            start = -1.0 if j <= p else 1.0
-            end = -1.0 if j >= n - p else 1.0
+            s0 = kv[j] - tol*(j==0)
+            s1 = kv[j+p+1] + tol*(j==n-1)
 
-            if kv[j] + start * tol < nodes[i] < kv[j + p + 1] - end * tol:
+            if s0 < nodes[i] < s1:
                 k = j + 1
                 break
-            elif nodes[i] < kv[j] - tol:
+            elif nodes[i] < s0:
                 return False
         else:
             # No valid basis function support found for nodes[i]
             return False
 
+        if with_edges and i<m-1:
+            #check the next interval between the nodes if we can find a basis function with intersecting support
+            for j in range(k,n):
+                s0 = kv[j] - tol if j <= p else kv[j] + tol
+                s1 = kv[j+p+1] + tol if j >= n-p else kv[j+p+1] - tol
+
+                if not (nodes[i] > s1 or nodes[i+1] < s0):
+                    k = j + 1
+                    break
+                elif nodes[i+1] < kv[j] - tol:
+                    return False
+            else:
+                # no valid basis function support found for [nodes[i],nodes[i+1]]
+                return False
     return True
 
 @cython.cdivision(True)
@@ -506,6 +520,82 @@ cpdef object pyx_findspans(double[::1] kv, int p, double[::1] u):
         result[i] = pyx_findspan(kv, p, u[i])
     return out
 
+# @cython.boundscheck(False)
+# @cython.wraparound(False)
+# cpdef np.ndarray[np.int64_t, ndim=1] pyx_findspans(double[::1] kv, int p, double[::1] u, int m):
+#     cdef np.ndarray[np.int64_t, ndim=1] out = np.empty(m, dtype=np.int64)
+#     cdef long[::1] result = out
+#     cdef int i
+#     with nogil:
+#         for i in range(m):
+#             result[i] = pyx_findspan(kv, p, u[i])
+#     return out
+
+# @cython.cdivision(True)
+# @cython.boundscheck(False)
+# @cython.wraparound(False)
+# cpdef np.ndarray[np.float64_t, ndim=1] pyx_knot_insertion(double[:] kv, int size, int p, double[:] u, int m):
+#     cdef int n = size - p - 1
+#     cdef np.ndarray[np.float64_t, ndim=1] kv_new = np.empty(size + m, dtype=np.float64)
+#     cdef double[:] kv_new_ = kv_new
+#     cdef int i1=0,i2=0,k=0
+#     while i1 < size or i2 < m:
+#         if i2==m: kv_new_[k] = kv[i1]; i1+=1
+#         elif i1==size: kv_new_[k] = u[i2]; i2+=1
+#         elif kv[i1] <= u[i2]: kv_new_[k] = kv[i1]; i1+=1
+#         else: kv_new_[k] = u[i2]; i2+=1
+#         k+=1
+#     cdef int n_new = k - p - 1
+#     #return kv_new
+
+#     cdef int max_nnz = (n + m) * (p + 1)
+#     cdef np.ndarray[np.float64_t, ndim=1] data = np.empty(max_nnz, dtype=np.float64)
+#     cdef np.ndarray[np.int32_t, ndim=1] ii = np.empty(max_nnz, dtype=np.int32)
+#     cdef np.ndarray[np.int32_t, ndim=1] jj = np.empty(max_nnz, dtype=np.int32)
+#     cdef double[:] data_ = data
+#     cdef int[:] ii_ = ii
+#     cdef int[:] jj_ = jj
+#     cdef double* alpha = <double *>malloc((m + p + 1) * sizeof(double))
+
+#     cdef int i,j, idx=0
+#     k=0
+#     for j in range(n):
+#         k = pyx_findspan(kv_new_, p, kv[j])
+#         r = 0
+#         while r + k + p + 1 < size + m and kv_new_[r + k + p + 1] < kv[j + p + 1]:
+#             r+=1
+#         pyx_compute_alpha(kv, kv_new_, p, k, r, j, alpha)
+#         for i in range(r + p + 1):
+#             data_[idx] = alpha[i]
+#             jj_[idx] = j
+#             ii_[idx] = i + k
+#             idx+=1
+#     free(alpha)
+
+# @cython.cdivision(True)
+# @cython.boundscheck(False)
+# @cython.wraparound(False)
+# cdef void pyx_compute_alpha(double[:] kv, double[:] kv_new, int p, int start_index, int r, int j, double* alpha) nogil:
+#     """
+#     """
+#     #cdef int i, r, s  # number of inserted knots
+#     #cdef double alpha, beta
+#     cdef int i, k
+#     cdef double beta
+#     # Step 1: initialize
+#     for i in range(p + 1):
+#         alpha[i] = 0.0
+#     alpha[0] = 1.0
+    
+#     for i in range(r):
+#         # loop backward to update coefficients
+#         for k in range(p + i, 0, -1):
+#             if kv[j + k + p] != kv[j + k]:
+#                 beta = #TODO
+#             else:
+#                 beta = 0.0
+#             alpha[k] = beta * alpha[k-1] + (1.0 - beta) * alpha[k]
+    
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -589,6 +679,90 @@ cdef double[:,:] bspline_active_deriv_single(object knotvec, double u, int numde
             (a1,a2) = (a2,a1)
 
     return result
+
+# @cython.cdivision(True)
+# @cython.boundscheck(False)
+# @cython.wraparound(False)
+# cdef double[:,:] bspline_active_deriv_single(object knotvec, double u, int numderiv, double[:,:] result=None) noexcept:
+#     """Evaluate all active B-spline basis functions and their derivatives
+#     up to `numderiv` at a single point `u`"""
+#     cdef double[::1] kv
+#     cdef int p, j, r, k, span, rk, pk, fac, j1, j2
+#     cdef double[:,::1] NDU
+#     cdef double saved, temp, d
+#     cdef double[64] left, right, a1buf, a2buf
+#     cdef double* a1
+#     cdef double* a2
+
+#     kv, p = knotvec.kv, knotvec.p
+#     assert p < 64, "Spline degree too high"  # need to change constant array sizes above (p+1)
+
+#     NDU = np.empty((p+1, p+1), order='C')
+#     if result is None:
+#         result = np.empty((numderiv+1, p+1))
+#     else:
+#         assert result.shape[0] is numderiv+1 and result.shape[1] is p+1
+
+#     span = pyx_findspan(kv, p, u)
+
+#     NDU[0,0] = 1.0
+
+#     for j in range(1, p+1):
+#         # Compute knot splits
+#         left[j-1]  = u - kv[span+1-j]
+#         right[j-1] = kv[span+j] - u
+#         saved = 0.0
+
+#         for r in range(j):     # For all but the last basis functions of degree j (ndu row)
+#             # Strictly lower triangular part: Knot differences of distance j
+#             NDU[j, r] = right[r] + left[j-r-1]
+#             temp = NDU[r, j-1] / NDU[j, r]
+#             # Upper triangular part: Basis functions of degree j
+#             NDU[r, j] = saved + right[r] * temp  # r-th function value of degree j
+#             saved = left[j-r-1] * temp
+
+#         # Diagonal: j-th (last) function value of degree j
+#         NDU[j, j] = saved
+
+#     # copy function values into result array
+#     for j in range(p+1):
+#         result[0, j] = NDU[j, p]
+
+#     (a1,a2) = a1buf, a2buf
+
+#     for r in range(p+1):    # loop over basis functions
+#         a1[0] = 1.0
+
+#         fac = p        # fac = fac(p) / fac(p-k)
+
+#         # Compute the k-th derivative of the r-th basis function
+#         for k in range(1, numderiv+1):
+#             rk = r - k
+#             pk = p - k
+#             d = 0.0
+
+#             if r >= k:
+#                 a2[0] = a1[0] / NDU[pk+1, rk]
+#                 d = a2[0] * NDU[rk, pk]
+
+#             j1 = 1 if rk >= -1  else -rk
+#             j2 = k-1 if r-1 <= pk else p - r
+
+#             for j in range(j1, j2+1):
+#                 a2[j] = (a1[j] - a1[j-1]) / NDU[pk+1, rk+j]
+#                 d += a2[j] * NDU[rk+j, pk]
+
+#             if r <= pk:
+#                 a2[k] = -a1[k-1] / NDU[pk+1, r]
+#                 d += a2[k] * NDU[r, pk]
+
+#             result[k, r] = d * fac
+#             fac *= pk          # update fac = fac(p) / fac(p-k) for next k
+
+#             # swap rows a1 and a2
+#             (a1,a2) = (a2,a1)
+
+#     return result
 
 @cython.boundscheck(False)
 @cython.wraparound(False)

@@ -1392,6 +1392,8 @@ class MultiBasis:
         self.dir_data = dir_data
 
         self.B = scipy.sparse.csr_matrix((0,self.N_ofs[-1]))
+        self.Constr = {}
+        self.nConstr = 0
 
         self.intfs = set()
         interfaces = self.mesh.interfaces
@@ -1445,10 +1447,11 @@ class MultiBasis:
 
     def set_constraints(self, subspace='C0'):
         t=time.time()
+        intfs = self.intfs.copy()
         if subspace=='C0':
-            B=[self.compute_C0_constraint(p1, bd1, s1, p2, bd2, s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
+            B=[self.compute_C0_constraint(p1, bd1, s1, p2, bd2, s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in intfs]
         elif subspace=='C1':
-            B=[self.compute_C1_constraint(p1, bd1, s1, p2, bd2, s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in self.intfs.copy()]
+            B=[self.compute_C1_constraint(p1, bd1, s1, p2, bd2, s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in intfs]
         print('setting up constraints took {:3} seconds.'.format(time.time()-t))
         if len(B)!=0:
             return scipy.sparse.vstack(B)
@@ -1498,7 +1501,9 @@ class MultiBasis:
         #retrieve local dofs for each patch on the boundary
         dofs1 = boundary_dofs(self.mesh.patches[p1][0][0], bdspec1, ravel=True)
         dofs2 = boundary_dofs(self.mesh.patches[p2][0][0], bdspec2, ravel=True, flip=flip)
-            
+
+        self.Constr[(p1,p2)] = self.nConstr,self.nConstr+len(dofs2)
+        self.nConstr += len(dofs2)
         #Prolongation operator  
         P = -scipy.sparse.coo_matrix(bspline.prolongation_tp(bkv1,bkv2))   #TODO: make paramater to generate prolongation matrix as coo_matrix directly?
         #construct constraints for this interface

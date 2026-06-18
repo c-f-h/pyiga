@@ -284,7 +284,7 @@ def make_solver(B, symm=False, spd=False):
             return scipy.sparse.linalg.LinearOperator(B.shape, dtype=B.dtype,
                         matvec=spLU.solve, matmat=spLU.solve)
     else:
-        if symm:
+        if spd:
             chol = scipy.linalg.cho_factor(B, check_finite=False)
             solve = lambda x: scipy.linalg.cho_solve(chol, x, check_finite=False)
             return scipy.sparse.linalg.LinearOperator(B.shape, dtype=B.dtype,

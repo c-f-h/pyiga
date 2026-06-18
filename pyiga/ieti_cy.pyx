@@ -93,7 +93,7 @@ cpdef tuple pyx_compute_decoupled_coarse_basis(object global_Basis, int[:] N_ofs
     cdef int l = 0
     cdef int[:] jj = np.empty(n, dtype=np.int32)            ###TODO: generate list of patch jump matrices immediately, also generate them in csr-format (data, indices, inptr)
     cdef int[:] ii = np.empty(n, dtype=np.int32)
-    cdef int[:] Bdata = np.empty(n, dtype=np.int32)
+    cdef double[:] Bdata = np.empty(n, dtype=np.float64)
     
     for k in range(p_intfs.shape[1]):
         p1 = p_intfs[0,k]
@@ -104,8 +104,8 @@ cpdef tuple pyx_compute_decoupled_coarse_basis(object global_Basis, int[:] N_ofs
             jj[l+1] = idx2[s] + N_ofs_[p2]
             ii[l] = l//2
             ii[l+1] = l//2
-            Bdata[l]= 1
-            Bdata[l+1]= -1
+            Bdata[l]= 1.0
+            Bdata[l+1]= -1.0
             l+=2
         
     B = scipy.sparse.coo_matrix((Bdata.base[:l],(ii.base[:l],jj.base[:l])),(l//2,N_ofs_[len(N_ofs_)-1])).tocsr()
@@ -181,7 +181,7 @@ cpdef void pyx_parametersort(int[:] indptr, int[:] indices, double[:] data, int 
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef np.ndarray[np.float64_t, ndim=1] pyx_multiplicity_scaling(int[:] indptr, int[:] indices, double[:] data, int m, int n):
+cpdef np.ndarray[np.float64_t, ndim=1] pyx_constraint_scaling(int[:] indptr, int[:] indices, double[:] data, int m, int n):
 
     cdef double[:] d = np.zeros(n, dtype=np.float64)
     cdef int i, j, ind
@@ -198,7 +198,7 @@ cpdef np.ndarray[np.float64_t, ndim=1] pyx_multiplicity_scaling(int[:] indptr, i
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef np.ndarray[np.float64_t, ndim=1] pyx_constraint_scaling(int[:] indptr, int[:] indices, double[:] data, int m, int n):
+cpdef np.ndarray[np.float64_t, ndim=1] pyx_weight_scaling(int[:] indptr, int[:] indices, double[:] data, int m, int n):
 
     cdef double[:] d = np.zeros(n, dtype=np.float64)
     cdef int i, j, ind
@@ -214,7 +214,7 @@ cpdef np.ndarray[np.float64_t, ndim=1] pyx_constraint_scaling(int[:] indptr, int
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef np.ndarray[np.float64_t, ndim=1] pyx_weight_scaling(int[:] indptr, int[:] indices, double[:] data, int m, int n):
+cpdef np.ndarray[np.float64_t, ndim=1] pyx_absolute_weight_scaling(int[:] indptr, int[:] indices, double[:] data, int m, int n):
 
     cdef double[:] d = np.zeros(n, dtype=np.float64)
     cdef int i, j, ind

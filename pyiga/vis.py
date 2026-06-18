@@ -80,18 +80,19 @@ def plot_geo(geo,
     """Plot a wireframe representation of a geometry."""
     assert (geo.dim == 2 or geo.dim == 3), 'Can only represent geometries in 2D or 3D!' 
 
+    if geo.sdim == 1:
+        return plot_curve(geo, res=res, linewidth=linewidth, lcolor=color, controlgrid=controlgrid, zorder=zorder, **kwargs)
+    if geo.sdim == 2:
+        return plot_surface(geo, grid=grid, gridx=gridx, gridy=gridy, res=res, linewidth=linewidth, lcolor=lcolor,
+                            color=color, boundary=boundary, bcolor=bcolor, controlgrid=controlgrid, zorder=zorder, **kwargs)
+        
     axis = kwargs.pop('axis', None)
     ax = axis if axis is not None else plt.gca()
 
-    if geo.sdim == 3 and not hasattr(ax, 'zaxis'):
+    assert geo.dim == 3, 'cannot plot geometries with dimension larger than 3!'
+    if not hasattr(ax, 'zaxis'):
         fig = plt.gcf()
         ax = fig.add_subplot(111, projection='3d')
-
-    if geo.sdim == 1:
-        return plot_curve(geo, res=res, linewidth=linewidth, lcolor=color, controlgrid=controlgrid, zorder=zorder, axis=ax)
-    if geo.sdim == 2:
-        return plot_surface(geo, grid=grid, gridx=gridx, gridy=gridy, res=res, linewidth=linewidth, lcolor=lcolor,
-                            color=color, boundary=boundary, bcolor=bcolor, controlgrid=controlgrid, zorder=zorder, axis=ax)
 
     if gridx is None: gridx = grid
     if gridy is None: gridy = grid
@@ -149,13 +150,19 @@ def plot_surface(geo,
                  linewidth=None, lcolor='black', color=None, boundary=True, bcolor='black', controlgrid=False, zorder=1,
                  **kwargs):
     """Plot a 2D or 3D surface."""
+
     axis = kwargs.pop('axis', None)
     ax = axis if axis is not None else plt.gca()
+
+    if geo.dim == 3 and not hasattr(ax, 'zaxis'):
+        fig = plt.gcf()
+        ax = fig.add_subplot(111, projection='3d')
 
     assert geo.sdim == 2 and (geo.dim == 2 or geo.dim == 3), "Can only plot surfaces."
 
     if gridx is None: gridx = grid
     if gridy is None: gridy = grid
+        
     if geo._support_override is not None:
         supp = geo._support_override
     else:

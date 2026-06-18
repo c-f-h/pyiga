@@ -572,15 +572,20 @@ def bspline_annulus(r1=1.0, r2=2.0, phi=np.pi/2, support = None):
     Returns:
         :class:`.BSplineFunc` 2D geometry
     """
-    assert -np.pi/2<=phi<=np.pi/2, 'angle needs to be sharp!'
+    #assert -np.pi/2<=phi<=np.pi/2, 'angle needs to be sharp!'
     kvx = bspline.make_knots(1, 0.0, 1.0, 1)
+    # if phi < np.pi+1e-14: switch = 1
+    # elif np.pi/2+1e-14 < phi < np.pi+1e-14: switch = 2
+    # elif np.pi
+
+    
     kvy = bspline.make_knots(2, 0.0, 1.0, 1)
 
     coeffs = np.array([
             [[ r1, 0.0],
              [ r2, 0.0]],
-            [[ r1,  np.tan(phi/2)*r1],
-             [ r2,  np.tan(phi/2)*r2]],
+            [[ r1*np.cos(phi/2),  np.sin(phi/2)*r1],
+             [ r2*np.cos(phi/2),  np.sin(phi/2)*r2]],
             [[np.cos(phi)*r1,  np.sin(phi)*r1],
              [np.cos(phi)*r2,  np.sin(phi)*r2]],
     ])
@@ -596,7 +601,7 @@ def bspline_annuseg(r1=1.0, r2=2.0, phi=np.pi/2, support = None):
     Returns:
         :class:`.BSplineFunc` 2D geometry
     """
-    assert -np.pi/2<=phi<=np.pi/2, 'angle needs to be sharp!'
+    #assert -np.pi/2<=phi<=np.pi/2, 'angle needs to be sharp!'
     kvx = bspline.make_knots(1, 0.0, 1.0, 1)
     kvy = bspline.make_knots(2, 0.0, 1.0, 1)
 
@@ -669,22 +674,30 @@ def annulus(r1=1.0, r2=2.0, phi=np.pi/2, support = None):
     Returns:
         :class:`NurbsFunc` 2D geometry
     """
-    assert -np.pi/2<=phi<=np.pi/2, 'angle needs to be sharp!'
+    #assert -np.pi/2<=phi<=np.pi/2, 'angle needs to be sharp!'
     kvx = bspline.make_knots(1, 0.0, 1.0, 1)
     kvy = bspline.make_knots(2, 0.0, 1.0, 1)
 
+    # coeffs = np.array([
+    #         [[ r1, 0.0, 1.0],
+    #          [ r2, 0.0, 1.0]],
+    #         [[ r1,  np.tan(phi/2)*r1, 1.0 / np.sqrt(2.0)],
+    #          [ r2,  np.tan(phi/2)*r2, 1.0 / np.sqrt(2.0)]],
+    #         [[np.cos(phi)*r1,  np.sin(phi)*r1, 1.0],
+    #          [np.cos(phi)*r2,  np.sin(phi)*r2, 1.0]],
+    # ])
     coeffs = np.array([
             [[ r1, 0.0, 1.0],
              [ r2, 0.0, 1.0]],
-            [[ r1,  np.tan(phi/2)*r1, 1.0 / np.sqrt(2.0)],
-             [ r2,  np.tan(phi/2)*r2, 1.0 / np.sqrt(2.0)]],
+            [[ r1*np.cos(phi/2),  np.sin(phi/2)*r1, np.cos(phi/2)],
+             [ r2*np.cos(phi/2),  np.sin(phi/2)*r2, np.cos(phi/2)]],
             [[np.cos(phi)*r1,  np.sin(phi)*r1, 1.0],
              [np.cos(phi)*r2,  np.sin(phi)*r2, 1.0]],
     ])
-    return NurbsFunc((kvy,kvx), coeffs, weights=None, support = support)
+    return NurbsFunc((kvy,kvx), coeffs, weights=None, premultiplied=True, support = support)
 
 def annuseg(r1=1.0, r2=2.0, phi=np.pi/2, support = None):
-    """A NURBS representation of a quarter annulus in the first quadrant.
+    """A NURBS representation of an annulus in the first quadrant.
     The 'bottom' and 'top' boundaries (with respect to the reference domain)
     lie on the x and y axis, respectively.
 
@@ -732,7 +745,7 @@ def quarter_annulus(r1=1.0, r2=2.0, support = None):
             [[0.0,  r1, 1.0],
              [0.0,  r2, 1.0]],
     ])
-    return NurbsFunc((kvy,kvx), coeffs, weights=None, support = support)
+    return NurbsFunc((kvy,kvx), coeffs, weights=None, premultiplied=False, support = support)
 
 def quarter_annuseg(r1=1.0, r2=2.0, support = None):
     """A NURBS representation of a quarter annulus in the first quadrant.

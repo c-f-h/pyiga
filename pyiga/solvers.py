@@ -380,9 +380,9 @@ def pcg(A, f, x0 = None, P = 1, rtol = 1e-5, atol = 0.0, maxiter = 200, output =
         Afun = A
         
     if not isinstance(f,np.ndarray):
-        f_ = f.toarray().ravel()
+        f_ = f.toarray().ravel().copy()
     else:
-        f_ = f.ravel()
+        f_ = f.ravel().copy()
         
     if x0 is not None:
         if not isinstance(x0, np.ndarray):
@@ -394,18 +394,18 @@ def pcg(A, f, x0 = None, P = 1, rtol = 1e-5, atol = 0.0, maxiter = 200, output =
         
     if not callable(P):
         if isinstance(P, np.ndarray) or scipy.sparse.issparse(P):
-            assert P.shape==2*(len(f),), 'dimension mismatch'
+            assert P.shape == (len(f_), len(f_)), 'dimension mismatch'
             Pfun = lambda x: P@x
         else:
             Pfun = lambda x : x
     else:
         Pfun = P
-    r = f_# - Afun(x)
+    r = f_ - Afun(x)
     h = Pfun(r)
     rho = h@r
     assert rho>=0, "Preconditioner not SPD."
     err = np.sqrt(rho)
-    err0 = np.sqrt(Pfun(f_)@f_)
+    err0 = np.sqrt(Pfun(r) @ r)
     d = h
     
     delta = np.zeros(maxiter+1, dtype=float)
@@ -448,9 +448,9 @@ def pcg(A, f, x0 = None, P = 1, rtol = 1e-5, atol = 0.0, maxiter = 200, output =
     eigs = scipy.linalg.eigvalsh_tridiagonal(delta[:(it+1)],gamma[:it])
     m = min(abs(eigs))
     M = max(abs(eigs))
-    L = algebra.LanczosMatrix(delta[:(it+1)], gamma[:(it)])
-    m = L.minEigenvalue()
-    M = L.maxEigenvalue()
+    # L = algebra.LanczosMatrix(delta[:(it+1)], gamma[:(it)])
+    # m = L.minEigenvalue()
+    # M = L.maxEigenvalue()
     cond = abs(M/m)
     
     if output:

@@ -45,21 +45,23 @@ def mp_resPois(MP, uh, f=0., nu=1., M=(0.,0.), divMaT =0., neu_data={}, **kwargs
     
     #flux contribution
     t=time.time()
-    for i,((p1,b1,_), (p2,b2,_), flip) in enumerate(MP.intfs):
+    for i,((p1,b1), (p2,b2), flip) in enumerate(MP.intfs):
         ((kvs1, geo1), _), ((kvs2, geo2), _) = MP.mesh.patches[p1], MP.mesh.patches[p2]
         bdspec1, bdspec2 = bspline._parse_bdspec(b1,2), bspline._parse_bdspec(b2,2)
         bkv1, bkv2 = assemble.boundary_kv(kvs1, bdspec1), assemble.boundary_kv(kvs2, bdspec2)
         geo = geo2.boundary(bdspec2)
         kv0 = tuple([bspline.KnotVector(kv.mesh, 0) for kv in bkv2])
-        h = bkv2[0].meshsize_max()*np.linalg.norm([b-a for a,b in geo.bounding_box(full=True)])
+        #kv0 = tuple([bspline.KnotVector(kv.mesh, 0) for kv in bkv1])
+        h1 = bkv1[0].meshsize_max()*np.linalg.norm([b-a for a,b in geo.bounding_box(full=True)])
+        h2 = bkv2[0].meshsize_max()*np.linalg.norm([b-a for a,b in geo.bounding_box(full=True)])
 
         uh1_grad = geometry.BSplineFunc(kvs1, uh_loc[MP.N_ofs[p1]:MP.N_ofs[p1+1]]).transformed_jacobian(geo1).boundary(bdspec1, flip=flip) 
         uh2_grad = geometry.BSplineFunc(kvs2, uh_loc[MP.N_ofs[p2]:MP.N_ofs[p2+1]]).transformed_jacobian(geo2).boundary(bdspec2)            
         J = np.sum(assemble.assemble('((inner((nu1 * uh1_grad + Ma1) - (nu2 * uh2_grad + Ma2), n) )**2 * v ) * ds', kv0, geo=geo, 
                                      nu1=nu[MP.mesh.patch_domains[p1]], nu2=nu[MP.mesh.patch_domains[p2]], uh1_grad=uh1_grad, uh2_grad=uh2_grad,
                                      Ma1=M[MP.mesh.patch_domains[p1]], Ma2=M[MP.mesh.patch_domains[p2]], **kwargs))
-        indicator[p1] += 0.5 * h * J
-        indicator[p2] += 0.5 * h * J
+        indicator[p1] += 0.5 * h2 * J
+        indicator[p2] += 0.5 * h2 * J
         
     #Neumann flux
     for bd in neu_data:

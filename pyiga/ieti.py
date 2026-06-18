@@ -63,8 +63,9 @@ class IetiMapper(assemble.MultiBasis):
             cdofs = assemble.boundary_dofs(self.mesh.kvs[p],m=0,ravel=True)
             
             if self.elim:
-                X = (self.Basis_loc[p]==1)
+                X = (self.Basis_loc[p]==1).tocsr()
                 fixed = X[fixed,:].indices
+                self.fixed_idx[p] = fixed
                 cdofs = X[cdofs,:].indices
 
             mask_corners[cdofs]=True
@@ -73,21 +74,22 @@ class IetiMapper(assemble.MultiBasis):
                 mask_corners[fixed]=False
             self.DOFS_interior[p] = to_free(np.flatnonzero(mask_interior), fixed)
             self.DOFS_corners[p] = to_free(np.flatnonzero(mask_corners), fixed)
-            print(1)
 
-            # for b in range(4):
-            #     if not any([(p,b) in self.mesh.outer_boundaries[key] for key in self.mesh.outer_boundaries]):
-            #         mask_intf = np.zeros(self.N[p], dtype=bool)
-            #         interface_dofs = assemble.boundary_dofs(self.mesh.kvs[p],bdspec=b,ravel=True)
-            #         mask_intf[interface_dofs[1:-1]] = True
-            #         mask_skeleton[interface_dofs] = True
-            #         if fixed is not None:
-            #             mask_intf[fixed]=False
-            #             mask_skeleton[fixed]=False
+            for b in range(4):
+                if not any([(p,b) in self.mesh.outer_boundaries[key] for key in self.mesh.outer_boundaries]):
+                    mask_intf = np.zeros(self.N[p], dtype=bool)
+                    interface_dofs = assemble.boundary_dofs(self.mesh.kvs[p],bdspec=b,ravel=True)[1:-1]
+                    if self.elim:
+                        interface_dofs = X[interface_dofs,:].indices
+                    mask_intf[interface_dofs] = True
+                    mask_skeleton[interface_dofs] = True
+                    if fixed is not None:
+                        mask_intf[fixed]=False
+                        mask_skeleton[fixed]=False
 
-            #         self.DOFS_interfaces[(p,b)] = to_free(np.flatnonzero(mask_intf), fixed)
+                    self.DOFS_interfaces[(p,b)] = to_free(np.flatnonzero(mask_intf), fixed)
 
-            # self.DOFS_skeleton[p] = to_free(np.flatnonzero(mask_skeleton), fixed)
+            self.DOFS_skeleton[p] = to_free(np.flatnonzero(mask_skeleton), fixed)
 
     def assemble(self, a, f, M):
         if M is None:

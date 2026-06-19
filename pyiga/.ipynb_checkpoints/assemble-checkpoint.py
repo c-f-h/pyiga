@@ -549,6 +549,14 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
         boundary and their computed values, respectively.
     """
     b = bspline._parse_bdspec(bdspec, len(kvs))
+    if len(kvs)==b.shape[0]:
+        print(0)
+        S = np.array(geo.support)[b[:,0],:]
+        print(1)
+        x = np.where(b[:,1],S[:,1],S[:,0])
+        print(dir_func(*geo(*x)))
+        return boundary_dofs(kvs, bdspec=b, ravel=True), dir_func(*geo(*x))
+
     axis, sides = b[:,0], -b[:,1]
     # get basis for the boundary face
     bdbasis = list(kvs)
@@ -721,7 +729,6 @@ def compute_initial_condition_01(kvs, geo, bdspec, g0, g1, physical=True):
 
     return bdindices, coll_coeffs.ravel()
 
-
 def combine_bcs(bcs):
     """Given a sequence of `(indices, values)` pairs such as returned by
     :func:`compute_dirichlet_bc`, combine them into a single pair
@@ -737,7 +744,6 @@ def combine_bcs(bcs):
 
     uidx, lookup = np.unique(indices, return_index=True)
     return uidx, values[lookup]
-
 
 class RestrictedLinearSystem:
     """Represents a linear system with some of its dofs eliminated.
@@ -1312,7 +1318,7 @@ def _check_geo_match(G1, G2, grid=4):
     X1 = G1.grid_eval(grid)
 
     for k, perm in enumerate(itertools.permutations(np.arange(G1.sdim))):
-        all_flips = itertools.product(*(G2.sdim * [(False, True)]))
+        all_flips = itertools.product((False, True), repeat=G2.sdim)
         for flip in all_flips:  # try all 2^d possible flips
             flipped_grid = list(grid)
             for (i, f) in enumerate(flip):
@@ -1389,21 +1395,17 @@ class MultiBasis:
         self.Z = [np.prod([kv.numspans for kv in kvs]) for kvs in M.kvs]
         self.Z_ofs = np.concatenate(([0], np.cumsum(self.Z)))
 
-        self.dir_data = dir_data
-
         self.B = scipy.sparse.csr_matrix((0,self.N_ofs[-1]))
         self.Constr = {}
         self.nConstr = 0
 
         self.intfs = set()
         interfaces = self.mesh.interfaces
-            
-        for ((p1,bd1,s1),((p2,bd2,s2),flip)) in interfaces.items():
-            if ((p2,bd2,s2),(p1,bd1,s1),flip) not in self.intfs:
-                if boundary_kv(self.mesh.kvs[p1],bd1) <= boundary_kv(self.mesh.kvs[p2],bd2):
-                    self.intfs.add(((p1,bd1,s1),(p2,bd2,s2),flip))
-                elif boundary_kv(self.mesh.kvs[p1],bd1) > boundary_kv(self.mesh.kvs[p2],bd2):
-                    self.intfs.add(((p2,bd2,s2),(p1,bd1,s1),flip))
+
+        for (p1,b1) in self.mesh.L_intfs:
+            for (p2,b2,flip) in self.mesh.L_intfs[(p1,b1)]:
+                if boundary_kv(self.mesh.kvs[p1],b1) <= boundary_kv(self.mesh.kvs[p2],b2,flip=flip):
+                    self.intfs.add(((p1,b1),(p2,b2),flip))
                 else:
                     match bd1:
                         case 0: side1='bottom'
@@ -1415,7 +1417,27 @@ class MultiBasis:
                         case 1: side2='top'
                         case 2: side2='left'
                         case 3: side2='right'
-                    raise AssertionError(f"Interface coupling not possible between patch {p1} on the {side1} side and patch {p2} on the {side2} side")
+                    raise AssertionError(f"Interface coupling not possible between patch {p1} on the {side1} side and patch {p2} on the {side2} side")                    
+                
+            
+        # for ((p1,bd1,s1),((p2,bd2,s2),flip)) in interfaces.items():
+        #     if ((p1,bd1,s1),(p2,bd2,s2),flip) not in self.intfs and ((p2,bd2,s2),(p1,bd1,s1),flip) not in self.intfs:
+        #         if boundary_kv(self.mesh.kvs[p1],bd1) <= boundary_kv(self.mesh.kvs[p2],bd2,flip=flip):
+        #             self.intfs.add(((p1,bd1),(p2,bd2),flip))
+        #         elif boundary_kv(self.mesh.kvs[p1],bd1) > boundary_kv(self.mesh.kvs[p2],bd2,flip=flip):
+        #             self.intfs.add(((p2,bd2),(p1,bd1),flip))
+        #         else:
+        #             match bd1:
+        #                 case 0: side1='bottom'
+        #                 case 1: side1='top'
+        #                 case 2: side1='left'
+        #                 case 3: side1='right'
+        #             match bd2:
+        #                 case 0: side2='bottom'
+        #                 case 1: side2='top'
+        #                 case 2: side2='left'
+        #                 case 3: side2='right'
+        #             raise AssertionError(f"Interface coupling not possible between patch {p1} on the {side1} side and patch {p2} on the {side2} side")
                 
         self.subspace = kwargs.get('subspace', None)
         if self.subspace is not None:
@@ -1424,6 +1446,9 @@ class MultiBasis:
             except:
                 print('subspace not compatible.')
                 self.subspace=None
+
+        if dir_data is not None:
+            self.set_fixed_boundary(dir_data)
     @property
     def nPatches(self):
         """Number of patches in the multipatch structure."""
@@ -1447,12 +1472,20 @@ class MultiBasis:
 
     def set_constraints(self, subspace='C0'):
         t=time.time()
-        intfs = self.intfs.copy()
+        #self.ConstrInfo = {'Vertex':}
+        #intfs = self.intfs.copy()
+        B=[]
+        self.CornerConstr=[]
+        self.Constr = {}
+        self.nConstr = 0
         if subspace=='C0':
-            B=[self.compute_C0_constraint(p1, bd1, s1, p2, bd2, s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in intfs]
+            for ((p1,bd1),(p2,bd2), flip) in self.intfs:
+                B.append(self.compute_C0_constraint(p1, bd1, p2, bd2, flip))
         elif subspace=='C1':
-            B=[self.compute_C1_constraint(p1, bd1, s1, p2, bd2, s2, flip) for ((p1,bd1,s1),(p2,bd2,s2), flip) in intfs]
+            for ((p1,bd1),(p2,bd2), flip) in self.intfs:
+                B.append(self.compute_C1_constraint(p1, bd1, p2, bd2, flip))
         print('setting up constraints took {:3} seconds.'.format(time.time()-t))
+        self.CornerConstr = np.concatenate(self.CornerConstr)
         if len(B)!=0:
             return scipy.sparse.vstack(B)
 
@@ -1480,7 +1513,7 @@ class MultiBasis:
         #self.check_basis()
         self.subspace=subspace
         
-    def compute_C0_constraint(self, p1, bdspec1, s1, p2, bdspec2, s2, flip=None):
+    def compute_C0_constraint(self, p1, bdspec1, p2, bdspec2, flip=None):
         """Join the dofs lying along boundary `bdspec1` of patch `p1` with
         those lying along boundary `bdspec2` of patch `p2`. 
 
@@ -1502,10 +1535,17 @@ class MultiBasis:
         dofs1 = boundary_dofs(self.mesh.patches[p1][0][0], bdspec1, ravel=True)
         dofs2 = boundary_dofs(self.mesh.patches[p2][0][0], bdspec2, ravel=True, flip=flip)
 
-        self.Constr[(p1,p2)] = self.nConstr,self.nConstr+len(dofs2)
-        self.nConstr += len(dofs2)
+        nConstr=len(dofs2)
+
+        self.CornerConstr.append(np.repeat(False,nConstr))
+        self.CornerConstr[-1][0]=self.CornerConstr[-1][-1]=True
+        self.Constr[(p1,p2)] = self.nConstr,self.nConstr+nConstr
+        self.nConstr += nConstr
         #Prolongation operator  
-        P = -scipy.sparse.coo_matrix(bspline.prolongation_tp(bkv1,bkv2))   #TODO: make paramater to generate prolongation matrix as coo_matrix directly?
+        try:
+            P = -scipy.sparse.coo_matrix(bspline.prolongation_tp(bkv1,bkv2))   #TODO: make paramater to generate prolongation matrix as coo_matrix directly?
+        except:
+            print(p1,p2)
         #construct constraints for this interface
         data = np.concatenate([P.data, np.ones(len(dofs2))])
         I = np.concatenate([P.row, np.arange(len(dofs2))])
@@ -1664,7 +1704,7 @@ class MultiBasis:
             
             return X.T @ N
 
-    def set_fixed_boundary(self, data):
+    def set_fixed_boundary(self, data, local=False):
         self.dir_data = data
         #self.neu_data = neu_data
         self.fixed_idx = dict()
@@ -1678,21 +1718,35 @@ class MultiBasis:
                         idx_,vals_ = compute_dirichlet_neumann_bc(kvs[p], geos[p], b, *data[key])
                 else:
                     idx_, vals_ = compute_dirichlet_bc(kvs[p], geos[p], b, data[key])
+                    # else:
+                    #     idx_ = boundary_dofs(kvs[p], bdspec=b, ravel=True)
+                    #     print(idx_)
+                    #     (s1,s2),(s3,s4) = geos[p].support
+                    #     x = (b[1]*(1-s3)+b[1]*s4,b[0]*(1-s1)+b[0]*s2)
+                    #     if np.isscalar(data[key]):
+                    #         vals_ = np.array([data[key]],'f')
+                    #     else:
+                    #         vals_ = np.array([data[key](*geos[p](*x))],'f')
+                        
                 if p in self.fixed_idx:
                     self.fixed_idx[p].append(idx_)
                     self.fixed_vals[p].append(vals_)
                 else:
                     self.fixed_idx[p]=[idx_]
-                    self.fixed_vals[p]=[vals_]
-                
+                    self.fixed_vals[p]=[vals_]  
+            
         for p in self.fixed_idx:
             self.fixed_idx[p], lookup = np.unique(np.concatenate(self.fixed_idx[p]), return_index = True)
             self.fixed_vals[p] = np.concatenate(self.fixed_vals[p])[lookup]
             
         self.local_fixed_idx = np.concatenate([self.fixed_idx[p] + self.N_ofs[p] for p in self.fixed_idx])
         self.local_fixed_vals = np.concatenate([self.fixed_vals[p] for p in self.fixed_idx])
+        # self.local_fixed_idx, lookup = np.unique(self.local_fixed_idx, return_index=True)
+        # self.local_fixed_vals = self.local_fixed_vals[lookup]
 
-        if self.subspace:
+        if local:
+            return self.local_fixed_idx, self.local_fixed_vals
+        elif not local and self.subspace is not None:
             B=self.Basis.tocsr()
             global_fixed_idx , global_fixed_vals= assemble_cy.pyx_find_global_indices(B.indptr, B.indices, B.data, self.local_fixed_idx.astype(np.int32), self.local_fixed_vals)
 
@@ -1743,7 +1797,8 @@ class MultiBasis:
         kvs_old = self.mesh.kvs
         new_patches=self.mesh.h_refine(h_ref, ref=ref)
 
-        self.__init__(self.mesh, self.dir_data, subspace=self.subspace)
+        if self.dir_data is not None:
+            self.__init__(self.mesh, dir_data=self.dir_data,  subspace=self.subspace)
 
         if return_P:
             refined_patches = h_ref

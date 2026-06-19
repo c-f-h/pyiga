@@ -549,10 +549,15 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
         boundary and their computed values, respectively.
     """
     b = bspline._parse_bdspec(bdspec, len(kvs))
-    if len(kvs)==len(b):
-        S = np.array(geo.support)
-        x = np.where(bdspec[:,1],S[:,1],S[:,0])
-        return boundary_dofs(kvs,bdspec=b, ravel=True), dir_func(*geo(*x))
+
+    if np.isscalar(dir_func):
+        const_value = dir_func
+        dir_func = lambda *x: const_value
+        
+    if len(kvs)==b.shape[0]:
+        S = np.array(geo.support)[b[:,0],:]
+        x = np.where(b[:,1],S[:,1],S[:,0])
+        return boundary_dofs(kvs, bdspec=b, ravel=True), np.array([dir_func(*geo(*x))])
 
     axis, sides = b[:,0], -b[:,1]
     # get basis for the boundary face
@@ -564,9 +569,6 @@ def compute_dirichlet_bc(kvs, geo, bdspec, dir_func):
     # get boundary geometry and interpolate dir_func
     bdgeo = geo.boundary(b)
     from .approx import interpolate
-    if np.isscalar(dir_func):
-        const_value = dir_func
-        dir_func = lambda *x: const_value
     dir_coeffs = interpolate(bdbasis, dir_func, geo=bdgeo)
 
     # compute sequential indices for eliminated dofs
@@ -1386,6 +1388,8 @@ class MultiBasis:
         else:
             print('unknown mesh object.')
 
+        self.elim=False
+
         self.mesh = M
         self.N = [np.prod([kv.numdofs for kv in kvs]) for kvs in M.kvs]
         self.N_ofs = np.concatenate(([0], np.cumsum(self.N)))
@@ -1399,24 +1403,28 @@ class MultiBasis:
         self.intfs = set()
         interfaces = self.mesh.interfaces
 
-        for (p1,b1) in self.mesh.L_intfs:
-            for (p2,b2,flip) in self.mesh.L_intfs[(p1,b1)]:
-                if boundary_kv(self.mesh.kvs[p1],b1) <= boundary_kv(self.mesh.kvs[p2],b2,flip=flip):
-                    self.intfs.add(((p1,b1),(p2,b2),flip))
-                else:
-                    match bd1:
-                        case 0: side1='bottom'
-                        case 1: side1='top'
-                        case 2: side1='left'
-                        case 3: side1='right'
-                    match bd2:
-                        case 0: side2='bottom'
-                        case 1: side2='top'
-                        case 2: side2='left'
-                        case 3: side2='right'
-                    raise AssertionError(f"Interface coupling not possible between patch {p1} on the {side1} side and patch {p2} on the {side2} side")                    
-                
-            
+        
+        if self.sdim==2:
+            for (p1,b1) in self.mesh.L_intfs:
+                for (p2,b2,flip) in self.mesh.L_intfs[(p1,b1)]:
+                    if boundary_kv(self.mesh.kvs[p1],b1) <= boundary_kv(self.mesh.kvs[p2],b2,flip=flip):
+                        self.intfs.add(((p1,b1),(p2,b2),flip))
+                    else:
+                        match bd1:
+                            case 0: side1='bottom'
+                            case 1: side1='top'
+                            case 2: side1='left'
+                            case 3: side1='right'
+                        match bd2:
+                            case 0: side2='bottom'
+                            case 1: side2='top'
+                            case 2: side2='left'
+                            case 3: side2='right'
+                        raise AssertionError(f"Interface coupling not possible between patch {p1} on the {side1} side and patch {p2} on the {side2} side") 
+        elif self.sdim==3:
+            for ((p1,bd1,s1),((p2,bd2,s2),flip)) in interfaces.items():
+                if ((p1,bd1,s1),(p2,bd2,s2),flip) not in self.intfs and ((p2,bd2,s2),(p1,bd1,s1),flip) not in self.intfs:
+                    self.intfs.add(((p1,bd1),(p2,bd2),flip))
         # for ((p1,bd1,s1),((p2,bd2,s2),flip)) in interfaces.items():
         #     if ((p1,bd1,s1),(p2,bd2,s2),flip) not in self.intfs and ((p2,bd2,s2),(p1,bd1,s1),flip) not in self.intfs:
         #         if boundary_kv(self.mesh.kvs[p1],bd1) <= boundary_kv(self.mesh.kvs[p2],bd2,flip=flip):
@@ -1738,8 +1746,8 @@ class MultiBasis:
             
         self.local_fixed_idx = np.concatenate([self.fixed_idx[p] + self.N_ofs[p] for p in self.fixed_idx])
         self.local_fixed_vals = np.concatenate([self.fixed_vals[p] for p in self.fixed_idx])
-        self.local_fixed_idx, lookup = np.unique(self.local_fixed_idx, return_index=True)
-        self.local_fixed_vals = self.local_fixed_vals[lookup]
+        # self.local_fixed_idx, lookup = np.unique(self.local_fixed_idx, return_index=True)
+        # self.local_fixed_vals = self.local_fixed_vals[lookup]
 
         if local:
             return self.local_fixed_idx, self.local_fixed_vals
@@ -1795,7 +1803,7 @@ class MultiBasis:
         new_patches=self.mesh.h_refine(h_ref, ref=ref)
 
         if self.dir_data is not None:
-            self.__init__(self.mesh, dir_data=self.dir_data,  subspace=self.subspace)
+            self.__init__(self.mesh, dir_data=self.dir_data, subspace=self.subspace, elim=self.elim)
 
         if return_P:
             refined_patches = h_ref

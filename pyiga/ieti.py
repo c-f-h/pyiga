@@ -9,36 +9,64 @@ from scipy.sparse.linalg import aslinearoperator as LinOp
 
 class IetiMapper(assemble.MultiBasis):
     def __init__(self, M, dir_data, neu_data=None, elim=False, **kwargs):
-        super().__init__(M, dir_data=dir_data, elim=elim, **kwargs)
+        super().__init__(M, dir_data=dir_data, **kwargs)
         self.elim=bool(elim)
 
-        self.global_fixed_idx,_ = self.set_fixed_boundary(dir_data, local=True)
-        self.global_free = np.setdiff1d(np.arange(self.N_ofs[-1]),self.global_fixed_idx, assume_unique=True)
-
-        self.N_free = [self.N[p] - len(self.fixed_idx.get(p, ())) for p in range(self.nPatches)]
-        self.N_ofs_free = np.cumsum([0]+self.N_free)
-
         if not self.subspace=='C0':
-            self.B = self.set_constraints('C0')
+            if self.elim:
+                self.set_subspace(subspace='C0')
+            else:
+                self.B = self.set_constraints('C0')
 
+        self.global_fixed_idx,_ = self.set_fixed_boundary(dir_data, local=True) 
+
+        self.N_elim = self.N
+        self.N_ofs_elim = self.N_ofs
         if self.elim:
+            self.Xk=[]
             p_intfs = np.array([[p1,p2] for (p1,_),(p2,_),_ in self.intfs], dtype=np.int32).T
-            self.Basis_loc, self.N_ofs, self.N, self.B = ieti_cy.pyx_compute_decoupled_coarse_basis(self.Basis.tocsc(), self.N_ofs.astype(np.int32), p_intfs)
-        else:
-            self.Basis_loc = [scipy.sparse.identity(self.N[p]) for p in range(self.nPatches)]
+            self.Basis_loc, self.N_ofs_elim, self.N_elim, self.B = ieti_cy.pyx_compute_decoupled_coarse_basis(self.Basis.tocsc(), self.N_ofs.astype(np.int32), p_intfs)
+            self.Basis_loc_global = scipy.sparse.block_diag(self.Basis_loc)
+            
+            for p in range(self.nPatches):
+                X = self.Basis_loc[p].tocoo()
+                idx = np.where(np.isclose(X.data,1))
+                X.data, X.row, X.col = X.data[idx], X.row[idx], X.col[idx]
+                self.Xk.append(X.tocsr())
+
+                # idx = self.Xk[p][self.fixed_idx[p],:].indices
+                # self.fixed_idx[p] = idx
+
+                I = np.zeros(self.Basis_loc[p].shape[0])
+                I[self.fixed_idx[p]] = 1
+                self.fixed_idx[p] = np.where(np.isclose(self.Xk[p]@I,1))[0]
+                #lookup = np.argsort(idx)
+                #self.fixed_idx[p] = self.fixed_idx[p][lookup]
+                #self.fixed_vals[p] = self.fixed_vals[p][lookup] 
+
+            self.global_fixed_idx = np.concatenate([self.fixed_idx[p] + self.N_ofs_elim[p] for p in self.fixed_idx])
+  
+        self.global_free = np.setdiff1d(np.arange(self.N_ofs_elim[-1]),self.global_fixed_idx, assume_unique=True)
+
+        self.N_free = [self.N_elim[p] - len(self.fixed_idx.get(p, ())) for p in range(self.nPatches)]
+        self.N_ofs_free = np.cumsum([0]+self.N_free)
 
         self.free={}
         for p in range(self.nPatches):
             if p in self.fixed_idx:
-                self.free[p] = np.setdiff1d(np.arange(self.N[p]),self.fixed_idx[p],assume_unique=True)
+                self.free[p] = np.setdiff1d(np.arange(self.N_elim[p]),self.fixed_idx[p],assume_unique=True)
             else:
-                self.free[p] = np.arange(self.N[p])
+                self.free[p] = np.arange(self.N_elim[p])
 
-        self.corners = np.concatenate([assemble.boundary_dofs(kvs,m=0,ravel=True)+self.N_ofs[p] for p, kvs in enumerate(self.mesh.kvs)])
+        # if self.elim:
+        #     self.corners = np.concatenate([self.Xk[p][assemble.boundary_dofs(kvs,m=0,ravel=True),:].indices + self.N_ofs_elim[p] for p, kvs in enumerate(self.mesh.kvs)])
+        # else:
+        if not self.elim:
+            self.corners = np.concatenate([assemble.boundary_dofs(kvs,m=0,ravel=True) + self.N_ofs_elim[p] for p, kvs in enumerate(self.mesh.kvs)])
 
-        self.Bk = [self.B[:,self.N_ofs[p]:self.N_ofs[p+1]] for p in range(self.nPatches)]
+        self.Bk = [self.B[:,self.N_ofs_elim[p]:self.N_ofs_elim[p+1]] for p in range(self.nPatches)]
         nnz_per_col = self.B.getnnz(axis=0)
-        # self.intfs = np.setdiff1d(np.where(nnz_per_col > 0)[0], self.global_fixed_idx)
+
         self.skeleton = np.setdiff1d(np.where(nnz_per_col > 0)[0], self.global_fixed_idx)
         self.interior = np.setdiff1d(np.where(nnz_per_col == 0)[0], self.global_fixed_idx)
 
@@ -54,18 +82,16 @@ class IetiMapper(assemble.MultiBasis):
         
         for p in range(self.nPatches):
             fixed = self.fixed_idx.get(p)
-            mask_skeleton = np.zeros(self.N[p], dtype=bool)
-            mask_corners = np.zeros(self.N[p], dtype=bool)
+            mask_skeleton = np.zeros(self.N_elim[p], dtype=bool)
+            mask_corners = np.zeros(self.N_elim[p], dtype=bool)
             intfs = np.where(self.Bk[p].getnnz(0) > 0)[0]
-            mask_interior = np.ones(self.N[p], dtype=bool)
+            mask_interior = np.ones(self.N_elim[p], dtype=bool)
             mask_interior[intfs]=False
 
             cdofs = assemble.boundary_dofs(self.mesh.kvs[p],m=0,ravel=True)
             
             if self.elim:
                 X = (self.Basis_loc[p]==1).tocsr()
-                fixed = X[fixed,:].indices
-                self.fixed_idx[p] = fixed
                 cdofs = X[cdofs,:].indices
 
             mask_corners[cdofs]=True
@@ -77,7 +103,7 @@ class IetiMapper(assemble.MultiBasis):
 
             for b in range(4):
                 if not any([(p,b) in self.mesh.outer_boundaries[key] for key in self.mesh.outer_boundaries]):
-                    mask_intf = np.zeros(self.N[p], dtype=bool)
+                    mask_intf = np.zeros(self.N_elim[p], dtype=bool)
                     interface_dofs = assemble.boundary_dofs(self.mesh.kvs[p],bdspec=b,ravel=True)[1:-1]
                     if self.elim:
                         interface_dofs = X[interface_dofs,:].indices
@@ -108,7 +134,7 @@ class IetiMapper(assemble.MultiBasis):
         else:
             A = [assemble.assemble('a * inner(grad(u), grad(v)) * dx', kvs, a=a[self.mesh.patch_domains[k]], 
                                    bfuns=[('u',1), ('v',1)], geo=geo) for k, ((kvs, geo),_) in enumerate(self.mesh.patches)]
-            RHS = [assemble.assemble('(f * v - inner(Ma_T,grad(v))) * dx', kvs, bfuns=[('v',1)], geo=geo, 
+            RHS = [assemble.assemble('f * v  * dx', kvs, bfuns=[('v',1)], geo=geo, 
                                     f=f[self.mesh.patch_domains[k]], Ma_T = M[self.mesh.patch_domains[k]]).ravel() for k, ((kvs, geo),_) in enumerate(self.mesh.patches)]
         
         self.BCRestr = {p:assemble.RestrictedLinearSystem(A[p], RHS[p], (self.fixed_idx[p],self.fixed_vals[p])) for p in self.fixed_idx}
@@ -135,23 +161,26 @@ class IetiMapper(assemble.MultiBasis):
 
     def parametersort(self, a):
         D = np.array([a[key] for key in self.mesh.patch_domains.values()], dtype=float)
-        ieti_cy.pyx_parametersort(self.B.indptr, self.B.indices, self.B.data, *self.B.shape, np.repeat(D,self.N))
+        ieti_cy.pyx_parametersort(self.B.indptr, self.B.indices, self.B.data, *self.B.shape, np.repeat(D,self.N_elim))
 
     def nodes_as_primals(self, dir_boundary=False):  ###TODO: cythonize(?)
         """Get global vertices of the multipatch object as well as local nodal degrees of freedom corresponding to the vertices. 
         In case of T-junctions also obtain the $p$ global degrees of freedom and $p$ local degrees of freedom on the coarse patch.
         Additionally may include nodes on the Dirichlet boundary if desired."""
         if self.elim:
-            n = self.N_ofs[-1]
+            to_be_eliminated = np.zeros(self.B.shape[0],dtype=bool)
+            n = self.N_ofs_elim[-1]
             q = np.where(self.B.getnnz(0)>1)[0]
+            #q = np.setdiff1d(q,self.global_fixed_idx)
             #B = self.B[:,q]
             R = scipy.sparse.coo_matrix((np.ones(len(q)),(np.arange(len(q)),q)),shape=(len(q),n)).tocsr()
             c_B = self.B@R.T
             c_B.eliminate_zeros()
+            to_be_eliminated[(c_B.getnnz(1)>0)] = True
 
             Basis , _ = algebra_cy.pyx_compute_basis(c_B.shape[0], c_B.shape[1], c_B, maxiter=100, switch=0)
             nodal_coeff = R.T@Basis
-            return nodal_coeff
+            return nodal_coeff, to_be_eliminated
             
         deg = self.mesh.patches[0][0][0][0].p
         n = self.N_ofs[-1]
@@ -232,6 +261,17 @@ class IetiMapper(assemble.MultiBasis):
 
     def completeDirichlet(self, U):
         return [self.BCRestr[p].complete(u) if p in self.BCRestr else u for p,u in enumerate(U)]
+
+    def function(self, u):
+        if self.subspace and len(u)==self.nDofs:
+            u_loc=self.Basis@u
+        elif len(u)==self.N_ofs_elim[-1] and self.elim:
+            u_loc = self.Basis_loc_global@u
+        elif len(u)==self.N_ofs[-1]:
+            u_loc = u
+        else:
+            raise ValueError('dimension mismatch')
+        return [geometry.BSplineFunc(kvs,u_loc[self.N_ofs[p]:self.N_ofs[p+1]]) for p, kvs in enumerate(self.mesh.kvs)]
 
 class PrimalSystem():
     def __init__(self, Prim):

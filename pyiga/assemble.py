@@ -1490,12 +1490,17 @@ class MultiBasis:
             for ((p1,bd1),(p2,bd2), flip) in self.intfs:
                 B.append(self.compute_C1_constraint(p1, bd1, p2, bd2, flip))
         print('setting up constraints took {:3} seconds.'.format(time.time()-t))
-        self.CornerConstr = np.concatenate(self.CornerConstr)
+        # self.CornerConstr = np.concatenate(self.CornerConstr)
+            
         if len(B)!=0:
             return scipy.sparse.vstack(B)
+            self.CornerConstr = np.concatenate(self.CornerConstr)
 
     def set_subspace(self, subspace='C0'):
         self.B = self.set_constraints(subspace=subspace)
+        if self.B is None:
+            self.P2G = self.Basis = scipy.sparse.identity(self.nLocDofs)
+            return
 
         t=time.time()
         I = self.related_dofs = np.unique(self.B.indices)

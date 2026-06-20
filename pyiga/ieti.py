@@ -22,27 +22,29 @@ class IetiMapper(assemble.MultiBasis):
 
         self.N_elim = self.N
         self.N_ofs_elim = self.N_ofs
-        if self.elim:
-            self.Xk=[]
+        if self.elim: 
+            self.X=[]
             p_intfs = np.array([[p1,p2] for (p1,_),(p2,_),_ in self.intfs], dtype=np.int32).T
             self.Basis_loc, self.N_ofs_elim, self.N_elim, self.B = ieti_cy.pyx_compute_decoupled_coarse_basis(self.Basis.tocsc(), self.N_ofs.astype(np.int32), p_intfs)
             self.Basis_loc_global = scipy.sparse.block_diag(self.Basis_loc)
             
             for p in range(self.nPatches):
-                X = self.Basis_loc[p].tocoo()
-                idx = np.where(np.isclose(X.data,1))
-                X.data, X.row, X.col = X.data[idx], X.row[idx], X.col[idx]
-                self.Xk.append(X.tocsr())
+                X = self.Basis_loc[p].T.tocoo()
 
-                # idx = self.Xk[p][self.fixed_idx[p],:].indices
-                # self.fixed_idx[p] = idx
+                mask = np.isclose(X.data, 1)
 
-                I = np.zeros(self.Basis_loc[p].shape[0])
-                I[self.fixed_idx[p]] = 1
-                self.fixed_idx[p] = np.where(np.isclose(self.Xk[p]@I,1))[0]
-                #lookup = np.argsort(idx)
-                #self.fixed_idx[p] = self.fixed_idx[p][lookup]
-                #self.fixed_vals[p] = self.fixed_vals[p][lookup] 
+                col_to_row = np.full(X.shape[1], -1, dtype=np.int64)
+                col_to_row[X.col[mask]] = X.row[mask]
+                
+                self.X.append(col_to_row)
+
+                idx = self.X[p][self.fixed_idx[p]]
+
+                if np.any(idx < 0):
+                    raise ValueError("Some fixed indices are not present in the selection matrix.")
+                lookup = np.argsort(idx)
+                self.fixed_idx[p] = idx[lookup]
+                self.fixed_vals[p] = self.fixed_vals[p][lookup] 
 
             self.global_fixed_idx = np.concatenate([self.fixed_idx[p] + self.N_ofs_elim[p] for p in self.fixed_idx])
   
@@ -58,10 +60,9 @@ class IetiMapper(assemble.MultiBasis):
             else:
                 self.free[p] = np.arange(self.N_elim[p])
 
-        # if self.elim:
-        #     self.corners = np.concatenate([self.Xk[p][assemble.boundary_dofs(kvs,m=0,ravel=True),:].indices + self.N_ofs_elim[p] for p, kvs in enumerate(self.mesh.kvs)])
-        # else:
-        if not self.elim:
+        if self.elim:
+            self.corners = np.concatenate([self.X[p][assemble.boundary_dofs(kvs,m=0,ravel=True)] + self.N_ofs_elim[p] for p, kvs in enumerate(self.mesh.kvs)])
+        else:
             self.corners = np.concatenate([assemble.boundary_dofs(kvs,m=0,ravel=True) + self.N_ofs_elim[p] for p, kvs in enumerate(self.mesh.kvs)])
 
         self.Bk = [self.B[:,self.N_ofs_elim[p]:self.N_ofs_elim[p+1]] for p in range(self.nPatches)]
@@ -91,8 +92,7 @@ class IetiMapper(assemble.MultiBasis):
             cdofs = assemble.boundary_dofs(self.mesh.kvs[p],m=0,ravel=True)
             
             if self.elim:
-                X = (self.Basis_loc[p]==1).tocsr()
-                cdofs = X[cdofs,:].indices
+                cdofs = self.X[p][cdofs]
 
             mask_corners[cdofs]=True
             if fixed is not None:
@@ -106,7 +106,7 @@ class IetiMapper(assemble.MultiBasis):
                     mask_intf = np.zeros(self.N_elim[p], dtype=bool)
                     interface_dofs = assemble.boundary_dofs(self.mesh.kvs[p],bdspec=b,ravel=True)[1:-1]
                     if self.elim:
-                        interface_dofs = X[interface_dofs,:].indices
+                        interface_dofs = self.X[p][interface_dofs]
                     mask_intf[interface_dofs] = True
                     mask_skeleton[interface_dofs] = True
                     if fixed is not None:
@@ -144,6 +144,8 @@ class IetiMapper(assemble.MultiBasis):
         return A, RHS
 
     def ConstraintMatrices(self, eliminate = None):
+        if self.elim:
+            return [self.Bk[p][:,self.free[p]] for p in range(self.nPatches)], np.repeat(False,self.nConstr)
         if eliminate is not None:
             eliminated_constraints = eliminate
         else:

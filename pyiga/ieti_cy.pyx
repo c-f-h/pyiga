@@ -71,20 +71,25 @@ cpdef tuple pyx_compute_decoupled_coarse_basis(object global_Basis, int[:] N_ofs
     #cdef double[:] data = global_Basis.data
     #cdef int[:] N_ofs_ = N_ofs
     
-    cdef int i, j, ind, p, last_p
-    
+    cdef int i, j, ind, p, last_p, row
+
+    # Loop over columns
     for j in range(global_Basis.shape[1]):
-        last_p=-1
-        for ind in range(indptr[j],indptr[j+1]):
-            for p in range(max(last_p,0),K):
-                if indices[ind] < N_ofs[p+1]:
-                    break
-            if p!=last_p:
-                dofs[N_ofs[p]+N[p]] = j 
-                N[p]+=1
-                last_p=p
+        p = 0
+
+        for ind in range(indptr[j], indptr[j+1]):
+            row = indices[ind]
+
+            # advance p monotonically
+            while p < K-1 and row >= N_ofs[p+1]:
+                p += 1
+
+            # assign DOF once per block
+            if N[p] == 0 or dofs[N_ofs[p] + N[p] - 1] != j:
+                dofs[N_ofs[p] + N[p]] = j
+                N[p] += 1
     
-    cdef list Basisk = [global_Basis[N_ofs[p]:N_ofs[p+1],:][:,dofs.base[N_ofs[p]:(N_ofs[p]+N[p])]] for p in range(K)]
+    cdef list Basisk = [global_Basis[N_ofs[p]:N_ofs[p+1],dofs.base[N_ofs[p]:(N_ofs[p]+N[p])]]] for p in range(K)]
     cdef int[:] N_ofs_ = np.r_[0,np.cumsum(N.base, dtype=np.int32)]
     
     cdef int k, p1, p2, m, s

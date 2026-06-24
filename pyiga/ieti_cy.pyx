@@ -89,7 +89,7 @@ cpdef tuple pyx_compute_decoupled_coarse_basis(object global_Basis, int[:] N_ofs
                 dofs[N_ofs[p] + N[p]] = j
                 N[p] += 1
     
-    cdef list Basisk = [global_Basis[N_ofs[p]:N_ofs[p+1],dofs.base[N_ofs[p]:(N_ofs[p]+N[p])]]] for p in range(K)]
+    cdef list Basisk = [global_Basis[N_ofs[p]:N_ofs[p+1],dofs.base[N_ofs[p]:(N_ofs[p]+N[p])]] for p in range(K)]
     cdef int[:] N_ofs_ = np.r_[0,np.cumsum(N.base, dtype=np.int32)]
     
     cdef int k, p1, p2, m, s

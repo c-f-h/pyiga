@@ -1491,10 +1491,10 @@ class MultiBasis:
                 B.append(self.compute_C1_constraint(p1, bd1, p2, bd2, flip))
         print('setting up constraints took {:3} seconds.'.format(time.time()-t))
         # self.CornerConstr = np.concatenate(self.CornerConstr)
-            
+
         if len(B)!=0:
-            return scipy.sparse.vstack(B)
             self.CornerConstr = np.concatenate(self.CornerConstr)
+            return scipy.sparse.vstack(B)
 
     def set_subspace(self, subspace='C0'):
         self.B = self.set_constraints(subspace=subspace)

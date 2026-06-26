@@ -771,7 +771,7 @@ def collocation(kv, nodes):
     # J: arange(indices[k], indices[k] + p + 1) per row
     J = (indices[:, None] + np.arange(kv.p + 1)[None, :]).ravel()
 
-    return scipy.sparse.coo_matrix((values.ravel(), (I,J)), shape=(m,n)).tocsr()
+    return scipy.sparse.coo_matrix((values.ravel().astype(np.float64), (I,J)), shape=(m,n)).tocsr()
 
 def collocation_tp(kvs, gridaxes):
     """Compute collocation matrix for Tensor product B-spline basis at the given interpolation grid"""

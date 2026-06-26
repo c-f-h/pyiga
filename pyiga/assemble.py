@@ -1451,8 +1451,9 @@ class MultiBasis:
             except:
                 print('subspace not compatible.')
                 self.subspace=None
-
+        self.dir_data = None
         if dir_data is not None:
+            self.dir_data=dir_data
             self.set_fixed_boundary(dir_data)
     @property
     def nPatches(self):
@@ -1668,7 +1669,7 @@ class MultiBasis:
                     kvs, geo = self.mesh.patches[p][0]
                     vals=assemble(problem, kvs, geo=geo, args=args, bfuns=bfuns,
                         symmetric=symmetric, format=format, layout=layout,
-                        **kwargs).ravel()
+                        **kwargs).ravel().astype(np.float64)
                     F[self.N_ofs[p]:self.N_ofs[p+1]]+=vals
             if not in_subspace:
                 return F
@@ -1721,6 +1722,7 @@ class MultiBasis:
         self.fixed_vals = dict()
         kvs = self.mesh.kvs
         geos = self.mesh.geos
+
         for key in data:
             for p,b in self.mesh.outer_boundaries[key]:
                 if isinstance(data[key], tuple):
@@ -1809,7 +1811,8 @@ class MultiBasis:
 
         if self.dir_data is not None:
             self.__init__(self.mesh, dir_data=self.dir_data, subspace=self.subspace, elim=self.elim)
-
+        else:
+            self.__init__(self.mesh, subspace=self.subspace, elim=self.elim)
         if return_P:
             refined_patches = h_ref
             for p in refined_patches:

@@ -45,10 +45,9 @@ def interpolate(kvs, func, geo=None, nodes=None):
             rhs = utils.grid_eval_transformed(func, nodes, geo)
         else:
             rhs = utils.grid_eval(func, nodes)
-
-    Cinvs = [operators.make_solver(bspline.collocation(kvs[i], nodes[i]))
-                for i in range(len(kvs))]
-    return tensor.apply_tprod(Cinvs, rhs)
+            
+    Cinvs = [operators.make_solver(bspline.collocation(kvs[i], nodes[i]), spd=False) for i in range(len(kvs))]
+    return tensor.apply_tprod(Cinvs, rhs.astype(np.float64))
 
 def interpolate_normal(kvs, bdspec, func, func_deriv, geo=None, nodes=None):
     ax, sd = bspline._parse_bdspec(bdspec,2)[0]

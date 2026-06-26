@@ -2,6 +2,7 @@
 import numpy as np
 import scipy.sparse.linalg
 from builtins import range   # Python 2 compatibility
+from pypardiso import PyPardisoSolver
 
 from . import kronecker
 
@@ -238,8 +239,7 @@ class SubspaceOperator(scipy.sparse.linalg.LinearOperator):
         Y._is_transpose = not self._is_transpose
         # shape stays the same since we are square
         return Y
-
-
+        
 class PardisoSolverWrapper(scipy.sparse.linalg.LinearOperator):
     """Wraps a PARDISO solver object and frees up the memory when deallocated."""
     def __init__(self, shape, dtype, solver):
@@ -254,6 +254,26 @@ class PardisoSolverWrapper(scipy.sparse.linalg.LinearOperator):
         self.solver = None
     def toarray(self):
         return self._matmat(np.eye(self.shape[1]))
+
+class PardisoCompat:
+    def __init__(self, A, mtype=11):
+        self.A = A.tocsr()
+        self.solver = PyPardisoSolver()
+
+        # Match the old pyMKL behaviour
+        self.solver.set_matrix_type(mtype)
+
+    def factor(self):
+        self.solver.factorize(self.A)
+
+    def solve(self, b):
+        return self.solver.solve(self.A, b)
+
+    def clear(self):
+        try:
+            self.solver.free_memory()
+        except Exception:
+            pass
 
 def make_solver(B, symm=False, spd=False):
     """Return a :class:`LinearOperator` that acts as a linear solver for the
@@ -271,7 +291,8 @@ def make_solver(B, symm=False, spd=False):
             mtype = 11   # real, nonsymmetric
             if symm:
                 mtype = 2 if spd else -2
-            solver = pyMKL.pardisoSolver(B, mtype)
+
+            solver = PardisoCompat(B, mtype)
             solver.factor()
             return PardisoSolverWrapper(B.shape, B.dtype, solver)
         else:

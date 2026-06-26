@@ -29,6 +29,11 @@ def _parse_bdspec(bdspec, dim):
     elif isinstance(bdspec, (int, np.integer)):
         b = np.array([[bdspec // 2, bdspec % 2]], dtype='i')
 
+    elif isinstance(bdspec, tuple):
+        assert len(bdspec)==2
+        b = np.array([[0, bdspec[0]],
+                      [1, bdspec[1]]], dtype='i')
+
     elif isinstance(bdspec, np.ndarray):
         b = np.asarray(bdspec, dtype='i')
         if b.ndim == 1 and b.size == 2:
@@ -766,7 +771,7 @@ def collocation(kv, nodes):
     # J: arange(indices[k], indices[k] + p + 1) per row
     J = (indices[:, None] + np.arange(kv.p + 1)[None, :]).ravel()
 
-    return scipy.sparse.coo_matrix((values.ravel(), (I,J)), shape=(m,n)).tocsr()
+    return scipy.sparse.coo_matrix((values.ravel().astype(np.float64), (I,J)), shape=(m,n)).tocsr()
 
 def collocation_tp(kvs, gridaxes):
     """Compute collocation matrix for Tensor product B-spline basis at the given interpolation grid"""
@@ -1293,7 +1298,7 @@ class BSplineFunc(_BaseSplineFunc):
             return _BaseGeoFunc.boundary(self, bdspec)
         
         bdspec = _parse_bdspec(bdspec, self.sdim)
-        axis, sides = bdspec[:,0], bdspec[:,1]
+        axis, sides = bdspec[:,0], -bdspec[:,1]
 
         assert ((0 <= axis) & (axis < self.sdim)).all(), 'Invalid axis'
         slices = self.sdim * [slice(None)]

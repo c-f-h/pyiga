@@ -2,15 +2,25 @@
 import numpy as np
 import scipy.sparse.linalg
 from builtins import range   # Python 2 compatibility
-from pypardiso import PyPardisoSolver
+#from pypardiso import PyPardisoSolver
 
 from . import kronecker
 
-HAVE_MKL = True
+# CHOLMOD
+HAVE_CHOLMOD = False
+try:
+    from sksparse.cholmod import cholesky
+    HAVE_CHOLMOD = True
+except ImportError:
+    pass
+
+# pyMKL
+HAVE_PYMKL = False
 try:
     import pyMKL
-except:
-    HAVE_MKL = False
+    HAVE_PYMKL = True
+except ImportError:
+    pass
 
 class NullOperator(scipy.sparse.linalg.LinearOperator):
     """Null operator of the given shape which always returns zeros. Used as placeholder."""
@@ -239,42 +249,39 @@ class SubspaceOperator(scipy.sparse.linalg.LinearOperator):
         Y._is_transpose = not self._is_transpose
         # shape stays the same since we are square
         return Y
-        
-class PardisoSolverWrapper(scipy.sparse.linalg.LinearOperator):
-    """Wraps a PARDISO solver object and frees up the memory when deallocated."""
+
+class SolverWrapper(scipy.sparse.linalg.LinearOperator):
     def __init__(self, shape, dtype, solver):
         self.solver = solver
-        scipy.sparse.linalg.LinearOperator.__init__(self, shape=shape, dtype=dtype)
-    def _matvec(self, x):
-        return self.solver.solve(x)
-    def _matmat(self, x):
-        return self.solver.solve(x)
-    def __del__(self):
-        self.solver.clear()
-        self.solver = None
-    def toarray(self):
-        return self._matmat(np.eye(self.shape[1]))
 
-class PardisoCompat:
-    def __init__(self, A, mtype=11):
-        self.A = A.tocsr()
-        self.solver = PyPardisoSolver()
+        if hasattr(solver, "solve"):
+            self._solve = solver.solve
+        elif hasattr(solver, "solve_A"):
+            self._solve = solver.solve_A
+        else:
+            raise TypeError(f"Unsupported solver {type(solver)}")
 
-        # Match the old pyMKL behaviour
-        self.solver.set_matrix_type(mtype)
-
-    def factor(self):
-        self.solver.factorize(self.A)
+        super().__init__(shape=shape, dtype=dtype)
 
     def solve(self, b):
-        return self.solver.solve(self.A, b)
+        return self._solve(b)
 
-    def clear(self):
-        try:
-            self.solver.free_memory()
-        except Exception:
-            pass
+    def _matvec(self, x):
+        return self._solve(x)
 
+    def _matmat(self, X):
+        return self._solve(X)
+
+    def toarray(self):
+        return self.solve(np.eye(self.shape[1]))
+        
+    def __del__(self):
+        if hasattr(self.solver, "clear"):
+            try:
+                self.solver.clear()
+            except Exception:
+                pass
+        
 def make_solver(B, symm=False, spd=False):
     """Return a :class:`LinearOperator` that acts as a linear solver for the
     (dense or sparse) square matrix `B`.
@@ -286,25 +293,20 @@ def make_solver(B, symm=False, spd=False):
         symm = True
 
     if scipy.sparse.issparse(B):
-        if HAVE_MKL:
-            # use MKL Pardiso
-            mtype = 11   # real, nonsymmetric
+        if spd and HAVE_CHOLMOD:
+            solver = cholesky(B.tocsc())
+
+        elif HAVE_PYMKL:
+            mtype = 11
             if symm:
                 mtype = 2 if spd else -2
-
             solver = pyMKL.pardisoSolver(B, mtype)
-            #solver = PardisoCompat(B, mtype)
             solver.factor()
-            return PardisoSolverWrapper(B.shape, B.dtype, solver)
+
         else:
-            # if symmetric:
-            #     chol = cholesky(B.tocsc())
-            #     return scipy.sparse.linalg.LinearOperator(B.shape, dtype=B.dtype, matvec=chol.solve_A, matmat=chol.solve_A)
-            # else:
-            # use SuperLU (unless scipy uses UMFPACK?) -- really slow!
-            spLU = scipy.sparse.linalg.splu(B.tocsc(), permc_spec='NATURAL')
-            return scipy.sparse.linalg.LinearOperator(B.shape, dtype=B.dtype,
-                        matvec=spLU.solve, matmat=spLU.solve)
+            solver = splu(B.tocsc(),permc_spec="NATURAL")
+
+        return SolverWrapper(B.shape, B.dtype, solver)
     else:
         if spd:
             chol = scipy.linalg.cho_factor(B, check_finite=False)

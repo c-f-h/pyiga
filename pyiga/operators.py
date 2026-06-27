@@ -292,7 +292,8 @@ def make_solver(B, symm=False, spd=False):
             if symm:
                 mtype = 2 if spd else -2
 
-            solver = PardisoCompat(B, mtype)
+            solver = pyMKL.pardisoSolver(B, mtype)
+            #solver = PardisoCompat(B, mtype)
             solver.factor()
             return PardisoSolverWrapper(B.shape, B.dtype, solver)
         else:

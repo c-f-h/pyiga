@@ -291,29 +291,9 @@ def make_solver(B, symm=False, spd=False):
             mtype = 11   # real, nonsymmetric
             if symm:
                 mtype = 2 if spd else -2
-            #solver = pyMKL.pardisoSolver(B, mtype)
-            B = B.tocsr()
-            #B.sort_indices()
-            # print("dtype:", B.dtype)
-            # print("format:", B.format)
-            # print("sorted:", B.has_sorted_indices)
-            
-            # Check symmetry
-            if mtype==2:
-                D = B - B.T
-                print("asymmetry nnz:", D.nnz)
-                if D.nnz:
-                    print("max asymmetry:", np.max(np.abs(D.data)))
-            
-            # # Check diagonal
-            # d = B.diagonal()
-            # print("min diagonal:", d.min())
-            
-            # # Estimate smallest eigenvalue
-            # lam = scipy.sparse.linalg.eigsh(B, k=1, which="SA", return_eigenvectors=False)[0]
-            # print("lambda_min =", lam)
 
-            solver = PardisoCompat(B, mtype)
+            solver = pyMKL.pardisoSolver(B, mtype)
+            #solver = PardisoCompat(B, mtype)
             solver.factor()
             return PardisoSolverWrapper(B.shape, B.dtype, solver)
         else:

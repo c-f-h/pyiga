@@ -9,7 +9,7 @@ from . import kronecker
 # CHOLMOD
 HAVE_CHOLMOD = False
 try:
-    from sksparse.cholmod import cholesky
+    from sksparse.cholmod import cho_factor
     HAVE_CHOLMOD = True
 except ImportError:
     pass
@@ -293,10 +293,10 @@ def make_solver(B, symm=False, spd=False):
         symm = True
 
     if scipy.sparse.issparse(B):
-        if spd and HAVE_CHOLMOD:
-            solver = cholesky(B.tocsc())
+        # if spd and HAVE_CHOLMOD:
+        #     solver = cho_factor(B.tocsc())
 
-        elif HAVE_PYMKL:
+        if HAVE_PYMKL:
             mtype = 11
             if symm:
                 mtype = 2 if spd else -2

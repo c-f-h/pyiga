@@ -449,7 +449,7 @@ cpdef bint pyx_knots_leq(double[:] kv1, int n1, int p1, double a1, double b1,
                          double[:] kv2, int n2, int p2, double a2, double b2):
     cdef int i1 = 0, i2 = 0
     cdef int m1, m2, delta_p = p2 - p1
-    cdef double tol = 1e-12
+    cdef double tol = 1e-14
     cdef double x
 
     if delta_p < 0:

@@ -831,7 +831,7 @@ class RestrictedLinearSystem:
 # Integration
 ################################################################################
 
-def integrate(kvs, f, f_physical=False, geo=None):
+def integrate(kvs, f, f_physical=False, geo=None, nqp=None):
     """Compute the integral of the function `f` over the geometry
     `geo` or a simple tensor product domain.
 
@@ -851,7 +851,9 @@ def integrate(kvs, f, f_physical=False, geo=None):
     if isinstance(kvs, bspline.KnotVector):
         kvs = (kvs,)
     # compute quadrature rules
-    nqp = max(kv.p for kv in kvs) + 1
+    if nqp is None:
+        nqp = max(kv.p for kv in kvs) + 1
+
     gaussgrid, gaussweights = make_tensor_quadrature([kv.mesh for kv in kvs], nqp)
 
     # evaluate function f on grid or transformed grid
@@ -1010,7 +1012,7 @@ def _assemble_hspace(problem, hs, args, bfuns=None, symmetric=False, format='csr
         hdiscr = HDiscretization(hs, None, asm_args=args)
         return hdiscr.assemble_functional(problem)
 
-def assemble(problem, kvs, args=None, bfuns=None, boundary=None, symmetric=False, format='csr', layout='blocked', **kwargs):
+def assemble(problem, kvs, args=None, bfuns=None, boundary=None, quadorder=None, symmetric=False, format='csr', layout='blocked', **kwargs):
     """Assemble a matrix or vector in a function space.
 
     Args:
@@ -1070,9 +1072,9 @@ def assemble(problem, kvs, args=None, bfuns=None, boundary=None, symmetric=False
                 format=format, layout=layout, args=args)
     else:
         if boundary is not None:
-            asm = instantiate_assembler(problem, kvs, args, bfuns, boundary = bspline._parse_bdspec(boundary, len(kvs)))
+            asm = instantiate_assembler(problem, kvs, args, bfuns, quadorder, boundary = bspline._parse_bdspec(boundary, len(kvs)))
         else:
-            asm = instantiate_assembler(problem, kvs, args, bfuns)
+            asm = instantiate_assembler(problem, kvs, args, bfuns, quadorder)
         return assemble_entries(asm, symmetric=symmetric, format=format, layout=layout)
 
 def _Jac_to_boundary_matrix(bdspec, dim):
@@ -1092,7 +1094,7 @@ def _Jac_to_boundary_matrix(bdspec, dim):
         B[:, 0] *= -1
     return B
 
-def instantiate_assembler(problem, kvs, args, bfuns, boundary=None, updatable=[]):
+def instantiate_assembler(problem, kvs, args, bfuns, quadorder, boundary=None, updatable=[]):
     from . import vform
 
     # parse string to VForm
@@ -1127,6 +1129,9 @@ def instantiate_assembler(problem, kvs, args, bfuns, boundary=None, updatable=[]
             if inp not in args:
                 raise ValueError("required input parameter '%s' missing" % inp)
             used_args[inp] = args[inp]
+        
+        if quadorder is not None:
+            used_args["quadorder"] = quadorder
 
         if num_spaces <= 1:
             asm = problem(kvs, **used_args)
@@ -1155,13 +1160,13 @@ class Assembler:
     considered updatable. The other arguments have the same meaning as for
     :func:`assemble`.
     """
-    def __init__(self, problem, kvs, args=None, bfuns=None, boundary=None, symmetric=False, updatable=[], **kwargs):
+    def __init__(self, problem, kvs, args=None, bfuns=None, quadorder=None, boundary=None, symmetric=False, updatable=[], **kwargs):
         if args is None:
             args = dict()
         args.update(kwargs)
         self.symmetric = bool(symmetric)
         self.updatable = tuple(updatable)
-        self.asm = instantiate_assembler(problem, kvs, args, bfuns, boundary, self.updatable)
+        self.asm = instantiate_assembler(problem, kvs, args, bfuns, quadorder, boundary, self.updatable)
         if not all(upd_name in self.asm.inputs().keys() for upd_name in self.updatable):
             raise ValueError('Assembler received an updatable argument which is not an assembler input')
 
@@ -1410,12 +1415,12 @@ class MultiBasis:
                     if boundary_kv(self.mesh.kvs[p1],b1) <= boundary_kv(self.mesh.kvs[p2],b2,flip=flip):
                         self.intfs.add(((p1,b1),(p2,b2),flip))
                     else:
-                        match bd1:
+                        match b1:
                             case 0: side1='bottom'
                             case 1: side1='top'
                             case 2: side1='left'
                             case 3: side1='right'
-                        match bd2:
+                        match b2:
                             case 0: side2='bottom'
                             case 1: side2='top'
                             case 2: side2='left'
@@ -1423,8 +1428,29 @@ class MultiBasis:
                         raise AssertionError(f"Interface coupling not possible between patch {p1} on the {side1} side and patch {p2} on the {side2} side") 
         elif self.sdim==3:
             for ((p1,bd1,s1),((p2,bd2,s2),flip)) in interfaces.items():
-                if ((p1,bd1,s1),(p2,bd2,s2),flip) not in self.intfs and ((p2,bd2,s2),(p1,bd1,s1),flip) not in self.intfs:
-                    self.intfs.add(((p1,bd1),(p2,bd2),flip))
+                if ((p1,bd1),(p2,bd2),flip[1]) not in self.intfs and ((p2,bd2),(p1,bd1),flip[1]) not in self.intfs:
+                    bkv1 = boundary_kv(self.mesh.kvs[p1],bd1)
+                    bkv2 = boundary_kv(self.mesh.kvs[p2],bd2,flip=flip[1])
+                    
+                    if bkv1[0] <= bkv2[0] and bkv1[1] <= bkv2[1]:
+                        self.intfs.add(((p1,bd1),(p2,bd2),flip[1]))
+                    else:
+                        print(bkv1[0].mesh,bkv2[0].mesh,bkv1[1].mesh,bkv2[1].mesh)
+                        match bd1:
+                            case 0: side1='front'
+                            case 1: side1='back'
+                            case 2: side1='bottom'
+                            case 3: side1='top'
+                            case 4: side1='left'
+                            case 5: side1='right'
+                        match bd2:
+                            case 0: side2='front'
+                            case 1: side2='back'
+                            case 2: side2='bottom'
+                            case 3: side2='top'
+                            case 4: side2='left'
+                            case 5: side2='right'
+                        raise AssertionError(f"Interface coupling not possible between patch {p1} on the {side1} side and patch {p2} on the {side2} side") 
         # for ((p1,bd1,s1),((p2,bd2,s2),flip)) in interfaces.items():
         #     if ((p1,bd1,s1),(p2,bd2,s2),flip) not in self.intfs and ((p2,bd2,s2),(p1,bd1,s1),flip) not in self.intfs:
         #         if boundary_kv(self.mesh.kvs[p1],bd1) <= boundary_kv(self.mesh.kvs[p2],bd2,flip=flip):
@@ -1496,6 +1522,8 @@ class MultiBasis:
         if len(B)!=0:
             self.CornerConstr = np.concatenate(self.CornerConstr)
             return scipy.sparse.vstack(B)
+        else:
+            return scipy.sparse.csr_matrix((0,self.N_ofs[-1]))
 
     def set_subspace(self, subspace='C0'):
         self.B = self.set_constraints(subspace=subspace)
@@ -1513,7 +1541,8 @@ class MultiBasis:
         t=time.time()
         B = (self.B@self.R_related.T).tocsr()
         if subspace=='C0':
-            self.Basis, _ = algebra_cy.pyx_compute_basis(B.shape[0], B.shape[1], B, maxiter=10, switch=0)
+            t1 =time.time()
+            self.Basis, _ = algebra_cy.pyx_compute_basis(B.shape[0], B.shape[1], B, maxiter=100, switch=0)
             self.Basis = scipy.sparse.hstack([self.R_free.T, self.R_related.T@self.Basis], format='csc')
             self.P2G = assemble_cy.pyx_right_inverse_C0_Basis(self.Basis.indptr, self.Basis.indices, self.Basis.data, *self.Basis.shape).tocsc()
         elif subspace=='C1':
@@ -1633,7 +1662,7 @@ class MultiBasis:
         
         in_subspace= bool(self.subspace) & bool(in_subspace)
         if in_subspace:
-            X = self.Basis
+            X = self.Basis.tocsr()
         else:
             X = scipy.sparse.identity(self.N_ofs[-1], format="csr")
             
@@ -1910,7 +1939,8 @@ class MultiBasis:
             cw, pad = cw_in/fig_w, pad_in/fig_w
             pos = ax.get_position()
             cax = fig.add_axes([pos.x0+pos.width+pad, pos.y0, cw, pos.height])
-            fig.colorbar(im, cax=cax)
+            cb = fig.colorbar(im, cax=cax)
+            cb.ax.tick_params(labelsize=kwargs.pop("cbar_fontsize", 14))
     
             # 7) Shift *only* the original other axes (e.g. the right subplot)
             shift = cw + pad
@@ -1931,6 +1961,39 @@ class MultiBasis:
         else:
             raise ValueError('dimension mismatch')
         return [geometry.BSplineFunc(kvs,u_loc[self.N_ofs[p]:self.N_ofs[p+1]]) for p, kvs in enumerate(self.mesh.kvs)]
+
+    def L2projection(self, u):
+        Mh = self.assemble_volume('u * v * dx', arity=2)
+        Uh = self.assemble_volume('f * v * dx', arity=1, f=u)
+        return operators.make_solver(Mh,spd=True)@Uh
+
+    def L2err(self, u_exact, uh):
+        out = 0.0
+        deg = self.mesh.kvs[0][0].p
+        for p in range(self.nPatches):
+            kvs=self.mesh.kvs[p]
+            kvs0=tuple(bspline.KnotVector(kvs[i].mesh,0) for i in range(self.sdim))
+            out += assemble('(u_exact-uh)**2 * v * dx', kvs=kvs0, geo=self.mesh.geos[p], u_exact=u_exact, uh=uh[p], symmetric=True, updateable=True, quadorder=2*deg+2).sum()
+        return np.sqrt(out)
+
+    def H1err(self, u_exact, grad_u, uh):
+        out = 0.0
+        deg = self.mesh.kvs[0][0].p
+        for p in range(self.nPatches):
+            kvs=self.mesh.kvs[p]
+            kvs0=tuple(bspline.KnotVector(kvs[i].mesh,0) for i in range(self.sdim))
+            out += assemble('inner(grad_u-grad(uh),grad_u-grad(uh))  * v * dx', kvs=kvs0, geo=self.mesh.geos[p], u_exact=u_exact, grad_u=grad_u, uh=uh[p], symmetric=True, updateable=True, quadorder = 2*deg+2).sum()
+        return np.sqrt(out)
+
+    def Eerr(self, u_exact, grad_u, uh, nu):
+        out = 0.0
+        deg = self.mesh.kvs[0][0].p
+        for p in range(self.nPatches):
+            kvs=self.mesh.kvs[p]
+            kvs0=tuple(bspline.KnotVector(kvs[i].mesh,0) for i in range(self.sdim))
+            out += assemble('nu*inner(grad_u-grad(uh),grad_u-grad(uh))  * v * dx', kvs=kvs0, geo=self.mesh.geos[p], u_exact=u_exact, grad_u=grad_u, uh=uh[p], nu=nu[self.mesh.patch_domains[p]], symmetric=True, updateable=True, quadorder = 2*deg+2).sum()
+        return np.sqrt(out)
+
 
     def check_basis(self):
         assert self.Basis != None, 'Basis for function space not yet computed.'

@@ -43,7 +43,7 @@ class IetiMapper(assemble.MultiBasis):
                 if np.any(idx < 0):
                     raise ValueError("Some fixed indices are not present in the selection matrix.")
                 lookup = np.argsort(idx)
-                self.fixed_idx[p] = self.fixed_idx[p][lookup]
+                self.fixed_idx[p] = idx[lookup]
                 self.fixed_vals[p] = self.fixed_vals[p][lookup] 
 
             self.global_fixed_idx = np.concatenate([self.fixed_idx[p] + self.N_ofs_elim[p] for p in self.fixed_idx])
@@ -342,6 +342,7 @@ class PrimalSystem():
             RHS[n_free:, :] = np.eye(n_constr)
     
             # Solve with dense RHS (assumed requirement of solver)
+            #print(loc_solvers[p].shape, RHS.shape)
             sol = loc_solvers[p] @ RHS
             psi = sol[:n_free, :]
             delta = sol[n_free:, :]
@@ -522,15 +523,16 @@ class ScaledDirichletPreconditioner():
         self.D_Is_Diagonal = True
         
     def setupCoefficientScaling(self, a):  ###TODO: cythonize and return 1d array instead of sparse diag
-        self.D = [scipy.sparse.csr_matrix((self.B[p].shape[1],self.B[p].shape[1])) for p in range(self.K)]
+        self.D = [np.zeros(self.B[p].shape[1]) for p in range(self.K)]
         for (p1,b1) in self.IMap.mesh.L_intfs:
-            R1 = self.IMap.R_interfaces[(p1,b1)]@self.IMap.R_skeleton[p1].T
-            for (p2,b2) in self.IMap.mesh.L_intfs[(p1,b1)]:
-                R2 = self.IMap.R_interfaces[(p2,b2)]@self.IMap.R_skeleton[p2].T
-                a1, a2 = a[self.IMap.mesh.patch_domains[p1]], a[self.IMap.mesh.patch_domains[p2]]
-                self.D[p1] += (a2)/(a1+a2)*R1.T@scipy.sparse.identity(R1.shape[0])@R1
-                self.D[p2] += (a1)/(a1+a2)*R2.T@scipy.sparse.identity(R2.shape[0])@R2
-        self.D_Is_Diagonal = False
+            dofs1 = np.searchsorted(self.IMap.DOFS_skeleton[p1],self.IMap.DOFS_interfaces[(p1,b1)])
+            a1 = a[self.IMap.mesh.patch_domains[p1]]
+            for p2,b2,_ in self.IMap.mesh.L_intfs[(p1,b1)]:
+                dofs2 = np.searchsorted(self.IMap.DOFS_skeleton[p2],self.IMap.DOFS_interfaces[(p2,b2)])
+                a2 = a[self.IMap.mesh.patch_domains[p2]]
+                self.D[p1][dofs1] = (a2)/(a1+a2)
+                self.D[p2][dofs2] = (a1)/(a1+a2)
+        self.D_Is_Diagonal = True
         
     def setupSelectionScaling(self):
         assert isinstance(self.B_full, scipy.sparse.csr_matrix)

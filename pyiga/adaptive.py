@@ -10,15 +10,18 @@ from pyiga import utils
 ################################################################################
 # Error Estimation
 ################################################################################
-def mp_resPois(MP, uh, f=0., nu=1., M=(0.,0.), divMaT =0., neu_data={}, **kwargs):
+def mp_resPois(MP, uh, f=0., nu=1., M=None, divMaT = 0., neu_data={}, **kwargs):
+    dim = MP.sdim
     if isinstance(nu,(int,float)):
         nu={d:nu for d in MP.mesh.domains}
     if isinstance(f,(int,float)):
         f={d:f for d in MP.mesh.domains}
     if isinstance(M,(tuple,list,set,np.ndarray)):
-        assert len(M)==2, 'coefficient has wrong dimension'
+        assert len(M)==dim, 'coefficient has wrong dimension'
         if all([isinstance(m,(int,float)) for m in M]):
             M={d:M for d in MP.mesh.domains}
+    if M is None:
+        M = {d:dim*(0.0,) for d in MP.mesh.domains}
     n = MP.mesh.numpatches
     indicator = np.zeros(n)
     
@@ -29,17 +32,18 @@ def mp_resPois(MP, uh, f=0., nu=1., M=(0.,0.), divMaT =0., neu_data={}, **kwargs
     else:
         raise Exception("Dimension of solution vector is incompatible!")
     uh_per_patch = dict()
-    
+
+    deg = MP.mesh.kvs[0][0].p
     #residual contribution
     t=time.time()
-    
     for p, ((kvs, geo), _) in enumerate(MP.mesh.patches):
         h = np.linalg.norm([kv.meshsize_max()*(b-a) for kv,(a,b) in zip(kvs,geo.bounding_box(full=True))])
         #h=np.linalg.norm([(b-a) for (a,b) in geo.bounding_box()])
         uh_per_patch[p] = uh_loc[np.arange(MP.N[p]) + MP.N_ofs[p]]   #cache Spline Function on patch p
         kvs0 = tuple([bspline.KnotVector(kv.mesh, 0) for kv in kvs])
         u_func = geometry.BSplineFunc(kvs, uh_per_patch[p])
-        indicator[p] = h**2 * np.sum(assemble.assemble('((f + div(nu*grad(uh)))**2 * v) * dx', kvs=kvs0, geo=geo, 
+        nu_ = nu[MP.mesh.patch_domains[p]]
+        indicator[p] = h**2/nu_ * np.sum(assemble.assemble('((f + div(nu*grad(uh)))**2 * v) * dx', kvs=kvs0, geo=geo, quadorder=deg+1,
                                                        nu=nu[MP.mesh.patch_domains[p]], f=f[MP.mesh.patch_domains[p]],uh=u_func,**kwargs))
     #print('Residual contributions took {:.3} seconds.'.format(time.time()-t))
     
@@ -47,21 +51,26 @@ def mp_resPois(MP, uh, f=0., nu=1., M=(0.,0.), divMaT =0., neu_data={}, **kwargs
     t=time.time()
     for i,((p1,b1), (p2,b2), flip) in enumerate(MP.intfs):
         ((kvs1, geo1), _), ((kvs2, geo2), _) = MP.mesh.patches[p1], MP.mesh.patches[p2]
-        bdspec1, bdspec2 = bspline._parse_bdspec(b1,2), bspline._parse_bdspec(b2,2)
+        bdspec1, bdspec2 = bspline._parse_bdspec(b1,dim), bspline._parse_bdspec(b2,dim)
         bkv1, bkv2 = assemble.boundary_kv(kvs1, bdspec1), assemble.boundary_kv(kvs2, bdspec2)
         geo = geo2.boundary(bdspec2)
         kv0 = tuple([bspline.KnotVector(kv.mesh, 0) for kv in bkv2])
+
         #kv0 = tuple([bspline.KnotVector(kv.mesh, 0) for kv in bkv1])
         h1 = bkv1[0].meshsize_max()*np.linalg.norm([b-a for a,b in geo.bounding_box(full=True)])
         h2 = bkv2[0].meshsize_max()*np.linalg.norm([b-a for a,b in geo.bounding_box(full=True)])
 
+        nu1=nu[MP.mesh.patch_domains[p1]]
+        nu2=nu[MP.mesh.patch_domains[p2]]
+        nu_av = 2*nu1*nu2/(nu1+nu2)
         uh1_grad = geometry.BSplineFunc(kvs1, uh_loc[MP.N_ofs[p1]:MP.N_ofs[p1+1]]).transformed_jacobian(geo1).boundary(bdspec1, flip=flip) 
         uh2_grad = geometry.BSplineFunc(kvs2, uh_loc[MP.N_ofs[p2]:MP.N_ofs[p2+1]]).transformed_jacobian(geo2).boundary(bdspec2)            
-        J = np.sum(assemble.assemble('((inner((nu1 * uh1_grad + Ma1) - (nu2 * uh2_grad + Ma2), n) )**2 * v ) * ds', kv0, geo=geo, 
+        J = np.sum(assemble.assemble('((inner((nu1 * uh1_grad + Ma1) - (nu2 * uh2_grad + Ma2), n) )**2 * v ) * ds', kv0, geo=geo, quadorder=deg+1,
                                      nu1=nu[MP.mesh.patch_domains[p1]], nu2=nu[MP.mesh.patch_domains[p2]], uh1_grad=uh1_grad, uh2_grad=uh2_grad,
                                      Ma1=M[MP.mesh.patch_domains[p1]], Ma2=M[MP.mesh.patch_domains[p2]], **kwargs))
-        indicator[p1] += 0.5 * h2 * J
-        indicator[p2] += 0.5 * h2 * J
+        #print(J)
+        indicator[p1] += 0.5 * h2/nu_av * J
+        indicator[p2] += 0.5 * h2/nu_av * J
         
     #Neumann flux
     for bd in neu_data:
@@ -74,9 +83,10 @@ def mp_resPois(MP, uh, f=0., nu=1., M=(0.,0.), divMaT =0., neu_data={}, **kwargs
             h = bkv[0].meshsize_max() * np.linalg.norm([b - a for a, b in geo_b.bounding_box(full=True)])
             kv0 = tuple([bspline.KnotVector(kv.mesh, 0) for kv in bkv])
             uh_grad = geometry.BSplineFunc(kvs, uh_per_patch[p]).transformed_jacobian(geo).boundary(bdspec)
+            nu_ = nu[MP.mesh.patch_domains[p]]
             J = np.sum(assemble.assemble('((inner(nu * uh_grad + Ma, n) - g)**2 * v ) * ds', kv0 ,geo=geo_b,Ma=M[MP.mesh.patch_domains[p]],
-                                         nu=nu[MP.mesh.patch_domains[p]],g=g, uh_grad=uh_grad, **kwargs))
-            indicator[p] += h * J
+                                         nu=nu[MP.mesh.patch_domains[p]],g=g, uh_grad=uh_grad, quadorder=deg+1, **kwargs))
+            indicator[p] += h/nu_ * J
             
     #print('Jump contributions took {:.3} seconds.'.format(time.time()-t))
     return np.sqrt(indicator)
@@ -167,6 +177,6 @@ def doerfler_mark(x, theta=0.8, TOL=0.01):
 def quick_mark(x, theta=0.8):
     """Given an array of x, return a minimal array of indices such that the indexed
     values of x have norm of at least theta * norm(errors)**2. Does not require sorting the array x.
-    TODO: add checks for when values are equal in the array, see Praetorius 2019 paper."""  
+    TODO: add checks for when values are equal in the array, see Praetorius/Pfeiler 2019 paper."""  
     n = len(x)
     return adaptive_cy.pyx_quick_mark(x, theta, np.arange(n, dtype=np.int32), 0, n-1, theta*x@x)

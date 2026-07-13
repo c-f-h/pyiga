@@ -136,7 +136,7 @@ class MultiPatch:
                 assert conn, 'patch graph is not connected!'
                 for (p0, bd0, p1, bd1, (perm, flip)) in conf_interfaces:
                     self.add_interface(p0, bd0, 0, p1, bd1, 0, flip)
-                    self.L_intfs[(p0,bd0)]=[(p1,bd1)]
+                    self.L_intfs[(p0,bd0)]=[(p1,bd1,flip)]
             if interfaces:
                 D={}
                 for (p, b, s),(p1, b1, s1),flip in interfaces:
@@ -162,6 +162,19 @@ class MultiPatch:
                 for b in range(4):
                     if (p,b,0) not in self.interfaces:
                         self.outer_boundaries[0].add((p,b))
+                        # match b:
+                        #     case 0:
+                        #         self.outer_boundaries[0].add((p,(0,0)))
+                        #         self.outer_boundaries[0].add((p,(1,0)))
+                        #     case 1:
+                        #         self.outer_boundaries[0].add((p,(0,1)))
+                        #         self.outer_boundaries[0].add((p,(1,1)))
+                        #     case 2:
+                        #         self.outer_boundaries[0].add((p,(0,0)))
+                        #         self.outer_boundaries[0].add((p,(0,1)))
+                        #     case 3:
+                        #         self.outer_boundaries[0].add((p,(1,0)))
+                        #         self.outer_boundaries[0].add((p,(1,1)))
                                 
             #self.sanity_check()
 
@@ -246,11 +259,20 @@ class MultiPatch:
         for key in boundary_id:
             for elem in boundary_id[key]:
                 match elem[1]:
-                    case 'bottom': B[key].add((elem[0],0))
-                    case 'top': B[key].add((elem[0],1))
-                    case 'left': B[key].add((elem[0],2))
-                    case 'right': B[key].add((elem[0],3))
-                    case _: continue
+                    case 0 | 'bottom':
+                        boundary = 0
+                    case 1 | 'top':
+                        boundary = 1
+                    case 2 | 'left':
+                        boundary = 2
+                    case 3 | 'right':
+                        boundary = 3
+                    case (0, 0) | (1, 0) | (0, 1) | (1, 1):
+                        boundary = elem[1]
+                    case _:
+                        continue
+                
+                B[key].add((elem[0], boundary))
         marked = set().union(*B.values())
     
         # remove them from existing boundaries
@@ -262,30 +284,6 @@ class MultiPatch:
         # now add them under the new keys
         for key, pts in B.items():
             self.outer_boundaries.setdefault(key, set()).update(pts)
-            
-        # B = {key:set() for key in boundary_id}
-        # for key in boundary_id:
-        #     for elem in boundary_id[key]:
-        #         match elem[1]:
-        #             case 'bottom': B[key].add((elem[0],0))
-        #             case 'top': B[key].add((elem[0],1))
-        #             case 'left': B[key].add((elem[0],2))
-        #             case 'right': B[key].add((elem[0],3))
-        #             case _: continue
-                        
-        # marked = set().union(*B.values())
-        # empty_keys =[]
-        # for key in self.outer_boundaries:
-        #     self.outer_boundaries[key]=self.outer_boundaries[key]-marked
-        #     if len(self.outer_boundaries[key])==0: empty_keys.append(key)
-        # for key in empty_keys:
-        #     del self.outer_boundaries[key]
-        # for key in B:
-        #     if key in self.outer_boundaries:
-        #         self.outer_boundaries[key]=self.outer_boundaries[key].union(B[key])
-        #     else:
-        #         self.outer_boundaries[key]=B[key]
-        # #self.outer_boundaries.update(boundary_id)
         
     def set_domain_id(self, domain_id):
         marked = set().union(*domain_id.values())
@@ -419,16 +417,16 @@ class MultiPatch:
             if (p,b,0) in self.interfaces:
                 (p0, b0, s0), flip = self.interfaces[(p,b,0)]
                 if (p0,b0) not in self.L_intfs:
-                    self.L_intfs[(p0,b0)] = [(new_p,b),(p,b)] if flip[0] else [(p,b),(new_p,b)]
+                    self.L_intfs[(p0,b0)] = [(new_p,b,flip),(p,b,flip)] if flip[0] else [(p,b,flip),(new_p,b,flip)]
                     del self.L_intfs[(p,b)]
                 else:
                     for i in range(len(self.L_intfs[(p0,b0)])):
                         if self.L_intfs[(p0,b0)][i][0]==p:
                             break
                     if flip[0]:
-                        self.L_intfs[(p0,b0)].insert(i    , (new_p,b))
+                        self.L_intfs[(p0,b0)].insert(i    , (new_p,b,flip))
                     else:
-                        self.L_intfs[(p0,b0)].insert(i + 1, (new_p,b))
+                        self.L_intfs[(p0,b0)].insert(i + 1, (new_p,b,flip))
             
             seg = self._find_boundary_split_index(p, b, xi, new_vtx)
             self.split_boundary_segment(p, b, seg, new_vtx, xi, new_p)
@@ -528,17 +526,32 @@ class MultiPatch:
             if (p,upper,0) in self.interfaces:
                 (p0, b0,_),_ = self.interfaces[(p,upper,0)]
                 for i in range(len(self.L_intfs[(p0,b0)])):
-                    p_, b_ = self.L_intfs[(p0,b0)][i]
-                    if p_ == p: self.L_intfs[(p0,b0)][i] = (new_p, b_)
+                    p_, b_, flip = self.L_intfs[(p0,b0)][i]
+                    if p_ == p: self.L_intfs[(p0,b0)][i] = (new_p, b_, flip)
         self._reindex_interfaces(p, upper, range(0, len(bds[upper]) - 1), 0, new_p=new_p)
 
         # reindex existing outer boundary to new patch
-        for s in self.outer_boundaries.keys():
+        for s in self.outer_boundaries:
+        
             if (p, upper) in self.outer_boundaries[s]:
                 self.outer_boundaries[s].remove((p, upper))
                 self.outer_boundaries[s].add((new_p, upper))
+        
+            if upper == 1:
+                for bd in ((1,0), (1, 1)):
+                    if (p, bd) in self.outer_boundaries[s]:
+                        self.outer_boundaries[s].remove((p, bd))
+                        self.outer_boundaries[s].add((new_p, bd))
+        
+            elif upper == 3:
+                for bd in ((0, 1), (1, 1)):
+                    if (p, bd) in self.outer_boundaries[s]:
+                        self.outer_boundaries[s].remove((p, bd))
+                        self.outer_boundaries[s].add((new_p, bd))
+        
             for bd in sides:
                 if (p, bd) in self.outer_boundaries[s]:
+                    #self.outer_boundaries[s].remove((p, bd))
                     self.outer_boundaries[s].add((new_p, bd))
                     
         bds[upper]         = list(new_vertices)      # upper edge of new lower patch
@@ -547,7 +560,7 @@ class MultiPatch:
         new_bds_par[lower] = [bds_par[upper][0], bds_par[upper][-1]]
         # add interface between the two new patches
         self.add_interface(p, upper, 0, new_p, lower, 0, (False,))
-        self.L_intfs[(p,upper)]=[(new_p,lower)]
+        self.L_intfs[(p,upper)]=[(new_p,lower,(False,))]
 
         for sb, new_vtx in zip(split_boundaries, new_vertices):
             i_new = self.split_patch_boundary(p, sb, split_xi, self.vertices[new_vtx], new_p)
@@ -634,17 +647,17 @@ class MultiPatch:
                 self.patches[p]=((new_kvs, geo), (b, b_par))
                 new_p=(p,)
             else:    
-                t=time.time()
+                #t=time.time()
                 new_p = self.split_patch(p, axis=patches[p], mult=mult, ref=ref)
             for b in range(4):
                     if (p,b) in self.L_intfs:
                         if len(self.L_intfs[(p,b)])==1:
-                            p2,b2 = self.L_intfs[(p,b)][0]
+                            p2,b2,flip = self.L_intfs[(p,b)][0]
                             kv1 = assemble.boundary_kv(self.kvs[p], b)
                             kv2 = assemble.boundary_kv(self.kvs[p2], b2)
                             if kv2 < kv1:
                                 del self.L_intfs[(p,b)]
-                                self.L_intfs[(p2,b2)]=[(p,b)]
+                                self.L_intfs[(p2,b2)]=[(p,b,flip)]
             new_patches[p] = new_p 
         return new_patches
 
@@ -687,16 +700,21 @@ class MultiPatch:
             fig=plt.figure(figsize=kwargs.get('figsize', (5,5)))
             ax = plt.axes()
             
-        if nodes:
-            ax.scatter(*np.transpose(self.vertices),zorder=100000)
+        if bool(nodes):
+            H = np.zeros(len(self.vertices))
+            for geo in self.geos:
+                vtx = np.array([self.add_vertex(c) for c in corners(geo, ravel = True)])
+                diam = np.linalg.norm([b-a for a,b in geo.bounding_box(full=False)])
+                H[vtx] = np.maximum(H[vtx],diam)
+            ax.scatter(*np.transpose(self.vertices),zorder=100000, s=float(nodes)*H)
         
         for p,((kvs, geo),_) in enumerate(self.patches):
             if color is not None:
                 c=color[self.patch_domains[p]]
             else:
-                c=None
+                c='gainsboro'
             if kwargs.get('knots'):
-                vis.plot_geo(geo, gridy=kvs[0].mesh, gridx=kvs[1].mesh, lcolor='lightgray', color=c, boundary=True, axis=ax)
+                vis.plot_geo(geo, gridy=kvs[0].mesh, gridx=kvs[1].mesh, lcolor='darkgray', color=c, boundary=True, axis=ax)
             else:
                 vis.plot_geo(geo, grid=2, color=c, boundary=True, axis=ax)
         
@@ -705,7 +723,8 @@ class MultiPatch:
             if bcolor is not None:
                 bcol=bcolor[key]
             for (p,b) in self.outer_boundaries[key]:
-                vis.plot_geo(self.geos[p].boundary(b), linewidth=bwidth, color=bcol, zorder=10000, axis=ax)
+                if np.isscalar(b):
+                    vis.plot_geo(self.geos[p].boundary(b), linewidth=bwidth, color=bcol, zorder=10000, axis=ax)
 
         if patch_idx:
             for p in range(len(self.patches)):        # annotate patch indices
@@ -953,7 +972,7 @@ class MultiPatch3D:
             new_s = [ofs + s[r:] for s in old_s]
         else:
             new_s = [ofs + s for s in old_s]
-        if not new_p:
+        if new_p is None:
             new_p = p
         S_old = [(p, b, s) for s in old_s]
         S_new = [(new_p, b, s) for s in new_s]
@@ -997,7 +1016,8 @@ class MultiPatch3D:
             self.interfaces.pop((p1, b1, s1))
             
             bd_axis = axis - 1*(axis > self.boundaries(p)[b].normal_axis)
-            if flip[bd_axis]:
+            # print(flip[1][bd_axis])
+            if flip[1][bd_axis]:
                 # indices are running in opposite directions on the two sides
                 self.interfaces[(p, b, s + (0,))] = ((p1, b1, s1 + (1,)), flip)
                 self.interfaces[(p1, b1, s1 + (1,))] = ((p, b, s + (0,)), flip)
@@ -1012,19 +1032,6 @@ class MultiPatch3D:
                 self.interfaces[(p1, b1, s1 + (1,))] = ((p, b, s + (1,)), flip)
 
     def split_patch_boundary(self, p, b, xi, axis, new_edge, new_p):
-        """Split the boundary `b` of patch `p` at a vertex which lies at
-        parameter value `xi` of the boundary curve and has coordinates
-        `vtxpos`.
-
-        Returns the index of the first segment after the new vertex.
-
-        It is valid to pass a vertex which is already contained in the
-        boundary, in which case nothing is inserted and the correct index is
-        returned.
-        """
-
-        #vtx1, vtx2 = self.boundaries(p)[b][::len(self.boundaries(p)[b])-1]
-        #new_edge = self.edges[new_edge]
         try:
             # is the new edge already contained in the boundary?
             if self.boundaries(p)[b].axis != axis:
@@ -1050,7 +1057,6 @@ class MultiPatch3D:
 
     def split_patch(self, p, axis = None, mult=1):
         if axis == None:
-            
             (p1, p2), new_kvs0 = self.split_patch(p,  axis=2, mult=mult)
             (p1, p3), new_kvs1 = self.split_patch(p1, axis=1, mult=mult)
             (p2, p4), _        = self.split_patch(p2, axis=1, mult=mult)
@@ -1139,11 +1145,11 @@ class MultiPatch3D:
                 if (p, bd) in self.outer_boundaries[s]:
                     self.outer_boundaries[s].add((new_p, bd))
                     
-        boundaries[upper]     =  BSegments([self.edges[e] for e in new_edges], axis)   # upper edge of new lower patch
-        new_boundaries[lower] =  BSegments([self.edges[e] for e in new_edges], axis)   # lower edge of new upper patch
+        boundaries[upper]     =  BSegments([self.edges[e] for e in new_edges], axis)   # upper face of new lower patch
+        new_boundaries[lower] =  BSegments([self.edges[e] for e in new_edges], axis)   # lower face of new upper patch
 
         # add interface between the two new patches
-        self.add_interface(p, upper, tuple(), new_p, lower, tuple(), (False, False))
+        self.add_interface(p, upper, tuple(), new_p, lower, tuple(), ((0,1),(False, False)))
 
         for sb, new_edge in zip(split_boundaries, new_edges):
             #print(self.boundaries(p)[sb].normal_axis)
@@ -1166,6 +1172,10 @@ class MultiPatch3D:
             
         self.patches[p] = ((kvs1, geo1), tuple(boundaries))
         self.patches.append(((kvs2, geo2), tuple(new_boundaries)))
+
+        domain_idx=self.patch_domains[p]
+        self.patch_domains[new_p]=domain_idx
+        self.domains[domain_idx].add(new_p)
         
         return (p, new_p), new_kvs     # return the two indices of the split patches and the joined knot mesh over the 2 patches
     
@@ -1211,7 +1221,7 @@ class MultiPatch3D:
                                 if bd == 'front' or bd == 'back':
                                     self.outer_boundaries[s].append((n, bd)) 
             
-    def h_refine(self, patches=None, mult=1):
+    def h_refine(self, patches=None, mult=1, **kwargs):
         if isinstance(patches, dict):
             if len(patches)>0:
                 assert max(patches.keys())<self.numpatches and min(patches.keys())>=0, "patch index out of bounds."
@@ -1271,8 +1281,32 @@ class MultiPatch3D:
             return matching[0], matching[1]
         else:
             return None, False     # no matching segment - must be on the boundary
+
+    def plot_boundary(self, figsize=(8,8)):
+        fig=plt.figure(figsize=figsize)
+        ax = plt.axes(projection='3d')
+        ax.grid(False)
+        ax.view_init(elev=-35, azim=225, roll=180)
+
+        ax.set_xlabel("x", fontsize=18)
+        ax.set_ylabel("y", fontsize=18)
+        ax.set_zlabel("z", fontsize=18)
+
+        ax.xaxis.set_tick_params(labelsize=18)
+        ax.yaxis.set_tick_params(labelsize=18)
+        ax.zaxis.set_tick_params(labelsize=18)
+
+        ax.set_xticks([-1.0, 0.0, 1.0])
+        ax.set_yticks([-1.0, 0.0, 1.0])
+        ax.set_zticks([-1.0, 0.0, 1.0])
+
+        geos=self.geos
+
+        for p,b in self.outer_boundaries[1]:
+            vis.plot_geo(geos[p].boundary(b), grid=2,lcolor='black')
+        #plt.show()
         
-    def draw(self, knots = True, vertex_idx = False, edge_idx=False, patch_idx = False, nodes=False, figsize=(8,8)):
+    def plotmesh(self, knots = True, vertex_idx = False, edge_idx=False, patch_idx = False, nodes=False, figsize=(8,8)):
         """draws a visualization of the multi-patch domain in 2D."""
         fig=plt.figure(figsize=figsize)
         ax = plt.axes(projection='3d')
@@ -1311,7 +1345,7 @@ class MultiPatch3D:
         ax.set_ylabel('y')
         ax.set_zlabel('z')
         #ax.set_aspect('equal')
-        plt.show()
+        #plt.show()
             
     def sanity_check(self):
         for (p, b, s), ((p1, b1, s1), flip) in self.interfaces.items():

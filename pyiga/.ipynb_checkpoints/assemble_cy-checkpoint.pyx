@@ -43,7 +43,7 @@ cpdef tuple pyx_find_global_indices(int[:] indptr, int[:] indices, double[:] dat
                 g_vals[k]=local_dir_vals[i]
                 k+=1
                 break;
-    return g_dofs[:k].base, g_vals[:k].base
+    return g_dofs.base[:k], g_vals.base[:k]
                 
         
 

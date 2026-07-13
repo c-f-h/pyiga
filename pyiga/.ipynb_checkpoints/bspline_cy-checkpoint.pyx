@@ -449,7 +449,7 @@ cpdef bint pyx_knots_leq(double[:] kv1, int n1, int p1, double a1, double b1,
                          double[:] kv2, int n2, int p2, double a2, double b2):
     cdef int i1 = 0, i2 = 0
     cdef int m1, m2, delta_p = p2 - p1
-    cdef double tol = 1e-12
+    cdef double tol = 1e-14
     cdef double x
 
     if delta_p < 0:
@@ -531,70 +531,70 @@ cpdef object pyx_findspans(double[::1] kv, int p, double[::1] u):
 #             result[i] = pyx_findspan(kv, p, u[i])
 #     return out
 
-@cython.cdivision(True)
-@cython.boundscheck(False)
-@cython.wraparound(False)
-cpdef np.ndarray[np.float64_t, ndim=1] pyx_knot_insertion(double[:] kv, int size, int p, double[:] u, int m):
-    cdef int n = size - p - 1
-    cdef np.ndarray[np.float64_t, ndim=1] kv_new = np.empty(size + m, dtype=np.float64)
-    cdef double[:] kv_new_ = kv_new
-    cdef int i1=0,i2=0,k=0
-    while i1 < size or i2 < m:
-        if i2==m: kv_new_[k] = kv[i1]; i1+=1
-        elif i1==size: kv_new_[k] = u[i2]; i2+=1
-        elif kv[i1] <= u[i2]: kv_new_[k] = kv[i1]; i1+=1
-        else: kv_new_[k] = u[i2]; i2+=1
-        k+=1
-    cdef int n_new = k - p - 1
-    #return kv_new
+# @cython.cdivision(True)
+# @cython.boundscheck(False)
+# @cython.wraparound(False)
+# cpdef np.ndarray[np.float64_t, ndim=1] pyx_knot_insertion(double[:] kv, int size, int p, double[:] u, int m):
+#     cdef int n = size - p - 1
+#     cdef np.ndarray[np.float64_t, ndim=1] kv_new = np.empty(size + m, dtype=np.float64)
+#     cdef double[:] kv_new_ = kv_new
+#     cdef int i1=0,i2=0,k=0
+#     while i1 < size or i2 < m:
+#         if i2==m: kv_new_[k] = kv[i1]; i1+=1
+#         elif i1==size: kv_new_[k] = u[i2]; i2+=1
+#         elif kv[i1] <= u[i2]: kv_new_[k] = kv[i1]; i1+=1
+#         else: kv_new_[k] = u[i2]; i2+=1
+#         k+=1
+#     cdef int n_new = k - p - 1
+#     #return kv_new
 
-    cdef int max_nnz = (n + m) * (p + 1)
-    cdef np.ndarray[np.float64_t, ndim=1] data = np.empty(max_nnz, dtype=np.float64)
-    cdef np.ndarray[np.int32_t, ndim=1] ii = np.empty(max_nnz, dtype=np.int32)
-    cdef np.ndarray[np.int32_t, ndim=1] jj = np.empty(max_nnz, dtype=np.int32)
-    cdef double[:] data_ = data
-    cdef int[:] ii_ = ii
-    cdef int[:] jj_ = jj
+#     cdef int max_nnz = (n + m) * (p + 1)
+#     cdef np.ndarray[np.float64_t, ndim=1] data = np.empty(max_nnz, dtype=np.float64)
+#     cdef np.ndarray[np.int32_t, ndim=1] ii = np.empty(max_nnz, dtype=np.int32)
+#     cdef np.ndarray[np.int32_t, ndim=1] jj = np.empty(max_nnz, dtype=np.int32)
+#     cdef double[:] data_ = data
+#     cdef int[:] ii_ = ii
+#     cdef int[:] jj_ = jj
+#     cdef double* alpha = <double *>malloc((m + p + 1) * sizeof(double))
 
-    cdef int i,j, idx=0
-    k=0
-    for j in range(n):
-        k = pyx_findspan(kv_new_, p, kv[j])
-        #TODO: compute alphas and number r of newly inserted knots in the support of basis function j
-        for i in range(r + p + 1):
-            data[idx] = #alpha
-            jj[idx] = j
-            ii[idx] = i + k
-            idx+=1
+#     cdef int i,j, idx=0
+#     k=0
+#     for j in range(n):
+#         k = pyx_findspan(kv_new_, p, kv[j])
+#         r = 0
+#         while r + k + p + 1 < size + m and kv_new_[r + k + p + 1] < kv[j + p + 1]:
+#             r+=1
+#         pyx_compute_alpha(kv, kv_new_, p, k, r, j, alpha)
+#         for i in range(r + p + 1):
+#             data_[idx] = alpha[i]
+#             jj_[idx] = j
+#             ii_[idx] = i + k
+#             idx+=1
+#     free(alpha)
 
-@cython.cdivision(True)
-@cython.boundscheck(False)
-@cython.wraparound(False)
-cdef void pyx_compute_alpha(double[:] kv, double[:] kv_new, int p, int r, int j, double* alpha, int size_a) nogil:
-    """
-    Compute knot insertion coefficients for coarse B-spline j.
-    coefs: length p+1
-    kv: coarse knot vector
-    kv_new: fine knot vector after insertion
-    """
-    #cdef int i, r, s  # number of inserted knots
-    #cdef double alpha, beta
-    cdef i, j
-    # Step 1: initialize
-    for i in range(size_a):
-        alpha[i] = 0.0
-    alpha[0] = 1.0
+# @cython.cdivision(True)
+# @cython.boundscheck(False)
+# @cython.wraparound(False)
+# cdef void pyx_compute_alpha(double[:] kv, double[:] kv_new, int p, int start_index, int r, int j, double* alpha) nogil:
+#     """
+#     """
+#     #cdef int i, r, s  # number of inserted knots
+#     #cdef double alpha, beta
+#     cdef int i, k
+#     cdef double beta
+#     # Step 1: initialize
+#     for i in range(p + 1):
+#         alpha[i] = 0.0
+#     alpha[0] = 1.0
     
-    # Step 2: loop over inserted knots
-    # only the knots in kv_new[j:j+p+1] that are new
-    for i in range(r):
-        # loop backward to update coefficients
-        for j in range(p, 0, -1):
-            if kv[i + j + p] != kv[i + j]:
-                beta = (kv_new[r] - kv[i + j]) / (kv[i + j + p] - kv[i + j])
-            else:
-                beta = 0.0
-            alpha[i] = beta * alpha[i-1] + (1.0 - beta) * alpha[i]
+#     for i in range(r):
+#         # loop backward to update coefficients
+#         for k in range(p + i, 0, -1):
+#             if kv[j + k + p] != kv[j + k]:
+#                 beta = #TODO
+#             else:
+#                 beta = 0.0
+#             alpha[k] = beta * alpha[k-1] + (1.0 - beta) * alpha[k]
     
 @cython.cdivision(True)
 @cython.boundscheck(False)

@@ -228,6 +228,7 @@ class IetiMapper(assemble.MultiBasis):
         ii=[]
         jj=[]
         k=0
+        deg = self.mesh.kvs[0][0].p
         #B = self.B.tocsc()
         for (p1,b1) in self.mesh.L_intfs:
             #supp1 = self.mesh.boundaries(p1)[1][b1]
@@ -245,10 +246,10 @@ class IetiMapper(assemble.MultiBasis):
                     P = bspline.prolongation(kv1,kv2)
                     #a, b = self.Constr[(p1,p2)]
     
-                    moments2 = assemble.assemble("v * ds", arity=1, kvs = self.mesh.kvs[p2], geo = self.mesh.geos[p2], boundary=b2).ravel()
+                    moments2 = assemble.assemble("v * ds", arity=1, kvs = self.mesh.kvs[p2], geo = self.mesh.geos[p2], boundary=b2, quadorder=2*deg+1).ravel()
                     #moments1 = assemble.assemble("v * ds", arity=1, kvs = self.mesh.kvs[p1], geo = self.mesh.geos[p1], boundary=b1).ravel()
     
-                    vv.append(np.r_[P.T@moments2,moments2]/sum(moments2))
+                    vv.append(np.r_[P.T@moments2,moments2]/moments2.sum())
                     ii.append(np.r_[dofs1 + self.N_ofs[p1], dofs2+ self.N_ofs[p2]])
                     jj.append(np.repeat(k, len(dofs1)+len(dofs2)))
                     k+=1
@@ -344,6 +345,7 @@ class PrimalSystem():
             # Solve with dense RHS (assumed requirement of solver)
             #print(loc_solvers[p].shape, RHS.shape)
             sol = loc_solvers[p] @ RHS
+            print(np.linalg.norm(mod_A[p] @ sol - RHS))
             psi = sol[:n_free, :]
             delta = sol[n_free:, :]
     
@@ -385,7 +387,7 @@ class IetiSystem():
             assert len(loc_solver)==len(A), 'amount of local solvers does not match amount of local system matrices!'
             self.loc_solver=loc_solver
         else:
-            self.loc_solver = [solvers.make_solver(a, spd=spd, symm=symm) for a in self.A]
+            self.loc_solver = [solvers.make_solver(self.A[i], spd=spd, symm=symm) for i in range(len(self.A))]
 
         self.K = len(A)
         self.nLagrangeMultipliers = self.B[0].shape[0]

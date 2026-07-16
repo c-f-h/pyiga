@@ -5,19 +5,20 @@ from builtins import range   # Python 2 compatibility
 #from pypardiso import PyPardisoSolver
 
 from . import kronecker
+from scipy.sparse.linalg import splu
 
 # CHOLMOD
 HAVE_CHOLMOD = False
-# try:
-#     from sksparse.cholmod import cholesky
-#     HAVE_CHOLMOD = True
-# except ImportError:
-#     pass
+try:
+    from sksparse.cholmod import cholesky
+    HAVE_CHOLMOD = True
+except ImportError:
+    pass
 
 # pyMKL
 HAVE_PYMKL = False
 try:
-    import pyMKL
+    from pymklpardiso import PardisoSolver
     HAVE_PYMKL = True
 except ImportError:
     pass
@@ -300,9 +301,10 @@ def make_solver(B, symm=False, spd=False):
             mtype = 11
             if symm:
                 mtype = 2 if spd else -2
-            solver = pyMKL.pardisoSolver(B, mtype)
-            solver.factor()
-
+                B = scipy.sparse.triu(B, format='csr')
+                B.sort_indices()
+            solver = PardisoSolver(B, mtype)
+            #solver.factor()
         else:
             solver = splu(B.tocsc(),permc_spec="NATURAL")
 

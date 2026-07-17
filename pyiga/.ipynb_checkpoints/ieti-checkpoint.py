@@ -303,7 +303,7 @@ class PrimalSystem():
             #diff = np.linalg.matrix_rank(c.toarray())==c.shape[0]
             self.C.append(c)
             self.R.append(scipy.sparse.coo_matrix((np.ones(c.shape[0]),(np.arange(c.shape[0]),jj)),(c.shape[0],self.nPrim)))
-            #assert np.linalg.matrix_rank(c.toarray())==c.shape[0], "Local saddle point system not full row rank in patch "+str(p)+": number of rows: "+str(c.shape[0])+", row rank: "+str(np.linalg.matrix_rank(c.toarray()))+" ."
+            assert np.linalg.matrix_rank(c.toarray())==c.shape[0], "Local saddle point system not full row rank in patch "+str(p)+": number of rows: "+str(c.shape[0])+", row rank: "+str(np.linalg.matrix_rank(c.toarray()))+" ."
         #assert np.all(np.array([np.linalg.matrix_rank(c.toarray())==c.shape[0] for c in self.C if c.shape[0]!=0])), "Local saddle point system not full rank."
             
         self.nPrimConstr = [c.shape[0] for c in self.C]
@@ -345,7 +345,7 @@ class PrimalSystem():
             # Solve with dense RHS (assumed requirement of solver)
             #print(loc_solvers[p].shape, RHS.shape)
             sol = loc_solvers[p] @ RHS
-            print(np.linalg.norm(mod_A[p] @ sol - RHS))
+            #print(np.linalg.norm(mod_A[p] @ sol - RHS))
             psi = sol[:n_free, :]
             delta = sol[n_free:, :]
     
@@ -375,7 +375,7 @@ class PrimalSystem():
         return [psi@u_prim for psi in self.Psi]
 
 class IetiSystem():
-    def __init__(self, A, B ,RHS, N, loc_solver = None, spd=False, symm=False):
+    def __init__(self, A, B ,RHS, N, loc_solver = None, spd=False, symm=True):
         self.A = A
         self.B = B
         self.RHS = RHS

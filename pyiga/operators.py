@@ -294,19 +294,32 @@ def make_solver(B, symm=False, spd=False):
         symm = True
 
     if scipy.sparse.issparse(B):
-        if spd and HAVE_CHOLMOD:
-            solver = cholesky(B.tocsc())
-
-        elif HAVE_PYMKL:
-            mtype = 11
-            if symm:
-                mtype = 2 if spd else -2
-                B = scipy.sparse.triu(B, format='csr')
-                B.sort_indices()
-            solver = PardisoSolver(B, mtype)
-            #solver.factor()
+        B = B.tocsr()
+        if spd:
+            if HAVE_CHOLMOD:
+                solver = cholesky(B.tocsc())
+            elif HAVE_PYMKL:
+                B_triu = scipy.sparse.triu(B, format='csr')
+                solver = PardisoSolver(B_triu, mtype=2)
+                solver.set_iparm(12, 1)   # weighted matching
+                solver.factor(B_triu.data)
+            else:
+                solver = splu(B.tocsc(),permc_spec="NATURAL")
+        elif symm:
+            if HAVE_PYMKL:
+                B_triu = scipy.sparse.triu(B, format='csr')
+                solver = PardisoSolver(B_triu, mtype=-2)
+                solver.set_iparm(12, 1)   # weighted matching
+                solver.factor(B_triu.data)
+            else:
+                solver = splu(B.tocsc(),permc_spec="NATURAL")
         else:
-            solver = splu(B.tocsc(),permc_spec="NATURAL")
+            if HAVE_PYMKL:
+                solver = PardisoSolver(B, mtype=11)
+                solver.set_iparm(12, 1)   # weighted matching
+                solver.factor(B.data)
+            else:
+                solver = splu(B.tocsc(), permc_spec="NATURAL")
 
         return SolverWrapper(B.shape, B.dtype, solver)
     else:

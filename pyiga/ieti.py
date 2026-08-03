@@ -219,17 +219,11 @@ class IetiMapper(assemble.MultiBasis):
         return nodal_coeff, to_be_eliminated
 
     def interface_averages_as_primals(self, level=None):
-        # def stepfunction(a,b):
-        #     def f(x):
-        #         if a<x and x<b: return 1.0
-        #         else: return 0.0
-        #     return np.vectorize(f)
         vv = []
         ii=[]
         jj=[]
         k=0
         deg = self.mesh.kvs[0][0].p
-        #B = self.B.tocsc()
         for (p1,b1) in self.mesh.L_intfs:
             #supp1 = self.mesh.boundaries(p1)[1][b1]
             kv1 = assemble.boundary_kv(self.mesh.kvs[p1],b1)[0]
@@ -244,10 +238,8 @@ class IetiMapper(assemble.MultiBasis):
                     dofs2 = assemble.boundary_dofs(self.mesh.kvs[p2],b2,ravel=True)
     
                     P = bspline.prolongation(kv1,kv2)
-                    #a, b = self.Constr[(p1,p2)]
     
                     moments2 = assemble.assemble("v * ds", arity=1, kvs = self.mesh.kvs[p2], geo = self.mesh.geos[p2], boundary=b2, quadorder=2*deg+1).ravel()
-                    #moments1 = assemble.assemble("v * ds", arity=1, kvs = self.mesh.kvs[p1], geo = self.mesh.geos[p1], boundary=b1).ravel()
     
                     vv.append(np.r_[P.T@moments2,moments2]/moments2.sum())
                     ii.append(np.r_[dofs1 + self.N_ofs[p1], dofs2+ self.N_ofs[p2]])

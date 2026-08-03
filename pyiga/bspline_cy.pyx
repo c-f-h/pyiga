@@ -340,7 +340,7 @@ from libc.math cimport fabs, fmin, fmax
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef bint pyx_checkSWcondition(double[::1] kv, int p, int size, double[::1] nodes, int m, bint with_edges):
+cpdef bint pyx_checkSWcondition(double[::1] kv, int p, int size, double[::1] nodes, int m, bint with_edges, const np.npy_bool[::1] check_edge):
     """
     Check Schönberg-Whitney condition:
     Given B-spline knot vector `kv` of degree `p` and `m` collocation `nodes`,
@@ -358,7 +358,7 @@ cpdef bint pyx_checkSWcondition(double[::1] kv, int p, int size, double[::1] nod
 
     # Check all nodes are strictly increasing and lie in the domain defined by kv[p] and kv[size-p-1]
     for i in range(m):
-        if i < m-1 and nodes[i] > nodes[i+1]: return False
+        if i < m-1 and nodes[i] >= nodes[i+1]: return False
         if nodes[i] < kv[p] - tol or nodes[i] > kv[size-p-1] + tol: return False
 
     for i in range(m):
@@ -376,7 +376,7 @@ cpdef bint pyx_checkSWcondition(double[::1] kv, int p, int size, double[::1] nod
             # No valid basis function support found for nodes[i]
             return False
 
-        if with_edges and i<m-1:
+        if with_edges and i<m-1 and check_edge[i]:
             #check the next interval between the nodes if we can find a basis function with intersecting support
             for j in range(k,n):
                 s0 = kv[j] - tol if j <= p else kv[j] + tol

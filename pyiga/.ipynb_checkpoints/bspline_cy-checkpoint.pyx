@@ -358,7 +358,7 @@ cpdef bint pyx_checkSWcondition(double[::1] kv, int p, int size, double[::1] nod
 
     # Check all nodes are strictly increasing and lie in the domain defined by kv[p] and kv[size-p-1]
     for i in range(m):
-        if i < m-1 and nodes[i] > nodes[i+1]: return False
+        if i < m-1 and nodes[i] >= nodes[i+1]: return False
         if nodes[i] < kv[p] - tol or nodes[i] > kv[size-p-1] + tol: return False
 
     for i in range(m):

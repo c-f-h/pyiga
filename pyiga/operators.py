@@ -17,11 +17,11 @@ except ImportError:
 
 # pyMKL
 HAVE_PYMKL = False
-try:
-    from pymklpardiso import PardisoSolver
-    HAVE_PYMKL = True
-except ImportError:
-    pass
+# try:
+#     from pymklpardiso import PardisoSolver
+#     HAVE_PYMKL = True
+# except ImportError:
+#     pass
 
 class NullOperator(scipy.sparse.linalg.LinearOperator):
     """Null operator of the given shape which always returns zeros. Used as placeholder."""

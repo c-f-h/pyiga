@@ -104,6 +104,7 @@ cpdef tuple pyx_compute_decoupled_coarse_basis(object global_Basis, int[:] N_ofs
         p1 = p_intfs[0,k]
         p2 = p_intfs[1,k]
         dofs_intfs, idx1, idx2, m = intersect(dofs[N_ofs[p1]:N_ofs[p1]+N[p1]],dofs[N_ofs[p2]:N_ofs[p2]+N[p2]])
+
         for s in range(m):
             jj[l] = idx1[s] + N_ofs_[p1]
             jj[l+1] = idx2[s] + N_ofs_[p2]

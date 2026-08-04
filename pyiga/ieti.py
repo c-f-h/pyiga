@@ -61,7 +61,10 @@ class IetiMapper(assemble.MultiBasis):
                 self.free[p] = np.arange(self.N_elim[p])
 
         if self.elim:
-            self.corners = np.concatenate([self.X[p][assemble.boundary_dofs(kvs,m=0,ravel=True)] + self.N_ofs_elim[p] for p, kvs in enumerate(self.mesh.kvs)])
+            #self.corners = np.concatenate([self.X[p][assemble.boundary_dofs(kvs,m=0,ravel=True)] + self.N_ofs_elim[p] for p, kvs in enumerate(self.mesh.kvs)])
+            self.corners = np.where(self.B.getnnz(0)>1)[0]
+            self.CornerConstr = self.B[:,self.corners].getnnz(1)>1
+            self.nConstr = self.B.shape[0]
         else:
             self.corners = np.concatenate([assemble.boundary_dofs(kvs,m=0,ravel=True) + self.N_ofs_elim[p] for p, kvs in enumerate(self.mesh.kvs)])
 
@@ -144,22 +147,20 @@ class IetiMapper(assemble.MultiBasis):
         return A, RHS
 
     def ConstraintMatrices(self, eliminate = None):
-        if self.elim:
-            return [self.Bk[p][:,self.free[p]] for p in range(self.nPatches)], np.repeat(False,self.nConstr)
         if eliminate is not None:
             eliminated_constraints = eliminate
         else:
             eliminated_constraints = np.repeat(False,self.nConstr)
-        B = self.B.tocsc()
-        # if not corners:
-        #     eliminated_constraints = ieti_cy.eliminate_corner_constraints(B.indptr.astype(np.int32), B.indices.astype(np.int32), B.data, *B.shape, 
-        #                                                                   self.corners.astype(np.int32), len(self.corners)).astype(bool)
 
+        #B = self.B.tocsc()
         B = self.B[:,self.global_free]
-        
         eliminated_constraints = eliminated_constraints | (B.getnnz(1)==0)
-        B = B[~eliminated_constraints,:]
-        return [B[:,self.N_ofs_free[p] : self.N_ofs_free[p+1]] for p in range(self.nPatches)], eliminated_constraints
+
+        if self.elim:
+            return [self.Bk[p][~eliminated_constraints,:][:,self.free[p]] for p in range(self.nPatches)], np.repeat(False,self.nConstr)
+        else:
+            B = B[~eliminated_constraints,:]
+            return [B[:,self.N_ofs_free[p] : self.N_ofs_free[p+1]] for p in range(self.nPatches)], eliminated_constraints
 
     def parametersort(self, a):
         D = np.array([a[key] for key in self.mesh.patch_domains.values()], dtype=float)
@@ -172,9 +173,8 @@ class IetiMapper(assemble.MultiBasis):
         if self.elim:
             to_be_eliminated = np.zeros(self.B.shape[0],dtype=bool)
             n = self.N_ofs_elim[-1]
-            q = np.where(self.B.getnnz(0)>1)[0]
-            #q = np.setdiff1d(q,self.global_fixed_idx)
-            #B = self.B[:,q]
+            q = np.where(self.B[self.CornerConstr,:].getnnz(0)>1)[0]
+
             R = scipy.sparse.coo_matrix((np.ones(len(q)),(np.arange(len(q)),q)),shape=(len(q),n)).tocsr()
             c_B = self.B@R.T
             c_B.eliminate_zeros()
@@ -182,6 +182,11 @@ class IetiMapper(assemble.MultiBasis):
 
             Basis , _ = algebra_cy.pyx_compute_basis(c_B.shape[0], c_B.shape[1], c_B, maxiter=100, switch=0)
             nodal_coeff = R.T@Basis
+            if not dir_boundary:
+                cols = np.flatnonzero(nodal_coeff[self.global_fixed_idx, :].getnnz(axis=0))
+                keep = np.ones(nodal_coeff.shape[1], dtype=bool)
+                keep[cols] = False
+                nodal_coeff=nodal_coeff[:,keep]
             return nodal_coeff, to_be_eliminated
             
         deg = self.mesh.patches[0][0][0][0].p
@@ -504,7 +509,8 @@ class ScaledDirichletPreconditioner():
 
     def setupConstraintScaling(self):
         d = ieti_cy.pyx_constraint_scaling(self.B_full.indptr, self.B_full.indices, self.B_full.data, *self.B_full.shape)
-        self.D = [scipy.sparse.diags(d[self.BN_ofs[p]:self.BN_ofs[p+1]], format='csr') for p in range(self.K)] 
+        self.D = [d[self.BN_ofs[p]:self.BN_ofs[p+1]] for p in range(self.K)] 
+        self.D_Is_Diagonal = True
         
     def setupWeightScaling(self):
         d = ieti_cy.pyx_weight_scaling(self.B_full.indptr, self.B_full.indices, self.B_full.data, *self.B_full.shape)

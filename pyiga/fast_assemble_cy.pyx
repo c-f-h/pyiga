@@ -1,3 +1,5 @@
+# distutils: define_macros=NPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION
+
 cimport cython
 from libcpp.vector cimport vector
 from cython cimport view    # avoid compiler crash
@@ -11,7 +13,7 @@ import scipy.sparse
 #
 # Imports from fastasm.cc:
 #
-cdef extern void set_log_func(void (*logfunc)(const char * str, size_t)) noexcept
+cdef extern void set_log_func(void (*logfunc)(const char * str, size_t))
 
 cdef extern void fast_assemble_2d_cimpl "fast_assemble_2d"(
         MatrixEntryFn entryfunc, void * data,
@@ -32,8 +34,6 @@ cdef extern void fast_assemble_3d_cimpl "fast_assemble_3d"(
 #
 # Imports end
 #
-
-
 # this is so that IPython notebooks can capture the output
 cdef void _stdout_log_func(const char * s, size_t nbytes) noexcept:
     import sys

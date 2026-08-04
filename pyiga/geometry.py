@@ -13,7 +13,6 @@ from .tensor import apply_tprod
 
 import functools
 
-
 def _nurbs_jacobian(val, jac):
     """Compute the NURBS Jacobians given an array of B-spline values and
     B-spline Jacobians.
@@ -48,7 +47,7 @@ class NurbsFunc(bspline._BaseSplineFunc):
     The evaluation functions have the same prototypes and behavior as those in
     :class:`.BSplineFunc`.
     """
-    def __init__(self, kvs, coeffs, weights, premultiplied=False):
+    def __init__(self, kvs, coeffs, weights, premultiplied=False, support=None):
         if isinstance(kvs, bspline.KnotVector):
             kvs = (kvs,)
         self.kvs = tuple(kvs)
@@ -89,7 +88,10 @@ class NurbsFunc(bspline._BaseSplineFunc):
         if not premultiplied:
             self.coeffs[..., :-1] *= self.coeffs[..., -1:]
 
-        self._support_override = None
+        if support:
+            self._support_override = tuple(support)
+        else:
+            self._support_override = None
 
     def output_shape(self):
         if self._isscalar:
@@ -98,6 +100,13 @@ class NurbsFunc(bspline._BaseSplineFunc):
             shp = list(self.coeffs.shape[self.sdim:])
             shp[-1] -= 1
             return tuple(shp)
+
+    def control_points(self):
+        return self.coeffs[..., :-1] / self.coeffs[..., -1:]
+
+    def center(self):
+        param_center = np.mean(np.array(self.support),axis=1)
+        return self.eval(*param_center)
 
     def grid_eval(self, gridaxes):
         assert len(gridaxes) == self.sdim, "Input has wrong dimension"
@@ -121,6 +130,35 @@ class NurbsFunc(bspline._BaseSplineFunc):
         if self._isscalar:
             J = np.squeeze(J, -2)           # eliminate scalar axis
         return J
+    
+    def grid_outer_normal(self, gridaxes, reference_point=None):
+        gridaxes = list(gridaxes)
+        N = [len(grid) for grid in gridaxes]
+        #gridaxes.insert(self.axis, np.array([self.fixed_coord]))
+        grid = self.grid_eval(gridaxes)
+        jacs = self.grid_jacobian(gridaxes, keep_normal=False)
+
+        if self.dim == 2 and self.sdim == 1:
+            tang = jacs
+            normal = np.empty_like(tang)
+            normal[:, 0], normal[:, 1] = -tang[:, 1], tang[:, 0]
+            normal /= np.linalg.norm(normal, axis=1)[:, None]
+
+        elif self.dim == 3 and self.sdim == 2:
+            du, dv = jacs[..., 0], jacs[..., 1]
+            normal = np.cross(du, dv)
+            normal /= np.linalg.norm(normal, axis=-1)[..., None]
+
+        else:
+            raise ValueError(f"Cannot compute normal for Jacobian shape {jacs.shape}")
+
+        if reference_point is not None:
+            diff = grid - reference_point  # vector from interior to boundary
+            dots = np.sum(np.squeeze(normal, axis=-1) * diff, axis=-1)  # local alignment
+            avg_dot = np.mean(dots)                # aggregate test over boundary
+            if avg_dot < 0:
+                normal *= -1  # flip *all* normals
+        return normal
 
     def grid_hessian(self, gridaxes):
         bsp = BSplineFunc(self.kvs, self.coeffs)
@@ -185,7 +223,7 @@ class NurbsFunc(bspline._BaseSplineFunc):
             J = np.squeeze(J, -2)           # eliminate scalar axis
         return J
 
-    def boundary(self, bdspec):
+    def boundary(self, bdspec, swap=None, flip = None):
         """Return one side of the boundary as a :class:`NurbsFunc`.
 
         Args:
@@ -195,18 +233,26 @@ class NurbsFunc(bspline._BaseSplineFunc):
             :class:`NurbsFunc`: representation of the boundary side;
             has `sdim` reduced by 1 and the same `dim` as this function
         """
+        if flip is None:
+            flip = self.sdim*(False,)
+        self.flip = tuple(flip)
+
+        b = bspline._parse_bdspec(bdspec, self.sdim)
+        
         if self._support_override:
             # if we have reduced support, the boundary may not be
             # interpolatory; return a custom function
-            return bspline._BaseGeoFunc.boundary(self, bdspec)
-
-        axis, side = bspline._parse_bdspec(bdspec, self.sdim)
-        assert 0 <= axis < self.sdim, 'Invalid axis'
+            return bspline._BaseGeoFunc.boundary(self, bdspec, flip=flip)
+        
+        axis, sides = b[:,0], -b[:,1]
+        assert ((0 <= axis) & (axis < self.sdim)).all(), 'Invalid axis'
         slices = self.sdim * [slice(None)]
-        slices[axis] = (0 if side==0 else -1)
+        for ax, idx in zip(axis, sides):
+            slices[ax] = idx
         coeffs = self.coeffs[tuple(slices)]
         kvs = list(self.kvs)
-        del kvs[axis]
+        for ax in sorted(axis, reverse=True):
+            del kvs[ax]
         return NurbsFunc(kvs, coeffs, weights=None, premultiplied=True)
 
     @property
@@ -220,7 +266,7 @@ class NurbsFunc(bspline._BaseSplineFunc):
 
     @support.setter
     def support(self, new_support):
-        self._support_override = new_support
+        self._support_override = tuple(new_support)
 
     def copy(self):
         """Return a copy of this geometry."""
@@ -228,7 +274,8 @@ class NurbsFunc(bspline._BaseSplineFunc):
                 tuple(kv.copy() for kv in self.kvs),
                 self.coeffs.copy(),
                 None,
-                premultiplied=True)
+                premultiplied=True,
+                support = self._support_override)
 
     def coeffs_weights(self):
         """Return the non-premultiplied coefficients and weights as a pair of arrays."""
@@ -238,14 +285,14 @@ class NurbsFunc(bspline._BaseSplineFunc):
     def translate(self, offset):
         """Return a version of this geometry translated by the specified offset."""
         C, W = self.coeffs_weights()
-        return NurbsFunc(self.kvs, C + offset, W)
+        return NurbsFunc(self.kvs, C + offset, W, support = self._support_override)
 
     def scale(self, factor):
         """Scale all control points either by a scalar factor or componentwise by
         a vector, leave the weights unchanged, and return the resulting new function.
         """
         C, W = self.coeffs_weights()
-        return NurbsFunc(self.kvs, C * factor, W)
+        return NurbsFunc(self.kvs, C * factor, W, support=self._support_override)
 
     def apply_matrix(self, A):
         """Apply a matrix to each control point of this function, leave the weights
@@ -258,7 +305,7 @@ class NurbsFunc(bspline._BaseSplineFunc):
         C, W = self.coeffs_weights()
         C = np.matmul(A, C[..., None])
         assert C.shape[-1] == 1  # this should have created a new singleton axis
-        return NurbsFunc(self.kvs, np.squeeze(C, axis=-1), W)
+        return NurbsFunc(self.kvs, np.squeeze(C, axis=-1), W, support=self._support_override)
 
     def rotate_2d(self, angle):
         """Rotate a geometry with :attr:`dim` = 2 by the given angle and return the result."""
@@ -267,6 +314,18 @@ class NurbsFunc(bspline._BaseSplineFunc):
         R = np.array([
             [c, -s],
             [s, c]
+        ])
+        return self.apply_matrix(R)
+    
+    def rotate_3d(self, angle, n):
+        """Rotate a geometry with :attr:`dim` = 3 by the given angle around a given line generated by n and return the result."""
+        assert self.dim == 3, 'Must be 3D vector function'
+        (n1,n2,n3) = n = n/np.linalg.norm(n)
+        s, c = np.sin(angle), np.cos(angle)
+        R = np.array([
+            [n1**2*(1-c) + c   , n1*n2*(1-c) - n3*s, n1*n3*(1-c) + n2*s],
+            [n1*n2*(1-c) + n3*s, n2**2*(1-c) + c   , n2*n3*(1-c) - n1*s],
+            [n1*n3*(1-c) - n2*s, n2*n3*(1-c) + n1*s, n3**2*(1-c) + c   ]
         ])
         return self.apply_matrix(R)
 
@@ -279,11 +338,11 @@ class NurbsFunc(bspline._BaseSplineFunc):
         else:
             assert self.is_scalar()
             C = self.coeffs[..., :-1]   # keep singleton dimension, don't squeeze it
-            return NurbsFunc(self.kvs, C, self.coeffs[..., -1], premultiplied=True)
+            return NurbsFunc(self.kvs, C, self.coeffs[..., -1], premultiplied=True, support=self.support)
 
     def __getitem__(self, I):
         C = self.coeffs[..., :-1]
-        return NurbsFunc(self.kvs, C[..., I], self.coeffs[..., -1], premultiplied=True)
+        return NurbsFunc(self.kvs, C[..., I], self.coeffs[..., -1], premultiplied=True, support = self._support_override)
 
 
 class UserFunction(bspline._BaseGeoFunc):
@@ -305,6 +364,7 @@ class UserFunction(bspline._BaseGeoFunc):
     def __init__(self, f, support, dim=None, jac=None):
         self.f = f
         self.support = tuple(support)
+        self._support_override=tuple(support)
         self.jac = jac
         if dim is None:
             x0 = tuple(lo for (lo,hi) in reversed(support))
@@ -324,6 +384,10 @@ class UserFunction(bspline._BaseGeoFunc):
 
     def output_shape(self):
         return self._output_shape
+
+    def center(self):
+        param_center = np.mean(np.array(self.support),axis=1)
+        return self.eval(*param_center)
 
     def grid_eval(self, grd):
         return utils.grid_eval(self.f, grd)
@@ -381,56 +445,102 @@ class _BoundaryFunction(bspline._BaseGeoFunc):
     """A function which represents the evaluation of the given function `f` at
     one side of its boundary, thus reducing `sdim` by one.
     """
-    def __init__(self, f, bdspec):
+    def __init__(self, f, bdspec, flip = None):
         self.f = f
-        axis, side = bspline._parse_bdspec(bdspec, f.sdim)
-        lohi = f.support[axis]
-        self.fixed_coord = (lohi[0] if side==0 else lohi[1])
-        self.axis = axis
-        self.support = f.support[:axis] + f.support[axis+1:]
+        b = bspline._parse_bdspec(bdspec, f.sdim)
+        self.axis, self.sides = b[:,0], b[:,1]
+        self.fixed_coord = {ax: f.support[ax][idx] for ax, idx in b}
+        self.support = list(f.support)
+        for ax in np.flip(self.axis):
+            del self.support[ax]
+        self.support=tuple(self.support)
         self.dim = f.dim
-        self.sdim = f.sdim - 1
+        self.sdim = f.sdim - b.shape[0]
+        
+        if flip is None:
+            flip = self.sdim*(False,)
+        self.flip = tuple(flip)
+        
+        if f._support_override:
+            self._support_override = self.support
 
     def output_shape(self):
         return self.f.output_shape()
 
+    def center(self):
+        param_center = np.mean(np.array(self.support),axis=1)
+        return self.eval(*param_center)
+
     def eval(self, *x):
         x = list(x)
-        x.insert(len(x) - self.axis, self.fixed_coord)
+        for ax in self.axis:
+            x.insert(len(x) - ax, self.fixed_coord[ax])
         return self.f(*x)
 
     def grid_eval(self, gridaxes):
-        gridaxes = list(gridaxes)
-        gridaxes.insert(self.axis, np.array([self.fixed_coord]))
+        gridaxes = [1 - grid if flp else grid for grid, flp in zip(gridaxes, self.flip)]
+        for ax in self.axis:
+            gridaxes.insert(ax, np.array([self.fixed_coord[ax]]))
         vals = utils.grid_eval(self.f, gridaxes)
-        return vals.squeeze(self.axis)
+        return np.squeeze(vals,tuple(self.axis))
 
     def grid_jacobian(self, gridaxes, keep_normal=False):
-        gridaxes = list(gridaxes)
-        gridaxes.insert(self.axis, np.array([self.fixed_coord]))
+        gridaxes = [1 - grid if flp else grid for grid, flp in zip(gridaxes, self.flip)]
+        for ax in self.axis:
+            gridaxes.insert(ax, np.array([self.fixed_coord[ax]]))
         jacs = self.f.grid_jacobian(gridaxes)
-        jacs = jacs.squeeze(self.axis)
+        jacs = np.squeeze(jacs, tuple(self.axis))
         if not keep_normal:
             # drop the partial derivatives corresponding to the normal
             # direction
-            ax = jacs.shape[-1] - self.axis - 1
+            ax = jacs.shape[-1] - self.axis[0] - 1
             jacs = np.concatenate((jacs[..., :ax], jacs[..., ax+1:]),
                     axis=-1)
         return jacs
+    
+    def grid_outer_normal(self, gridaxes):
+        gridaxes = [1 - np.flip(grid) if flp else grid for grid, supp, flp in zip(gridaxes, self.support, self.flip)]
+        N = [len(grid) for grid in gridaxes]
+        #gridaxes.insert(self.axis, np.array([self.fixed_coord]))
+        grid = self.grid_eval(gridaxes)
+        jacs = self.grid_jacobian(gridaxes)
+        reference_point=self.f.center()
+
+        if self.dim == 2 and self.sdim == 1:
+            tang = jacs
+            normal = np.empty_like(tang)
+            normal[:, 0], normal[:, 1] = -tang[:, 1], tang[:, 0]
+            normal /= np.linalg.norm(normal, axis=1)[:, None]
+
+        elif self.dim == 3 and self.sdim == 2:
+            du, dv = jacs[..., 0], jacs[..., 1]
+            normal = np.cross(du, dv)
+            normal /= np.linalg.norm(normal, axis=-1)[..., None]
+
+        else:
+            raise ValueError(f"Cannot compute normal for Jacobian shape {jacs.shape}")
+
+        if reference_point is not None:
+            diff = grid - reference_point  # vector from interior to boundary
+            dots = np.sum(np.squeeze(normal, axis=-1) * diff, axis=-1)  # local alignment
+            avg_dot = np.mean(dots)                # aggregate test over boundary
+            if avg_dot < 0:
+                normal *= -1  # flip *all* normals
+        return normal
 
 ################################################################################
 # Examples of 2D geometries
 ################################################################################
 
-def unit_square(num_intervals=1):
+def unit_square(num_intervals=1, support = None):
     """Unit square with given number of intervals per direction.
 
     Returns:
         :class:`.BSplineFunc` 2D geometry
     """
-    return unit_cube(dim=2, num_intervals=num_intervals)
+    return unit_cube(dim=2, num_intervals=num_intervals, support=support)
 
-def perturbed_square(num_intervals=5, noise=0.02):
+def perturbed_square(num_intervals=5, noise=0.02, support = None):
     """Randomly perturbed unit square.
 
     Unit square with given number of intervals per direction;
@@ -440,9 +550,72 @@ def perturbed_square(num_intervals=5, noise=0.02):
     Returns:
         :class:`.BSplineFunc` 2D geometry
     """
-    return unit_square(num_intervals).perturb(noise)
+    return unit_square(num_intervals, support).perturb(noise)
 
-def bspline_quarter_annulus(r1=1.0, r2=2.0):
+def Quad(P,support=None):
+    
+    bottom = line_segment(P[:,0],P[:,1])
+    top = line_segment(P[:,2],P[:,3])
+    left = line_segment(P[:,0],P[:,2])
+    right = line_segment(P[:,1],P[:,3])
+    
+    kvs, coeffs = _combine_boundary_curves(bottom,top,left,right)
+    return bspline.BSplineFunc(kvs, coeffs, support=support)
+
+def bspline_annulus(r1=1.0, r2=2.0, phi=np.pi/2, support = None):
+    """A B-spline approximation of a quarter annulus in the first quadrant.
+
+    Args:
+        r1 (float): inner radius
+        r2 (float): outer radius
+
+    Returns:
+        :class:`.BSplineFunc` 2D geometry
+    """
+    #assert -np.pi/2<=phi<=np.pi/2, 'angle needs to be sharp!'
+    kvx = bspline.make_knots(1, 0.0, 1.0, 1)
+    # if phi < np.pi+1e-14: switch = 1
+    # elif np.pi/2+1e-14 < phi < np.pi+1e-14: switch = 2
+    # elif np.pi
+
+    
+    kvy = bspline.make_knots(2, 0.0, 1.0, 1)
+
+    coeffs = np.array([
+            [[ r1, 0.0],
+             [ r2, 0.0]],
+            [[ r1*np.cos(phi/2),  np.sin(phi/2)*r1],
+             [ r2*np.cos(phi/2),  np.sin(phi/2)*r2]],
+            [[np.cos(phi)*r1,  np.sin(phi)*r1],
+             [np.cos(phi)*r2,  np.sin(phi)*r2]],
+    ])
+    return BSplineFunc((kvy,kvx), coeffs, support)
+
+def bspline_annuseg(r1=1.0, r2=2.0, phi=np.pi/2, support = None):
+    """A B-spline approximation of a quarter annulus in the first quadrant.
+
+    Args:
+        r1 (float): inner radius
+        r2 (float): outer radius
+
+    Returns:
+        :class:`.BSplineFunc` 2D geometry
+    """
+    #assert -np.pi/2<=phi<=np.pi/2, 'angle needs to be sharp!'
+    kvx = bspline.make_knots(1, 0.0, 1.0, 1)
+    kvy = bspline.make_knots(2, 0.0, 1.0, 1)
+
+    coeffs = np.array([
+            [[ r1, 0.0],
+             [ r2, 0.0]],
+            [[ r1/2*(1+np.cos(phi)),  np.sin(phi)*r1/2],
+             [ r2,  np.tan(phi/2)*r2]],
+            [[np.cos(phi)*r1,  np.sin(phi)*r1],
+             [np.cos(phi)*r2,  np.sin(phi)*r2]],
+    ])
+    return BSplineFunc((kvy,kvx), coeffs, support)
+
+def bspline_quarter_annulus(r1=1.0, r2=2.0, support = None):
     """A B-spline approximation of a quarter annulus in the first quadrant.
 
     Args:
@@ -463,9 +636,93 @@ def bspline_quarter_annulus(r1=1.0, r2=2.0):
             [[0.0,  r1],
              [0.0,  r2]],
     ])
-    return BSplineFunc((kvy,kvx), coeffs)
+    return BSplineFunc((kvy,kvx), coeffs, support)
 
-def quarter_annulus(r1=1.0, r2=2.0):
+def bspline_quarter_annuseg(r1=1.0, r2=2.0, phi=np.pi/2, support = None):
+    """A B-spline approximation of a quarter annulus in the first quadrant.
+
+    Args:
+        r1 (float): inner radius
+        r2 (float): outer radius
+
+    Returns:
+        :class:`.BSplineFunc` 2D geometry
+    """
+    assert -np.pi/2<=phi<=np.pi/2, 'angle needs to be sharp!'
+    kvx = bspline.make_knots(1, 0.0, 1.0, 1)
+    kvy = bspline.make_knots(2, 0.0, 1.0, 1)
+
+    coeffs = np.array([
+            [[ r1, 0.0],
+             [ r2, 0.0]],
+            [[ r1/2,  r1/2],
+             [ r2,  r2]],
+            [[0.0,  r1],
+             [0.0,  r2]],
+    ])
+    return BSplineFunc((kvy,kvx), coeffs, support)
+
+def annulus(r1=1.0, r2=2.0, phi=np.pi/2, support = None):
+    """A NURBS representation of a quarter annulus in the first quadrant.
+    The 'bottom' and 'top' boundaries (with respect to the reference domain)
+    lie on the x and y axis, respectively.
+
+    Args:
+        r1 (float): inner radius
+        r2 (float): outer radius
+
+    Returns:
+        :class:`NurbsFunc` 2D geometry
+    """
+    #assert -np.pi/2<=phi<=np.pi/2, 'angle needs to be sharp!'
+    kvx = bspline.make_knots(1, 0.0, 1.0, 1)
+    kvy = bspline.make_knots(2, 0.0, 1.0, 1)
+
+    # coeffs = np.array([
+    #         [[ r1, 0.0, 1.0],
+    #          [ r2, 0.0, 1.0]],
+    #         [[ r1,  np.tan(phi/2)*r1, 1.0 / np.sqrt(2.0)],
+    #          [ r2,  np.tan(phi/2)*r2, 1.0 / np.sqrt(2.0)]],
+    #         [[np.cos(phi)*r1,  np.sin(phi)*r1, 1.0],
+    #          [np.cos(phi)*r2,  np.sin(phi)*r2, 1.0]],
+    # ])
+    coeffs = np.array([
+            [[ r1, 0.0, 1.0],
+             [ r2, 0.0, 1.0]],
+            [[ r1*np.cos(phi/2),  np.sin(phi/2)*r1, np.cos(phi/2)],
+             [ r2*np.cos(phi/2),  np.sin(phi/2)*r2, np.cos(phi/2)]],
+            [[np.cos(phi)*r1,  np.sin(phi)*r1, 1.0],
+             [np.cos(phi)*r2,  np.sin(phi)*r2, 1.0]],
+    ])
+    return NurbsFunc((kvy,kvx), coeffs, weights=None, premultiplied=True, support = support)
+
+def annuseg(r1=1.0, r2=2.0, phi=np.pi/2, support = None):
+    """A NURBS representation of an annulus in the first quadrant.
+    The 'bottom' and 'top' boundaries (with respect to the reference domain)
+    lie on the x and y axis, respectively.
+
+    Args:
+        r1 (float): inner radius
+        r2 (float): outer radius
+
+    Returns:
+        :class:`NurbsFunc` 2D geometry
+    """
+    assert -np.pi/2<=phi<=np.pi/2, 'angle needs to be sharp!'
+    kvx = bspline.make_knots(1, 0.0, 1.0, 1)
+    kvy = bspline.make_knots(2, 0.0, 1.0, 1)
+
+    coeffs = np.array([
+            [[ r1, 0.0, 1.0],
+             [ r2, 0.0, 1.0]],
+            [[ r1/2*(1+np.cos(phi)),  np.sin(phi)*r1/2, 1.0],
+             [ r2,  np.tan(phi/2)*r2, 1.0 / np.sqrt(2.0)]],
+            [[np.cos(phi)*r1,  np.sin(phi)*r1, 1.0],
+             [np.cos(phi)*r2,  np.sin(phi)*r2, 1.0]],
+    ])
+    return NurbsFunc((kvy,kvx), coeffs, weights=None, support = support)
+
+def quarter_annulus(r1=1.0, r2=2.0, support = None):
     """A NURBS representation of a quarter annulus in the first quadrant.
     The 'bottom' and 'top' boundaries (with respect to the reference domain)
     lie on the x and y axis, respectively.
@@ -488,7 +745,32 @@ def quarter_annulus(r1=1.0, r2=2.0):
             [[0.0,  r1, 1.0],
              [0.0,  r2, 1.0]],
     ])
-    return NurbsFunc((kvy,kvx), coeffs, weights=None)
+    return NurbsFunc((kvy,kvx), coeffs, weights=None, premultiplied=False, support = support)
+
+def quarter_annuseg(r1=1.0, r2=2.0, support = None):
+    """A NURBS representation of a quarter annulus in the first quadrant.
+    The 'bottom' and 'top' boundaries (with respect to the reference domain)
+    lie on the x and y axis, respectively.
+
+    Args:
+        r1 (float): inner radius
+        r2 (float): outer radius
+
+    Returns:
+        :class:`NurbsFunc` 2D geometry
+    """
+    kvx = bspline.make_knots(1, 0.0, 1.0, 1)
+    kvy = bspline.make_knots(2, 0.0, 1.0, 1)
+
+    coeffs = np.array([
+            [[ r1, 0.0, 1.0],
+             [ r2, 0.0, 1.0]],
+            [[ r1/2,  r1/2, 1.0],
+             [ r2,  r2, 1.0 / np.sqrt(2.0)]],
+            [[0.0,  r1, 1.0],
+             [0.0,  r2, 1.0]],
+    ])
+    return NurbsFunc((kvy,kvx), coeffs, weights=None, support = support)
 
 def _combine_boundary_curves(bottom, top, left, right):
     kvs = (left.kvs[0], bottom.kvs[0])
@@ -499,7 +781,7 @@ def _combine_boundary_curves(bottom, top, left, right):
     coeffs[-1, :] = top.coeffs
     return kvs, coeffs
 
-def disk(r=1.0):
+def disk(r=1.0, support = None):
     """A NURBS representation of a circular disk.
 
     The parametrization has four boundary singularities where the determinant
@@ -524,20 +806,24 @@ def disk(r=1.0):
     coeffs[1, 1] = (0.0, 0.0, 0.5)  # weight 1/2 makes weight matrix rank 1
     if r != 1.0:
         coeffs[:, :, :2] *= r
-    return NurbsFunc(kvs, coeffs, None, premultiplied=True)
+    return NurbsFunc(kvs, coeffs, None, premultiplied=True, support = support)
 
 ################################################################################
 # Examples of 3D geometries
 ################################################################################
 
-def unit_cube(dim=3, num_intervals=1):
+def unit_cube(dim=3, num_intervals=1, support = None):
     """The `dim`-dimensional unit cube with `num_intervals` intervals
     per coordinate direction.
 
     Returns:
         :class:`.BSplineFunc` geometry
     """
-    return functools.reduce(tensor_product, dim * (line_segment(0.0, 1.0, intervals=num_intervals),))
+    if support:
+        assert len(support)==dim, "Wrong dimension of support!"
+        return functools.reduce(tensor_product, tuple(line_segment(0.0, 1.0, intervals=num_intervals, support = S) for S in support))
+    else:
+        return functools.reduce(tensor_product, dim * (line_segment(0.0, 1.0, intervals=num_intervals),))
 
 def identity(extents):
     """Identity mapping (using linear splines) over a d-dimensional box
@@ -592,7 +878,7 @@ def twisted_box():
 # Functions for creating curves
 ################################################################################
 
-def line_segment(x0, x1, support=(0.0, 1.0), intervals=1):
+def line_segment(x0, x1, intervals=1,support=None):
     """Return a :class:`.BSplineFunc` which describes the line between the
     vectors `x0` and `x1`.
 
@@ -612,7 +898,7 @@ def line_segment(x0, x1, support=(0.0, 1.0), intervals=1):
     # interpolate linearly
     S = np.linspace(0.0, 1.0, intervals+1).reshape((intervals+1, 1))
     coeffs = (1-S) * x0 + S * x1
-    return BSplineFunc(bspline.make_knots(1, support[0], support[1], intervals), coeffs)
+    return BSplineFunc(bspline.make_knots(1, 0.0, 1.0, intervals,), coeffs, support = support)
 
 def circular_arc(alpha, r=1.0):
     """Construct a circular arc with angle `alpha` and radius `r`.
@@ -664,6 +950,17 @@ def semicircle(r=1.0):
 def circle(r=1.0):
     """Construct a circle with radius `r` using NURBS."""
     return circular_arc_7pt(2 * np.pi, r)
+
+################################################################################
+# Multi-patch geometries
+################################################################################
+
+def mp_disk(r=1.0):
+    return [unit_square().scale(1/np.sqrt(2)).rotate_2d(np.pi/4).translate((0,-0.5)),
+            quarter_annuseg(r1=0.5,r2=1),
+            quarter_annuseg(r1=0.5,r2=1).rotate_2d(angle=np.pi/2),
+            quarter_annuseg(r1=0.5,r2=1).rotate_2d(angle=np.pi),
+            quarter_annuseg(r1=0.5,r2=1).rotate_2d(angle=3*np.pi/2)]
 
 ################################################################################
 # Operations on geometries
@@ -779,6 +1076,7 @@ def tensor_product(G1, G2, *Gs):
 
     Gs = (G1, G2)
     nurbs = any(isinstance(G, NurbsFunc) for G in Gs)
+    override = any(G._support_override for G in Gs)
 
     if nurbs:
         Gs = tuple(G.as_nurbs() for G in Gs)
@@ -791,6 +1089,15 @@ def tensor_product(G1, G2, *Gs):
     else:
         assert isinstance(G1, BSplineFunc) and isinstance(G2, BSplineFunc)
         Cs = tuple(G.coeffs for G in Gs)
+        
+    if override:
+        if G1.sdim ==1: supp1 = (G1.support,) 
+        else: supp1 =G1.support
+        if G2.sdim ==1: supp2 = (G2.support,) 
+        else: supp2 = G2.support
+        support = supp1 + supp2
+    else:
+        support = None
 
     SD1, SD2 = (np.atleast_1d(C.shape[:G.sdim]) for (C,G) in zip(Cs,Gs))
     VD1, VD2 = (np.atleast_1d(C.shape[G.sdim:]) for (C,G) in zip(Cs,Gs))
@@ -804,6 +1111,7 @@ def tensor_product(G1, G2, *Gs):
     C = np.concatenate((C2,C1), axis=-1)
 
     if nurbs:
-        return NurbsFunc(G1.kvs + G2.kvs, C, W)
+        return NurbsFunc(G1.kvs + G2.kvs, C, W, support = support)
     else:
-        return BSplineFunc(G1.kvs + G2.kvs, C)
+        return BSplineFunc(G1.kvs + G2.kvs, C, support = support)
+

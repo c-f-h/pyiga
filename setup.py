@@ -5,6 +5,7 @@ import numpy
 
 import Cython.Compiler.Options
 Cython.Compiler.Options.cimport_from_pyx = True
+Cython.Compiler.Options.annotate = True
 
 USE_OPENMP = True
 
@@ -17,10 +18,44 @@ else:
     c_args_openmp = l_args_openmp = []
 
 extensions = [
+    Extension("pyiga.geometry_cy",
+             ["pyiga/geometry_cy.pyx"],
+        include_dirs = [numpy.get_include()],
+        extra_compile_args=c_args,
+        define_macros=c_macros,
+    ),
+    Extension("pyiga.ieti_cy",
+             ["pyiga/ieti_cy.pyx"],
+        include_dirs = [numpy.get_include()],
+        extra_compile_args=c_args,
+        language="c++",
+        define_macros=c_macros,
+    ),
+    Extension("pyiga.adaptive_cy",
+             ["pyiga/adaptive_cy.pyx"],
+        include_dirs = [numpy.get_include()],
+        extra_compile_args=c_args,
+        define_macros=c_macros,
+    ),
+    Extension("pyiga.algebra_cy",
+             ["pyiga/algebra_cy.pyx"],
+        include_dirs = [numpy.get_include()],
+        extra_compile_args=c_args,
+        language="c++",
+        define_macros=c_macros,
+    ),
+    Extension("pyiga.assemble_cy",
+             ["pyiga/assemble_cy.pyx"],
+        include_dirs = [numpy.get_include()],
+        extra_compile_args=c_args,
+        language="c++",
+        define_macros=c_macros,
+    ),
     Extension("pyiga.bspline_cy",
              ["pyiga/bspline_cy.pyx"],
         include_dirs = [numpy.get_include()],
         extra_compile_args=c_args,
+        language="c++",
         define_macros=c_macros,
     ),
     Extension("pyiga.lowrank_cy",
@@ -85,7 +120,7 @@ setup(
     ],
     packages = ['pyiga', 'pyiga.codegen'],
 
-    ext_modules = cythonize(extensions, compiler_directives={'language_level': 3, 'legacy_implicit_noexcept': True}),
+    ext_modules = cythonize(extensions, compiler_directives={'language_level': 3, 'legacy_implicit_noexcept': True}, annotate=True),
     package_data = {
         'pyiga': [ '*.pyx' , '*.pxd' , '*.pxi' ,],
     },

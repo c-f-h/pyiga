@@ -1,18 +1,17 @@
 """Solvers for linear, nonlinear, and time-dependent problems."""
 import numpy as np
 import scipy.linalg
+import time
 from .operators import make_solver, KroneckerOperator, DiagonalOperator
-from . import utils
+from . import utils, algebra
 
 from functools import reduce
 
-
 def _asdense(X):
     try:
-        return X.A
+        return X.toarray()
     except:
         return X
-
 
 def fastdiag_solver(KM):
     """The fast diagonalization solver as described in [Sangalli, Tani 2016].
@@ -336,13 +335,13 @@ def newton(F, J, x0, atol=1e-6, rtol=1e-6, maxiter=100, freeze_jac=1):
     """Solve the nonlinear problem F(x) == 0 using Newton iteration.
 
     Args:
-        F (function): function computing the residual of the nonlinear equation
-        J (function): function computing the Jacobian matrix of `F`
-        x0 (ndarray): the initial guess as a vector
-        atol (float): absolute tolerance for the norm of the residual
-        rtol (float): relative tolerance with respect to the initial residual
-        maxiter (int): the maximum number of iterations
-        freeze_jac (int): if >1, the Jacobian is only updated every `freeze_jac` steps
+        F (function):      function computing the residual of the nonlinear equation
+        J (function):      function computing the Jacobian matrix of `F`
+        x0 (ndarray):      the initial guess as a vector
+        atol (float):      absolute tolerance for the norm of the residual
+        rtol (float):      relative tolerance with respect to the initial residual
+        maxiter (int):     the maximum number of iterations
+        freeze_jac (int):  if >1, the Jacobian is only updated every `freeze_jac` steps
 
     Returns:
         ndarray: a vector `x` which approximately satisfies F(x) == 0
@@ -359,6 +358,104 @@ def newton(F, J, x0, atol=1e-6, rtol=1e-6, maxiter=100, freeze_jac=1):
         x -= jac_inv.dot(res)
         res = F(x)
     raise NoConvergenceError('newton', maxiter, x)
+    
+def pcg(A, f, x0 = None, P = 1, rtol = 1e-5, atol = 0.0, maxiter = 200, output = False):    
+    """Solve the the linear system Ax = f by conjugated gradient method.
+    
+    Args:
+        A (LinearOperator or ndarray or sparse matrix):  the symmetric and positive definite matrix of the linear system
+        f (ndarray):                                     the right-hand side vector of the system
+        x0 (ndarray):                                    initial guess for the solution, by default the zero vector
+        P (LinearOperator or ndarray or sparse matrix):  preconditioner to use for the system. by default the identity map.
+        rtol (float), atol (float) :                     iteration stops if relative error of residual and initial residual has reached rtol or if absolute error has reached atol
+        maxiter (int) :                                  maximum number of iterations if the stopping criterion is not met
+        output (boolean) :                               information to be printed after iteration stops
+    """
+    t1=time.time()
+    maxiter = int(maxiter)
+    
+    if not callable(A):
+        Afun = lambda x : A@x
+    else:
+        Afun = A
+        
+    if not isinstance(f,np.ndarray):
+        f_ = f.toarray().ravel().copy()
+    else:
+        f_ = f.ravel().copy()
+        
+    if x0 is not None:
+        if not isinstance(x0, np.ndarray):
+            x = x0.toarray().ravel()
+        else:
+            x = x0.ravel() 
+    else:
+        x = np.zeros(len(f_))
+        
+    if not callable(P):
+        if isinstance(P, np.ndarray) or scipy.sparse.issparse(P):
+            assert P.shape == (len(f_), len(f_)), 'dimension mismatch'
+            Pfun = lambda x: P@x
+        else:
+            Pfun = lambda x : x
+    else:
+        Pfun = P
+    r = f_ - Afun(x)
+    h = Pfun(r)
+    rho = h@r
+    assert rho>=0, "Preconditioner not SPD."
+    err = np.sqrt(rho)
+    err0 = np.sqrt(Pfun(r) @ r)
+    d = h
+    
+    delta = np.zeros(maxiter+1, dtype=float)
+    gamma = np.zeros(maxiter,   dtype=float)
+    
+    if err < max(rtol * err0, atol):
+        delta[0] = (Afun(d)@d)/rho
+        t2=time.time()
+        if output:
+            print('pcg with preconditioned condition number ' + str('\N{greek small letter kappa}')+ ' ~ {:.4} stopped after {} iterations with relres {:.4} after {:.3} seconds.'.format(1., 0, err/err0, t2-t1))
+        return x, 0 , delta[0], delta[0], err
+
+    #while err > max(rtol * err0, atol) and it < maxiter:
+    for it in range(maxiter):
+        z = Afun(d)
+        alpha = rho/(z@d)
+        delta[it]+=1/alpha
+        x += alpha*d
+        r -= alpha*z
+        h = Pfun(r)
+        rho_old = rho
+        rho = h@r
+        if rho<0: print(rho)
+        assert rho>=0, "Preconditioner not SPD."
+        err = np.sqrt(rho)
+        #print(err, err/err0)
+        if err < max(rtol * err0, atol):
+            break
+        beta = rho/rho_old
+        #print(beta)
+        d = h + beta*d
+        gamma[it] = -np.sqrt(beta)/alpha
+        delta[it+1] = beta/alpha
+        if it==maxiter-1:
+            delta[it+1] += (Afun(d)@d)/rho
+
+    t2=time.time()
+        
+    #print(delta,gamma)
+    eigs = scipy.linalg.eigvalsh_tridiagonal(delta[:(it+1)],gamma[:it])
+    m = min(abs(eigs))
+    M = max(abs(eigs))
+    # L = algebra.LanczosMatrix(delta[:(it+1)], gamma[:(it)])
+    # m = L.minEigenvalue()
+    # M = L.maxEigenvalue()
+    cond = abs(M/m)
+    
+    if output:
+        print('pcg with preconditioned condition number ' + str('\N{greek small letter kappa}')+ ' ~ {:.4} stopped after {} iterations with relres {:.4} after {:.3} seconds.'.format(cond, it+1, err/err0, t2-t1))
+    return x, it+1 , m, M, err
 
 
 ## Time stepping
@@ -937,3 +1034,4 @@ ros3pw = adaptive_rosenbrock_method(*coeffs_ros3pw(), 'ros3pw', 'ROS3PW Rosenbro
 rowdaind2 = adaptive_rosenbrock_method(*coeffs_rowdaind2(), 'rowdaind2', 'ROWDAIND2 Rosenbrock')
 rodasp = adaptive_rosenbrock_method(*coeffs_rodasp(), 'rodasp', 'RODASP Rosenbrock')
 rosi2p1 = adaptive_rosenbrock_method(*coeffs_rosi2p1(), 'rosi2p1', 'ROSI2P1 Rosenbrock')
+
